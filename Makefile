@@ -26,4 +26,5 @@ security:
 	@command -v gosec >/dev/null 2>&1 || { echo >&2 "gosec not found, run 'make install-tools'"; exit 1; }
 	gosec ./...
 
-
+build:
+	go build -o bindplane-loader ./cmd/loader/main.go
