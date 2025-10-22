@@ -1,13 +1,17 @@
 # Development
 
 ## Requirements
-[List of requirements to install and scripts to run for initialization]
+
+You should have Go 1.25+ installed.
 
 ## Local Build
-[Explain how to create a build locally]
+
+```bash
+make build
+```
 
 ## Testing
-[Explain how to run tests]
 
-## Other Commands
-[List any other useful commands to run]
+```bash
+make test
+```

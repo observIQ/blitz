@@ -1,0 +1,88 @@
+confidence = 0.8
+severity = "warning"
+
+[[rules]]
+name = "blank-imports"
+
+[[rules]]
+name = "context-as-argument"
+
+[[rules]]
+name = "context-keys-type"
+
+[[rules]]
+name = "dot-imports"
+
+[[rules]]
+name = "error-return"
+
+[[rules]]
+name = "error-strings"
+
+[[rules]]
+name = "error-naming"
+
+[[rules]]
+name = "exported"
+arguments = ["checkPublicInterface"]
+
+[[rules]]
+name = "if-return"
+
+[[rules]]
+name = "increment-decrement"
+
+[[rules]]
+name = "var-naming"
+arguments = [
+  [],
+  [],
+  [ { skipPackageNameChecks = true } ]
+]
+
+[[rules]]
+name = "var-declaration"
+
+[[rules]]
+name = "package-comments"
+
+[[rules]]
+name = "range"
+
+[[rules]]
+name = "receiver-naming"
+
+[[rules]]
+name = "time-naming"
+
+[[rules]]
+name = "unexported-return"
+
+[[rules]]
+name = "indent-error-flow"
+
+[[rules]]
+name = "errorf"
+
+[[rules]]
+name = "empty-block"
+
+[[rules]]
+name = "superfluous-else"
+
+[[rules]]
+name = "unused-parameter"
+
+[[rules]]
+name = "unreachable-code"
+
+[[rules]]
+name = "redefines-builtin-id"
+
+[[rules]]
+name = "struct-tag"
+
+[[rules]]
+name = "time-equal"
+
+
