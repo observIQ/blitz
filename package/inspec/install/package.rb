@@ -44,5 +44,5 @@ end
 describe systemd_service('bindplane-loader') do
     it { should be_installed }
     it { should_not be_enabled }
-    it { should be_running }
+    it { should_not be_running }
 end
