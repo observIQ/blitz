@@ -1,0 +1,8 @@
+---
+globs: **.go
+alwaysApply: true
+---
+- When creating struct tags in go, prefer to use camel case.  Do not use snake case.
+- Prefer using `any` instead of `interface{}`
+
+- Always follow the Uber Go Style Guide: https://raw.githubusercontent.com/uber-go/guide/refs/heads/master/style.md

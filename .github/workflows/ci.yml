@@ -10,6 +10,16 @@ permissions:
   contents: read
 
 jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run ShellCheck
+        run: |
+          find package/scripts -type f -name "*.sh" -exec shellcheck {} +
+
   setup:
     name: Setup environment
     runs-on: ubuntu-latest
@@ -119,5 +129,62 @@ jobs:
       - name: Run revive
         run: |
           make lint
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: setup
+    env:
+      cinc_package: https://packages.cinc.sh/files/stable/cinc-auditor/4.56.58/ubuntu/22.04/cinc-auditor_4.56.58-1_amd64.deb
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Restore Go cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean --skip=publish --skip=sign --skip=validate --snapshot
+
+      - name: Download CINC (Inspec)
+        run: |
+          mkdir -p /tmp/cinc
+          curl -L -o /tmp/cinc/cinc.deb $cinc_package
+
+      - name: Install CINC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y -f /tmp/cinc/cinc.deb
+
+      - name: Install package
+        run: |
+          sudo apt-get install -y -f ./dist/bindplane-loader_*_amd64.deb
+
+      - name: Run install tests
+        run: |
+          sudo cinc-auditor exec package/inspec/install/package.rb
+
+      - name: Uninstall package
+        run: |
+          sudo apt-get remove -y bindplane-loader
+
+      - name: Run uninstall tests
+        run: |
+          sudo cinc-auditor exec package/inspec/remove/package.rb
 
 

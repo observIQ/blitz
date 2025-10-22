@@ -1,0 +1,125 @@
+version: 2
+project_name: bindplane-loader
+
+builds:
+  - id: bindplane-loader
+    main: ./cmd/loader
+    binary: bindplane-loader
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    tags:
+      - timetzdata
+    ldflags:
+      - -s -w
+
+archives:
+  - id: archive
+    builds:
+      - bindplane-loader
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    wrap_in_directory: true
+    files:
+      - LICENSE
+
+nfpms:
+  - id: linux-packages
+    package_name: bindplane-loader
+    file_name_template: "{{ .ProjectName }}_{{ .Arch }}"
+    homepage: https://github.com/observiq/bindplane-loader
+    maintainer: Bindplane Team <support@bindplane.com>
+    description: Bindplane Loader - a load generation tool for Bindplane managed collectors.
+    vendor: Bindplane
+    license: Apache-2.0
+    formats:
+      - deb
+      - rpm
+    builds:
+      - bindplane-loader
+    bindir: /usr/bin
+    scripts:
+      preinstall: package/scripts/preinstall.sh
+      postinstall: package/scripts/postinstall.sh
+      preremove: package/scripts/preremove.sh
+      postremove: package/scripts/postremove.sh
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/bindplane-loader/LICENSE
+      - src: package/config.yaml
+        dst: /etc/bindplane-loader/config.yaml
+        type: config
+        file_info:
+          mode: 0640
+          owner: bploader
+          group: bploader
+      - src: package/bindplane-loader.service
+        dst: /usr/lib/systemd/system/bindplane-loader.service
+        file_info:
+          mode: 0640
+          owner: root
+          group: root
+
+dockers:
+  - id: docker-amd64
+    ids:
+      - bindplane-loader
+    goos: linux
+    goarch: amd64
+    dockerfile: package/Dockerfile
+    use: buildx
+    image_templates:
+      - ghcr.io/observiq/bindplane-loader:{{ .Version }}-amd64
+      - ghcr.io/observiq/bindplane-loader:{{ .Tag }}-amd64
+    build_flag_templates:
+      - --platform=linux/amd64
+      - --build-arg=PROJECT_NAME={{ .ProjectName }}
+  - id: docker-arm64
+    ids:
+      - bindplane-loader
+    goos: linux
+    goarch: arm64
+    dockerfile: package/Dockerfile
+    use: buildx
+    image_templates:
+      - ghcr.io/observiq/bindplane-loader:{{ .Version }}-arm64
+      - ghcr.io/observiq/bindplane-loader:{{ .Tag }}-arm64
+    build_flag_templates:
+      - --platform=linux/arm64
+      - --build-arg=PROJECT_NAME={{ .ProjectName }}
+
+docker_manifests:
+  - name_template: ghcr.io/observiq/bindplane-loader:{{ .Version }}
+    image_templates:
+      - ghcr.io/observiq/bindplane-loader:{{ .Version }}-amd64
+      - ghcr.io/observiq/bindplane-loader:{{ .Version }}-arm64
+  - name_template: ghcr.io/observiq/bindplane-loader:latest
+    image_templates:
+      - ghcr.io/observiq/bindplane-loader:{{ .Tag }}-amd64
+      - ghcr.io/observiq/bindplane-loader:{{ .Tag }}-arm64
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+

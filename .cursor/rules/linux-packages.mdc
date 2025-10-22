@@ -1,0 +1,44 @@
+# Cursor Rule: Linux Packages and Releases
+---
+globs: "**"
+alwaysApply: true
+---
+# Cursor Rule: Linux Packages and Releases
+
+## Purpose
+Keep `docs/release/linux-packages.md` and build docs in sync with release configuration and packaging assets.
+
+## Scope
+- `.goreleaser.yaml`
+- `package/` (scripts, systemd unit, config)
+- `package/inspec/` (test files)
+- `docs/release/linux-packages.md`
+- `docs/development.md` (build steps summary)
+
+## Rules
+- When changing `.goreleaser.yaml` nFPM `contents`, `scripts`, or Docker settings, update:
+  - `docs/release/linux-packages.md` to reflect installed files, ownership, and permissions.
+  - `docs/development.md` if the build matrix, outputs, or steps change.
+  - `package/inspec/install/package.rb` and `package/inspec/remove/package.rb` to match new file paths, ownership, and permissions.
+- When changing files under `package/` (scripts, service unit, config), update:
+  - `docs/release/linux-packages.md` to match current behavior and installation paths.
+  - `package/inspec/install/package.rb` to verify new files, permissions, and service configuration.
+  - `package/inspec/remove/package.rb` to verify proper cleanup of new files and services.
+- Preserve ownership/modes in docs:
+  - `/etc/bindplane-loader/config.yaml` → `bploader:bploader`, mode `0640`.
+  - `/usr/lib/systemd/system/bindplane-loader.service` → `root:root`, mode `0640`.
+- The service must not be started/enabled/restarted by package scripts; ensure docs reflect this.
+- Include basic systemctl usage (enable, start, status; stop, disable) in the docs.
+
+## Build Outline (GoReleaser)
+- Binaries: linux {amd64, arm64}, darwin {amd64, arm64}, windows {amd64}; `CGO_ENABLED=0`, tags `timetzdata`.
+- Linux packages: deb, rpm via NFPM; include LICENSE, config, service unit, and scripts.
+- Containers: multi-arch images via Buildx, manifests, Dockerfile scratch final with CA certs and passwd copied from Alpine.
+
+## Review Checklist
+- [ ] Do changes in `.goreleaser.yaml` reflect in `docs/release/linux-packages.md`?
+- [ ] Do changes in `package/` scripts or unit file reflect in docs?
+- [ ] Do docs match ownership and permission modes?
+- [ ] Does `docs/development.md` still accurately outline the build steps and outputs?
+- [ ] Do Inspec tests (`package/inspec/install/package.rb` and `package/inspec/remove/package.rb`) verify all installed files, permissions, and service configuration?
+- [ ] Do Inspec tests properly verify cleanup of all files and services during uninstall?
