@@ -2,10 +2,8 @@
 set -eu
 
 # Detect action: install/upgrade vs remove
-ACTION="install"
-if [ "${1:-}" = "remove" ] || [ "${1:-}" = "0" ]; then
-  ACTION="remove"
-fi
+# Note: Currently both install and remove perform the same operations
+# (user/group creation, config dir setup, systemd reload)
 
 # Create user and group if missing; ensure no login shell
 NOLOGIN="/usr/sbin/nologin"

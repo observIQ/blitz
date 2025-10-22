@@ -2,10 +2,8 @@
 set -eu
 
 # Detect action
-ACTION="install"
-if [ "${1:-}" = "remove" ] || [ "${1:-}" = "0" ]; then
-  ACTION="remove"
-fi
+# Note: Currently both install and remove perform the same operations
+# (config dir setup, systemd reload)
 
 # Ensure config dir ownership remains correct
 mkdir -p /etc/bindplane-loader
