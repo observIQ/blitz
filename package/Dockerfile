@@ -1,5 +1,5 @@
 # Build stage: get CA certs and passwd from a minimal image
-FROM alpine:3.20 AS basefs
+FROM alpine:3.22 AS basefs
 RUN apk add --no-cache ca-certificates
 RUN adduser -D -u 10001 appuser
 
