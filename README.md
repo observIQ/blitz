@@ -1,4 +1,4 @@
-# [Bindplane Loader]
+# Bindplane Loader
 
 A load generation tool for Bindplane managed collectors.
 
