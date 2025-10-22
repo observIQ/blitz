@@ -2,10 +2,9 @@ module github.com/observiq/bindplane-loader
 
 go 1.25
 
-require (
-	github.com/mgechev/revive v1.12.0
-	github.com/securego/gosec/v2 v2.22.10
-)
+tool github.com/mgechev/revive
+
+tool github.com/securego/gosec/v2/cmd/gosec
 
 require (
 	cloud.google.com/go v0.121.2 // indirect
@@ -31,6 +30,8 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mgechev/dots v1.0.0 // indirect
+	github.com/mgechev/revive v1.12.0 // indirect
+	github.com/securego/gosec/v2 v2.22.10 // indirect
 	github.com/spf13/afero v1.14.0 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect

@@ -6,25 +6,25 @@ TOOLS := \
     github.com/securego/gosec/v2/cmd/gosec@latest \
     github.com/mgechev/revive@latest
 
-all: tools test lint security
+all: install-tools test lint security
 
 install-tools:
-	@echo "Installing tools..."
-	@for tool in $(TOOLS); do \
-		echo "Installing $$tool"; \
-		go install $$tool; \
-	done
+	go get -tool github.com/securego/gosec/v2/cmd/gosec
+	go get -tool github.com/mgechev/revive
+	go tool -n gosec >/dev/null
+	go tool -n revive >/dev/null
 
 test:
 	go test ./...
 
 lint:
-	@command -v revive >/dev/null 2>&1 || { echo >&2 "revive not found, run 'make install-tools'"; exit 1; }
-	revive -config .revive.toml -formatter friendly ./...
+	go tool revive -config .revive.toml -formatter friendly ./...
 
 security:
-	@command -v gosec >/dev/null 2>&1 || { echo >&2 "gosec not found, run 'make install-tools'"; exit 1; }
-	gosec ./...
+	go tool gosec ./...
 
 build:
 	go build -o bindplane-loader ./cmd/loader/main.go
+
+tidy:
+	go mod tidy
