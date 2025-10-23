@@ -5,6 +5,8 @@ package config
 type Config struct {
 	// Logging configuration for the logger
 	Logging Logging `yaml:"logging,omitempty" mapstructure:"logging,omitempty"`
+	// Generator configuration
+	Generator Generator `yaml:"generator,omitempty" mapstructure:"generator,omitempty"`
 	// Output configuration
 	Output Output `yaml:"output,omitempty" mapstructure:"output,omitempty"`
 }
@@ -12,6 +14,9 @@ type Config struct {
 // Validate validates the entire configuration
 func (c *Config) Validate() error {
 	if err := c.Logging.Validate(); err != nil {
+		return err
+	}
+	if err := c.Generator.Validate(); err != nil {
 		return err
 	}
 	if err := c.Output.Validate(); err != nil {

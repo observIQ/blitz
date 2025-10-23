@@ -8,6 +8,7 @@ tool github.com/securego/gosec/v2/cmd/gosec
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/goccy/go-json v0.10.5
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
