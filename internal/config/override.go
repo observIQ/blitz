@@ -55,6 +55,8 @@ func (o *Override) createFlag(flags *pflag.FlagSet) *pflag.Flag {
 		_ = flags.String(o.Flag, v, o.Usage)
 	case LogLevel:
 		_ = flags.String(o.Flag, string(v), o.Usage)
+	case int:
+		_ = flags.Int(o.Flag, v, o.Usage)
 	default:
 		_ = flags.String(o.Flag, "", o.Usage)
 	}
@@ -80,5 +82,12 @@ func DefaultOverrides() []*Override {
 	return []*Override{
 		NewOverride("logging.type", "output of the log. One of: stdout", LoggingTypeStdout),
 		NewOverride("logging.level", "log level to use. One of: debug|info|warn|error", LogLevelInfo),
+		NewOverride("output.type", "output type. One of: tcp|udp", ""),
+		NewOverride("output.udp.host", "UDP output target host", ""),
+		NewOverride("output.udp.port", "UDP output target port", 0),
+		NewOverride("output.udp.workers", "number of UDP output workers", 1),
+		NewOverride("output.tcp.host", "TCP output target host", ""),
+		NewOverride("output.tcp.port", "TCP output target port", 0),
+		NewOverride("output.tcp.workers", "number of TCP output workers", 1),
 	}
 }
