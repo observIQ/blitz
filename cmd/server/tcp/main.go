@@ -9,14 +9,14 @@ import (
 
 func main() {
 	// Listen on localhost:5000
-	listener, err := net.Listen("tcp", "localhost:5000")
+	listener, err := net.Listen("tcp", ":5000")
 	if err != nil {
 		fmt.Printf("Failed to start TCP server: %v\n", err)
 		return
 	}
 	defer listener.Close()
 
-	fmt.Println("TCP server listening on localhost:5000")
+	fmt.Println("TCP server listening on 5000")
 
 	for {
 		// Accept connections with a timeout

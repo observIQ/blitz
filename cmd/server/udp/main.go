@@ -3,12 +3,13 @@ package main
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
 func main() {
 	// Listen on localhost:5000
-	addr, err := net.ResolveUDPAddr("udp", "localhost:5000")
+	addr, err := net.ResolveUDPAddr("udp", ":5000")
 	if err != nil {
 		fmt.Printf("Failed to resolve UDP address: %v\n", err)
 		return
@@ -21,7 +22,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	fmt.Println("UDP server listening on localhost:5000")
+	fmt.Println("UDP server listening on 5000")
 
 	// Buffer for incoming data
 	buffer := make([]byte, 1024)
@@ -39,5 +40,11 @@ func main() {
 
 		data := string(buffer[:n])
 		fmt.Printf("UDP received from %s: %s\n", clientAddr, data)
+
+		// Terminate if received newline
+		if strings.Contains(data, "\n") {
+			fmt.Println("Received newline, terminating UDP server")
+			break
+		}
 	}
 }
