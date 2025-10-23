@@ -127,7 +127,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
-          distribution: goreleaser
+          distribution: goreleaser-pro
           version: "v2.12.5"
           args: release --clean --skip=publish --skip=sign --skip=validate --snapshot --split
         env:
