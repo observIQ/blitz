@@ -176,8 +176,11 @@ func (t *TCP) sendData(conn net.Conn, data []byte) error {
 		return fmt.Errorf("failed to set write deadline: %w", err)
 	}
 
+	// Append newline to data before sending
+	dataWithNewline := append(data, '\n')
+
 	// Send the data
-	_, err := conn.Write(data)
+	_, err := conn.Write(dataWithNewline)
 	if err != nil {
 		return fmt.Errorf("failed to write data: %w", err)
 	}

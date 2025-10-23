@@ -215,6 +215,7 @@ func TestTCP_Integration(t *testing.T) {
 	}
 
 	// Check that both test messages are present in the received data
+	// Note: TCP output now appends \n to each message
 	allDataStr := string(allData)
 	if !strings.Contains(allDataStr, string(testData1)) {
 		t.Errorf("First message %q not found in received data: %q", string(testData1), allDataStr)
