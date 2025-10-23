@@ -28,3 +28,6 @@ build:
 
 tidy:
 	go mod tidy
+
+bench:
+	go test -bench=. ./...
