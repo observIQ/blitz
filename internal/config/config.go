@@ -1,6 +1,8 @@
 // Package config contains the top level configuration structures and logic
 package config
 
+import "time"
+
 // Config is the configuration for bindplane-loader.
 type Config struct {
 	// Logging configuration for the logger
@@ -28,4 +30,43 @@ func (c *Config) Validate() error {
 // NewConfig returns a new config
 func NewConfig() *Config {
 	return &Config{}
+}
+
+// ApplyDefaults applies default values to the configuration
+func (c *Config) ApplyDefaults() {
+	// Apply generator defaults
+	if c.Generator.Type == "" {
+		c.Generator.Type = GeneratorTypeNop
+	}
+
+	// Apply output defaults
+	if c.Output.Type == "" {
+		c.Output.Type = OutputTypeNop
+	}
+
+	// Apply logging defaults
+	if c.Logging.Type == "" {
+		c.Logging.Type = LoggingTypeStdout
+	}
+	if c.Logging.Level == "" {
+		c.Logging.Level = LogLevelInfo
+	}
+
+	// Apply JSON generator defaults
+	if c.Generator.JSON.Workers == 0 {
+		c.Generator.JSON.Workers = 1
+	}
+	if c.Generator.JSON.Rate == 0 {
+		c.Generator.JSON.Rate = 1 * time.Second
+	}
+
+	// Apply TCP output defaults
+	if c.Output.TCP.Workers == 0 {
+		c.Output.TCP.Workers = 1
+	}
+
+	// Apply UDP output defaults
+	if c.Output.UDP.Workers == 0 {
+		c.Output.UDP.Workers = 1
+	}
 }

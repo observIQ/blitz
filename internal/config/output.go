@@ -8,6 +8,8 @@ import (
 type OutputType string
 
 const (
+	// OutputTypeNop represents NOP output
+	OutputTypeNop OutputType = "nop"
 	// OutputTypeTCP represents TCP output
 	OutputTypeTCP OutputType = "tcp"
 	// OutputTypeUDP represents UDP output
@@ -26,11 +28,14 @@ type Output struct {
 
 // Validate validates the output configuration
 func (o *Output) Validate() error {
+	// Allow empty type - defaults will be applied by override system
 	if o.Type == "" {
-		return fmt.Errorf("output type cannot be empty")
+		return nil
 	}
 
 	switch o.Type {
+	case OutputTypeNop:
+		// NOP output requires no additional validation
 	case OutputTypeTCP:
 		if err := o.TCP.Validate(); err != nil {
 			return fmt.Errorf("TCP output validation failed: %w", err)
@@ -40,7 +45,7 @@ func (o *Output) Validate() error {
 			return fmt.Errorf("UDP output validation failed: %w", err)
 		}
 	default:
-		return fmt.Errorf("invalid output type: %s, must be one of: tcp, udp", o.Type)
+		return fmt.Errorf("invalid output type: %s, must be one of: nop, tcp, udp", o.Type)
 	}
 
 	return nil

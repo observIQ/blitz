@@ -46,8 +46,7 @@ func TestOutput_Validate(t *testing.T) {
 					Workers: 1,
 				},
 			},
-			wantErr: true,
-			errMsg:  "output type cannot be empty",
+			wantErr: false,
 		},
 		{
 			name: "invalid output type",
@@ -60,7 +59,7 @@ func TestOutput_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "invalid output type: invalid, must be one of: tcp, udp",
+			errMsg:  "invalid output type: invalid, must be one of: nop, tcp, udp",
 		},
 		{
 			name: "TCP output with invalid config",

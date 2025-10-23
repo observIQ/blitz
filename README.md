@@ -2,6 +2,129 @@
 
 A load generation tool for Bindplane managed collectors.
 
-# Community
+## Installation
+
+### CLI
+
+Download the binary for your platform from the [latest release](https://github.com/observiq/bindplane-loader/releases/latest):
+
+Extract the archive and run the binary directly in a terminal:
+
+```bash
+# Extract the archive
+tar -xzf bindplane-loader_*_linux_amd64.tar.gz
+
+# Run with default NOP configuration (no work performed)
+./bindplane-loader
+
+# Run with JSON generator and TCP output
+./bindplane-loader \
+  --generator-type json \
+  --generator-json-workers 2 \
+  --generator-json-rate 500ms \
+  --output-type tcp \
+  --output-tcp-host logs.example.com \
+  --output-tcp-port 9090 \
+  --output-tcp-workers 3 \
+  --logging-level info
+```
+
+### Linux Systemd Service
+
+Download the appropriate package for your Linux distribution from the [latest release](https://github.com/observiq/bindplane-loader/releases/latest):
+
+- **Debian/Ubuntu**: `bindplane-loader_amd64.deb` or `bindplane-loader_arm64.deb`
+- **Red Hat/CentOS/Fedora**: `bindplane-loader_amd64.rpm` or `bindplane-loader_arm64.rpm`
+
+#### Debian/Ubuntu Installation
+
+```bash
+# Install the package
+sudo apt-get install ./bindplane-loader_amd64.deb
+
+# Edit the configuration file
+sudo vi /etc/bindplane-loader/config.yaml
+
+# Enable and start the service
+sudo systemctl enable bindplane-loader
+sudo systemctl start bindplane-loader
+
+# Check service status
+sudo systemctl status bindplane-loader
+
+# View service logs
+sudo journalctl -u bindplane-loader -f
+```
+
+#### Red Hat/CentOS/Fedora Installation
+
+```bash
+# Install the package
+sudo dnf install bindplane-loader_amd64.rpm
+
+# Edit the configuration file
+sudo vi /etc/bindplane-loader/config.yaml
+
+# Enable and start the service
+sudo systemctl enable bindplane-loader
+sudo systemctl start bindplane-loader
+
+# Check service status
+sudo systemctl status bindplane-loader
+
+# View service logs
+sudo journalctl -u bindplane-loader -f
+```
+
+The package installs:
+- Binary: `/usr/bin/bindplane-loader`
+- Configuration: `/etc/bindplane-loader/config.yaml`
+- Systemd service: `/usr/lib/systemd/system/bindplane-loader.service`
+- User/Group: `bploader:bploader`
+
+### Container
+
+Pull the Docker image from GitHub Container Registry and run it with environment variables for configuration:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/observiq/bindplane-loader:latest
+
+# Run with default NOP configuration (no work performed)
+docker run --rm ghcr.io/observiq/bindplane-loader:latest
+
+# Run with JSON generator and TCP output
+docker run --rm \
+  -e BINDPLANE_GENERATOR_TYPE=json \
+  -e BINDPLANE_GENERATOR_JSON_WORKERS=2 \
+  -e BINDPLANE_GENERATOR_JSON_RATE=500ms \
+  -e BINDPLANE_OUTPUT_TYPE=tcp \
+  -e BINDPLANE_OUTPUT_TCP_HOST=logs.example.com \
+  -e BINDPLANE_OUTPUT_TCP_PORT=9090 \
+  -e BINDPLANE_OUTPUT_TCP_WORKERS=3 \
+  -e BINDPLANE_LOGGING_LEVEL=info \
+  ghcr.io/observiq/bindplane-loader:latest
+
+# Run with UDP output
+docker run --rm \
+  -e BINDPLANE_GENERATOR_TYPE=json \
+  -e BINDPLANE_OUTPUT_TYPE=udp \
+  -e BINDPLANE_OUTPUT_UDP_HOST=logs.example.com \
+  -e BINDPLANE_OUTPUT_UDP_PORT=514 \
+  -e BINDPLANE_OUTPUT_UDP_WORKERS=2 \
+  ghcr.io/observiq/bindplane-loader:latest
+```
+
+
+For detailed configuration options, see the [Configuration Guide](/docs/configuration.md).
+
+## Documentation
+
+- [Configuration Guide](/docs/configuration.md) - Complete guide to configuring bindplane-loader with YAML files, environment variables, and command-line flags
+- [Architecture Overview](/docs/architecture.md) - Detailed explanation of the application architecture, components, and data flow
+- [Development Guide](/docs/development.md) - Guidelines for contributing to the project
+- [Contributing Guidelines](/docs/CONTRIBUTING.md) - How to contribute to the project
+
+## Community
 
 The Bindplane Loader is an open source project. If you'd like to contribute, take a look at our [contribution guidelines](/docs/CONTRIBUTING.md) and [developer guide](/docs/development.md). We look forward to building with you.

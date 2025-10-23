@@ -85,10 +85,10 @@ func DefaultOverrides() []*Override {
 	return []*Override{
 		NewOverride("logging.type", "output of the log. One of: stdout", LoggingTypeStdout),
 		NewOverride("logging.level", "log level to use. One of: debug|info|warn|error", LogLevelInfo),
-		NewOverride("generator.type", "generator type. One of: json", ""),
+		NewOverride("generator.type", "generator type. One of: nop|json", GeneratorTypeNop),
 		NewOverride("generator.json.workers", "number of JSON generator workers", 1),
 		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),
-		NewOverride("output.type", "output type. One of: tcp|udp", ""),
+		NewOverride("output.type", "output type. One of: nop|tcp|udp", OutputTypeNop),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),
 		NewOverride("output.udp.workers", "number of UDP output workers", 1),
