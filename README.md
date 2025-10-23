@@ -1,12 +1,12 @@
-# Bindplane Loader
+# Blitz
 
 A load generation tool for Bindplane managed collectors.
 
 ## Documentation
 
-- [Configuration Guide](/docs/configuration.md) - Complete guide to configuring bindplane-loader with YAML files, environment variables, and command-line flags
+- [Configuration Guide](/docs/configuration.md) - Complete guide to configuring blitz with YAML files, environment variables, and command-line flags
 - [Architecture Overview](/docs/architecture.md) - Detailed explanation of the application architecture, components, and data flow
-- [Metrics Documentation](/docs/metrics.md) - Comprehensive guide to monitoring and metrics exposed by bindplane-loader
+- [Metrics Documentation](/docs/metrics.md) - Comprehensive guide to monitoring and metrics exposed by blitz
 - [Development Guide](/docs/development.md) - Guidelines for contributing to the project
 - [Contributing Guidelines](/docs/CONTRIBUTING.md) - How to contribute to the project
 
@@ -14,24 +14,24 @@ A load generation tool for Bindplane managed collectors.
 
 ### CLI
 
-Download the binary for your platform from the [latest release](https://github.com/observiq/bindplane-loader/releases/latest):
+Download the binary for your platform from the [latest release](https://github.com/observiq/blitz/releases/latest):
 
 Extract the archive and run the binary directly in a terminal:
 
 ```bash
-tar -xzf bindplane-loader_*_linux_amd64.tar.gz
+tar -xzf blitz_*_linux_amd64.tar.gz
 ```
 
 Run with default NOP configuration:
 
 ```bash
-./bindplane-loader
+./blitz
 ```
 
 Run with JSON generator and TCP output:
 
 ```bash
-./bindplane-loader \
+./blitz \
   --generator-type json \
   --generator-json-workers 2 \
   --generator-json-rate 500ms \
@@ -44,31 +44,29 @@ Run with JSON generator and TCP output:
 
 ### Linux Systemd Service
 
-Download the appropriate package for your Linux distribution from the [latest release](https://github.com/observiq/bindplane-loader/releases/latest):
+Download the appropriate package for your Linux distribution from the [latest release](https://github.com/observiq/blitz/releases/latest):
 
-- **Debian/Ubuntu**: `bindplane-loader_amd64.deb` or `bindplane-loader_arm64.deb`
-- **Red Hat/CentOS/Fedora**: `bindplane-loader_amd64.rpm` or `bindplane-loader_arm64.rpm`
-
-#### Debian/Ubuntu Installation
+- **Debian/Ubuntu**: `blitz_amd64.deb` or `blitz_arm64.deb`
+- **Red Hat/CentOS/Fedora**: `blitz_amd64.rpm` or `blitz_arm64.rpm`
 
 Install the package with your package manager:
 
 **Debian**
 
 ```bash
-sudo apt-get install -f ./bindplane-loader_amd64.deb
+sudo apt-get install -f ./blitz_amd64.deb
 ```
 
 **RHEL**
 
 ```bash
-sudo dnf install ./bindplane-loader_amd64.rpm
+sudo dnf install ./blitz_amd64.rpm
 ```
 
 Edit the configuration file:
 
 ```bash
-sudo vi /etc/bindplane-loader/config.yaml
+sudo vi /etc/blitz/config.yaml
 ```
 
 Example minimal configuration for JSON generator and TCP output:
@@ -92,15 +90,15 @@ logging:
 Enable and start the service
 
 ```bash
-sudo systemctl enable bindplane-loader
-sudo systemctl start bindplane-loader
-sudo systemctl status bindplane-loader
+sudo systemctl enable blitz
+sudo systemctl start blitz
+sudo systemctl status blitz
 ```
 
 View service logs:
 
 ```bash
-sudo journalctl -u bindplane-loader -f
+sudo journalctl -u blitz -f
 ```
 
 ### Container
@@ -110,7 +108,7 @@ Pull the Docker image from GitHub Container Registry and run it with environment
 Run with default NOP configuration:
 
 ```bash
-docker run --rm ghcr.io/observiq/bindplane-loader:latest
+docker run --rm ghcr.io/observiq/blitz:latest
 ```
 
 Run with JSON generator and TCP output:
@@ -125,11 +123,11 @@ docker run --rm \
   -e BINDPLANE_OUTPUT_TCP_PORT=9090 \
   -e BINDPLANE_OUTPUT_TCP_WORKERS=3 \
   -e BINDPLANE_LOGGING_LEVEL=info \
-  ghcr.io/observiq/bindplane-loader:latest
+  ghcr.io/observiq/blitz:latest
 ```
 
 For detailed configuration options, see the [Configuration Guide](/docs/configuration.md).
 
 ## Community
 
-The Bindplane Loader is an open source project. If you'd like to contribute, take a look at our [contribution guidelines](/docs/CONTRIBUTING.md) and [developer guide](/docs/development.md). We look forward to building with you.
+The Blitz is an open source project. If you'd like to contribute, take a look at our [contribution guidelines](/docs/CONTRIBUTING.md) and [developer guide](/docs/development.md). We look forward to building with you.

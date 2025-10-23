@@ -3,7 +3,7 @@ package config
 
 import "time"
 
-// Config is the configuration for bindplane-loader.
+// Config is the configuration for blitz.
 type Config struct {
 	// Logging configuration for the logger
 	Logging Logging `yaml:"logging,omitempty" mapstructure:"logging,omitempty"`

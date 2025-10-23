@@ -1,3 +1,3 @@
-# Bindplane Loader Code of Conduct
+# Blitz Code of Conduct
 
-Bindplane Loader follows the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/master/code-of-conduct.md).
+Blitz follows the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/master/code-of-conduct.md).

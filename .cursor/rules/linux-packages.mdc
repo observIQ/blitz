@@ -25,8 +25,8 @@ Keep `docs/release/linux-packages.md` and build docs in sync with release config
   - `package/inspec/install/package.rb` to verify new files, permissions, and service configuration.
   - `package/inspec/remove/package.rb` to verify proper cleanup of new files and services.
 - Preserve ownership/modes in docs:
-  - `/etc/bindplane-loader/config.yaml` → `bploader:bploader`, mode `0640`.
-  - `/usr/lib/systemd/system/bindplane-loader.service` → `root:root`, mode `0640`.
+  - `/etc/blitz/config.yaml` → `blitz:blitz`, mode `0640`.
+  - `/usr/lib/systemd/system/blitz.service` → `root:root`, mode `0640`.
 - The service must not be started/enabled/restarted by package scripts; ensure docs reflect this.
 - Include basic systemctl usage (enable, start, status; stop, disable) in the docs.
 

@@ -1,10 +1,10 @@
-# Bindplane Loader Architecture
+# Blitz Architecture
 
-This document provides a comprehensive overview of the bindplane-loader application architecture, covering the main components, their responsibilities, and how they interact to create a robust log generation and forwarding system.
+This document provides a comprehensive overview of the blitz application architecture, covering the main components, their responsibilities, and how they interact to create a robust log generation and forwarding system.
 
 ## Overview
 
-Bindplane Loader is a high-performance log generation and forwarding application designed to simulate realistic log traffic for testing and benchmarking purposes. The application follows a modular architecture with clear separation of concerns, making it extensible and maintainable.
+Blitz is a high-performance log generation and forwarding application designed to simulate realistic log traffic for testing and benchmarking purposes. The application follows a modular architecture with clear separation of concerns, making it extensible and maintainable.
 
 ## Architecture Diagram
 
@@ -41,7 +41,7 @@ Bindplane Loader is a high-performance log generation and forwarding application
 
 ### 1. main.go - Application Lifecycle Management
 
-**Location:** `cmd/loader/main.go`
+**Location:** `cmd/blitz/main.go`
 
 The main.go file serves as the application entry point and manages the entire application lifecycle. It handles:
 

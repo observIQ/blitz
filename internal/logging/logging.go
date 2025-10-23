@@ -1,4 +1,4 @@
-// Package logging contains the logging logic for Bindplane Loader
+// Package logging contains the logging logic for Blitz
 package logging
 
 import (
@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	loaderconfig "github.com/observiq/bindplane-loader/internal/config"
+	loaderconfig "github.com/observiq/blitz/internal/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

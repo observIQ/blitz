@@ -1,12 +1,12 @@
 [Unit]
-Description=Bindplane Loader
+Description=Blitz
 After=network.target
 
 [Service]
 Type=simple
-User=bploader
-Group=bploader
-ExecStart=/usr/bin/bindplane-loader --config /etc/bindplane-loader/config.yaml
+User=blitz
+Group=blitz
+ExecStart=/usr/bin/blitz --config /etc/blitz/config.yaml
 Restart=on-failure
 RestartSec=5s
 AmbientCapabilities=

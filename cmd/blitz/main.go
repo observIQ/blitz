@@ -13,12 +13,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/observiq/bindplane-loader/generator"
-	"github.com/observiq/bindplane-loader/internal/config"
-	"github.com/observiq/bindplane-loader/internal/logging"
-	"github.com/observiq/bindplane-loader/internal/service"
-	"github.com/observiq/bindplane-loader/internal/telemetry/metrics"
-	"github.com/observiq/bindplane-loader/output"
+	"github.com/observiq/blitz/generator"
+	"github.com/observiq/blitz/internal/config"
+	"github.com/observiq/blitz/internal/logging"
+	"github.com/observiq/blitz/internal/service"
+	"github.com/observiq/blitz/internal/telemetry/metrics"
+	"github.com/observiq/blitz/output"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -27,7 +27,7 @@ import (
 
 func main() {
 	// Bind overrides to flags and environment variables
-	flags := pflag.NewFlagSet("bindplane-loader", pflag.ExitOnError)
+	flags := pflag.NewFlagSet("blitz", pflag.ExitOnError)
 
 	// Add config file flag
 	configFile := flags.String("config", "", "path to configuration file")
@@ -78,13 +78,12 @@ func main() {
 	}
 	defer func() { _ = logger.Sync() }()
 
-	logger.Info("bindplane-loader started")
+	logger.Info("blitz started")
 
 	// Create signal context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Setup metrics
 	if err := setupMetrics(ctx, logger); err != nil {
 		logger.Error("Failed to setup metrics", zap.Error(err))
 		os.Exit(1)
@@ -177,7 +176,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Info("bindplane-loader shutdown complete")
+	logger.Info("blitz shutdown complete")
 }
 
 func setupMetrics(ctx context.Context, logger *zap.Logger) error {

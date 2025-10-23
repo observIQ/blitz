@@ -24,7 +24,7 @@ security:
 	go tool gosec ./...
 
 build:
-	go build -o bindplane-loader ./cmd/loader/main.go
+	go build -o blitz ./cmd/blitz/main.go
 
 tidy:
 	go mod tidy

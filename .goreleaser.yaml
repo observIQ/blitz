@@ -1,10 +1,10 @@
 version: 2
-project_name: bindplane-loader
+project_name: blitz
 
 builds:
-  - id: bindplane-loader
-    main: ./cmd/loader
-    binary: bindplane-loader
+  - id: blitz
+    main: ./cmd/blitz
+    binary: blitz
     env:
       - CGO_ENABLED=0
     goos:
@@ -27,7 +27,7 @@ builds:
 archives:
   - id: archive
     builds:
-      - bindplane-loader
+      - blitz
     format: tar.gz
     format_overrides:
       - goos: windows
@@ -40,18 +40,18 @@ archives:
 
 nfpms:
   - id: linux-packages
-    package_name: bindplane-loader
+    package_name: blitz
     file_name_template: "{{ .ProjectName }}_{{ .Arch }}"
-    homepage: https://github.com/observiq/bindplane-loader
+    homepage: https://github.com/observiq/blitz
     maintainer: Bindplane Team <support@bindplane.com>
-    description: Bindplane Loader - a load generation tool for Bindplane managed collectors.
+    description: Blitz - a load generation tool for Bindplane managed collectors.
     vendor: Bindplane
     license: Apache-2.0
     formats:
       - deb
       - rpm
     builds:
-      - bindplane-loader
+      - blitz
     bindir: /usr/bin
     scripts:
       preinstall: package/scripts/preinstall.sh
@@ -60,16 +60,16 @@ nfpms:
       postremove: package/scripts/postremove.sh
     contents:
       - src: LICENSE
-        dst: /usr/share/doc/bindplane-loader/LICENSE
+        dst: /usr/share/doc/blitz/LICENSE
       - src: package/config.yaml
-        dst: /etc/bindplane-loader/config.yaml
+        dst: /etc/blitz/config.yaml
         type: config
         file_info:
           mode: 0640
-          owner: bploader
-          group: bploader
-      - src: package/bindplane-loader.service
-        dst: /usr/lib/systemd/system/bindplane-loader.service
+          owner: blitz
+          group: blitz
+      - src: package/blitz.service
+        dst: /usr/lib/systemd/system/blitz.service
         file_info:
           mode: 0640
           owner: root
@@ -78,14 +78,14 @@ nfpms:
 dockers:
   - id: docker-amd64
     ids:
-      - bindplane-loader
+      - blitz
     goos: linux
     goarch: amd64
     dockerfile: package/Dockerfile
     use: buildx
     image_templates:
-      - ghcr.io/observiq/bindplane-loader:{{ .Version }}-amd64
-      - ghcr.io/observiq/bindplane-loader:{{ .Tag }}-amd64
+      - ghcr.io/observiq/blitz:{{ .Version }}-amd64
+      - ghcr.io/observiq/blitz:{{ .Tag }}-amd64
     build_flag_templates:
       - --platform=linux/amd64
       - --build-arg=PROJECT_NAME={{ .ProjectName }}
@@ -93,14 +93,14 @@ dockers:
       - --build-arg=COMMIT_SHA={{ .FullCommit }}
   - id: docker-arm64
     ids:
-      - bindplane-loader
+      - blitz
     goos: linux
     goarch: arm64
     dockerfile: package/Dockerfile
     use: buildx
     image_templates:
-      - ghcr.io/observiq/bindplane-loader:{{ .Version }}-arm64
-      - ghcr.io/observiq/bindplane-loader:{{ .Tag }}-arm64
+      - ghcr.io/observiq/blitz:{{ .Version }}-arm64
+      - ghcr.io/observiq/blitz:{{ .Tag }}-arm64
     build_flag_templates:
       - --platform=linux/arm64
       - --build-arg=PROJECT_NAME={{ .ProjectName }}
@@ -108,14 +108,14 @@ dockers:
       - --build-arg=COMMIT_SHA={{ .FullCommit }}
 
 docker_manifests:
-  - name_template: ghcr.io/observiq/bindplane-loader:{{ .Version }}
+  - name_template: ghcr.io/observiq/blitz:{{ .Version }}
     image_templates:
-      - ghcr.io/observiq/bindplane-loader:{{ .Version }}-amd64
-      - ghcr.io/observiq/bindplane-loader:{{ .Version }}-arm64
-  - name_template: ghcr.io/observiq/bindplane-loader:latest
+      - ghcr.io/observiq/blitz:{{ .Version }}-amd64
+      - ghcr.io/observiq/blitz:{{ .Version }}-arm64
+  - name_template: ghcr.io/observiq/blitz:latest
     image_templates:
-      - ghcr.io/observiq/bindplane-loader:{{ .Tag }}-amd64
-      - ghcr.io/observiq/bindplane-loader:{{ .Tag }}-arm64
+      - ghcr.io/observiq/blitz:{{ .Tag }}-amd64
+      - ghcr.io/observiq/blitz:{{ .Tag }}-arm64
 
 checksum:
   name_template: "checksums.txt"
