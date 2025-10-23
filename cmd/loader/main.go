@@ -4,17 +4,22 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/observiq/bindplane-loader/generator"
 	"github.com/observiq/bindplane-loader/internal/config"
 	"github.com/observiq/bindplane-loader/internal/logging"
 	"github.com/observiq/bindplane-loader/internal/service"
+	"github.com/observiq/bindplane-loader/internal/telemetry/metrics"
 	"github.com/observiq/bindplane-loader/output"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -78,6 +83,12 @@ func main() {
 	// Create signal context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Setup metrics
+	if err := setupMetrics(ctx, logger); err != nil {
+		logger.Error("Failed to setup metrics", zap.Error(err))
+		os.Exit(1)
+	}
 
 	// Listen for OS signals
 	sigChan := make(chan os.Signal, 1)
@@ -167,4 +178,45 @@ func main() {
 	}
 
 	logger.Info("bindplane-loader shutdown complete")
+}
+
+func setupMetrics(ctx context.Context, logger *zap.Logger) error {
+	logger.Info("starting metrics server")
+
+	prometheus, err := metrics.NewPrometheus()
+	if err != nil {
+		return fmt.Errorf("new prometheus: %w", err)
+	}
+
+	if err := prometheus.Start(ctx); err != nil {
+		return fmt.Errorf("start prometheus exporter: %w", err)
+	}
+
+	go func() {
+		err := httpServer(logger)
+		if err != nil {
+			logger.Error("http server", zap.Error(err))
+		}
+	}()
+
+	logger.Info("metrics server started")
+
+	return nil
+}
+
+func httpServer(logger *zap.Logger) error {
+	addr := net.JoinHostPort("0.0.0.0", "9100")
+
+	s := &http.Server{
+		Addr:              addr,
+		IdleTimeout:       5 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      5 * time.Second,
+	}
+
+	s.Handler = promhttp.Handler()
+
+	logger.Info("starting metrics HTTP server", zap.String("addr", addr))
+	return s.ListenAndServe()
 }
