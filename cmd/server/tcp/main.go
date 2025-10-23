@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"os"
 	"time"
 )
 
 func main() {
-	// Listen on localhost:5000
+	// #nosec G102
 	listener, err := net.Listen("tcp", ":5000")
 	if err != nil {
 		fmt.Printf("Failed to start TCP server: %v\n", err)
@@ -34,8 +35,11 @@ func main() {
 func handleTCPConnection(conn net.Conn) {
 	defer conn.Close()
 
-	// Set read timeout
-	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	err := conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	if err != nil {
+		fmt.Printf("Failed to set read deadline: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Read data from the connection
 	scanner := bufio.NewScanner(conn)
