@@ -89,6 +89,8 @@ dockers:
     build_flag_templates:
       - --platform=linux/amd64
       - --build-arg=PROJECT_NAME={{ .ProjectName }}
+      - --build-arg=VERSION={{ .Version }}
+      - --build-arg=COMMIT_SHA={{ .FullCommit }}
   - id: docker-arm64
     ids:
       - bindplane-loader
@@ -102,6 +104,8 @@ dockers:
     build_flag_templates:
       - --platform=linux/arm64
       - --build-arg=PROJECT_NAME={{ .ProjectName }}
+      - --build-arg=VERSION={{ .Version }}
+      - --build-arg=COMMIT_SHA={{ .FullCommit }}
 
 docker_manifests:
   - name_template: ghcr.io/observiq/bindplane-loader:{{ .Version }}

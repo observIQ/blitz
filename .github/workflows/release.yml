@@ -12,6 +12,7 @@ concurrency:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   release:
@@ -43,3 +44,4 @@ jobs:
           args: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_REGISTRY: ghcr.io
