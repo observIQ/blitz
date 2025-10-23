@@ -58,11 +58,11 @@ func NewJSONGenerator(logger *zap.Logger, workers int, rate time.Duration) (*JSO
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
-	meter := otel.Meter("bindplane-loader-generator")
+	meter := otel.Meter("blitz-generator")
 
 	// Initialize metrics
 	jsonLogsGenerated, err := meter.Int64Counter(
-		"bindplane-loader.generator.logs.generated",
+		"blitz.generator.logs.generated",
 		metric.WithDescription("Total number of logs generated"),
 	)
 	if err != nil {
@@ -70,7 +70,7 @@ func NewJSONGenerator(logger *zap.Logger, workers int, rate time.Duration) (*JSO
 	}
 
 	jsonActiveWorkers, err := meter.Int64Gauge(
-		"bindplane-loader.generator.workers.active",
+		"blitz.generator.workers.active",
 		metric.WithDescription("Number of active worker goroutines"),
 	)
 	if err != nil {
@@ -78,7 +78,7 @@ func NewJSONGenerator(logger *zap.Logger, workers int, rate time.Duration) (*JSO
 	}
 
 	jsonWriteErrors, err := meter.Int64Counter(
-		"bindplane-loader.generator.write.errors",
+		"blitz.generator.write.errors",
 		metric.WithDescription("Total number of write errors"),
 	)
 	if err != nil {

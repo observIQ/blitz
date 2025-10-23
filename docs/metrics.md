@@ -20,7 +20,7 @@ To scrape metrics from the Bindplane Loader, configure your Prometheus server to
 
 ```yaml
 scrape_configs:
-  - job_name: 'bindplane-loader'
+  - job_name: 'blitz'
     static_configs:
       - targets: ['localhost:9100']
     scrape_interval: 15s

@@ -17,7 +17,7 @@ import (
 
 // TODO(jsirianni): These could be configurable in the future.
 const (
-	serviceName = "bindplane-loader"
+	serviceName = "blitz"
 )
 
 // Prometheus is an OpenTelemetry Prometheus exporter.

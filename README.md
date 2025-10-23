@@ -6,7 +6,7 @@ A load generation tool for Bindplane managed collectors.
 
 - [Configuration Guide](/docs/configuration.md) - Complete guide to configuring blitz with YAML files, environment variables, and command-line flags
 - [Architecture Overview](/docs/architecture.md) - Detailed explanation of the application architecture, components, and data flow
-- [Metrics Documentation](/docs/metrics.md) - Comprehensive guide to monitoring and metrics exposed by bindplane-loader
+- [Metrics Documentation](/docs/metrics.md) - Comprehensive guide to monitoring and metrics exposed by blitz
 - [Development Guide](/docs/development.md) - Guidelines for contributing to the project
 - [Contributing Guidelines](/docs/CONTRIBUTING.md) - How to contribute to the project
 
