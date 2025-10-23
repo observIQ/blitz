@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/observiq/bindplane-loader/internal/workermanager"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
 
@@ -34,10 +37,20 @@ type UDP struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
+	meter         metric.Meter
+
+	// Metrics
+	udpLogsReceived     metric.Int64Counter
+	udpActiveWorkers    metric.Int64Gauge
+	udpLogRate          metric.Float64Counter
+	udpRequestSizeBytes metric.Int64Histogram
+	udpSendErrors       metric.Int64Counter
 }
 
 // NewUDP creates a new UDP output instance
 func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
+	var err error
+
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -52,15 +65,69 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		if err != nil {
+			cancel()
+		}
+	}()
+
+	meter := otel.Meter("bindplane-loader-udp-output")
+
+	// Initialize metrics
+	udpLogsReceived, err := meter.Int64Counter(
+		"bindplane-loader.udp.logs.received",
+		metric.WithDescription("Number of logs received from the write channel"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create logs received counter: %w", err)
+	}
+
+	udpActiveWorkers, err := meter.Int64Gauge(
+		"bindplane-loader.udp.workers.active",
+		metric.WithDescription("Number of active worker goroutines"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create active workers gauge: %w", err)
+	}
+
+	udpLogRate, err := meter.Float64Counter(
+		"bindplane-loader.udp.log.rate",
+		metric.WithDescription("Rate at which logs are successfully sent to the configured host"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create log rate counter: %w", err)
+	}
+
+	udpRequestSizeBytes, err := meter.Int64Histogram(
+		"bindplane-loader.udp.request.size.bytes",
+		metric.WithDescription("Size of requests in bytes"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create request size histogram: %w", err)
+	}
+
+	udpSendErrors, err := meter.Int64Counter(
+		"bindplane-loader.udp.send.errors",
+		metric.WithDescription("Total number of send errors"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create send errors counter: %w", err)
+	}
 
 	udp := &UDP{
-		logger:   logger.Named("output-udp"),
-		host:     host,
-		port:     port,
-		workers:  workers,
-		dataChan: make(chan []byte, DefaultUDPChannelSize),
-		ctx:      ctx,
-		cancel:   cancel,
+		logger:              logger.Named("output-udp"),
+		host:                host,
+		port:                port,
+		workers:             workers,
+		dataChan:            make(chan []byte, DefaultUDPChannelSize),
+		ctx:                 ctx,
+		cancel:              cancel,
+		meter:               meter,
+		udpLogsReceived:     udpLogsReceived,
+		udpActiveWorkers:    udpActiveWorkers,
+		udpLogRate:          udpLogRate,
+		udpRequestSizeBytes: udpRequestSizeBytes,
+		udpSendErrors:       udpSendErrors,
 	}
 
 	udp.logger.Info("Starting UDP output",
@@ -72,6 +139,15 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 
 	// Create worker manager
 	udp.workerManager = workermanager.NewWorkerManager(udp.logger, workers, udp.udpWorker)
+
+	// Record initial active workers count
+	udp.udpActiveWorkers.Record(context.Background(), int64(workers),
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_udp"),
+			),
+		),
+	)
 
 	// Start the workers
 	udp.workerManager.Start()
@@ -86,6 +162,14 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 func (u *UDP) Write(ctx context.Context, data []byte) error {
 	select {
 	case u.dataChan <- data:
+		// Record logs received
+		u.udpLogsReceived.Add(ctx, 1,
+			metric.WithAttributeSet(
+				attribute.NewSet(
+					attribute.String("component", "output_udp"),
+				),
+			),
+		)
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -100,6 +184,15 @@ func (u *UDP) Write(ctx context.Context, data []byte) error {
 // even if workers are still shutting down.
 func (u *UDP) Stop(ctx context.Context) error {
 	u.logger.Info("Stopping UDP output")
+
+	// Record zero active workers
+	u.udpActiveWorkers.Record(ctx, 0,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_udp"),
+			),
+		),
+	)
 
 	// Close the channel to ensure workers do not
 	// process new data.
@@ -170,14 +263,51 @@ func (u *UDP) connect() (net.Conn, error) {
 func (u *UDP) sendData(conn net.Conn, data []byte) error {
 	// Set write timeout
 	if err := conn.SetWriteDeadline(time.Now().Add(DefaultUDPWriteTimeout)); err != nil {
+		u.recordSendError("unknown", err)
 		return fmt.Errorf("failed to set write deadline: %w", err)
 	}
 
 	// Send the data
-	_, err := conn.Write(data)
+	bytesWritten, err := conn.Write(data)
 	if err != nil {
+		// Classify error type
+		errorType := "unknown"
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			errorType = "timeout"
+		}
+		u.recordSendError(errorType, err)
 		return fmt.Errorf("failed to write data: %w", err)
 	}
 
+	// Record successful send metrics
+	u.udpLogRate.Add(context.Background(), 1.0,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_udp"),
+			),
+		),
+	)
+	u.udpRequestSizeBytes.Record(context.Background(), int64(bytesWritten),
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_udp"),
+			),
+		),
+	)
+
 	return nil
+}
+
+// recordSendError records metrics for send errors
+func (u *UDP) recordSendError(errorType string, err error) {
+	ctx := context.Background()
+
+	u.udpSendErrors.Add(ctx, 1,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_udp"),
+				attribute.String("error_type", errorType),
+			),
+		),
+	)
 }

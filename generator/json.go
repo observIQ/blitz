@@ -9,6 +9,9 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	json "github.com/goccy/go-json"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +31,12 @@ type JSONLogGenerator struct {
 	rate    time.Duration
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
+	meter   metric.Meter
+
+	// Metrics
+	jsonLogsGenerated metric.Int64Counter
+	jsonActiveWorkers metric.Int64Gauge
+	jsonWriteErrors   metric.Int64Counter
 }
 
 // severityLevels contains random log severity levels
@@ -49,11 +58,42 @@ func NewJSONGenerator(logger *zap.Logger, workers int, rate time.Duration) (*JSO
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
+	meter := otel.Meter("bindplane-loader-generator")
+
+	// Initialize metrics
+	jsonLogsGenerated, err := meter.Int64Counter(
+		"bindplane-loader.generator.logs.generated",
+		metric.WithDescription("Total number of logs generated"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create logs generated counter: %w", err)
+	}
+
+	jsonActiveWorkers, err := meter.Int64Gauge(
+		"bindplane-loader.generator.workers.active",
+		metric.WithDescription("Number of active worker goroutines"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create active workers gauge: %w", err)
+	}
+
+	jsonWriteErrors, err := meter.Int64Counter(
+		"bindplane-loader.generator.write.errors",
+		metric.WithDescription("Total number of write errors"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create write errors counter: %w", err)
+	}
+
 	return &JSONLogGenerator{
-		logger:  logger,
-		workers: workers,
-		rate:    rate,
-		stopCh:  make(chan struct{}),
+		logger:            logger,
+		workers:           workers,
+		rate:              rate,
+		stopCh:            make(chan struct{}),
+		meter:             meter,
+		jsonLogsGenerated: jsonLogsGenerated,
+		jsonActiveWorkers: jsonActiveWorkers,
+		jsonWriteErrors:   jsonWriteErrors,
 	}, nil
 }
 
@@ -63,6 +103,15 @@ func (g *JSONLogGenerator) Start(writer generatorWriter) error {
 	g.logger.Info("Starting JSON log generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate))
+
+	// Record initial active workers count
+	g.jsonActiveWorkers.Record(context.Background(), int64(g.workers),
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "generator_json"),
+			),
+		),
+	)
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
@@ -76,6 +125,15 @@ func (g *JSONLogGenerator) Start(writer generatorWriter) error {
 // This function expects to be called exactly once.
 func (g *JSONLogGenerator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping JSON log generator")
+
+	// Record zero active workers
+	g.jsonActiveWorkers.Record(ctx, 0,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "generator_json"),
+			),
+		),
+	)
 
 	close(g.stopCh)
 
@@ -130,14 +188,34 @@ func (g *JSONLogGenerator) worker(workerID int, writer generatorWriter) {
 func (g *JSONLogGenerator) generateAndWriteLog(writer generatorWriter, workerID int) error {
 	data, err := generateRandomLog()
 	if err != nil {
+		g.recordWriteError("unknown", err)
 		return fmt.Errorf("generate random log: %w", err)
 	}
+
+	// Record logs generated counter
+	g.jsonLogsGenerated.Add(context.Background(), 1,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "generator_json"),
+			),
+		),
+	)
 
 	// Write the data with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	return writer.Write(ctx, data)
+	if err := writer.Write(ctx, data); err != nil {
+		// Classify error type
+		errorType := "unknown"
+		if ctx.Err() == context.DeadlineExceeded {
+			errorType = "timeout"
+		}
+		g.recordWriteError(errorType, err)
+		return err
+	}
+
+	return nil
 }
 
 // generateRandomLog creates a random log entry
@@ -285,4 +363,18 @@ var logMessages = []string{
 	"Database security monitoring, database_count=50, query_monitoring=continuous, access_logging=enabled, privilege_escalation=detected, data_encryption=at_rest_and_in_transit, backup_encryption=enabled, audit_trail=comprehensive",
 	"Identity governance and administration, identity_count=10000, lifecycle_management=automated, access_certification=quarterly, segregation_of_duties=enforced, privileged_access=monitored, compliance_reporting=automated",
 	"Security orchestration and automation, playbook_count=50, automation_level=80%, response_time=reduced_75%, analyst_productivity=increased_50%, false_positive_reduction=60%, integration_count=100, workflow_efficiency=optimized",
+}
+
+// recordWriteError records metrics for write errors
+func (g *JSONLogGenerator) recordWriteError(errorType string, err error) {
+	ctx := context.Background()
+
+	g.jsonWriteErrors.Add(ctx, 1,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "generator_json"),
+				attribute.String("error_type", errorType),
+			),
+		),
+	)
 }

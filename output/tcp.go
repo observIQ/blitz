@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/observiq/bindplane-loader/internal/workermanager"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
 
@@ -37,10 +40,21 @@ type TCP struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
+	meter         metric.Meter
+
+	// Metrics
+	tcpLogsReceived     metric.Int64Counter
+	tcpActiveWorkers    metric.Int64Gauge
+	tcpLogRate          metric.Float64Counter
+	tcpRequestSizeBytes metric.Int64Histogram
+	tcpRequestLatency   metric.Float64Histogram
+	tcpSendErrors       metric.Int64Counter
 }
 
 // NewTCP creates a new TCP output instance
 func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
+	var err error
+
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -55,15 +69,78 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		if err != nil {
+			cancel()
+		}
+	}()
+
+	meter := otel.Meter("bindplane-loader-tcp-output")
+
+	// Initialize metrics
+	tcpLogsReceived, err := meter.Int64Counter(
+		"bindplane-loader.tcp.logs.received",
+		metric.WithDescription("Number of logs received from the write channel"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create logs received counter: %w", err)
+	}
+
+	tcpActiveWorkers, err := meter.Int64Gauge(
+		"bindplane-loader.tcp.workers.active",
+		metric.WithDescription("Number of active worker goroutines"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create active workers gauge: %w", err)
+	}
+
+	tcpLogRate, err := meter.Float64Counter(
+		"bindplane-loader.tcp.log.rate",
+		metric.WithDescription("Rate at which logs are successfully sent to the configured host"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create log rate counter: %w", err)
+	}
+
+	tcpRequestSizeBytes, err := meter.Int64Histogram(
+		"bindplane-loader.tcp.request.size.bytes",
+		metric.WithDescription("Size of requests in bytes"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create request size histogram: %w", err)
+	}
+
+	tcpRequestLatency, err := meter.Float64Histogram(
+		"bindplane-loader.tcp.request.latency",
+		metric.WithDescription("Request latency in seconds"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create request latency histogram: %w", err)
+	}
+
+	tcpSendErrors, err := meter.Int64Counter(
+		"bindplane-loader.tcp.send.errors",
+		metric.WithDescription("Total number of send errors"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create send errors counter: %w", err)
+	}
 
 	tcp := &TCP{
-		logger:   logger.Named("output-tcp"),
-		host:     host,
-		port:     port,
-		workers:  workers,
-		dataChan: make(chan []byte, DefaultTCPChannelSize),
-		ctx:      ctx,
-		cancel:   cancel,
+		logger:              logger.Named("output-tcp"),
+		host:                host,
+		port:                port,
+		workers:             workers,
+		dataChan:            make(chan []byte, DefaultTCPChannelSize),
+		ctx:                 ctx,
+		cancel:              cancel,
+		meter:               meter,
+		tcpLogsReceived:     tcpLogsReceived,
+		tcpActiveWorkers:    tcpActiveWorkers,
+		tcpLogRate:          tcpLogRate,
+		tcpRequestSizeBytes: tcpRequestSizeBytes,
+		tcpRequestLatency:   tcpRequestLatency,
+		tcpSendErrors:       tcpSendErrors,
 	}
 
 	tcp.logger.Info("Starting TCP output",
@@ -75,6 +152,15 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 
 	// Create worker manager
 	tcp.workerManager = workermanager.NewWorkerManager(tcp.logger, workers, tcp.tcpWorker)
+
+	// Record initial active workers count
+	tcp.tcpActiveWorkers.Record(context.Background(), int64(workers),
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_tcp"),
+			),
+		),
+	)
 
 	// Start the workers
 	tcp.workerManager.Start()
@@ -89,6 +175,14 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 func (t *TCP) Write(ctx context.Context, data []byte) error {
 	select {
 	case t.dataChan <- data:
+		// Record logs received
+		t.tcpLogsReceived.Add(ctx, 1,
+			metric.WithAttributeSet(
+				attribute.NewSet(
+					attribute.String("component", "output_tcp"),
+				),
+			),
+		)
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -103,6 +197,15 @@ func (t *TCP) Write(ctx context.Context, data []byte) error {
 // even if workers are still shutting down.
 func (t *TCP) Stop(ctx context.Context) error {
 	t.logger.Info("Stopping TCP output")
+
+	// Record zero active workers
+	t.tcpActiveWorkers.Record(ctx, 0,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_tcp"),
+			),
+		),
+	)
 
 	// Close the channel to ensure workers do not
 	// process new data.
@@ -171,8 +274,11 @@ func (t *TCP) connect() (net.Conn, error) {
 
 // sendData sends data to the TCP connection with a timeout
 func (t *TCP) sendData(conn net.Conn, data []byte) error {
+	startTime := time.Now()
+
 	// Set write timeout
 	if err := conn.SetWriteDeadline(time.Now().Add(DefaultTCPWriteTimeout)); err != nil {
+		t.recordSendError("unknown", err)
 		return fmt.Errorf("failed to set write deadline: %w", err)
 	}
 
@@ -180,10 +286,54 @@ func (t *TCP) sendData(conn net.Conn, data []byte) error {
 	dataWithNewline := append(data, '\n')
 
 	// Send the data
-	_, err := conn.Write(dataWithNewline)
+	bytesWritten, err := conn.Write(dataWithNewline)
 	if err != nil {
+		// Classify error type
+		errorType := "unknown"
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			errorType = "timeout"
+		}
+		t.recordSendError(errorType, err)
 		return fmt.Errorf("failed to write data: %w", err)
 	}
 
+	// Record successful send metrics
+	latency := time.Since(startTime).Seconds()
+	t.tcpLogRate.Add(context.Background(), 1.0,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_tcp"),
+			),
+		),
+	)
+	t.tcpRequestSizeBytes.Record(context.Background(), int64(bytesWritten),
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_tcp"),
+			),
+		),
+	)
+	t.tcpRequestLatency.Record(context.Background(), latency,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_tcp"),
+			),
+		),
+	)
+
 	return nil
+}
+
+// recordSendError records metrics for send errors
+func (t *TCP) recordSendError(errorType string, err error) {
+	ctx := context.Background()
+
+	t.tcpSendErrors.Add(ctx, 1,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_tcp"),
+				attribute.String("error_type", errorType),
+			),
+		),
+	)
 }
