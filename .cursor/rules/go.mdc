@@ -6,3 +6,12 @@ alwaysApply: true
 - Prefer using `any` instead of `interface{}`
 
 - Always follow the Uber Go Style Guide: https://raw.githubusercontent.com/uber-go/guide/refs/heads/master/style.md
+
+## Testing Requirements
+- Tests must be updated whenever function signatures change
+- All tests must pass after any code changes
+
+## Code Quality
+- All code must pass linting checks
+- No unused imports or variables
+- Comments should only be used when code is not obvious. Avoid comments that simply restate what the code does (e.g., "Use no-op logger for tests" or "close channel")

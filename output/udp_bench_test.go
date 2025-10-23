@@ -9,55 +9,45 @@ import (
 	"go.uber.org/zap"
 )
 
-// Benchmark server state
+// Benchmark UDP server state
 var (
-	benchServer     net.Listener
-	benchServerAddr string
-	benchServerOnce sync.Once
+	benchUDPServer     net.PacketConn
+	benchUDPServerAddr string
+	benchUDPServerOnce sync.Once
 )
 
-// startBenchmarkServer starts a single TCP server for all benchmarks
-func startBenchmarkServer() (net.Listener, string) {
-	benchServerOnce.Do(func() {
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
+// startBenchmarkUDPServer starts a single UDP server for all benchmarks
+func startBenchmarkUDPServer() (net.PacketConn, string) {
+	benchUDPServerOnce.Do(func() {
+		conn, err := net.ListenPacket("udp", "127.0.0.1:0")
 		if err != nil {
-			panic("Failed to start benchmark server: " + err.Error())
+			panic("Failed to start benchmark UDP server: " + err.Error())
 		}
 
-		benchServer = listener
-		benchServerAddr = listener.Addr().String()
+		benchUDPServer = conn
+		benchUDPServerAddr = conn.LocalAddr().String()
 
 		// Start server goroutine that discards all data
 		go func() {
+			buffer := make([]byte, 4096)
 			for {
-				conn, err := listener.Accept()
+				_, _, err := conn.ReadFrom(buffer)
 				if err != nil {
-					// Listener closed, exit
+					// Connection closed or error, exit
 					return
 				}
-
-				go func() {
-					defer conn.Close()
-					// Discard all data by reading into a buffer
-					buffer := make([]byte, 4096)
-					for {
-						_, err := conn.Read(buffer)
-						if err != nil {
-							return
-						}
-					}
-				}()
+				// Discard data
 			}
 		}()
 	})
 
-	return benchServer, benchServerAddr
+	return benchUDPServer, benchUDPServerAddr
 }
 
-func BenchmarkTCP_1Worker(b *testing.B) {
+func BenchmarkUDP_1Worker(b *testing.B) {
 	logger := zap.NewNop()
 
-	_, serverAddr := startBenchmarkServer()
+	_, serverAddr := startBenchmarkUDPServer()
 	defer func() {
 		// Don't close the server as it's shared across benchmarks
 	}()
@@ -67,12 +57,12 @@ func BenchmarkTCP_1Worker(b *testing.B) {
 		b.Fatalf("Failed to split server address: %v", err)
 	}
 
-	// Create TCP client with 1 worker
-	tcp, err := NewTCP(logger, host, port, 1)
+	// Create UDP client with 1 worker
+	udp, err := NewUDP(logger, host, port, 1)
 	if err != nil {
-		b.Fatalf("Failed to create TCP client: %v", err)
+		b.Fatalf("Failed to create UDP client: %v", err)
 	}
-	defer tcp.Stop(context.Background())
+	defer udp.Stop(context.Background())
 
 	// Test data
 	testData := []byte("benchmark test data")
@@ -81,7 +71,7 @@ func BenchmarkTCP_1Worker(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := tcp.Write(ctx, testData)
+			err := udp.Write(ctx, testData)
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -89,10 +79,10 @@ func BenchmarkTCP_1Worker(b *testing.B) {
 	})
 }
 
-func BenchmarkTCP_10Workers(b *testing.B) {
+func BenchmarkUDP_10Workers(b *testing.B) {
 	logger := zap.NewNop()
 
-	_, serverAddr := startBenchmarkServer()
+	_, serverAddr := startBenchmarkUDPServer()
 	defer func() {
 		// Don't close the server as it's shared across benchmarks
 	}()
@@ -102,12 +92,12 @@ func BenchmarkTCP_10Workers(b *testing.B) {
 		b.Fatalf("Failed to split server address: %v", err)
 	}
 
-	// Create TCP client with 10 workers
-	tcp, err := NewTCP(logger, host, port, 10)
+	// Create UDP client with 10 workers
+	udp, err := NewUDP(logger, host, port, 10)
 	if err != nil {
-		b.Fatalf("Failed to create TCP client: %v", err)
+		b.Fatalf("Failed to create UDP client: %v", err)
 	}
-	defer tcp.Stop(context.Background())
+	defer udp.Stop(context.Background())
 
 	// Test data
 	testData := []byte("benchmark test data")
@@ -116,7 +106,7 @@ func BenchmarkTCP_10Workers(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := tcp.Write(ctx, testData)
+			err := udp.Write(ctx, testData)
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -124,11 +114,11 @@ func BenchmarkTCP_10Workers(b *testing.B) {
 	})
 }
 
-// BenchmarkTCP_1Worker_Sequential benchmarks 1 worker with sequential writes
-func BenchmarkTCP_1Worker_Sequential(b *testing.B) {
+// BenchmarkUDP_1Worker_Sequential benchmarks 1 worker with sequential writes
+func BenchmarkUDP_1Worker_Sequential(b *testing.B) {
 	logger := zap.NewNop()
 
-	_, serverAddr := startBenchmarkServer()
+	_, serverAddr := startBenchmarkUDPServer()
 	defer func() {
 		// Don't close the server as it's shared across benchmarks
 	}()
@@ -138,12 +128,12 @@ func BenchmarkTCP_1Worker_Sequential(b *testing.B) {
 		b.Fatalf("Failed to split server address: %v", err)
 	}
 
-	// Create TCP client with 1 worker
-	tcp, err := NewTCP(logger, host, port, 1)
+	// Create UDP client with 1 worker
+	udp, err := NewUDP(logger, host, port, 1)
 	if err != nil {
-		b.Fatalf("Failed to create TCP client: %v", err)
+		b.Fatalf("Failed to create UDP client: %v", err)
 	}
-	defer tcp.Stop(context.Background())
+	defer udp.Stop(context.Background())
 
 	// Test data
 	testData := []byte("benchmark test data")
@@ -151,18 +141,18 @@ func BenchmarkTCP_1Worker_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := tcp.Write(ctx, testData)
+		err := udp.Write(ctx, testData)
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}
 	}
 }
 
-// BenchmarkTCP_10Workers_Sequential benchmarks 10 workers with sequential writes
-func BenchmarkTCP_10Workers_Sequential(b *testing.B) {
+// BenchmarkUDP_10Workers_Sequential benchmarks 10 workers with sequential writes
+func BenchmarkUDP_10Workers_Sequential(b *testing.B) {
 	logger := zap.NewNop()
 
-	_, serverAddr := startBenchmarkServer()
+	_, serverAddr := startBenchmarkUDPServer()
 	defer func() {
 		// Don't close the server as it's shared across benchmarks
 	}()
@@ -172,12 +162,12 @@ func BenchmarkTCP_10Workers_Sequential(b *testing.B) {
 		b.Fatalf("Failed to split server address: %v", err)
 	}
 
-	// Create TCP client with 10 workers
-	tcp, err := NewTCP(logger, host, port, 10)
+	// Create UDP client with 10 workers
+	udp, err := NewUDP(logger, host, port, 10)
 	if err != nil {
-		b.Fatalf("Failed to create TCP client: %v", err)
+		b.Fatalf("Failed to create UDP client: %v", err)
 	}
-	defer tcp.Stop(context.Background())
+	defer udp.Stop(context.Background())
 
 	// Test data
 	testData := []byte("benchmark test data")
@@ -185,17 +175,17 @@ func BenchmarkTCP_10Workers_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := tcp.Write(ctx, testData)
+		err := udp.Write(ctx, testData)
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}
 	}
 }
 
-// BenchmarkTCP_ChannelOnly benchmarks just the channel operations without TCP
-func BenchmarkTCP_ChannelOnly(b *testing.B) {
-	// Create a channel similar to the TCP implementation
-	dataChan := make(chan []byte, DefaultTCPChannelSize)
+// BenchmarkUDP_ChannelOnly benchmarks just the channel operations without UDP
+func BenchmarkUDP_ChannelOnly(b *testing.B) {
+	// Create a channel similar to the UDP implementation
+	dataChan := make(chan []byte, DefaultUDPChannelSize)
 
 	// Start a goroutine to consume data
 	go func() {
@@ -221,10 +211,10 @@ func BenchmarkTCP_ChannelOnly(b *testing.B) {
 	close(dataChan)
 }
 
-// BenchmarkTCP_ChannelOnly_Sequential benchmarks channel operations sequentially
-func BenchmarkTCP_ChannelOnly_Sequential(b *testing.B) {
-	// Create a channel similar to the TCP implementation
-	dataChan := make(chan []byte, DefaultTCPChannelSize)
+// BenchmarkUDP_ChannelOnly_Sequential benchmarks channel operations sequentially
+func BenchmarkUDP_ChannelOnly_Sequential(b *testing.B) {
+	// Create a channel similar to the UDP implementation
+	dataChan := make(chan []byte, DefaultUDPChannelSize)
 
 	// Start a goroutine to consume data
 	go func() {

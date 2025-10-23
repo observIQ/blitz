@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func TestNewTCP(t *testing.T) {
+func TestNewUDP(t *testing.T) {
 	logger := zap.NewNop()
 
 	tests := []struct {
@@ -78,93 +78,77 @@ func TestNewTCP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var tcp *TCP
+			var udp *UDP
 			var err error
 
 			if tt.name == "nil logger" {
-				tcp, err = NewTCP(nil, tt.host, tt.port, tt.workers)
+				udp, err = NewUDP(nil, tt.host, tt.port, tt.workers)
 			} else {
-				tcp, err = NewTCP(logger, tt.host, tt.port, tt.workers)
+				udp, err = NewUDP(logger, tt.host, tt.port, tt.workers)
 			}
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("NewTCP() expected error but got none")
+					t.Errorf("NewUDP() expected error but got none")
 					return
 				}
 				if tt.errContains != "" && !containsString(err.Error(), tt.errContains) {
-					t.Errorf("NewTCP() error = %v, want error containing %q", err, tt.errContains)
+					t.Errorf("NewUDP() error = %v, want error containing %q", err, tt.errContains)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("NewTCP() unexpected error = %v", err)
+				t.Errorf("NewUDP() unexpected error = %v", err)
 				return
 			}
 
-			if tcp == nil {
-				t.Errorf("NewTCP() returned nil TCP instance")
+			if udp == nil {
+				t.Errorf("NewUDP() returned nil UDP instance")
 				return
 			}
 
 			// Verify the configuration was set correctly
-			if tcp.host != tt.host {
-				t.Errorf("NewTCP() host = %v, want %v", tcp.host, tt.host)
+			if udp.host != tt.host {
+				t.Errorf("NewUDP() host = %v, want %v", udp.host, tt.host)
 			}
-			if tcp.port != tt.port {
-				t.Errorf("NewTCP() port = %v, want %v", tcp.port, tt.port)
+			if udp.port != tt.port {
+				t.Errorf("NewUDP() port = %v, want %v", udp.port, tt.port)
 			}
 
 			// Verify workers defaulting
 			expectedWorkers := tt.workers
 			if tt.workers <= 0 {
-				expectedWorkers = DefaultTCPWorkers
+				expectedWorkers = DefaultUDPWorkers
 			}
-			if tcp.workers != expectedWorkers {
-				t.Errorf("NewTCP() workers = %v, want %v", tcp.workers, expectedWorkers)
+			if udp.workers != expectedWorkers {
+				t.Errorf("NewUDP() workers = %v, want %v", udp.workers, expectedWorkers)
 			}
 
 			// Verify channel was created
-			if tcp.dataChan == nil {
-				t.Errorf("NewTCP() dataChan is nil")
+			if udp.dataChan == nil {
+				t.Errorf("NewUDP() dataChan is nil")
 			}
 
 			// Verify context was created
-			if tcp.ctx == nil {
-				t.Errorf("NewTCP() ctx is nil")
+			if udp.ctx == nil {
+				t.Errorf("NewUDP() ctx is nil")
 			}
-			if tcp.cancel == nil {
-				t.Errorf("NewTCP() cancel is nil")
+			if udp.cancel == nil {
+				t.Errorf("NewUDP() cancel is nil")
 			}
 
 			// Clean up
-			tcp.Stop(context.Background())
+			udp.Stop(context.Background())
 		})
 	}
 }
 
-// Helper function to check if a string contains a substring
-func containsString(s, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
-func TestTCP_Integration(t *testing.T) {
+func TestUDP_Integration(t *testing.T) {
 	logger := zap.NewNop()
 
-	// Start a TCP server on a random available port
-	listener, serverAddr := startTestTCPServer(t)
+	// Start a UDP server on a random available port
+	listener, serverAddr := startTestUDPServer(t)
 	defer listener.Close()
 
 	// Extract host and port from the server address
@@ -173,21 +157,21 @@ func TestTCP_Integration(t *testing.T) {
 		t.Fatalf("Failed to split server address: %v", err)
 	}
 
-	// Create TCP client
-	tcp, err := NewTCP(logger, host, port, 1)
+	// Create UDP client
+	udp, err := NewUDP(logger, host, port, 1)
 	if err != nil {
-		t.Fatalf("Failed to create TCP client: %v", err)
+		t.Fatalf("Failed to create UDP client: %v", err)
 	}
 
 	// Test data to send
-	testData1 := []byte("Hello, World!")
-	testData2 := []byte("Second message")
+	testData1 := []byte("Hello, UDP!")
+	testData2 := []byte("Second UDP message")
 
 	// Send first message
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err = tcp.Write(ctx, testData1)
+	err = udp.Write(ctx, testData1)
 	if err != nil {
 		t.Errorf("First Write() failed: %v", err)
 	}
@@ -196,7 +180,7 @@ func TestTCP_Integration(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Send second message
-	err = tcp.Write(ctx, testData2)
+	err = udp.Write(ctx, testData2)
 	if err != nil {
 		t.Errorf("Second Write() failed: %v", err)
 	}
@@ -205,7 +189,7 @@ func TestTCP_Integration(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Stop the client
-	err = tcp.Stop(ctx)
+	err = udp.Stop(ctx)
 	if err != nil {
 		t.Errorf("Stop() failed: %v", err)
 	}
@@ -214,22 +198,20 @@ func TestTCP_Integration(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify the server received the data
-	receivedData := getReceivedData(t)
+	receivedData := getReceivedUDPData(t)
 
-	// TCP is a stream protocol, so messages might be concatenated
-	// We'll check that we received at least one message containing our data
+	// UDP packets are separate, so we should receive them individually
 	if len(receivedData) == 0 {
 		t.Errorf("Expected at least 1 message, got 0")
 		return
 	}
 
-	// Combine all received data to check content
+	// Check that both test messages are present in the received data
 	var allData []byte
 	for _, data := range receivedData {
 		allData = append(allData, data...)
 	}
 
-	// Check that both test messages are present in the received data
 	allDataStr := string(allData)
 	if !containsString(allDataStr, string(testData1)) {
 		t.Errorf("First message %q not found in received data: %q", string(testData1), allDataStr)
@@ -239,11 +221,11 @@ func TestTCP_Integration(t *testing.T) {
 	}
 }
 
-func TestTCP_WriteAfterStop(t *testing.T) {
+func TestUDP_WriteAfterStop(t *testing.T) {
 	logger := zap.NewNop()
 
-	// Start a TCP server
-	listener, serverAddr := startTestTCPServer(t)
+	// Start a UDP server
+	listener, serverAddr := startTestUDPServer(t)
 	defer listener.Close()
 
 	host, port, err := net.SplitHostPort(serverAddr)
@@ -251,15 +233,15 @@ func TestTCP_WriteAfterStop(t *testing.T) {
 		t.Fatalf("Failed to split server address: %v", err)
 	}
 
-	// Create TCP client
-	tcp, err := NewTCP(logger, host, port, 1)
+	// Create UDP client
+	udp, err := NewUDP(logger, host, port, 1)
 	if err != nil {
-		t.Fatalf("Failed to create TCP client: %v", err)
+		t.Fatalf("Failed to create UDP client: %v", err)
 	}
 
 	// Stop the client
 	ctx := context.Background()
-	err = tcp.Stop(ctx)
+	err = udp.Stop(ctx)
 	if err != nil {
 		t.Errorf("Stop() failed: %v", err)
 	}
@@ -272,20 +254,20 @@ func TestTCP_WriteAfterStop(t *testing.T) {
 		}
 	}()
 
-	err = tcp.Write(ctx, []byte("This should fail"))
+	err = udp.Write(ctx, []byte("This should fail"))
 	if err != nil {
 		// Error is also expected due to race condition
-		if !containsString(err.Error(), "TCP output is shutting down") {
+		if !containsString(err.Error(), "UDP output is shutting down") {
 			t.Errorf("Write after Stop should return shutdown error, got: %v", err)
 		}
 	}
 }
 
-func TestTCP_StopTwice(t *testing.T) {
+func TestUDP_StopTwice(t *testing.T) {
 	logger := zap.NewNop()
 
-	// Start a TCP server
-	listener, serverAddr := startTestTCPServer(t)
+	// Start a UDP server
+	listener, serverAddr := startTestUDPServer(t)
 	defer listener.Close()
 
 	host, port, err := net.SplitHostPort(serverAddr)
@@ -293,15 +275,15 @@ func TestTCP_StopTwice(t *testing.T) {
 		t.Fatalf("Failed to split server address: %v", err)
 	}
 
-	// Create TCP client
-	tcp, err := NewTCP(logger, host, port, 1)
+	// Create UDP client
+	udp, err := NewUDP(logger, host, port, 1)
 	if err != nil {
-		t.Fatalf("Failed to create TCP client: %v", err)
+		t.Fatalf("Failed to create UDP client: %v", err)
 	}
 
 	// Stop the client first time
 	ctx := context.Background()
-	err = tcp.Stop(ctx)
+	err = udp.Stop(ctx)
 	if err != nil {
 		t.Errorf("First Stop() failed: %v", err)
 	}
@@ -313,70 +295,56 @@ func TestTCP_StopTwice(t *testing.T) {
 		}
 	}()
 
-	tcp.Stop(ctx)
+	udp.Stop(ctx)
 }
 
-// Test server implementation
+// Test UDP server implementation
 var (
-	receivedData [][]byte
-	dataMutex    sync.Mutex
+	receivedUDPData [][]byte
+	udpDataMutex    sync.Mutex
 )
 
-func startTestTCPServer(t *testing.T) (net.Listener, string) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+func startTestUDPServer(t *testing.T) (net.PacketConn, string) {
+	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("Failed to start test server: %v", err)
+		t.Fatalf("Failed to start test UDP server: %v", err)
 	}
 
 	// Reset received data
-	dataMutex.Lock()
-	receivedData = make([][]byte, 0)
-	dataMutex.Unlock()
+	udpDataMutex.Lock()
+	receivedUDPData = make([][]byte, 0)
+	udpDataMutex.Unlock()
 
 	// Start server goroutine
 	go func() {
+		buffer := make([]byte, 1024)
 		for {
-			conn, err := listener.Accept()
+			n, _, err := conn.ReadFrom(buffer)
 			if err != nil {
-				// Listener closed, exit
+				// Connection closed or error, exit
 				return
 			}
 
-			go handleTestConnection(conn)
+			// Store received data
+			data := make([]byte, n)
+			copy(data, buffer[:n])
+
+			udpDataMutex.Lock()
+			receivedUDPData = append(receivedUDPData, data)
+			udpDataMutex.Unlock()
 		}
 	}()
 
-	return listener, listener.Addr().String()
+	return conn, conn.LocalAddr().String()
 }
 
-func handleTestConnection(conn net.Conn) {
-	defer conn.Close()
-
-	buffer := make([]byte, 1024)
-	for {
-		n, err := conn.Read(buffer)
-		if err != nil {
-			// Connection closed or error, exit
-			return
-		}
-
-		// Store received data
-		data := make([]byte, n)
-		copy(data, buffer[:n])
-
-		dataMutex.Lock()
-		receivedData = append(receivedData, data)
-		dataMutex.Unlock()
-	}
-}
-
-func getReceivedData(t *testing.T) [][]byte {
-	dataMutex.Lock()
-	defer dataMutex.Unlock()
+func getReceivedUDPData(t *testing.T) [][]byte {
+	udpDataMutex.Lock()
+	defer udpDataMutex.Unlock()
 
 	// Return a copy of the received data
-	result := make([][]byte, len(receivedData))
-	for i, data := range receivedData {
+	result := make([][]byte, len(receivedUDPData))
+	for i, data := range receivedUDPData {
 		result[i] = make([]byte, len(data))
 		copy(result[i], data)
 	}
