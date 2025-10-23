@@ -38,49 +38,57 @@ Download the appropriate package for your Linux distribution from the [latest re
 
 #### Debian/Ubuntu Installation
 
-```bash
-# Install the package
-sudo apt-get install ./bindplane-loader_amd64.deb
+Install the package with your package manager:
 
-# Edit the configuration file
-sudo vi /etc/bindplane-loader/config.yaml
-
-# Enable and start the service
-sudo systemctl enable bindplane-loader
-sudo systemctl start bindplane-loader
-
-# Check service status
-sudo systemctl status bindplane-loader
-
-# View service logs
-sudo journalctl -u bindplane-loader -f
-```
-
-#### Red Hat/CentOS/Fedora Installation
+**Debian**
 
 ```bash
-# Install the package
-sudo dnf install bindplane-loader_amd64.rpm
-
-# Edit the configuration file
-sudo vi /etc/bindplane-loader/config.yaml
-
-# Enable and start the service
-sudo systemctl enable bindplane-loader
-sudo systemctl start bindplane-loader
-
-# Check service status
-sudo systemctl status bindplane-loader
-
-# View service logs
-sudo journalctl -u bindplane-loader -f
+sudo apt-get install -f ./bindplane-loader_amd64.deb
 ```
 
-The package installs:
-- Binary: `/usr/bin/bindplane-loader`
-- Configuration: `/etc/bindplane-loader/config.yaml`
-- Systemd service: `/usr/lib/systemd/system/bindplane-loader.service`
-- User/Group: `bploader:bploader`
+**RHEL**
+
+```bash
+sudo dnf install ./bindplane-loader_amd64.rpm
+```
+
+Edit the configuration file:
+
+```bash
+sudo vi /etc/bindplane-loader/config.yaml
+```
+
+Example minimal configuration for JSON generator and TCP output:
+
+```yaml
+generator:
+  type: json
+  json:
+    workers: 2
+    rate: 500ms
+output:
+  type: tcp
+  tcp:
+    host: logs.example.com
+    port: 9090
+    workers: 3
+logging:
+  level: info
+```
+
+Enable and start the service
+
+```bash
+sudo systemctl enable bindplane-loader
+sudo systemctl start bindplane-loader
+sudo systemctl status bindplane-loader
+```
+
+View service logs:
+
+```bash
+sudo journalctl -u bindplane-loader -f
+```
 
 ### Container
 
