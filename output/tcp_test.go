@@ -3,6 +3,7 @@ package output
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -92,7 +93,7 @@ func TestNewTCP(t *testing.T) {
 					t.Errorf("NewTCP() expected error but got none")
 					return
 				}
-				if tt.errContains != "" && !containsString(err.Error(), tt.errContains) {
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
 					t.Errorf("NewTCP() error = %v, want error containing %q", err, tt.errContains)
 				}
 				return
@@ -142,22 +143,6 @@ func TestNewTCP(t *testing.T) {
 			tcp.Stop(context.Background())
 		})
 	}
-}
-
-// Helper function to check if a string contains a substring
-func containsString(s, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestTCP_Integration(t *testing.T) {
@@ -231,10 +216,10 @@ func TestTCP_Integration(t *testing.T) {
 
 	// Check that both test messages are present in the received data
 	allDataStr := string(allData)
-	if !containsString(allDataStr, string(testData1)) {
+	if !strings.Contains(allDataStr, string(testData1)) {
 		t.Errorf("First message %q not found in received data: %q", string(testData1), allDataStr)
 	}
-	if !containsString(allDataStr, string(testData2)) {
+	if !strings.Contains(allDataStr, string(testData2)) {
 		t.Errorf("Second message %q not found in received data: %q", string(testData2), allDataStr)
 	}
 }
@@ -275,7 +260,7 @@ func TestTCP_WriteAfterStop(t *testing.T) {
 	err = tcp.Write(ctx, []byte("This should fail"))
 	if err != nil {
 		// Error is also expected due to race condition
-		if !containsString(err.Error(), "TCP output is shutting down") {
+		if !strings.Contains(err.Error(), "TCP output is shutting down") {
 			t.Errorf("Write after Stop should return shutdown error, got: %v", err)
 		}
 	}

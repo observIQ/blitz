@@ -158,7 +158,7 @@ type WorkerManager struct {
 	wg            sync.WaitGroup
 	workerFunc    func(id int)
 	workerCount   int
-	activeWorkers int32
+	activeWorkers int
 	mu            sync.RWMutex
 }
 
@@ -217,7 +217,6 @@ func (wm *WorkerManager) runWorker(id int) {
 		backoff.WithMaxInterval(30*time.Second),
 		backoff.WithMultiplier(2),
 		backoff.WithRandomizationFactor(0.1),
-		backoff.WithMaxElapsedTime(5*time.Minute),
 	)
 
 	for {
@@ -263,5 +262,5 @@ func (wm *WorkerManager) runWorker(id int) {
 func (wm *WorkerManager) GetActiveWorkerCount() int {
 	wm.mu.RLock()
 	defer wm.mu.RUnlock()
-	return int(wm.activeWorkers)
+	return wm.activeWorkers
 }

@@ -3,6 +3,7 @@ package output
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -92,7 +93,7 @@ func TestNewUDP(t *testing.T) {
 					t.Errorf("NewUDP() expected error but got none")
 					return
 				}
-				if tt.errContains != "" && !containsString(err.Error(), tt.errContains) {
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
 					t.Errorf("NewUDP() error = %v, want error containing %q", err, tt.errContains)
 				}
 				return
@@ -213,10 +214,10 @@ func TestUDP_Integration(t *testing.T) {
 	}
 
 	allDataStr := string(allData)
-	if !containsString(allDataStr, string(testData1)) {
+	if !strings.Contains(allDataStr, string(testData1)) {
 		t.Errorf("First message %q not found in received data: %q", string(testData1), allDataStr)
 	}
-	if !containsString(allDataStr, string(testData2)) {
+	if !strings.Contains(allDataStr, string(testData2)) {
 		t.Errorf("Second message %q not found in received data: %q", string(testData2), allDataStr)
 	}
 }
@@ -257,7 +258,7 @@ func TestUDP_WriteAfterStop(t *testing.T) {
 	err = udp.Write(ctx, []byte("This should fail"))
 	if err != nil {
 		// Error is also expected due to race condition
-		if !containsString(err.Error(), "UDP output is shutting down") {
+		if !strings.Contains(err.Error(), "UDP output is shutting down") {
 			t.Errorf("Write after Stop should return shutdown error, got: %v", err)
 		}
 	}
