@@ -2,6 +2,7 @@ package config
 
 import (
 	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -57,6 +58,8 @@ func (o *Override) createFlag(flags *pflag.FlagSet) *pflag.Flag {
 		_ = flags.String(o.Flag, string(v), o.Usage)
 	case int:
 		_ = flags.Int(o.Flag, v, o.Usage)
+	case time.Duration:
+		_ = flags.Duration(o.Flag, v, o.Usage)
 	default:
 		_ = flags.String(o.Flag, "", o.Usage)
 	}
@@ -82,6 +85,9 @@ func DefaultOverrides() []*Override {
 	return []*Override{
 		NewOverride("logging.type", "output of the log. One of: stdout", LoggingTypeStdout),
 		NewOverride("logging.level", "log level to use. One of: debug|info|warn|error", LogLevelInfo),
+		NewOverride("generator.type", "generator type. One of: json", ""),
+		NewOverride("generator.json.workers", "number of JSON generator workers", 1),
+		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),
 		NewOverride("output.type", "output type. One of: tcp|udp", ""),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),

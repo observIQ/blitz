@@ -2,14 +2,22 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
+	"github.com/observiq/bindplane-loader/generator"
 	"github.com/observiq/bindplane-loader/internal/config"
 	"github.com/observiq/bindplane-loader/internal/logging"
+	"github.com/observiq/bindplane-loader/output"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -50,4 +58,104 @@ func main() {
 	defer func() { _ = logger.Sync() }()
 
 	logger.Info("bindplane-loader started")
+
+	// Create signal context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Listen for OS signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigChan
+		logger.Info("Received signal, initiating graceful shutdown", zap.String("signal", sig.String()))
+		cancel()
+	}()
+
+	// Configure output first
+	var outputInstance output.Output
+	switch cfg.Output.Type {
+	case config.OutputTypeTCP:
+		outputInstance, err = output.NewTCP(
+			logger,
+			cfg.Output.TCP.Host,
+			strconv.Itoa(cfg.Output.TCP.Port),
+			cfg.Output.TCP.Workers,
+		)
+		if err != nil {
+			logger.Error("Failed to create TCP output", zap.Error(err))
+			os.Exit(1)
+		}
+	case config.OutputTypeUDP:
+		outputInstance, err = output.NewUDP(
+			logger,
+			cfg.Output.UDP.Host,
+			strconv.Itoa(cfg.Output.UDP.Port),
+			cfg.Output.UDP.Workers,
+		)
+		if err != nil {
+			logger.Error("Failed to create UDP output", zap.Error(err))
+			os.Exit(1)
+		}
+	default:
+		logger.Error("Invalid output type", zap.String("type", string(cfg.Output.Type)))
+		os.Exit(1)
+	}
+
+	// Configure generator
+	var generatorInstance generator.Generator
+	switch cfg.Generator.Type {
+	case config.GeneratorTypeJSON:
+		generatorInstance, err = generator.NewJSONGenerator(
+			logger,
+			cfg.Generator.JSON.Workers,
+			cfg.Generator.JSON.Rate,
+		)
+		if err != nil {
+			logger.Error("Failed to create JSON generator", zap.Error(err))
+			os.Exit(1)
+		}
+	default:
+		logger.Error("Invalid generator type", zap.String("type", string(cfg.Generator.Type)))
+		os.Exit(1)
+	}
+
+	// Start the generator with the output's Write function
+	err = generatorInstance.Start(outputInstance)
+	if err != nil {
+		logger.Error("Failed to start generator", zap.Error(err))
+		os.Exit(1)
+	}
+
+	logger.Info("Generator started successfully")
+
+	// Wait for signal context to be cancelled
+	<-ctx.Done()
+
+	// Graceful shutdown sequence
+	logger.Info("Starting graceful shutdown")
+
+	// Stop generator with 10 second timeout
+	genStopCtx, genStopCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer genStopCancel()
+
+	logger.Info("Stopping generator")
+	if err := generatorInstance.Stop(genStopCtx); err != nil {
+		logger.Error("Failed to stop generator", zap.Error(err))
+	} else {
+		logger.Info("Generator stopped successfully")
+	}
+
+	// Stop output with 30 second timeout
+	outputStopCtx, outputStopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer outputStopCancel()
+
+	logger.Info("Stopping output")
+	if err := outputInstance.Stop(outputStopCtx); err != nil {
+		logger.Error("Failed to stop output", zap.Error(err))
+	} else {
+		logger.Info("Output stopped successfully")
+	}
+
+	logger.Info("bindplane-loader shutdown complete")
 }
