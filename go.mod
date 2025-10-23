@@ -1,4 +1,4 @@
-module github.com/observiq/bindplane-loader
+module github.com/observiq/blitz
 
 go 1.25.1
 

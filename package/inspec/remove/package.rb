@@ -1,27 +1,27 @@
-describe package('bindplane-loader') do
+describe package('blitz') do
     it { should_not be_installed }
 end
 
-describe file('/usr/bin/bindplane-loader') do
+describe file('/usr/bin/blitz') do
     it { should_not exist }
 end
 
 # Uninstall should not remove user.
-describe user('bploader') do
+describe user('blitz') do
     it { should exist }
 end
 
 # Uninstall should ot remove group.
-describe group('bploader') do
+describe group('blitz') do
     it { should exist }
 end
 
-describe systemd_service('bindplane-loader') do
+describe systemd_service('blitz') do
     it { should_not be_installed }
     it { should_not be_enabled }
     it { should_not be_running }
 end
 
-describe processes('bindplane-loader') do
+describe processes('blitz') do
     it { should_not exist }
 end

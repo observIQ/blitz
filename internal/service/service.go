@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/observiq/bindplane-loader/generator"
-	"github.com/observiq/bindplane-loader/output"
+	"github.com/observiq/blitz/generator"
+	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
 )
 

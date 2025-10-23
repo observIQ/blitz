@@ -1,6 +1,6 @@
-# Bindplane Loader Configuration
+# Blitz Configuration
 
-Bindplane Loader supports configuration through multiple methods with the following priority order (highest to lowest):
+Blitz supports configuration through multiple methods with the following priority order (highest to lowest):
 
 1. **Command-line flags** (highest priority)
 2. **Environment variables**
@@ -14,7 +14,7 @@ Bindplane Loader supports configuration through multiple methods with the follow
 Use the `--config` flag to specify a configuration file:
 
 ```bash
-./bindplane-loader --config /path/to/config.yaml
+./blitz --config /path/to/config.yaml
 ```
 
 ### Environment Variables
@@ -24,7 +24,7 @@ All configuration options can be set using environment variables with the `BINDP
 ```bash
 export BINDPLANE_LOGGING_LEVEL=debug
 export BINDPLANE_OUTPUT_TYPE=tcp
-./bindplane-loader
+./blitz
 ```
 
 ### Configuration File
@@ -32,7 +32,7 @@ export BINDPLANE_OUTPUT_TYPE=tcp
 Configuration files must be in YAML format and can be specified using the `--config` flag:
 
 ```bash
-./bindplane-loader --config config.yaml
+./blitz --config config.yaml
 ```
 
 ## Configuration Options
@@ -228,12 +228,12 @@ Failed to read config file nonexistent.yaml: open nonexistent.yaml: no such file
 
 ### Using Configuration File Only
 ```bash
-./bindplane-loader --config production.yaml
+./blitz --config production.yaml
 ```
 
 ### Overriding Configuration File with Flags
 ```bash
-./bindplane-loader --config production.yaml --logging-level debug --generator-json-workers 5
+./blitz --config production.yaml --logging-level debug --generator-json-workers 5
 ```
 
 ### Using Environment Variables
@@ -242,11 +242,11 @@ export BINDPLANE_LOGGING_LEVEL=debug
 export BINDPLANE_OUTPUT_TYPE=tcp
 export BINDPLANE_OUTPUT_TCP_HOST=logs.example.com
 export BINDPLANE_OUTPUT_TCP_PORT=9090
-./bindplane-loader
+./blitz
 ```
 
 ### Mixed Configuration Methods
 ```bash
 export BINDPLANE_OUTPUT_TYPE=tcp
-./bindplane-loader --config base.yaml --logging-level warn --generator-json-workers 3
+./blitz --config base.yaml --logging-level warn --generator-json-workers 3
 ```

@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/observiq/bindplane-loader/internal/workermanager"
+	"github.com/observiq/blitz/internal/workermanager"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
