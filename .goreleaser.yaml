@@ -3,7 +3,7 @@ project_name: blitz
 
 builds:
   - id: blitz
-    main: ./cmd/blitz/main.go
+    main: ./cmd/blitz
     binary: blitz
     env:
       - CGO_ENABLED=0
