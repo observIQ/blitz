@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"regexp"
 )
 
 // ValidatePort validates that a port number is valid
@@ -13,6 +14,10 @@ func ValidatePort(port int) error {
 
 	return nil
 }
+
+// hostnameRegex is the regex pattern for validating hostnames
+// This regex validates hostnames according to RFC 1123 standards
+var hostnameRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$`)
 
 // ValidateHost validates that a host string is a valid IP address or hostname
 func ValidateHost(host string) error {
@@ -25,9 +30,14 @@ func ValidateHost(host string) error {
 		return nil
 	}
 
-	// If it's not a valid IP, check if it's a valid hostname
-	if _, err := net.LookupHost(host); err != nil {
-		return fmt.Errorf("host must be a valid IP address or hostname: %w", err)
+	// Check hostname length (max 253 characters)
+	if len(host) > 253 {
+		return fmt.Errorf("host must be a valid IP address or hostname")
+	}
+
+	// If it's not a valid IP, check if it's a valid hostname using regex
+	if !hostnameRegex.MatchString(host) {
+		return fmt.Errorf("host must be a valid IP address or hostname")
 	}
 
 	return nil

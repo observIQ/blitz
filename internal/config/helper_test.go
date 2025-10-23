@@ -101,8 +101,26 @@ func TestValidateHost(t *testing.T) {
 			errMsg:  "host cannot be empty",
 		},
 		{
-			name:    "invalid hostname",
+			name:    "invalid hostname - double dots",
 			host:    "invalid..hostname",
+			wantErr: true,
+			errMsg:  "host must be a valid IP address or hostname",
+		},
+		{
+			name:    "invalid hostname - starts with dash",
+			host:    "-invalid.hostname",
+			wantErr: true,
+			errMsg:  "host must be a valid IP address or hostname",
+		},
+		{
+			name:    "invalid hostname - ends with dash",
+			host:    "invalid.hostname-",
+			wantErr: true,
+			errMsg:  "host must be a valid IP address or hostname",
+		},
+		{
+			name:    "invalid hostname - too long",
+			host:    "a" + strings.Repeat(".a", 127), // Creates a hostname longer than 253 chars
 			wantErr: true,
 			errMsg:  "host must be a valid IP address or hostname",
 		},
