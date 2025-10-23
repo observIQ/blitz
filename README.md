@@ -2,6 +2,13 @@
 
 A load generation tool for Bindplane managed collectors.
 
+## Documentation
+
+- [Configuration Guide](/docs/configuration.md) - Complete guide to configuring bindplane-loader with YAML files, environment variables, and command-line flags
+- [Architecture Overview](/docs/architecture.md) - Detailed explanation of the application architecture, components, and data flow
+- [Development Guide](/docs/development.md) - Guidelines for contributing to the project
+- [Contributing Guidelines](/docs/CONTRIBUTING.md) - How to contribute to the project
+
 ## Installation
 
 ### CLI
@@ -11,13 +18,18 @@ Download the binary for your platform from the [latest release](https://github.c
 Extract the archive and run the binary directly in a terminal:
 
 ```bash
-# Extract the archive
 tar -xzf bindplane-loader_*_linux_amd64.tar.gz
+```
 
-# Run with default NOP configuration (no work performed)
+Run with default NOP configuration:
+
+```bash
 ./bindplane-loader
+```
 
-# Run with JSON generator and TCP output
+Run with JSON generator and TCP output:
+
+```bash
 ./bindplane-loader \
   --generator-type json \
   --generator-json-workers 2 \
@@ -94,14 +106,15 @@ sudo journalctl -u bindplane-loader -f
 
 Pull the Docker image from GitHub Container Registry and run it with environment variables for configuration:
 
+Run with default NOP configuration:
+
 ```bash
-# Pull the latest image
-docker pull ghcr.io/observiq/bindplane-loader:latest
-
-# Run with default NOP configuration (no work performed)
 docker run --rm ghcr.io/observiq/bindplane-loader:latest
+```
 
-# Run with JSON generator and TCP output
+Run with JSON generator and TCP output:
+
+```bash
 docker run --rm \
   -e BINDPLANE_GENERATOR_TYPE=json \
   -e BINDPLANE_GENERATOR_JSON_WORKERS=2 \
@@ -112,26 +125,9 @@ docker run --rm \
   -e BINDPLANE_OUTPUT_TCP_WORKERS=3 \
   -e BINDPLANE_LOGGING_LEVEL=info \
   ghcr.io/observiq/bindplane-loader:latest
-
-# Run with UDP output
-docker run --rm \
-  -e BINDPLANE_GENERATOR_TYPE=json \
-  -e BINDPLANE_OUTPUT_TYPE=udp \
-  -e BINDPLANE_OUTPUT_UDP_HOST=logs.example.com \
-  -e BINDPLANE_OUTPUT_UDP_PORT=514 \
-  -e BINDPLANE_OUTPUT_UDP_WORKERS=2 \
-  ghcr.io/observiq/bindplane-loader:latest
 ```
 
-
 For detailed configuration options, see the [Configuration Guide](/docs/configuration.md).
-
-## Documentation
-
-- [Configuration Guide](/docs/configuration.md) - Complete guide to configuring bindplane-loader with YAML files, environment variables, and command-line flags
-- [Architecture Overview](/docs/architecture.md) - Detailed explanation of the application architecture, components, and data flow
-- [Development Guide](/docs/development.md) - Guidelines for contributing to the project
-- [Contributing Guidelines](/docs/CONTRIBUTING.md) - How to contribute to the project
 
 ## Community
 
