@@ -34,8 +34,7 @@ func TestGenerator_Validate(t *testing.T) {
 					Rate:    100 * time.Millisecond,
 				},
 			},
-			wantErr: true,
-			errMsg:  "generator type cannot be empty",
+			wantErr: false,
 		},
 		{
 			name: "invalid generator type",
@@ -47,7 +46,7 @@ func TestGenerator_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "invalid generator type: invalid, must be one of: json",
+			errMsg:  "invalid generator type: invalid, must be one of: nop, json",
 		},
 		{
 			name: "JSON generator validation error",

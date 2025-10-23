@@ -23,6 +23,10 @@ import (
 func main() {
 	// Bind overrides to flags and environment variables
 	flags := pflag.NewFlagSet("bindplane-loader", pflag.ExitOnError)
+
+	// Add config file flag
+	configFile := flags.String("config", "", "path to configuration file")
+
 	for _, override := range config.DefaultOverrides() {
 		if err := override.Bind(flags); err != nil {
 			fmt.Printf("Failed to bind override %s: %s", override.Field, err.Error())
@@ -39,11 +43,23 @@ func main() {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
+	// Read configuration file if provided
+	if *configFile != "" {
+		viper.SetConfigFile(*configFile)
+		if err := viper.ReadInConfig(); err != nil {
+			fmt.Printf("Failed to read config file %s: %s", *configFile, err.Error())
+			os.Exit(1)
+		}
+	}
+
 	cfg := config.NewConfig()
 	if err := viper.Unmarshal(cfg); err != nil {
 		fmt.Printf("Failed to unmarshal config: %s", err.Error())
 		os.Exit(1)
 	}
+
+	// Apply defaults for any empty fields
+	cfg.ApplyDefaults()
 
 	if err := cfg.Validate(); err != nil {
 		fmt.Printf("Failed to validate config: %s", err.Error())
@@ -75,6 +91,12 @@ func main() {
 	// Configure output first
 	var outputInstance output.Output
 	switch cfg.Output.Type {
+	case config.OutputTypeNop:
+		outputInstance, err = output.NewNopOutput(logger)
+		if err != nil {
+			logger.Error("Failed to create NOP output", zap.Error(err))
+			os.Exit(1)
+		}
 	case config.OutputTypeTCP:
 		outputInstance, err = output.NewTCP(
 			logger,
@@ -105,6 +127,12 @@ func main() {
 	// Configure generator
 	var generatorInstance generator.Generator
 	switch cfg.Generator.Type {
+	case config.GeneratorTypeNop:
+		generatorInstance, err = generator.NewNopGenerator(logger)
+		if err != nil {
+			logger.Error("Failed to create NOP generator", zap.Error(err))
+			os.Exit(1)
+		}
 	case config.GeneratorTypeJSON:
 		generatorInstance, err = generator.NewJSONGenerator(
 			logger,
