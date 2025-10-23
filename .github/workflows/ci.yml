@@ -38,16 +38,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Cache Go build and mod
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
       - name: Download dependencies
         run: |
           go env
@@ -71,14 +61,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Restore Go cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-
       - name: Run tests
         run: |
           go test ./...
@@ -97,14 +79,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Restore Go cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-
       - name: Run gosec
         run: |
           make security
@@ -122,14 +96,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: Restore Go cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
 
       - name: Run revive
         run: |
@@ -157,14 +123,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: Restore Go cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
