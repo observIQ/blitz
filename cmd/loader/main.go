@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/observiq/bindplane-loader/generator"
 	"github.com/observiq/bindplane-loader/internal/config"
 	"github.com/observiq/bindplane-loader/internal/logging"
+	"github.com/observiq/bindplane-loader/internal/service"
 	"github.com/observiq/bindplane-loader/output"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -120,41 +120,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Start the generator with the output's Write function
-	err = generatorInstance.Start(outputInstance)
+	service, err := service.New(logger, generatorInstance, outputInstance)
 	if err != nil {
-		logger.Error("Failed to start generator", zap.Error(err))
+		logger.Error("Failed to create service", zap.Error(err))
 		os.Exit(1)
 	}
 
-	logger.Info("Generator started successfully")
-
-	// Wait for signal context to be cancelled
-	<-ctx.Done()
-
-	// Graceful shutdown sequence
-	logger.Info("Starting graceful shutdown")
-
-	// Stop generator with 10 second timeout
-	genStopCtx, genStopCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer genStopCancel()
-
-	logger.Info("Stopping generator")
-	if err := generatorInstance.Stop(genStopCtx); err != nil {
-		logger.Error("Failed to stop generator", zap.Error(err))
-	} else {
-		logger.Info("Generator stopped successfully")
+	if err := service.Start(); err != nil {
+		logger.Error("Failed to start service", zap.Error(err))
+		os.Exit(1)
 	}
 
-	// Stop output with 30 second timeout
-	outputStopCtx, outputStopCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer outputStopCancel()
+	<-ctx.Done()
 
-	logger.Info("Stopping output")
-	if err := outputInstance.Stop(outputStopCtx); err != nil {
-		logger.Error("Failed to stop output", zap.Error(err))
-	} else {
-		logger.Info("Output stopped successfully")
+	if err := service.Stop(); err != nil {
+		logger.Error("Failed to stop service", zap.Error(err))
+		os.Exit(1)
 	}
 
 	logger.Info("bindplane-loader shutdown complete")
