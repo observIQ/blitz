@@ -131,7 +131,7 @@ jobs:
           version: "v2.12.5"
           args: release --clean --skip=publish --skip=sign --skip=validate --snapshot --split
         env:
-          GORELEASER_LICENSE: ${{ secrets.GORELEASER_KEY }}
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
       - name: Download CINC (Inspec)
         run: |

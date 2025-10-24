@@ -51,5 +51,5 @@ jobs:
           args: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GORELEASER_LICENSE: ${{ secrets.GORELEASER_KEY }}
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           DOCKER_REGISTRY: ghcr.io
