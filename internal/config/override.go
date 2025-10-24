@@ -54,6 +54,8 @@ func (o *Override) createFlag(flags *pflag.FlagSet) *pflag.Flag {
 	switch v := o.Default.(type) {
 	case string:
 		_ = flags.String(o.Flag, v, o.Usage)
+	case []string:
+		_ = flags.StringSlice(o.Flag, v, o.Usage)
 	case LogLevel:
 		_ = flags.String(o.Flag, string(v), o.Usage)
 	case int:
@@ -77,12 +79,53 @@ func createFlagName(field string) string {
 func createEnvName(field string) string {
 	updatedField := strings.ReplaceAll(field, ".", "_")
 	updatedField = strings.ToUpper(updatedField)
-	return "BINDPLANE_" + updatedField
+	return "BLITZ_" + updatedField
+}
+
+// tcpTLSOverrides creates TCP TLS overrides that removes double tls-tls in flag name
+func tcpTLSOverrides() []*Override {
+	return []*Override{
+		{
+			Field:   "output.tcp.tls.tlsCert",
+			Flag:    "tcp-tls-cert",
+			Env:     "BLITZ_OUTPUT_TCP_TLS_TLS_CERT",
+			Usage:   "the path to the TLS certificate for TCP connections",
+			Default: "",
+		},
+		{
+			Field:   "output.tcp.tls.tlsKey",
+			Flag:    "tcp-tls-key",
+			Env:     "BLITZ_OUTPUT_TCP_TLS_TLS_KEY",
+			Usage:   "the path to the TLS private key for TCP connections",
+			Default: "",
+		},
+		{
+			Field:   "output.tcp.tls.tlsCA",
+			Flag:    "tcp-tls-ca",
+			Env:     "BLITZ_OUTPUT_TCP_TLS_TLS_CA",
+			Usage:   "the path to the TLS CA files. Optional, if not provided the host's root CA set will be used",
+			Default: []string{},
+		},
+		{
+			Field:   "output.tcp.tls.tlsSkipVerify",
+			Flag:    "tcp-tls-skip-verify",
+			Env:     "BLITZ_OUTPUT_TCP_TLS_TLS_SKIP_VERIFY",
+			Usage:   "whether to skip TLS verification for TCP connections",
+			Default: false,
+		},
+		{
+			Field:   "output.tcp.tls.tlsMinVersion",
+			Flag:    "tcp-tls-min-version",
+			Env:     "BLITZ_OUTPUT_TCP_TLS_TLS_MIN_VERSION",
+			Usage:   "the minimum TLS version to use for TCP connections. One of: 1.2|1.3",
+			Default: "",
+		},
+	}
 }
 
 // DefaultOverrides returns all overrides for the application
 func DefaultOverrides() []*Override {
-	return []*Override{
+	overrides := []*Override{
 		NewOverride("logging.type", "output of the log. One of: stdout", LoggingTypeStdout),
 		NewOverride("logging.level", "log level to use. One of: debug|info|warn|error", LogLevelInfo),
 		NewOverride("generator.type", "generator type. One of: nop|json", GeneratorTypeNop),
@@ -96,4 +139,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("output.tcp.port", "TCP output target port", 0),
 		NewOverride("output.tcp.workers", "number of TCP output workers", 1),
 	}
+
+	overrides = append(overrides, tcpTLSOverrides()...)
+	return overrides
 }
