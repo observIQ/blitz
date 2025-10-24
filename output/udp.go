@@ -71,11 +71,11 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 		}
 	}()
 
-	meter := otel.Meter("bindplane-loader-udp-output")
+	meter := otel.Meter("blitz-udp-output")
 
 	// Initialize metrics
 	udpLogsReceived, err := meter.Int64Counter(
-		"bindplane-loader.udp.logs.received",
+		"blitz.udp.logs.received",
 		metric.WithDescription("Number of logs received from the write channel"),
 	)
 	if err != nil {
@@ -83,7 +83,7 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 	}
 
 	udpActiveWorkers, err := meter.Int64Gauge(
-		"bindplane-loader.udp.workers.active",
+		"blitz.udp.workers.active",
 		metric.WithDescription("Number of active worker goroutines"),
 	)
 	if err != nil {
@@ -91,7 +91,7 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 	}
 
 	udpLogRate, err := meter.Float64Counter(
-		"bindplane-loader.udp.log.rate",
+		"blitz.udp.log.rate",
 		metric.WithDescription("Rate at which logs are successfully sent to the configured host"),
 	)
 	if err != nil {
@@ -99,7 +99,7 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 	}
 
 	udpRequestSizeBytes, err := meter.Int64Histogram(
-		"bindplane-loader.udp.request.size.bytes",
+		"blitz.udp.request.size.bytes",
 		metric.WithDescription("Size of requests in bytes"),
 	)
 	if err != nil {
@@ -107,7 +107,7 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 	}
 
 	udpSendErrors, err := meter.Int64Counter(
-		"bindplane-loader.udp.send.errors",
+		"blitz.udp.send.errors",
 		metric.WithDescription("Total number of send errors"),
 	)
 	if err != nil {
@@ -139,7 +139,7 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 
 	// Create channel size gauge
 	_, err = meter.Int64ObservableGauge(
-		"bindplane-loader.udp.channel.size",
+		"blitz.udp.channel.size",
 		metric.WithDescription("Current size of the data channel"),
 		metric.WithInt64Callback(func(_ context.Context, io metric.Int64Observer) error {
 			io.Observe(int64(len(udp.dataChan)))

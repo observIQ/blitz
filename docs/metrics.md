@@ -1,10 +1,10 @@
 # Metrics Documentation
 
-This document describes the metrics exposed by the Bindplane Loader application.
+This document describes the metrics exposed by the Blitz application.
 
 ## Overview
 
-Bindplane Loader exposes Prometheus-compatible metrics via an HTTP endpoint. The metrics provide insights into the application's performance, including log generation rates, output throughput, error rates, and worker activity.
+Blitz exposes Prometheus-compatible metrics via an HTTP endpoint. The metrics provide insights into the application's performance, including log generation rates, output throughput, error rates, worker activity, and channel utilization.
 
 ## Metrics Endpoint
 
@@ -16,7 +16,7 @@ http://localhost:9100/metrics
 
 ### Scraping Metrics
 
-To scrape metrics from the Bindplane Loader, configure your Prometheus server to scrape the metrics endpoint:
+To scrape metrics from Blitz, configure your Prometheus server to scrape the metrics endpoint:
 
 ```yaml
 scrape_configs:
@@ -35,36 +35,40 @@ curl http://localhost:9100/metrics
 This will return metrics in Prometheus format, for example:
 
 ```
-# HELP bindplane_loader_generator_logs_generated_total Total number of logs generated
-# TYPE bindplane_loader_generator_logs_generated_total counter
-bindplane_loader_generator_logs_generated_total{component="generator_json"} 1500
+# HELP blitz_generator_logs_generated_total Total number of logs generated
+# TYPE blitz_generator_logs_generated_total counter
+blitz_generator_logs_generated_total{component="generator_json"} 1500
 
-# HELP bindplane_loader_tcp_logs_received_total Number of logs received from the write channel
-# TYPE bindplane_loader_tcp_logs_received_total counter
-bindplane_loader_tcp_logs_received_total{component="output_tcp"} 1500
+# HELP blitz_tcp_logs_received_total Number of logs received from the write channel
+# TYPE blitz_tcp_logs_received_total counter
+blitz_tcp_logs_received_total{component="output_tcp"} 1500
 
-# HELP bindplane_loader_tcp_workers_active Number of active worker goroutines
-# TYPE bindplane_loader_tcp_workers_active gauge
-bindplane_loader_tcp_workers_active{component="output_tcp"} 4
+# HELP blitz_tcp_workers_active Number of active worker goroutines
+# TYPE blitz_tcp_workers_active gauge
+blitz_tcp_workers_active{component="output_tcp"} 4
+
+# HELP blitz_tcp_channel_size Current size of the data channel
+# TYPE blitz_tcp_channel_size gauge
+blitz_tcp_channel_size{component="output_tcp"} 25
 ```
 
 ## Available Metrics
 
 ### Generator Metrics
 
-#### `bindplane_loader_generator_logs_generated_total`
+#### `blitz_generator_logs_generated_total`
 - **Type**: Counter
 - **Description**: Total number of logs generated
 - **Labels**:
   - `component`: Always `generator_json`
 
-#### `bindplane_loader_generator_workers_active`
+#### `blitz_generator_workers_active`
 - **Type**: Gauge
 - **Description**: Number of active worker goroutines
 - **Labels**:
   - `component`: Always `generator_json`
 
-#### `bindplane_loader_generator_write_errors_total`
+#### `blitz_generator_write_errors_total`
 - **Type**: Counter
 - **Description**: Total number of write errors
 - **Labels**:
@@ -73,75 +77,87 @@ bindplane_loader_tcp_workers_active{component="output_tcp"} 4
 
 ### TCP Output Metrics
 
-#### `bindplane_loader_tcp_logs_received_total`
+#### `blitz_tcp_logs_received_total`
 - **Type**: Counter
 - **Description**: Number of logs received from the write channel
 - **Labels**:
   - `component`: Always `output_tcp`
 
-#### `bindplane_loader_tcp_workers_active`
+#### `blitz_tcp_workers_active`
 - **Type**: Gauge
 - **Description**: Number of active worker goroutines
 - **Labels**:
   - `component`: Always `output_tcp`
 
-#### `bindplane_loader_tcp_log_rate_total`
+#### `blitz_tcp_log_rate_total`
 - **Type**: Counter (Float64)
 - **Description**: Rate at which logs are successfully sent to the configured host
 - **Labels**:
   - `component`: Always `output_tcp`
 
-#### `bindplane_loader_tcp_request_size_bytes`
+#### `blitz_tcp_request_size_bytes`
 - **Type**: Histogram
 - **Description**: Size of requests in bytes
 - **Labels**:
   - `component`: Always `output_tcp`
 
-#### `bindplane_loader_tcp_request_latency`
+#### `blitz_tcp_request_latency`
 - **Type**: Histogram
 - **Description**: Request latency in seconds
 - **Labels**:
   - `component`: Always `output_tcp`
 
-#### `bindplane_loader_tcp_send_errors_total`
+#### `blitz_tcp_send_errors_total`
 - **Type**: Counter
 - **Description**: Total number of send errors
 - **Labels**:
   - `component`: Always `output_tcp`
   - `error_type`: Either `unknown` or `timeout`
 
+#### `blitz_tcp_channel_size`
+- **Type**: Gauge
+- **Description**: Current size of the data channel
+- **Labels**:
+  - `component`: Always `output_tcp`
+
 ### UDP Output Metrics
 
-#### `bindplane_loader_udp_logs_received_total`
+#### `blitz_udp_logs_received_total`
 - **Type**: Counter
 - **Description**: Number of logs received from the write channel
 - **Labels**:
   - `component`: Always `output_udp`
 
-#### `bindplane_loader_udp_workers_active`
+#### `blitz_udp_workers_active`
 - **Type**: Gauge
 - **Description**: Number of active worker goroutines
 - **Labels**:
   - `component`: Always `output_udp`
 
-#### `bindplane_loader_udp_log_rate_total`
+#### `blitz_udp_log_rate_total`
 - **Type**: Counter (Float64)
 - **Description**: Rate at which logs are successfully sent to the configured host
 - **Labels**:
   - `component`: Always `output_udp`
 
-#### `bindplane_loader_udp_request_size_bytes`
+#### `blitz_udp_request_size_bytes`
 - **Type**: Histogram
 - **Description**: Size of requests in bytes
 - **Labels**:
   - `component`: Always `output_udp`
 
-#### `bindplane_loader_udp_send_errors_total`
+#### `blitz_udp_send_errors_total`
 - **Type**: Counter
 - **Description**: Total number of send errors
 - **Labels**:
   - `component`: Always `output_udp`
   - `error_type`: Either `unknown` or `timeout`
+
+#### `blitz_udp_channel_size`
+- **Type**: Gauge
+- **Description**: Current size of the data channel
+- **Labels**:
+  - `component`: Always `output_udp`
 
 ## Metric Labels
 
@@ -164,46 +180,58 @@ Error metrics include an `error_type` label with the following values:
 
 ### Log Generation Rate
 ```promql
-rate(bindplane_loader_generator_logs_generated_total[5m])
+rate(blitz_generator_logs_generated_total[5m])
 ```
 
 ### Active Workers by Component
 ```promql
-bindplane_loader_generator_workers_active or bindplane_loader_tcp_workers_active or bindplane_loader_udp_workers_active
+blitz_generator_workers_active or blitz_tcp_workers_active or blitz_udp_workers_active
 ```
 
 ### Error Rate by Component
 ```promql
-rate(bindplane_loader_generator_write_errors_total[5m]) + rate(bindplane_loader_tcp_send_errors_total[5m]) + rate(bindplane_loader_udp_send_errors_total[5m])
+rate(blitz_generator_write_errors_total[5m]) + rate(blitz_tcp_send_errors_total[5m]) + rate(blitz_udp_send_errors_total[5m])
 ```
 
 ### Request Latency (TCP only)
 ```promql
-histogram_quantile(0.95, rate(bindplane_loader_tcp_request_latency_bucket[5m]))
+histogram_quantile(0.95, rate(blitz_tcp_request_latency_bucket[5m]))
 ```
 
 ### Request Size Distribution
 ```promql
-histogram_quantile(0.50, rate(bindplane_loader_tcp_request_size_bytes_bucket[5m]))
-histogram_quantile(0.95, rate(bindplane_loader_tcp_request_size_bytes_bucket[5m]))
+histogram_quantile(0.50, rate(blitz_tcp_request_size_bytes_bucket[5m]))
+histogram_quantile(0.95, rate(blitz_tcp_request_size_bytes_bucket[5m]))
+```
+
+### Channel Utilization
+```promql
+# Current channel sizes
+blitz_tcp_channel_size
+blitz_udp_channel_size
+
+# Channel utilization percentage (assuming default channel size of 100)
+blitz_tcp_channel_size / 100 * 100
+blitz_udp_channel_size / 100 * 100
 ```
 
 ## Monitoring Recommendations
 
 ### Key Metrics to Monitor
 
-1. **Log Generation Rate**: Monitor `bindplane_loader_generator_logs_generated_total` to ensure logs are being generated at expected rates
-2. **Worker Health**: Monitor `bindplane_loader_*_workers_active` to ensure workers are running
+1. **Log Generation Rate**: Monitor `blitz_generator_logs_generated_total` to ensure logs are being generated at expected rates
+2. **Worker Health**: Monitor `blitz_*_workers_active` to ensure workers are running
 3. **Error Rates**: Monitor error counters to detect issues early
-4. **Throughput**: Monitor `bindplane_loader_*_log_rate_total` to track output performance
-5. **Latency**: Monitor `bindplane_loader_tcp_request_latency` for TCP output performance
+4. **Throughput**: Monitor `blitz_*_log_rate_total` to track output performance
+5. **Latency**: Monitor `blitz_tcp_request_latency` for TCP output performance
+6. **Channel Utilization**: Monitor `blitz_*_channel_size` to track data channel usage and detect potential bottlenecks
 
 ### Alerting Examples
 
 ```yaml
 # Alert if no logs are being generated
 - alert: NoLogGeneration
-  expr: rate(bindplane_loader_generator_logs_generated_total[5m]) == 0
+  expr: rate(blitz_generator_logs_generated_total[5m]) == 0
   for: 2m
   labels:
     severity: warning
@@ -212,7 +240,7 @@ histogram_quantile(0.95, rate(bindplane_loader_tcp_request_size_bytes_bucket[5m]
 
 # Alert if error rate is high
 - alert: HighErrorRate
-  expr: rate(bindplane_loader_generator_write_errors_total[5m]) + rate(bindplane_loader_tcp_send_errors_total[5m]) + rate(bindplane_loader_udp_send_errors_total[5m]) > 0.1
+  expr: rate(blitz_generator_write_errors_total[5m]) + rate(blitz_tcp_send_errors_total[5m]) + rate(blitz_udp_send_errors_total[5m]) > 0.1
   for: 1m
   labels:
     severity: critical
@@ -221,12 +249,21 @@ histogram_quantile(0.95, rate(bindplane_loader_tcp_request_size_bytes_bucket[5m]
 
 # Alert if workers are down
 - alert: WorkersDown
-  expr: bindplane_loader_generator_workers_active == 0 or bindplane_loader_tcp_workers_active == 0 or bindplane_loader_udp_workers_active == 0
+  expr: blitz_generator_workers_active == 0 or blitz_tcp_workers_active == 0 or blitz_udp_workers_active == 0
   for: 1m
   labels:
     severity: critical
   annotations:
     summary: "One or more worker pools are down"
+
+# Alert if channel utilization is high
+- alert: HighChannelUtilization
+  expr: blitz_tcp_channel_size > 80 or blitz_udp_channel_size > 80
+  for: 2m
+  labels:
+    severity: warning
+  annotations:
+    summary: "High channel utilization detected"
 ```
 
 ## Troubleshooting
@@ -246,5 +283,6 @@ histogram_quantile(0.95, rate(bindplane_loader_tcp_request_size_bytes_bucket[5m]
 ### Performance Issues
 
 1. **Monitor worker counts**: Ensure adequate worker goroutines are running
-2. **Check request latency**: Monitor `bindplane_loader_tcp_request_latency` for TCP performance
-3. **Review request sizes**: Monitor `bindplane_loader_*_request_size_bytes` for optimal payload sizes
+2. **Check request latency**: Monitor `blitz_tcp_request_latency` for TCP performance
+3. **Review request sizes**: Monitor `blitz_*_request_size_bytes` for optimal payload sizes
+4. **Monitor channel utilization**: Check `blitz_*_channel_size` to detect potential bottlenecks

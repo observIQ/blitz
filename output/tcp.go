@@ -75,11 +75,11 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 		}
 	}()
 
-	meter := otel.Meter("bindplane-loader-tcp-output")
+	meter := otel.Meter("blitz-tcp-output")
 
 	// Initialize metrics
 	tcpLogsReceived, err := meter.Int64Counter(
-		"bindplane-loader.tcp.logs.received",
+		"blitz.tcp.logs.received",
 		metric.WithDescription("Number of logs received from the write channel"),
 	)
 	if err != nil {
@@ -87,7 +87,7 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 	}
 
 	tcpActiveWorkers, err := meter.Int64Gauge(
-		"bindplane-loader.tcp.workers.active",
+		"blitz.tcp.workers.active",
 		metric.WithDescription("Number of active worker goroutines"),
 	)
 	if err != nil {
@@ -95,7 +95,7 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 	}
 
 	tcpLogRate, err := meter.Float64Counter(
-		"bindplane-loader.tcp.log.rate",
+		"blitz.tcp.log.rate",
 		metric.WithDescription("Rate at which logs are successfully sent to the configured host"),
 	)
 	if err != nil {
@@ -103,7 +103,7 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 	}
 
 	tcpRequestSizeBytes, err := meter.Int64Histogram(
-		"bindplane-loader.tcp.request.size.bytes",
+		"blitz.tcp.request.size.bytes",
 		metric.WithDescription("Size of requests in bytes"),
 	)
 	if err != nil {
@@ -111,7 +111,7 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 	}
 
 	tcpRequestLatency, err := meter.Float64Histogram(
-		"bindplane-loader.tcp.request.latency",
+		"blitz.tcp.request.latency",
 		metric.WithDescription("Request latency in seconds"),
 	)
 	if err != nil {
@@ -119,7 +119,7 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 	}
 
 	tcpSendErrors, err := meter.Int64Counter(
-		"bindplane-loader.tcp.send.errors",
+		"blitz.tcp.send.errors",
 		metric.WithDescription("Total number of send errors"),
 	)
 	if err != nil {
@@ -152,7 +152,7 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 
 	// Create channel size gauge
 	_, err = meter.Int64ObservableGauge(
-		"bindplane-loader.tcp.channel.size",
+		"blitz.tcp.channel.size",
 		metric.WithDescription("Current size of the data channel"),
 		metric.WithInt64Callback(func(_ context.Context, io metric.Int64Observer) error {
 			io.Observe(int64(len(tcp.dataChan)))
