@@ -137,6 +137,19 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 		zap.Int("channel_size", DefaultUDPChannelSize),
 	)
 
+	// Create channel size gauge
+	_, err = meter.Int64ObservableGauge(
+		"bindplane-loader.udp.channel.size",
+		metric.WithDescription("Current size of the data channel"),
+		metric.WithInt64Callback(func(_ context.Context, io metric.Int64Observer) error {
+			io.Observe(int64(len(udp.dataChan)))
+			return nil
+		}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create channel size gauge: %w", err)
+	}
+
 	// Create worker manager
 	udp.workerManager = workermanager.NewWorkerManager(udp.logger, workers, udp.udpWorker)
 
