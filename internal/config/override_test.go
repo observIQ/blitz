@@ -37,8 +37,10 @@ func TestOverrideDefaults(t *testing.T) {
 		Output: Output{
 			UDP: UDPOutputConfig{Workers: 1},
 			TCP: TCPOutputConfig{
-				Workers: 1,
+				Workers:   1,
+				EnableTLS: false,
 				TLS: TLS{
+					MinTLSVersion:        "1.2",
 					CertificateAuthority: []string{},
 				},
 			},
@@ -49,6 +51,12 @@ func TestOverrideDefaults(t *testing.T) {
 				BatchTimeout:       DefaultOTLPGrpcBatchTimeout,
 				MaxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
 				MaxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
+				EnableTLS:          false,
+				TLS: TLS{
+					MinTLSVersion:        "1.2",
+					CertificateAuthority: []string{},
+					Insecure:             true,
+				},
 			},
 		},
 	}
@@ -98,10 +106,12 @@ func TestOverrideFlags(t *testing.T) {
 			Type: OutputTypeTCP,
 			UDP:  UDPOutputConfig{Workers: 1},
 			TCP: TCPOutputConfig{
-				Host:    "127.0.0.1",
-				Port:    9090,
-				Workers: 3,
+				Host:      "127.0.0.1",
+				Port:      9090,
+				Workers:   3,
+				EnableTLS: false,
 				TLS: TLS{
+					MinTLSVersion:        "1.2",
 					CertificateAuthority: []string{},
 				},
 			},
@@ -112,6 +122,12 @@ func TestOverrideFlags(t *testing.T) {
 				BatchTimeout:       DefaultOTLPGrpcBatchTimeout,
 				MaxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
 				MaxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
+				EnableTLS:          false,
+				TLS: TLS{
+					MinTLSVersion:        "1.2",
+					CertificateAuthority: []string{},
+					Insecure:             true,
+				},
 			},
 		},
 	}
@@ -161,8 +177,10 @@ func TestOverrideEnvs(t *testing.T) {
 				Workers: 4,
 			},
 			TCP: TCPOutputConfig{
-				Workers: 1,
+				Workers:   1,
+				EnableTLS: false,
 				TLS: TLS{
+					MinTLSVersion:        "1.2",
 					CertificateAuthority: []string{},
 				},
 			},
@@ -173,6 +191,12 @@ func TestOverrideEnvs(t *testing.T) {
 				BatchTimeout:       DefaultOTLPGrpcBatchTimeout,
 				MaxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
 				MaxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
+				EnableTLS:          false,
+				TLS: TLS{
+					MinTLSVersion:        "1.2",
+					CertificateAuthority: []string{},
+					Insecure:             true,
+				},
 			},
 		},
 	}
@@ -219,8 +243,10 @@ func TestOverrideOTLPGrpcFlags(t *testing.T) {
 			Type: OutputTypeOTLPGrpc,
 			UDP:  UDPOutputConfig{Workers: 1},
 			TCP: TCPOutputConfig{
-				Workers: 1,
+				Workers:   1,
+				EnableTLS: false,
 				TLS: TLS{
+					MinTLSVersion:        "1.2",
 					CertificateAuthority: []string{},
 				},
 			},
@@ -231,6 +257,12 @@ func TestOverrideOTLPGrpcFlags(t *testing.T) {
 				BatchTimeout:       10 * time.Second,
 				MaxQueueSize:       4096,
 				MaxExportBatchSize: 1024,
+				EnableTLS:          false,
+				TLS: TLS{
+					MinTLSVersion:        "1.2",
+					CertificateAuthority: []string{},
+					Insecure:             true,
+				},
 			},
 		},
 	}
@@ -273,8 +305,10 @@ func TestOverrideOTLPGrpcEnvs(t *testing.T) {
 			Type: OutputTypeOTLPGrpc,
 			UDP:  UDPOutputConfig{Workers: 1},
 			TCP: TCPOutputConfig{
-				Workers: 1,
+				Workers:   1,
+				EnableTLS: false,
 				TLS: TLS{
+					MinTLSVersion:        "1.2",
 					CertificateAuthority: []string{},
 				},
 			},
@@ -285,6 +319,12 @@ func TestOverrideOTLPGrpcEnvs(t *testing.T) {
 				BatchTimeout:       15 * time.Second,
 				MaxQueueSize:       8192,
 				MaxExportBatchSize: 2048,
+				EnableTLS:          false,
+				TLS: TLS{
+					MinTLSVersion:        "1.2",
+					CertificateAuthority: []string{},
+					Insecure:             true,
+				},
 			},
 		},
 	}
@@ -298,11 +338,12 @@ func TestOverrideTCPTLSFlags(t *testing.T) {
 		"--output-tcp-host", "127.0.0.1",
 		"--output-tcp-port", "9090",
 		"--output-tcp-workers", "3",
-		"--tcp-tls-cert", "/path/to/cert.pem",
-		"--tcp-tls-key", "/path/to/key.pem",
-		"--tcp-tls-ca", "/path/to/ca1.pem,/path/to/ca2.pem",
-		"--tcp-tls-skip-verify", "true",
-		"--tcp-tls-min-version", "1.2",
+		"--output-tcp-enable-tls", "true",
+		"--output-tcp-tls-cert", "/path/to/cert.pem",
+		"--output-tcp-tls-key", "/path/to/key.pem",
+		"--output-tcp-tls-ca", "/path/to/ca1.pem,/path/to/ca2.pem",
+		"--output-tcp-tls-skip-verify", "true",
+		"--output-tcp-tls-min-version", "1.2",
 	}
 
 	overrides := DefaultOverrides()
@@ -333,9 +374,10 @@ func TestOverrideTCPTLSFlags(t *testing.T) {
 			Type: OutputTypeTCP,
 			UDP:  UDPOutputConfig{Workers: 1},
 			TCP: TCPOutputConfig{
-				Host:    "127.0.0.1",
-				Port:    9090,
-				Workers: 3,
+				Host:      "127.0.0.1",
+				Port:      9090,
+				Workers:   3,
+				EnableTLS: true,
 				TLS: TLS{
 					Certificate:          "/path/to/cert.pem",
 					PrivateKey:           "/path/to/key.pem",
@@ -351,6 +393,12 @@ func TestOverrideTCPTLSFlags(t *testing.T) {
 				BatchTimeout:       DefaultOTLPGrpcBatchTimeout,
 				MaxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
 				MaxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
+				EnableTLS:          false,
+				TLS: TLS{
+					MinTLSVersion:        "1.2",
+					CertificateAuthority: []string{},
+					Insecure:             true,
+				},
 			},
 		},
 	}
@@ -362,11 +410,12 @@ func TestOverrideTCPTLSEnvs(t *testing.T) {
 	t.Setenv("BLITZ_OUTPUT_TCP_HOST", "example.com")
 	t.Setenv("BLITZ_OUTPUT_TCP_PORT", "8080")
 	t.Setenv("BLITZ_OUTPUT_TCP_WORKERS", "2")
-	t.Setenv("BLITZ_OUTPUT_TCP_TLS_TLS_CERT", "/env/cert.pem")
-	t.Setenv("BLITZ_OUTPUT_TCP_TLS_TLS_KEY", "/env/key.pem")
-	t.Setenv("BLITZ_OUTPUT_TCP_TLS_TLS_CA", "/env/ca1.pem,/env/ca2.pem")
-	t.Setenv("BLITZ_OUTPUT_TCP_TLS_TLS_SKIP_VERIFY", "true")
-	t.Setenv("BLITZ_OUTPUT_TCP_TLS_TLS_MIN_VERSION", "1.3")
+	t.Setenv("BLITZ_OUTPUT_TCP_ENABLE_TLS", "true")
+	t.Setenv("BLITZ_OUTPUT_TCP_TLS_CERT", "/env/cert.pem")
+	t.Setenv("BLITZ_OUTPUT_TCP_TLS_KEY", "/env/key.pem")
+	t.Setenv("BLITZ_OUTPUT_TCP_TLS_CA", "/env/ca1.pem,/env/ca2.pem")
+	t.Setenv("BLITZ_OUTPUT_TCP_TLS_SKIP_VERIFY", "true")
+	t.Setenv("BLITZ_OUTPUT_TCP_TLS_MIN_VERSION", "1.3")
 
 	flagSet := pflag.NewFlagSet("test", pflag.PanicOnError)
 	overrides := DefaultOverrides()
@@ -395,9 +444,10 @@ func TestOverrideTCPTLSEnvs(t *testing.T) {
 			Type: OutputTypeTCP,
 			UDP:  UDPOutputConfig{Workers: 1},
 			TCP: TCPOutputConfig{
-				Host:    "example.com",
-				Port:    8080,
-				Workers: 2,
+				Host:      "example.com",
+				Port:      8080,
+				Workers:   2,
+				EnableTLS: true,
 				TLS: TLS{
 					Certificate:          "/env/cert.pem",
 					PrivateKey:           "/env/key.pem",
@@ -413,6 +463,12 @@ func TestOverrideTCPTLSEnvs(t *testing.T) {
 				BatchTimeout:       DefaultOTLPGrpcBatchTimeout,
 				MaxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
 				MaxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
+				EnableTLS:          false,
+				TLS: TLS{
+					MinTLSVersion:        "1.2",
+					CertificateAuthority: []string{},
+					Insecure:             true,
+				},
 			},
 		},
 	}

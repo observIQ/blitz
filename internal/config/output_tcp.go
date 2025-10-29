@@ -13,6 +13,9 @@ type TCPOutputConfig struct {
 	// Workers is the number of worker goroutines for TCP output
 	Workers int `yaml:"workers,omitempty" mapstructure:"workers,omitempty"`
 
+	// EnableTLS enables TLS for TCP connections. When true, the TLS configuration will be used.
+	EnableTLS bool `yaml:"enableTLS,omitempty" mapstructure:"enableTLS,omitempty"`
+
 	TLS `yaml:",inline"`
 }
 
@@ -30,8 +33,10 @@ func (c *TCPOutputConfig) Validate() error {
 		return fmt.Errorf("TCP output workers cannot be negative, got %d", c.Workers)
 	}
 
-	if err := c.TLS.Validate(); err != nil {
-		return fmt.Errorf("TCP output TLS validation failed: %w", err)
+	if c.EnableTLS {
+		if err := c.TLS.Validate(); err != nil {
+			return fmt.Errorf("TCP output TLS validation failed: %w", err)
+		}
 	}
 
 	return nil

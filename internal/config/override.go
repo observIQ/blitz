@@ -62,6 +62,8 @@ func (o *Override) createFlag(flags *pflag.FlagSet) *pflag.Flag {
 		_ = flags.Int(o.Flag, v, o.Usage)
 	case time.Duration:
 		_ = flags.Duration(o.Flag, v, o.Usage)
+	case bool:
+		_ = flags.Bool(o.Flag, v, o.Usage)
 	default:
 		_ = flags.String(o.Flag, "", o.Usage)
 	}
@@ -86,39 +88,101 @@ func createEnvName(field string) string {
 func tcpTLSOverrides() []*Override {
 	return []*Override{
 		{
-			Field:   "output.tcp.tls.tlsCert",
-			Flag:    "tcp-tls-cert",
-			Env:     "BLITZ_OUTPUT_TCP_TLS_TLS_CERT",
-			Usage:   "the path to the TLS certificate for TCP connections (not implemented currently)",
-			Default: "",
-		},
-		{
-			Field:   "output.tcp.tls.tlsKey",
-			Flag:    "tcp-tls-key",
-			Env:     "BLITZ_OUTPUT_TCP_TLS_TLS_KEY",
-			Usage:   "the path to the TLS private key for TCP connections (not implemented currently)",
-			Default: "",
-		},
-		{
-			Field:   "output.tcp.tls.tlsCA",
-			Flag:    "tcp-tls-ca",
-			Env:     "BLITZ_OUTPUT_TCP_TLS_TLS_CA",
-			Usage:   "the path to the TLS CA files. Optional, if not provided the host's root CA set will be used (not implemented currently)",
-			Default: []string{},
-		},
-		{
-			Field:   "output.tcp.tls.tlsSkipVerify",
-			Flag:    "tcp-tls-skip-verify",
-			Env:     "BLITZ_OUTPUT_TCP_TLS_TLS_SKIP_VERIFY",
-			Usage:   "whether to skip TLS verification for TCP connections (not implemented currently)",
+			Field:   "output.tcp.enableTLS",
+			Flag:    "output-tcp-enable-tls",
+			Env:     "BLITZ_OUTPUT_TCP_ENABLE_TLS",
+			Usage:   "enable TLS for TCP connections",
 			Default: false,
 		},
 		{
-			Field:   "output.tcp.tls.tlsMinVersion",
-			Flag:    "tcp-tls-min-version",
-			Env:     "BLITZ_OUTPUT_TCP_TLS_TLS_MIN_VERSION",
-			Usage:   "the minimum TLS version to use for TCP connections. One of: 1.2|1.3 (not implemented currently)",
+			Field:   "output.tcp.tls.cert",
+			Flag:    "output-tcp-tls-cert",
+			Env:     "BLITZ_OUTPUT_TCP_TLS_CERT",
+			Usage:   "the path to the TLS certificate for TCP connections",
 			Default: "",
+		},
+		{
+			Field:   "output.tcp.tls.key",
+			Flag:    "output-tcp-tls-key",
+			Env:     "BLITZ_OUTPUT_TCP_TLS_KEY",
+			Usage:   "the path to the TLS private key for TCP connections",
+			Default: "",
+		},
+		{
+			Field:   "output.tcp.tls.ca",
+			Flag:    "output-tcp-tls-ca",
+			Env:     "BLITZ_OUTPUT_TCP_TLS_CA",
+			Usage:   "the path to the TLS CA files. Optional, if not provided the host's root CA set will be used",
+			Default: []string{},
+		},
+		{
+			Field:   "output.tcp.tls.skipVerify",
+			Flag:    "output-tcp-tls-skip-verify",
+			Env:     "BLITZ_OUTPUT_TCP_TLS_SKIP_VERIFY",
+			Usage:   "whether to skip TLS verification for TCP connections",
+			Default: false,
+		},
+		{
+			Field:   "output.tcp.tls.minVersion",
+			Flag:    "output-tcp-tls-min-version",
+			Env:     "BLITZ_OUTPUT_TCP_TLS_MIN_VERSION",
+			Usage:   "the minimum TLS version to use for TCP connections. One of: 1.2|1.3",
+			Default: "1.2",
+		},
+	}
+}
+
+// otlpGrpcTLSOverrides creates OTLP gRPC TLS overrides
+func otlpGrpcTLSOverrides() []*Override {
+	return []*Override{
+		{
+			Field:   "output.otlpGrpc.enableTLS",
+			Flag:    "output-otlpgrpc-enable-tls",
+			Env:     "BLITZ_OUTPUT_OTLPGRPC_ENABLE_TLS",
+			Usage:   "enable TLS for OTLP gRPC connections",
+			Default: false,
+		},
+		{
+			Field:   "output.otlpGrpc.tls.insecure",
+			Flag:    "otlp-grpc-tls-insecure",
+			Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE",
+			Usage:   "whether to use insecure credentials (no TLS) for OTLP gRPC connections",
+			Default: true,
+		},
+		{
+			Field:   "output.otlpGrpc.tls.cert",
+			Flag:    "otlp-grpc-tls-cert",
+			Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_CERT",
+			Usage:   "the path to the TLS certificate for OTLP gRPC connections",
+			Default: "",
+		},
+		{
+			Field:   "output.otlpGrpc.tls.key",
+			Flag:    "otlp-grpc-tls-key",
+			Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_KEY",
+			Usage:   "the path to the TLS private key for OTLP gRPC connections",
+			Default: "",
+		},
+		{
+			Field:   "output.otlpGrpc.tls.ca",
+			Flag:    "otlp-grpc-tls-ca",
+			Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_CA",
+			Usage:   "the path to the TLS CA files. Optional, if not provided the host's root CA set will be used",
+			Default: []string{},
+		},
+		{
+			Field:   "output.otlpGrpc.tls.skipVerify",
+			Flag:    "otlp-grpc-tls-skip-verify",
+			Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY",
+			Usage:   "whether to skip TLS verification for OTLP gRPC connections",
+			Default: false,
+		},
+		{
+			Field:   "output.otlpGrpc.tls.minVersion",
+			Flag:    "otlp-grpc-tls-min-version",
+			Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_MIN_VERSION",
+			Usage:   "the minimum TLS version to use for OTLP gRPC connections. One of: 1.2|1.3",
+			Default: "1.2",
 		},
 	}
 }
@@ -147,5 +211,6 @@ func DefaultOverrides() []*Override {
 	}
 
 	overrides = append(overrides, tcpTLSOverrides()...)
+	overrides = append(overrides, otlpGrpcTLSOverrides()...)
 	return overrides
 }

@@ -34,6 +34,12 @@ type OTLPGrpcOutputConfig struct {
 	MaxQueueSize int `yaml:"maxQueueSize,omitempty" mapstructure:"maxQueueSize,omitempty"`
 	// MaxExportBatchSize is the maximum batch size for export
 	MaxExportBatchSize int `yaml:"maxExportBatchSize,omitempty" mapstructure:"maxExportBatchSize,omitempty"`
+
+	// EnableTLS enables TLS for OTLP gRPC connections. When true, the TLS configuration will be used.
+	// Note: This is separate from the TLS.Insecure field, which controls whether to use insecure credentials (no TLS).
+	EnableTLS bool `yaml:"enableTLS,omitempty" mapstructure:"enableTLS,omitempty"`
+
+	TLS `yaml:",inline"`
 }
 
 // Validate validates the OTLP gRPC output configuration
@@ -56,6 +62,12 @@ func (c *OTLPGrpcOutputConfig) Validate() error {
 
 	if c.MaxExportBatchSize < 0 {
 		return fmt.Errorf("OTLP gRPC output max export batch size cannot be negative, got %d", c.MaxExportBatchSize)
+	}
+
+	if c.EnableTLS {
+		if err := c.TLS.Validate(); err != nil {
+			return fmt.Errorf("OTLP gRPC output TLS validation failed: %w", err)
+		}
 	}
 
 	return nil
