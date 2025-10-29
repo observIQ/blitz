@@ -594,8 +594,8 @@ func (o *OTLPGrpc) buildOTLPRequest(logs []jsonLog) *collectorlogs.ExportLogsSer
 
 	for _, jsonLog := range logs {
 		logRecord := &logspb.LogRecord{
-			TimeUnixNano:         uint64(jsonLog.Timestamp.UnixNano()),
-			ObservedTimeUnixNano: uint64(time.Now().UnixNano()),
+			TimeUnixNano:         timeToUnixNanoUint64(jsonLog.Timestamp),
+			ObservedTimeUnixNano: timeToUnixNanoUint64(time.Now()),
 			SeverityNumber:       o.mapSeverityNumber(jsonLog.Level),
 			SeverityText:         jsonLog.Level,
 			Body: &commonpb.AnyValue{
