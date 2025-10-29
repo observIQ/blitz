@@ -71,7 +71,7 @@ The NOP (No Operation) generator performs no work and generates no data. It's us
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.type` | `--output-type` | `BINDPLANE_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `tcp`, `udp` |
+| `output.type` | `--output-type` | `BINDPLANE_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `tcp`, `udp`, `otlp-grpc` |
 
 #### NOP Output Configuration
 
@@ -94,6 +94,19 @@ The NOP (No Operation) output performs no work and discards all data. It's usefu
 | `output.udp.host` | `--output-udp-host` | `BINDPLANE_OUTPUT_UDP_HOST` | `""` | UDP target host (IP address or hostname) |
 | `output.udp.port` | `--output-udp-port` | `BINDPLANE_OUTPUT_UDP_PORT` | `0` | UDP target port (1-65535) |
 | `output.udp.workers` | `--output-udp-workers` | `BINDPLANE_OUTPUT_UDP_WORKERS` | `1` | Number of UDP output workers (must be ≥ 0) |
+
+#### OTLP gRPC Output Configuration
+
+The OTLP gRPC output sends logs to an OpenTelemetry collector via gRPC using the OTLP protocol.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `output.otlpGrpc.host` | `--output-otlpgrpc-host` | `BINDPLANE_OUTPUT_OTLPGRPC_HOST` | `localhost` | OTLP gRPC target host (IP address or hostname) |
+| `output.otlpGrpc.port` | `--output-otlpgrpc-port` | `BINDPLANE_OUTPUT_OTLPGRPC_PORT` | `4317` | OTLP gRPC target port (1-65535) |
+| `output.otlpGrpc.workers` | `--output-otlpgrpc-workers` | `BINDPLANE_OUTPUT_OTLPGRPC_WORKERS` | `1` | Number of OTLP gRPC output workers (must be ≥ 0) |
+| `output.otlpGrpc.batchTimeout` | `--output-otlpgrpc-batchtimeout` | `BINDPLANE_OUTPUT_OTLPGRPC_BATCHTIMEOUT` | `1s` | Timeout for batching log records before sending (duration format) |
+| `output.otlpGrpc.maxQueueSize` | `--output-otlpgrpc-maxqueuesize` | `BINDPLANE_OUTPUT_OTLPGRPC_MAXQUEUESIZE` | `100` | Maximum queue size for batching logs (must be ≥ 0) |
+| `output.otlpGrpc.maxExportBatchSize` | `--output-otlpgrpc-maxexportbatchsize` | `BINDPLANE_OUTPUT_OTLPGRPC_MAXEXPORTBATCHSIZE` | `200` | Maximum number of logs per export batch (must be ≥ 0) |
 
 ## Example Configurations
 
@@ -180,6 +193,30 @@ output:
     port: 9090
 ```
 
+### OTLP gRPC Output Configuration
+
+```yaml
+logging:
+  type: stdout
+  level: info
+
+generator:
+  type: json
+  json:
+    workers: 2
+    rate: 500ms
+
+output:
+  type: otlp-grpc
+  otlpGrpc:
+    host: collector.example.com
+    port: 4317
+    workers: 3
+    batchTimeout: 5s
+    maxQueueSize: 2048
+    maxExportBatchSize: 512
+```
+
 ## Duration Format
 
 Duration values (like `generator.json.rate`) support the following formats:
@@ -199,18 +236,25 @@ Duration values (like `generator.json.rate`) support the following formats:
 - `output.tcp.port` - Required when using TCP output
 - `output.udp.host` - Required when using UDP output
 - `output.udp.port` - Required when using UDP output
+- `output.otlpGrpc.host` - Required when using OTLP gRPC output
+- `output.otlpGrpc.port` - Required when using OTLP gRPC output
 
 ### Validation Constraints
 - `generator.json.workers` - Must be ≥ 1
 - `generator.json.rate` - Must be > 0
 - `output.tcp.workers` - Must be ≥ 0
 - `output.udp.workers` - Must be ≥ 0
+- `output.otlpGrpc.workers` - Must be ≥ 0
 - `output.tcp.port` - Must be between 1 and 65535
 - `output.udp.port` - Must be between 1 and 65535
+- `output.otlpGrpc.port` - Must be between 1 and 65535
+- `output.otlpGrpc.maxQueueSize` - Must be ≥ 0
+- `output.otlpGrpc.maxExportBatchSize` - Must be ≥ 0
+- `output.otlpGrpc.batchTimeout` - Must be > 0 (duration format)
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
 - `logging.type` - Must be `stdout` (only supported type)
 - `generator.type` - Must be one of: `nop`, `json`
-- `output.type` - Must be one of: `nop`, `tcp`, `udp`
+- `output.type` - Must be one of: `nop`, `tcp`, `udp`, `otlp-grpc`
 
 ## Error Handling
 
@@ -242,6 +286,20 @@ export BINDPLANE_LOGGING_LEVEL=debug
 export BINDPLANE_OUTPUT_TYPE=tcp
 export BINDPLANE_OUTPUT_TCP_HOST=logs.example.com
 export BINDPLANE_OUTPUT_TCP_PORT=9090
+./blitz
+```
+
+### Using OTLP gRPC Output
+```bash
+./blitz --output-type otlp-grpc --output-otlpgrpc-host collector.example.com --output-otlpgrpc-port 4317
+```
+
+Or with environment variables:
+```bash
+export BINDPLANE_OUTPUT_TYPE=otlp-grpc
+export BINDPLANE_OUTPUT_OTLPGRPC_HOST=collector.example.com
+export BINDPLANE_OUTPUT_OTLPGRPC_PORT=4317
+export BINDPLANE_OUTPUT_OTLPGRPC_BATCHTIMEOUT=10s
 ./blitz
 ```
 
