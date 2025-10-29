@@ -131,13 +131,19 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.type", "generator type. One of: nop|json", GeneratorTypeNop),
 		NewOverride("generator.json.workers", "number of JSON generator workers", 1),
 		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),
-		NewOverride("output.type", "output type. One of: nop|tcp|udp", OutputTypeNop),
+		NewOverride("output.type", "output type. One of: nop|tcp|udp|otlp-grpc", OutputTypeNop),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),
 		NewOverride("output.udp.workers", "number of UDP output workers", 1),
 		NewOverride("output.tcp.host", "TCP output target host", ""),
 		NewOverride("output.tcp.port", "TCP output target port", 0),
 		NewOverride("output.tcp.workers", "number of TCP output workers", 1),
+		NewOverride("output.otlpGrpc.host", "OTLP gRPC output target host", DefaultOTLPGrpcHost),
+		NewOverride("output.otlpGrpc.port", "OTLP gRPC output target port", DefaultOTLPGrpcPort),
+		NewOverride("output.otlpGrpc.workers", "number of OTLP gRPC output workers", DefaultOTLPGrpcWorkers),
+		NewOverride("output.otlpGrpc.batchTimeout", "OTLP gRPC output batch timeout", DefaultOTLPGrpcBatchTimeout),
+		NewOverride("output.otlpGrpc.maxQueueSize", "OTLP gRPC output maximum queue size", DefaultOTLPGrpcMaxQueueSize),
+		NewOverride("output.otlpGrpc.maxExportBatchSize", "OTLP gRPC output maximum export batch size", DefaultOTLPGrpcMaxExportBatchSize),
 	}
 
 	overrides = append(overrides, tcpTLSOverrides()...)
