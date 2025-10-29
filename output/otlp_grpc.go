@@ -120,17 +120,15 @@ func WithMaxExportBatchSize(size int) OTLPGrpcOption {
 
 // OTLPGrpc implements the Output interface for OTLP gRPC connections
 type OTLPGrpc struct {
-	logger            *zap.Logger
-	host              string
-	port              string
-	workers           int
-	dataChan          chan []byte
-	ctx               context.Context
-	cancel            context.CancelFunc
-	workerManager     *workermanager.WorkerManager
-	meter             metric.Meter
-	grpcConn          *grpc.ClientConn
-	logsServiceClient collectorlogs.LogsServiceClient
+	logger        *zap.Logger
+	host          string
+	port          string
+	workers       int
+	dataChan      chan []byte
+	ctx           context.Context
+	cancel        context.CancelFunc
+	workerManager *workermanager.WorkerManager
+	meter         metric.Meter
 
 	// Metrics
 	otlpLogsReceived     metric.Int64Counter
@@ -356,13 +354,6 @@ func (o *OTLPGrpc) Stop(ctx context.Context) error {
 	// Stop the worker manager
 	o.workerManager.Stop()
 
-	// Close gRPC connection if it exists
-	if o.grpcConn != nil {
-		if err := o.grpcConn.Close(); err != nil {
-			o.logger.Warn("Error closing gRPC connection", zap.Error(err))
-		}
-	}
-
 	o.logger.Info("OTLP gRPC output stopped successfully")
 	return nil
 }
@@ -382,11 +373,9 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 			zap.Error(err))
 		return
 	}
-	o.grpcConn = conn
 	defer conn.Close()
 
 	client := collectorlogs.NewLogsServiceClient(conn)
-	o.logsServiceClient = client
 
 	batch := newLogBatch(o.maxExportBatchSize, o.batchTimeout)
 
@@ -407,7 +396,12 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 
 			// Send batch if it's full
 			if batch.isFull() {
-				batch.timer.Stop()
+				if !batch.timer.Stop() {
+					select {
+					case <-batch.timer.C:
+					default:
+					}
+				}
 				if err := o.sendBatch(client, batch); err != nil {
 					o.logger.Error("Failed to send OTLP gRPC batch",
 						zap.Int("worker_id", id),
@@ -445,12 +439,12 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 func (o *OTLPGrpc) connect() (*grpc.ClientConn, error) {
 	endpoint := fmt.Sprintf("%s:%s", o.host, o.port)
 
-	conn, err := grpc.Dial(endpoint,
+	conn, err := grpc.NewClient(
+		endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to %s: %w", endpoint, err)
+		return nil, fmt.Errorf("failed to create gRPC client for %s: %w", endpoint, err)
 	}
 
 	return conn, nil
@@ -563,7 +557,12 @@ func (o *OTLPGrpc) sendBatch(client collectorlogs.LogsServiceClient, batch *logB
 
 // flushBatch flushes any remaining logs in the batch
 func (o *OTLPGrpc) flushBatch(client collectorlogs.LogsServiceClient, batch *logBatch) error {
-	batch.timer.Stop()
+	if !batch.timer.Stop() {
+		select {
+		case <-batch.timer.C:
+		default:
+		}
+	}
 	if batch.isEmpty() {
 		return nil
 	}
