@@ -39,7 +39,7 @@ func (t TLSVersion) parseTLSVersion() uint16 {
 // TLS is the configuration for TLS connections
 type TLS struct {
 	// The minimum TLS version that is acceptable for incoming connections.
-	MinTLSVersion TLSVersion `mapstructure:"tlsMinVersion" yaml:"tlsMinVersion,omitempty"`
+	MinTLSVersion TLSVersion `mapstructure:"minVersion" yaml:"minVersion,omitempty"`
 
 	// Certificate is the path to the x509 PEM encoded certificate file that will be used to
 	// establish TLS connections.
@@ -47,14 +47,14 @@ type TLS struct {
 	// When operating in server mode, this certificate is presented to clients.
 	// When operating in client mode with mTLS, this certificate is used for authentication
 	// against the server.
-	Certificate string `mapstructure:"tlsCert" yaml:"tlsCert,omitempty"`
+	Certificate string `mapstructure:"cert" yaml:"cert,omitempty"`
 
 	// PrivateKey is the matching x509 PEM encoded private key for the Certificate.
-	PrivateKey string `mapstructure:"tlsKey" yaml:"tlsKey,omitempty"`
+	PrivateKey string `mapstructure:"key" yaml:"key,omitempty"`
 
 	// CertificateAuthority is one or more file paths to x509 PEM encoded certificate authority chains.
 	// These certificate authorities are used for trusting incoming client mTLS connections.
-	CertificateAuthority []string `mapstructure:"tlsCa" yaml:"tlsCa,omitempty"`
+	CertificateAuthority []string `mapstructure:"ca" yaml:"ca,omitempty"`
 
 	// InsecureSkipVerify controls whether a client verifies the server's certificate chain and host name. If
 	// InsecureSkipVerify is true, crypto/tls accepts any certificate presented by the server and any host name in that
@@ -64,7 +64,7 @@ type TLS struct {
 	// tls.insecure set to true.
 	//
 	// In this mode, TLS is susceptible to machine-in-the-middle attacks. This should be used only for testing only.
-	InsecureSkipVerify bool `mapstructure:"tlsSkipVerify" yaml:"tlsSkipVerify,omitempty"`
+	InsecureSkipVerify bool `mapstructure:"skipVerify" yaml:"skipVerify,omitempty"`
 
 	// Insecure controls whether TLS should be used at all for gRPC clients. When true, gRPC clients will use
 	// insecure credentials (no TLS). When false and TLS is configured, gRPC clients will use TLS credentials.

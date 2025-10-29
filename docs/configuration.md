@@ -93,11 +93,11 @@ TLS is disabled by default. To enable TLS, provide both a certificate and privat
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.tcp.tls.tlsCert` | `--output-tcp-tls-cert` | `BLITZ_OUTPUT_TCP_TLS_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
-| `output.tcp.tls.tlsKey` | `--output-tcp-tls-key` | `BLITZ_OUTPUT_TCP_TLS_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
-| `output.tcp.tls.tlsCA` | `--output-tcp-tls-ca` | `BLITZ_OUTPUT_TCP_TLS_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional, if not provided the host's root CA set will be used |
-| `output.tcp.tls.tlsSkipVerify` | `--output-tcp-tls-skip-verify` | `BLITZ_OUTPUT_TCP_TLS_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended for production) |
-| `output.tcp.tls.tlsMinVersion` | `--output-tcp-tls-min-version` | `BLITZ_OUTPUT_TCP_TLS_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
+| `output.tcp.tls.cert` | `--output-tcp-tls-cert` | `BLITZ_OUTPUT_TCP_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
+| `output.tcp.tls.key` | `--output-tcp-tls-key` | `BLITZ_OUTPUT_TCP_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
+| `output.tcp.tls.ca` | `--output-tcp-tls-ca` | `BLITZ_OUTPUT_TCP_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional, if not provided the host's root CA set will be used |
+| `output.tcp.tls.skipVerify` | `--output-tcp-tls-skip-verify` | `BLITZ_OUTPUT_TCP_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended for production) |
+| `output.tcp.tls.minVersion` | `--output-tcp-tls-min-version` | `BLITZ_OUTPUT_TCP_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
 
 #### UDP Output Configuration
 
@@ -127,11 +127,11 @@ By default, OTLP gRPC uses insecure credentials (no TLS). To enable TLS, set `in
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
 | `output.otlpGrpc.tls.insecure` | `--otlp-grpc-tls-insecure` | `BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE` | `true` | Whether to use insecure credentials (no TLS). When `true`, TLS is not used. When `false` and TLS certificates are provided, TLS will be enabled |
-| `output.otlpGrpc.tls.tlsCert` | `--otlp-grpc-tls-cert` | `BLITZ_OUTPUT_OTLPGRPC_TLS_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
-| `output.otlpGrpc.tls.tlsKey` | `--otlp-grpc-tls-key` | `BLITZ_OUTPUT_OTLPGRPC_TLS_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
-| `output.otlpGrpc.tls.tlsCA` | `--otlp-grpc-tls-ca` | `BLITZ_OUTPUT_OTLPGRPC_TLS_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional, if not provided the host's root CA set will be used |
-| `output.otlpGrpc.tls.tlsSkipVerify` | `--otlp-grpc-tls-skip-verify` | `BLITZ_OUTPUT_OTLPGRPC_TLS_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended for production) |
-| `output.otlpGrpc.tls.tlsMinVersion` | `--otlp-grpc-tls-min-version` | `BLITZ_OUTPUT_OTLPGRPC_TLS_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
+| `output.otlpGrpc.tls.cert` | `--otlp-grpc-tls-cert` | `BLITZ_OUTPUT_OTLPGRPC_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
+| `output.otlpGrpc.tls.key` | `--otlp-grpc-tls-key` | `BLITZ_OUTPUT_OTLPGRPC_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
+| `output.otlpGrpc.tls.ca` | `--otlp-grpc-tls-ca` | `BLITZ_OUTPUT_OTLPGRPC_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional, if not provided the host's root CA set will be used |
+| `output.otlpGrpc.tls.skipVerify` | `--otlp-grpc-tls-skip-verify` | `BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended for production) |
+| `output.otlpGrpc.tls.minVersion` | `--otlp-grpc-tls-min-version` | `BLITZ_OUTPUT_OTLPGRPC_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
 
 ## Example Configurations
 
@@ -344,12 +344,12 @@ output:
     port: 9090
     workers: 3
     tls:
-      tlsCert: /path/to/cert.pem
-      tlsKey: /path/to/key.pem
-      tlsCA:
+      cert: /path/to/cert.pem
+      key: /path/to/key.pem
+      ca:
         - /path/to/ca.pem
-      tlsSkipVerify: false
-      tlsMinVersion: "1.2"
+      skipVerify: false
+      minVersion: "1.2"
 ```
 
 Or with command-line flags:
@@ -374,12 +374,12 @@ output:
     workers: 3
     tls:
       insecure: false
-      tlsCert: /path/to/cert.pem
-      tlsKey: /path/to/key.pem
-      tlsCA:
+      cert: /path/to/cert.pem
+      key: /path/to/key.pem
+      ca:
         - /path/to/ca.pem
-      tlsSkipVerify: false
-      tlsMinVersion: "1.2"
+      skipVerify: false
+      minVersion: "1.2"
 ```
 
 Or with command-line flags:
