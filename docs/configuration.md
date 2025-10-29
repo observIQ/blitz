@@ -19,11 +19,11 @@ Use the `--config` flag to specify a configuration file:
 
 ### Environment Variables
 
-All configuration options can be set using environment variables with the `BINDPLANE_` prefix:
+All configuration options can be set using environment variables with the `BLITZ_` prefix:
 
 ```bash
-export BINDPLANE_LOGGING_LEVEL=debug
-export BINDPLANE_OUTPUT_TYPE=tcp
+export BLITZ_LOGGING_LEVEL=debug
+export BLITZ_OUTPUT_TYPE=tcp
 ./blitz
 ```
 
@@ -41,8 +41,8 @@ Configuration files must be in YAML format and can be specified using the `--con
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `logging.type` | `--logging-type` | `BINDPLANE_LOGGING_TYPE` | `stdout` | Output destination for logs. Currently only `stdout` is supported. |
-| `logging.level` | `--logging-level` | `BINDPLANE_LOGGING_LEVEL` | `info` | Log level. Valid values: `debug`, `info`, `warn`, `error` |
+| `logging.type` | `--logging-type` | `BLITZ_LOGGING_TYPE` | `stdout` | Output destination for logs. Currently only `stdout` is supported. |
+| `logging.level` | `--logging-level` | `BLITZ_LOGGING_LEVEL` | `info` | Log level. Valid values: `debug`, `info`, `warn`, `error` |
 
 ### Generator Configuration
 
@@ -50,7 +50,7 @@ Configuration files must be in YAML format and can be specified using the `--con
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.type` | `--generator-type` | `BINDPLANE_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json` |
+| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json` |
 
 #### NOP Generator Configuration
 
@@ -62,8 +62,8 @@ The NOP (No Operation) generator performs no work and generates no data. It's us
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.json.workers` | `--generator-json-workers` | `BINDPLANE_GENERATOR_JSON_WORKERS` | `1` | Number of JSON generator workers (must be ≥ 1) |
-| `generator.json.rate` | `--generator-json-rate` | `BINDPLANE_GENERATOR_JSON_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
+| `generator.json.workers` | `--generator-json-workers` | `BLITZ_GENERATOR_JSON_WORKERS` | `1` | Number of JSON generator workers (must be ≥ 1) |
+| `generator.json.rate` | `--generator-json-rate` | `BLITZ_GENERATOR_JSON_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
 
 ### Output Configuration
 
@@ -71,7 +71,7 @@ The NOP (No Operation) generator performs no work and generates no data. It's us
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.type` | `--output-type` | `BINDPLANE_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `tcp`, `udp`, `otlp-grpc` |
+| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `tcp`, `udp`, `otlp-grpc` |
 
 #### NOP Output Configuration
 
@@ -83,17 +83,29 @@ The NOP (No Operation) output performs no work and discards all data. It's usefu
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.tcp.host` | `--output-tcp-host` | `BINDPLANE_OUTPUT_TCP_HOST` | `""` | TCP target host (IP address or hostname) |
-| `output.tcp.port` | `--output-tcp-port` | `BINDPLANE_OUTPUT_TCP_PORT` | `0` | TCP target port (1-65535) |
-| `output.tcp.workers` | `--output-tcp-workers` | `BINDPLANE_OUTPUT_TCP_WORKERS` | `1` | Number of TCP output workers (must be ≥ 0) |
+| `output.tcp.host` | `--output-tcp-host` | `BLITZ_OUTPUT_TCP_HOST` | `""` | TCP target host (IP address or hostname) |
+| `output.tcp.port` | `--output-tcp-port` | `BLITZ_OUTPUT_TCP_PORT` | `0` | TCP target port (1-65535) |
+| `output.tcp.workers` | `--output-tcp-workers` | `BLITZ_OUTPUT_TCP_WORKERS` | `1` | Number of TCP output workers (must be ≥ 0) |
+
+##### TCP TLS Configuration
+
+TLS is disabled by default. To enable TLS, provide both a certificate and private key.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `output.tcp.tls.tlsCert` | `--output-tcp-tls-cert` | `BLITZ_OUTPUT_TCP_TLS_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
+| `output.tcp.tls.tlsKey` | `--output-tcp-tls-key` | `BLITZ_OUTPUT_TCP_TLS_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
+| `output.tcp.tls.tlsCA` | `--output-tcp-tls-ca` | `BLITZ_OUTPUT_TCP_TLS_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional, if not provided the host's root CA set will be used |
+| `output.tcp.tls.tlsSkipVerify` | `--output-tcp-tls-skip-verify` | `BLITZ_OUTPUT_TCP_TLS_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended for production) |
+| `output.tcp.tls.tlsMinVersion` | `--output-tcp-tls-min-version` | `BLITZ_OUTPUT_TCP_TLS_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
 
 #### UDP Output Configuration
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.udp.host` | `--output-udp-host` | `BINDPLANE_OUTPUT_UDP_HOST` | `""` | UDP target host (IP address or hostname) |
-| `output.udp.port` | `--output-udp-port` | `BINDPLANE_OUTPUT_UDP_PORT` | `0` | UDP target port (1-65535) |
-| `output.udp.workers` | `--output-udp-workers` | `BINDPLANE_OUTPUT_UDP_WORKERS` | `1` | Number of UDP output workers (must be ≥ 0) |
+| `output.udp.host` | `--output-udp-host` | `BLITZ_OUTPUT_UDP_HOST` | `""` | UDP target host (IP address or hostname) |
+| `output.udp.port` | `--output-udp-port` | `BLITZ_OUTPUT_UDP_PORT` | `0` | UDP target port (1-65535) |
+| `output.udp.workers` | `--output-udp-workers` | `BLITZ_OUTPUT_UDP_WORKERS` | `1` | Number of UDP output workers (must be ≥ 0) |
 
 #### OTLP gRPC Output Configuration
 
@@ -101,12 +113,25 @@ The OTLP gRPC output sends logs to an OpenTelemetry collector via gRPC using the
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.otlpGrpc.host` | `--output-otlpgrpc-host` | `BINDPLANE_OUTPUT_OTLPGRPC_HOST` | `localhost` | OTLP gRPC target host (IP address or hostname) |
-| `output.otlpGrpc.port` | `--output-otlpgrpc-port` | `BINDPLANE_OUTPUT_OTLPGRPC_PORT` | `4317` | OTLP gRPC target port (1-65535) |
-| `output.otlpGrpc.workers` | `--output-otlpgrpc-workers` | `BINDPLANE_OUTPUT_OTLPGRPC_WORKERS` | `1` | Number of OTLP gRPC output workers (must be ≥ 0) |
-| `output.otlpGrpc.batchTimeout` | `--output-otlpgrpc-batchtimeout` | `BINDPLANE_OUTPUT_OTLPGRPC_BATCHTIMEOUT` | `1s` | Timeout for batching log records before sending (duration format) |
-| `output.otlpGrpc.maxQueueSize` | `--output-otlpgrpc-maxqueuesize` | `BINDPLANE_OUTPUT_OTLPGRPC_MAXQUEUESIZE` | `100` | Maximum queue size for batching logs (must be ≥ 0) |
-| `output.otlpGrpc.maxExportBatchSize` | `--output-otlpgrpc-maxexportbatchsize` | `BINDPLANE_OUTPUT_OTLPGRPC_MAXEXPORTBATCHSIZE` | `200` | Maximum number of logs per export batch (must be ≥ 0) |
+| `output.otlpGrpc.host` | `--output-otlpgrpc-host` | `BLITZ_OUTPUT_OTLPGRPC_HOST` | `localhost` | OTLP gRPC target host (IP address or hostname) |
+| `output.otlpGrpc.port` | `--output-otlpgrpc-port` | `BLITZ_OUTPUT_OTLPGRPC_PORT` | `4317` | OTLP gRPC target port (1-65535) |
+| `output.otlpGrpc.workers` | `--output-otlpgrpc-workers` | `BLITZ_OUTPUT_OTLPGRPC_WORKERS` | `1` | Number of OTLP gRPC output workers (must be ≥ 0) |
+| `output.otlpGrpc.batchTimeout` | `--output-otlpgrpc-batchtimeout` | `BLITZ_OUTPUT_OTLPGRPC_BATCHTIMEOUT` | `1s` | Timeout for batching log records before sending (duration format) |
+| `output.otlpGrpc.maxQueueSize` | `--output-otlpgrpc-maxqueuesize` | `BLITZ_OUTPUT_OTLPGRPC_MAXQUEUESIZE` | `100` | Maximum queue size for batching logs (must be ≥ 0) |
+| `output.otlpGrpc.maxExportBatchSize` | `--output-otlpgrpc-maxexportbatchsize` | `BLITZ_OUTPUT_OTLPGRPC_MAXEXPORTBATCHSIZE` | `200` | Maximum number of logs per export batch (must be ≥ 0) |
+
+##### OTLP gRPC TLS Configuration
+
+By default, OTLP gRPC uses insecure credentials (no TLS). To enable TLS, set `insecure` to `false` and provide certificate and key files.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `output.otlpGrpc.tls.insecure` | `--otlp-grpc-tls-insecure` | `BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE` | `true` | Whether to use insecure credentials (no TLS). When `true`, TLS is not used. When `false` and TLS certificates are provided, TLS will be enabled |
+| `output.otlpGrpc.tls.tlsCert` | `--otlp-grpc-tls-cert` | `BLITZ_OUTPUT_OTLPGRPC_TLS_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
+| `output.otlpGrpc.tls.tlsKey` | `--otlp-grpc-tls-key` | `BLITZ_OUTPUT_OTLPGRPC_TLS_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
+| `output.otlpGrpc.tls.tlsCA` | `--otlp-grpc-tls-ca` | `BLITZ_OUTPUT_OTLPGRPC_TLS_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional, if not provided the host's root CA set will be used |
+| `output.otlpGrpc.tls.tlsSkipVerify` | `--otlp-grpc-tls-skip-verify` | `BLITZ_OUTPUT_OTLPGRPC_TLS_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended for production) |
+| `output.otlpGrpc.tls.tlsMinVersion` | `--otlp-grpc-tls-min-version` | `BLITZ_OUTPUT_OTLPGRPC_TLS_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
 
 ## Example Configurations
 
@@ -282,10 +307,10 @@ Failed to read config file nonexistent.yaml: open nonexistent.yaml: no such file
 
 ### Using Environment Variables
 ```bash
-export BINDPLANE_LOGGING_LEVEL=debug
-export BINDPLANE_OUTPUT_TYPE=tcp
-export BINDPLANE_OUTPUT_TCP_HOST=logs.example.com
-export BINDPLANE_OUTPUT_TCP_PORT=9090
+export BLITZ_LOGGING_LEVEL=debug
+export BLITZ_OUTPUT_TYPE=tcp
+export BLITZ_OUTPUT_TCP_HOST=logs.example.com
+export BLITZ_OUTPUT_TCP_PORT=9090
 ./blitz
 ```
 
@@ -296,15 +321,75 @@ export BINDPLANE_OUTPUT_TCP_PORT=9090
 
 Or with environment variables:
 ```bash
-export BINDPLANE_OUTPUT_TYPE=otlp-grpc
-export BINDPLANE_OUTPUT_OTLPGRPC_HOST=collector.example.com
-export BINDPLANE_OUTPUT_OTLPGRPC_PORT=4317
-export BINDPLANE_OUTPUT_OTLPGRPC_BATCHTIMEOUT=10s
+export BLITZ_OUTPUT_TYPE=otlp-grpc
+export BLITZ_OUTPUT_OTLPGRPC_HOST=collector.example.com
+export BLITZ_OUTPUT_OTLPGRPC_PORT=4317
+export BLITZ_OUTPUT_OTLPGRPC_BATCHTIMEOUT=10s
 ./blitz
 ```
 
 ### Mixed Configuration Methods
 ```bash
-export BINDPLANE_OUTPUT_TYPE=tcp
+export BLITZ_OUTPUT_TYPE=tcp
 ./blitz --config base.yaml --logging-level warn --generator-json-workers 3
+```
+
+### Using TLS with TCP Output
+
+```yaml
+output:
+  type: tcp
+  tcp:
+    host: logs.example.com
+    port: 9090
+    workers: 3
+    tls:
+      tlsCert: /path/to/cert.pem
+      tlsKey: /path/to/key.pem
+      tlsCA:
+        - /path/to/ca.pem
+      tlsSkipVerify: false
+      tlsMinVersion: "1.2"
+```
+
+Or with command-line flags:
+```bash
+./blitz --output-type tcp \
+  --output-tcp-host logs.example.com \
+  --output-tcp-port 9090 \
+  --output-tcp-tls-cert /path/to/cert.pem \
+  --output-tcp-tls-key /path/to/key.pem \
+  --output-tcp-tls-ca /path/to/ca.pem \
+  --output-tcp-tls-min-version 1.2
+```
+
+### Using TLS with OTLP gRPC Output
+
+```yaml
+output:
+  type: otlp-grpc
+  otlpGrpc:
+    host: collector.example.com
+    port: 4317
+    workers: 3
+    tls:
+      insecure: false
+      tlsCert: /path/to/cert.pem
+      tlsKey: /path/to/key.pem
+      tlsCA:
+        - /path/to/ca.pem
+      tlsSkipVerify: false
+      tlsMinVersion: "1.2"
+```
+
+Or with command-line flags:
+```bash
+./blitz --output-type otlp-grpc \
+  --output-otlpgrpc-host collector.example.com \
+  --output-otlpgrpc-port 4317 \
+  --otlp-grpc-tls-insecure false \
+  --otlp-grpc-tls-cert /path/to/cert.pem \
+  --otlp-grpc-tls-key /path/to/key.pem \
+  --otlp-grpc-tls-ca /path/to/ca.pem \
+  --otlp-grpc-tls-min-version 1.2
 ```

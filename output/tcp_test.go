@@ -2,7 +2,12 @@ package output
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"net"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -83,9 +88,9 @@ func TestNewTCP(t *testing.T) {
 			var err error
 
 			if tt.name == "nil logger" {
-				tcp, err = NewTCP(nil, tt.host, tt.port, tt.workers)
+				tcp, err = NewTCP(nil, tt.host, tt.port, tt.workers, nil)
 			} else {
-				tcp, err = NewTCP(logger, tt.host, tt.port, tt.workers)
+				tcp, err = NewTCP(logger, tt.host, tt.port, tt.workers, nil)
 			}
 
 			if tt.wantErr {
@@ -159,7 +164,7 @@ func TestTCP_Integration(t *testing.T) {
 	}
 
 	// Create TCP client
-	tcp, err := NewTCP(logger, host, port, 1)
+	tcp, err := NewTCP(logger, host, port, 1, nil)
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -238,7 +243,7 @@ func TestTCP_WriteAfterStop(t *testing.T) {
 	}
 
 	// Create TCP client
-	tcp, err := NewTCP(logger, host, port, 1)
+	tcp, err := NewTCP(logger, host, port, 1, nil)
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -280,7 +285,7 @@ func TestTCP_StopTwice(t *testing.T) {
 	}
 
 	// Create TCP client
-	tcp, err := NewTCP(logger, host, port, 1)
+	tcp, err := NewTCP(logger, host, port, 1, nil)
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -300,6 +305,166 @@ func TestTCP_StopTwice(t *testing.T) {
 	}()
 
 	tcp.Stop(ctx)
+}
+
+func TestTCP_IntegrationTLS(t *testing.T) {
+	logger := zap.NewNop()
+
+	// Find test certificates relative to the repository root
+	// Get the absolute path of the test file first
+	_, testFile, _, _ := runtime.Caller(0)
+	testDir := filepath.Dir(testFile)
+	// output/tcp_test.go -> output/ -> repo root
+	repoRoot := filepath.Join(testDir, "..")
+	certFile := filepath.Join(repoRoot, "cmd", "server", "tcp", "test_server.crt")
+	keyFile := filepath.Join(repoRoot, "cmd", "server", "tcp", "test_server.key")
+
+	// Make paths absolute
+	certFile, _ = filepath.Abs(certFile)
+	keyFile, _ = filepath.Abs(keyFile)
+
+	// Check if certificates exist
+	if _, err := os.Stat(certFile); os.IsNotExist(err) {
+		t.Skipf("Test certificates not found at %s. Run ./generate_test_certs.sh in cmd/server/tcp/", certFile)
+	}
+	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
+		t.Skipf("Test key not found at %s. Run ./generate_test_certs.sh in cmd/server/tcp/", keyFile)
+	}
+
+	// Load server certificate
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		t.Fatalf("Failed to load test certificates: %v", err)
+	}
+
+	// Start a TLS TCP server on a random available port
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+	}
+
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", tlsConfig)
+	if err != nil {
+		t.Fatalf("Failed to start TLS TCP server: %v", err)
+	}
+	defer listener.Close()
+
+	serverAddr := listener.Addr().String()
+
+	// Reset received data
+	dataMutex.Lock()
+	receivedData = make([][]byte, 0)
+	dataMutex.Unlock()
+
+	// Start server goroutine
+	serverReady := make(chan bool, 1)
+	go func() {
+		serverReady <- true
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go handleTestConnection(conn)
+		}
+	}()
+
+	// Wait for server to be ready
+	<-serverReady
+	time.Sleep(50 * time.Millisecond)
+
+	// Extract host and port from the server address
+	host, port, err := net.SplitHostPort(serverAddr)
+	if err != nil {
+		t.Fatalf("Failed to split server address: %v", err)
+	}
+
+	// Load CA certificate for client
+	caCert, err := os.ReadFile(certFile)
+	if err != nil {
+		t.Fatalf("Failed to read CA certificate: %v", err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		t.Fatalf("Failed to parse CA certificate")
+	}
+
+	// Create TLS config for client
+	// Note: Since the certificate is for "localhost", we need to set ServerName
+	clientTLSConfig := &tls.Config{
+		RootCAs:            caCertPool,
+		InsecureSkipVerify: false,
+		MinVersion:         tls.VersionTLS12,
+		ServerName:         "localhost", // Certificate is valid for localhost
+	}
+
+	// Create TCP client with TLS
+	tcp, err := NewTCP(logger, host, port, 1, clientTLSConfig)
+	if err != nil {
+		t.Fatalf("Failed to create TLS TCP client: %v", err)
+	}
+
+	// Give time for the worker to establish TLS connection
+	time.Sleep(200 * time.Millisecond)
+
+	// Test data to send
+	testData1 := []byte("Hello, TLS World!")
+	testData2 := []byte("Second TLS message")
+
+	// Send first message
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = tcp.Write(ctx, testData1)
+	if err != nil {
+		t.Errorf("First Write() failed: %v", err)
+	}
+
+	// Give some time for first message to be sent
+	time.Sleep(100 * time.Millisecond)
+
+	// Send second message
+	err = tcp.Write(ctx, testData2)
+	if err != nil {
+		t.Errorf("Second Write() failed: %v", err)
+	}
+
+	// Give some time for data to be sent
+	time.Sleep(200 * time.Millisecond)
+
+	// Stop the client
+	err = tcp.Stop(ctx)
+	if err != nil {
+		t.Errorf("Stop() failed: %v", err)
+	}
+
+	// Wait a bit more for final data to arrive
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify the server received the data
+	receivedData := getReceivedData(t)
+
+	// TCP is a stream protocol, so messages might be concatenated
+	if len(receivedData) == 0 {
+		t.Errorf("Expected at least 1 message, got 0")
+		return
+	}
+
+	// Combine all received data to check content
+	var allData []byte
+	for _, data := range receivedData {
+		allData = append(allData, data...)
+	}
+
+	// Check that both test messages are present in the received data
+	allDataStr := string(allData)
+	if !strings.Contains(allDataStr, string(testData1)) {
+		t.Errorf("First message %q not found in received data: %q", string(testData1), allDataStr)
+	}
+	if !strings.Contains(allDataStr, string(testData2)) {
+		t.Errorf("Second message %q not found in received data: %q", string(testData2), allDataStr)
+	}
 }
 
 // Test server implementation

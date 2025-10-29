@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"time"
@@ -36,6 +37,7 @@ type TCP struct {
 	host          string
 	port          string
 	workers       int
+	tlsConfig     *tls.Config
 	dataChan      chan []byte
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -52,7 +54,7 @@ type TCP struct {
 }
 
 // NewTCP creates a new TCP output instance
-func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
+func NewTCP(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Config) (*TCP, error) {
 	var err error
 
 	if logger == nil {
@@ -131,6 +133,7 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 		host:                host,
 		port:                port,
 		workers:             workers,
+		tlsConfig:           tlsConfig,
 		dataChan:            make(chan []byte, DefaultTCPChannelSize),
 		ctx:                 ctx,
 		cancel:              cancel,
@@ -148,6 +151,7 @@ func NewTCP(logger *zap.Logger, host, port string, workers int) (*TCP, error) {
 		zap.String("port", tcp.port),
 		zap.Int("workers", tcp.workers),
 		zap.Int("channel_size", DefaultTCPChannelSize),
+		zap.Bool("tls_enabled", tlsConfig != nil),
 	)
 
 	// Create channel size gauge
@@ -277,9 +281,26 @@ func (t *TCP) tcpWorker(id int) {
 func (t *TCP) connect() (net.Conn, error) {
 	address := net.JoinHostPort(t.host, t.port)
 
-	conn, err := net.DialTimeout("tcp", address, DefaultTCPConnectTimeout)
+	dialer := &net.Dialer{
+		Timeout: DefaultTCPConnectTimeout,
+	}
+
+	conn, err := dialer.Dial("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to %s: %w", address, err)
+	}
+
+	// If TLS is configured, upgrade the connection to TLS
+	if t.tlsConfig != nil {
+		tlsConn := tls.Client(conn, t.tlsConfig)
+		if err := tlsConn.Handshake(); err != nil {
+			if closeErr := conn.Close(); closeErr != nil {
+				t.logger.Error("Failed to close connection after TLS handshake error",
+					zap.Error(closeErr))
+			}
+			return nil, fmt.Errorf("failed to perform TLS handshake: %w", err)
+		}
+		return tlsConn, nil
 	}
 
 	return conn, nil

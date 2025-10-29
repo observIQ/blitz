@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
@@ -68,6 +70,8 @@ type OTLPGrpcConfig struct {
 	batchTimeout       time.Duration
 	maxQueueSize       int
 	maxExportBatchSize int
+	insecure           bool
+	tlsConfig          *tls.Config
 }
 
 // WithHost sets the host for OTLP gRPC connections
@@ -118,12 +122,30 @@ func WithMaxExportBatchSize(size int) OTLPGrpcOption {
 	}
 }
 
+// WithInsecure sets whether to use insecure credentials (no TLS)
+func WithInsecure(insecure bool) OTLPGrpcOption {
+	return func(cfg *OTLPGrpcConfig) error {
+		cfg.insecure = insecure
+		return nil
+	}
+}
+
+// WithTLSConfig sets the TLS configuration for secure connections
+func WithTLSConfig(tlsConfig *tls.Config) OTLPGrpcOption {
+	return func(cfg *OTLPGrpcConfig) error {
+		cfg.tlsConfig = tlsConfig
+		return nil
+	}
+}
+
 // OTLPGrpc implements the Output interface for OTLP gRPC connections
 type OTLPGrpc struct {
 	logger        *zap.Logger
 	host          string
 	port          string
 	workers       int
+	insecure      bool
+	tlsConfig     *tls.Config
 	dataChan      chan []byte
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -160,6 +182,7 @@ func NewOTLPGrpc(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) 
 		batchTimeout:       DefaultOTLPGrpcBatchTimeout,
 		maxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
 		maxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
+		insecure:           true,
 	}
 
 	// Apply options
@@ -249,6 +272,8 @@ func NewOTLPGrpc(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) 
 		host:                 cfg.host,
 		port:                 cfg.port,
 		workers:              cfg.workers,
+		insecure:             cfg.insecure,
+		tlsConfig:            cfg.tlsConfig,
 		dataChan:             make(chan []byte, DefaultOTLPGrpcChannelSize),
 		ctx:                  ctx,
 		cancel:               cancel,
@@ -272,6 +297,8 @@ func NewOTLPGrpc(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) 
 		zap.Duration("batch_timeout", otlp.batchTimeout),
 		zap.Int("max_queue_size", otlp.maxQueueSize),
 		zap.Int("max_export_batch_size", otlp.maxExportBatchSize),
+		zap.Bool("insecure", cfg.insecure),
+		zap.Bool("tls_enabled", cfg.tlsConfig != nil),
 	)
 
 	// Create channel size gauge
@@ -439,10 +466,19 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 func (o *OTLPGrpc) connect() (*grpc.ClientConn, error) {
 	endpoint := fmt.Sprintf("%s:%s", o.host, o.port)
 
-	conn, err := grpc.NewClient(
-		endpoint,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	var opts []grpc.DialOption
+
+	// Configure transport credentials based on insecure flag and TLS config
+	if o.insecure || o.tlsConfig == nil {
+		// Use insecure credentials (no TLS)
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	} else {
+		// Use TLS credentials
+		tlsCreds := credentials.NewTLS(o.tlsConfig)
+		opts = append(opts, grpc.WithTransportCredentials(tlsCreds))
+	}
+
+	conn, err := grpc.NewClient(endpoint, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC client for %s: %w", endpoint, err)
 	}

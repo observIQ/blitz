@@ -68,7 +68,7 @@ func BenchmarkTCP_1Worker(b *testing.B) {
 	}
 
 	// Create TCP client with 1 worker
-	tcp, err := NewTCP(logger, host, port, 1)
+	tcp, err := NewTCP(logger, host, port, 1, nil)
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -103,7 +103,7 @@ func BenchmarkTCP_10Workers(b *testing.B) {
 	}
 
 	// Create TCP client with 10 workers
-	tcp, err := NewTCP(logger, host, port, 10)
+	tcp, err := NewTCP(logger, host, port, 10, nil)
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -139,7 +139,7 @@ func BenchmarkTCP_1Worker_Sequential(b *testing.B) {
 	}
 
 	// Create TCP client with 1 worker
-	tcp, err := NewTCP(logger, host, port, 1)
+	tcp, err := NewTCP(logger, host, port, 1, nil)
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -173,7 +173,7 @@ func BenchmarkTCP_10Workers_Sequential(b *testing.B) {
 	}
 
 	// Create TCP client with 10 workers
-	tcp, err := NewTCP(logger, host, port, 10)
+	tcp, err := NewTCP(logger, host, port, 10, nil)
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}

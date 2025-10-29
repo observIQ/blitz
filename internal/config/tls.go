@@ -65,11 +65,11 @@ type TLS struct {
 	//
 	// In this mode, TLS is susceptible to machine-in-the-middle attacks. This should be used only for testing only.
 	InsecureSkipVerify bool `mapstructure:"tlsSkipVerify" yaml:"tlsSkipVerify,omitempty"`
-}
 
-// TLSEnabled returns true if TLS is configured
-func (t *TLS) TLSEnabled() bool {
-	return t.Certificate != "" && t.PrivateKey != ""
+	// Insecure controls whether TLS should be used at all for gRPC clients. When true, gRPC clients will use
+	// insecure credentials (no TLS). When false and TLS is configured, gRPC clients will use TLS credentials.
+	// This field is only used for gRPC clients and has no effect for TCP connections.
+	Insecure bool `mapstructure:"insecure" yaml:"insecure,omitempty"`
 }
 
 // Validate validates the TLS configuration

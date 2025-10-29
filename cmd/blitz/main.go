@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -108,11 +109,21 @@ func main() {
 			os.Exit(1)
 		}
 	case config.OutputTypeTCP:
+		var tlsConfig *tls.Config
+		if cfg.Output.TCP.EnableTLS {
+			var tlsErr error
+			tlsConfig, tlsErr = cfg.Output.TCP.TLS.Convert()
+			if tlsErr != nil {
+				logger.Error("Failed to convert TLS config for TCP output", zap.Error(tlsErr))
+				os.Exit(1)
+			}
+		}
 		outputInstance, err = output.NewTCP(
 			logger,
 			cfg.Output.TCP.Host,
 			strconv.Itoa(cfg.Output.TCP.Port),
 			cfg.Output.TCP.Workers,
+			tlsConfig,
 		)
 		if err != nil {
 			logger.Error("Failed to create TCP output", zap.Error(err))
@@ -143,6 +154,18 @@ func main() {
 		}
 		if cfg.Output.OTLPGrpc.MaxExportBatchSize > 0 {
 			opts = append(opts, output.WithMaxExportBatchSize(cfg.Output.OTLPGrpc.MaxExportBatchSize))
+		}
+		// Set insecure flag
+		opts = append(opts, output.WithInsecure(cfg.Output.OTLPGrpc.Insecure))
+		// If TLS is enabled and not insecure, set up TLS
+		if cfg.Output.OTLPGrpc.EnableTLS && !cfg.Output.OTLPGrpc.Insecure {
+			var tlsConfig *tls.Config
+			tlsConfig, err = cfg.Output.OTLPGrpc.TLS.Convert()
+			if err != nil {
+				logger.Error("Failed to convert TLS config for OTLP gRPC output", zap.Error(err))
+				os.Exit(1)
+			}
+			opts = append(opts, output.WithTLSConfig(tlsConfig))
 		}
 		outputInstance, err = output.NewOTLPGrpc(logger, opts...)
 		if err != nil {
