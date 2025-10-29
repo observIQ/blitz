@@ -69,4 +69,24 @@ func (c *Config) ApplyDefaults() {
 	if c.Output.UDP.Workers == 0 {
 		c.Output.UDP.Workers = 1
 	}
+
+	// Apply OTLP gRPC output defaults
+	if c.Output.OTLPGrpc.Host == "" {
+		c.Output.OTLPGrpc.Host = DefaultOTLPGrpcHost
+	}
+	if c.Output.OTLPGrpc.Port == 0 {
+		c.Output.OTLPGrpc.Port = DefaultOTLPGrpcPort
+	}
+	if c.Output.OTLPGrpc.Workers == 0 {
+		c.Output.OTLPGrpc.Workers = DefaultOTLPGrpcWorkers
+	}
+	if c.Output.OTLPGrpc.BatchTimeout == 0 {
+		c.Output.OTLPGrpc.BatchTimeout = DefaultOTLPGrpcBatchTimeout
+	}
+	if c.Output.OTLPGrpc.MaxQueueSize == 0 {
+		c.Output.OTLPGrpc.MaxQueueSize = DefaultOTLPGrpcMaxQueueSize
+	}
+	if c.Output.OTLPGrpc.MaxExportBatchSize == 0 {
+		c.Output.OTLPGrpc.MaxExportBatchSize = DefaultOTLPGrpcMaxExportBatchSize
+	}
 }

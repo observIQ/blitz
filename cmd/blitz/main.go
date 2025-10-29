@@ -129,6 +129,26 @@ func main() {
 			logger.Error("Failed to create UDP output", zap.Error(err))
 			os.Exit(1)
 		}
+	case config.OutputTypeOTLPGrpc:
+		opts := []output.OTLPGrpcOption{
+			output.WithHost(cfg.Output.OTLPGrpc.Host),
+			output.WithPort(strconv.Itoa(cfg.Output.OTLPGrpc.Port)),
+			output.WithWorkers(cfg.Output.OTLPGrpc.Workers),
+		}
+		if cfg.Output.OTLPGrpc.BatchTimeout > 0 {
+			opts = append(opts, output.WithBatchTimeout(cfg.Output.OTLPGrpc.BatchTimeout))
+		}
+		if cfg.Output.OTLPGrpc.MaxQueueSize > 0 {
+			opts = append(opts, output.WithMaxQueueSize(cfg.Output.OTLPGrpc.MaxQueueSize))
+		}
+		if cfg.Output.OTLPGrpc.MaxExportBatchSize > 0 {
+			opts = append(opts, output.WithMaxExportBatchSize(cfg.Output.OTLPGrpc.MaxExportBatchSize))
+		}
+		outputInstance, err = output.NewOTLPGrpc(logger, opts...)
+		if err != nil {
+			logger.Error("Failed to create OTLP gRPC output", zap.Error(err))
+			os.Exit(1)
+		}
 	default:
 		logger.Error("Invalid output type", zap.String("type", string(cfg.Output.Type)))
 		os.Exit(1)

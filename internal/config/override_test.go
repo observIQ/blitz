@@ -42,6 +42,14 @@ func TestOverrideDefaults(t *testing.T) {
 					CertificateAuthority: []string{},
 				},
 			},
+			OTLPGrpc: OTLPGrpcOutputConfig{
+				Host:               DefaultOTLPGrpcHost,
+				Port:               DefaultOTLPGrpcPort,
+				Workers:            DefaultOTLPGrpcWorkers,
+				BatchTimeout:       DefaultOTLPGrpcBatchTimeout,
+				MaxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
+				MaxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
+			},
 		},
 	}
 	require.Equal(t, expectedCfg, cfg)
@@ -97,6 +105,14 @@ func TestOverrideFlags(t *testing.T) {
 					CertificateAuthority: []string{},
 				},
 			},
+			OTLPGrpc: OTLPGrpcOutputConfig{
+				Host:               DefaultOTLPGrpcHost,
+				Port:               DefaultOTLPGrpcPort,
+				Workers:            DefaultOTLPGrpcWorkers,
+				BatchTimeout:       DefaultOTLPGrpcBatchTimeout,
+				MaxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
+				MaxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
+			},
 		},
 	}
 	require.Equal(t, expectedCfg, cfg)
@@ -149,6 +165,126 @@ func TestOverrideEnvs(t *testing.T) {
 				TLS: TLS{
 					CertificateAuthority: []string{},
 				},
+			},
+			OTLPGrpc: OTLPGrpcOutputConfig{
+				Host:               DefaultOTLPGrpcHost,
+				Port:               DefaultOTLPGrpcPort,
+				Workers:            DefaultOTLPGrpcWorkers,
+				BatchTimeout:       DefaultOTLPGrpcBatchTimeout,
+				MaxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
+				MaxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
+			},
+		},
+	}
+	require.Equal(t, expectedCfg, cfg)
+}
+
+func TestOverrideOTLPGrpcFlags(t *testing.T) {
+	flagSet := pflag.NewFlagSet("test", pflag.PanicOnError)
+	args := []string{
+		"--output-type", "otlp-grpc",
+		"--output-otlpgrpc-host", "collector.example.com",
+		"--output-otlpgrpc-port", "4317",
+		"--output-otlpgrpc-workers", "3",
+		"--output-otlpgrpc-batchtimeout", "10s",
+		"--output-otlpgrpc-maxqueuesize", "4096",
+		"--output-otlpgrpc-maxexportbatchsize", "1024",
+	}
+
+	overrides := DefaultOverrides()
+	for _, override := range overrides {
+		require.NoError(t, override.Bind(flagSet))
+	}
+
+	require.NoError(t, flagSet.Parse(args))
+
+	viper.SetConfigType("yaml")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	cfg := NewConfig()
+	err := viper.Unmarshal(cfg)
+	require.NoError(t, err)
+
+	// build expected config and compare full struct
+	expectedCfg := &Config{
+		Logging: Logging{Type: LoggingTypeStdout, Level: LogLevelInfo},
+		Generator: Generator{
+			JSON: JSONGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
+		},
+		Output: Output{
+			Type: OutputTypeOTLPGrpc,
+			UDP:  UDPOutputConfig{Workers: 1},
+			TCP: TCPOutputConfig{
+				Workers: 1,
+				TLS: TLS{
+					CertificateAuthority: []string{},
+				},
+			},
+			OTLPGrpc: OTLPGrpcOutputConfig{
+				Host:               "collector.example.com",
+				Port:               4317,
+				Workers:            3,
+				BatchTimeout:       10 * time.Second,
+				MaxQueueSize:       4096,
+				MaxExportBatchSize: 1024,
+			},
+		},
+	}
+	require.Equal(t, expectedCfg, cfg)
+}
+
+func TestOverrideOTLPGrpcEnvs(t *testing.T) {
+	t.Setenv("BLITZ_OUTPUT_TYPE", "otlp-grpc")
+	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_HOST", "collector.example.com")
+	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_PORT", "4317")
+	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_WORKERS", "5")
+	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_BATCHTIMEOUT", "15s")
+	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_MAXQUEUESIZE", "8192")
+	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_MAXEXPORTBATCHSIZE", "2048")
+
+	flagSet := pflag.NewFlagSet("test", pflag.PanicOnError)
+	overrides := DefaultOverrides()
+	for _, override := range overrides {
+		require.NoError(t, override.Bind(flagSet))
+	}
+
+	viper.SetConfigType("yaml")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	cfg := NewConfig()
+	err := viper.Unmarshal(cfg)
+	require.NoError(t, err)
+
+	// build expected config and compare full struct
+	expectedCfg := &Config{
+		Logging: Logging{Type: LoggingTypeStdout, Level: LogLevelInfo},
+		Generator: Generator{
+			JSON: JSONGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
+		},
+		Output: Output{
+			Type: OutputTypeOTLPGrpc,
+			UDP:  UDPOutputConfig{Workers: 1},
+			TCP: TCPOutputConfig{
+				Workers: 1,
+				TLS: TLS{
+					CertificateAuthority: []string{},
+				},
+			},
+			OTLPGrpc: OTLPGrpcOutputConfig{
+				Host:               "collector.example.com",
+				Port:               4317,
+				Workers:            5,
+				BatchTimeout:       15 * time.Second,
+				MaxQueueSize:       8192,
+				MaxExportBatchSize: 2048,
 			},
 		},
 	}
@@ -208,6 +344,14 @@ func TestOverrideTCPTLSFlags(t *testing.T) {
 					MinTLSVersion:        "1.2",
 				},
 			},
+			OTLPGrpc: OTLPGrpcOutputConfig{
+				Host:               DefaultOTLPGrpcHost,
+				Port:               DefaultOTLPGrpcPort,
+				Workers:            DefaultOTLPGrpcWorkers,
+				BatchTimeout:       DefaultOTLPGrpcBatchTimeout,
+				MaxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
+				MaxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
+			},
 		},
 	}
 	require.Equal(t, expectedCfg, cfg)
@@ -261,6 +405,14 @@ func TestOverrideTCPTLSEnvs(t *testing.T) {
 					InsecureSkipVerify:   true,
 					MinTLSVersion:        "1.3",
 				},
+			},
+			OTLPGrpc: OTLPGrpcOutputConfig{
+				Host:               DefaultOTLPGrpcHost,
+				Port:               DefaultOTLPGrpcPort,
+				Workers:            DefaultOTLPGrpcWorkers,
+				BatchTimeout:       DefaultOTLPGrpcBatchTimeout,
+				MaxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
+				MaxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
 			},
 		},
 	}

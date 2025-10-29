@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOutput_Validate(t *testing.T) {
@@ -59,7 +60,7 @@ func TestOutput_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "invalid output type: invalid, must be one of: nop, tcp, udp",
+			errMsg:  "invalid output type: invalid, must be one of: nop, tcp, udp, otlp-grpc",
 		},
 		{
 			name: "TCP output with invalid config",
@@ -86,6 +87,34 @@ func TestOutput_Validate(t *testing.T) {
 			},
 			wantErr: true,
 			errMsg:  "UDP output validation failed",
+		},
+		{
+			name: "valid OTLP gRPC output",
+			output: Output{
+				Type: OutputTypeOTLPGrpc,
+				OTLPGrpc: OTLPGrpcOutputConfig{
+					Host:               "localhost",
+					Port:               4317,
+					Workers:            2,
+					BatchTimeout:       5 * time.Second,
+					MaxQueueSize:       2048,
+					MaxExportBatchSize: 512,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "OTLP gRPC output with invalid config",
+			output: Output{
+				Type: OutputTypeOTLPGrpc,
+				OTLPGrpc: OTLPGrpcOutputConfig{
+					Host:    "",
+					Port:    0,
+					Workers: 1,
+				},
+			},
+			wantErr: true,
+			errMsg:  "OTLP gRPC output validation failed",
 		},
 	}
 
