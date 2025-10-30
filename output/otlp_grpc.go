@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -713,13 +714,15 @@ func (o *OTLPGrpc) toAnyValue(v any) *commonpb.AnyValue {
 	case int64:
 		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: x}}
 	case uint:
-		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: int64(x)}}
+		ux := uint64(x)
+		if ux > uint64(math.MaxInt64) {
+			return &commonpb.AnyValue{Value: &commonpb.AnyValue_DoubleValue{DoubleValue: float64(ux)}}
+		}
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: int64(ux)}}
 	case uint32:
 		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: int64(x)}}
 	case uint64:
-		// Best-effort: may overflow into negative if > MaxInt64
-		if x > ^uint64(0)>>1 {
-			// too large; use double
+		if x > uint64(math.MaxInt64) {
 			return &commonpb.AnyValue{Value: &commonpb.AnyValue_DoubleValue{DoubleValue: float64(x)}}
 		}
 		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: int64(x)}}
