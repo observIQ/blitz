@@ -50,7 +50,7 @@ Configuration files must be in YAML format and can be specified using the `--con
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json` |
+| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt` |
 
 #### NOP Generator Configuration
 
@@ -64,6 +64,13 @@ The NOP (No Operation) generator performs no work and generates no data. It's us
 |-----------|-----------|---------------------|---------|-------------|
 | `generator.json.workers` | `--generator-json-workers` | `BLITZ_GENERATOR_JSON_WORKERS` | `1` | Number of JSON generator workers (must be ≥ 1) |
 | `generator.json.rate` | `--generator-json-rate` | `BLITZ_GENERATOR_JSON_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
+
+#### Windows Event (winevt) Generator Configuration
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `generator.winevt.workers` | `--generator-winevt-workers` | `BLITZ_GENERATOR_WINEVT_WORKERS` | `1` | Number of winevt generator workers (must be ≥ 1) |
+| `generator.winevt.rate` | `--generator-winevt-rate` | `BLITZ_GENERATOR_WINEVT_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
 
 ### Output Configuration
 
@@ -278,7 +285,7 @@ Duration values (like `generator.json.rate`) support the following formats:
 - `output.otlpGrpc.batchTimeout` - Must be > 0 (duration format)
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
 - `logging.type` - Must be `stdout` (only supported type)
-- `generator.type` - Must be one of: `nop`, `json`
+- `generator.type` - Must be one of: `nop`, `json`, `winevt`
 - `output.type` - Must be one of: `nop`, `tcp`, `udp`, `otlp-grpc`
 
 ## Error Handling

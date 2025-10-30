@@ -347,6 +347,7 @@ func (o *OTLPGrpc) Write(ctx context.Context, data []byte) error {
 				),
 			),
 		)
+		o.logger.Info("log received and pushed to channel")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -420,6 +421,7 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 
 			// Add to batch
 			batch.add(data)
+			o.logger.Info("log added to batch")
 
 			// Send batch if it's full
 			if batch.isFull() {
@@ -435,6 +437,7 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 						zap.Error(err))
 					return
 				}
+				o.logger.Info("batch sent")
 				batch = newLogBatch(o.maxExportBatchSize, o.batchTimeout)
 			}
 
