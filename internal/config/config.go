@@ -60,6 +60,14 @@ func (c *Config) ApplyDefaults() {
 		c.Generator.JSON.Rate = 1 * time.Second
 	}
 
+	// Apply winevt generator defaults
+	if c.Generator.Winevt.Workers == 0 {
+		c.Generator.Winevt.Workers = 1
+	}
+	if c.Generator.Winevt.Rate == 0 {
+		c.Generator.Winevt.Rate = 1 * time.Second
+	}
+
 	// Apply TCP output defaults
 	if c.Output.TCP.Workers == 0 {
 		c.Output.TCP.Workers = 1

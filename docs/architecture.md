@@ -136,7 +136,7 @@ The generator package creates realistic log data with configurable patterns and 
 #### Generator Interface:
 ```go
 type Generator interface {
-    Start(writer generatorWriter) error
+    Start(writer output.Writer) error
     Stop(ctx context.Context) error
 }
 ```

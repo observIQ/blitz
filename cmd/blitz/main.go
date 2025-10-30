@@ -196,6 +196,16 @@ func main() {
 			logger.Error("Failed to create JSON generator", zap.Error(err))
 			os.Exit(1)
 		}
+	case config.GeneratorTypeWinevt:
+		generatorInstance, err = generator.NewWinevtGenerator(
+			logger,
+			cfg.Generator.Winevt.Workers,
+			cfg.Generator.Winevt.Rate,
+		)
+		if err != nil {
+			logger.Error("Failed to create winevt generator", zap.Error(err))
+			os.Exit(1)
+		}
 	default:
 		logger.Error("Invalid generator type", zap.String("type", string(cfg.Generator.Type)))
 		os.Exit(1)

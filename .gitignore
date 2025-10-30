@@ -1,2 +1,4 @@
+.gocache
+blitz
 dist/
 cmd/blitz/blitz

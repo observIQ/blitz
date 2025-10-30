@@ -8,12 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-// mockWriter implements generatorWriter for testing
+// mockWriter implements output.Writer for testing
 type mockWriter struct {
 	mu       sync.Mutex
 	writes   [][]byte
@@ -29,7 +30,7 @@ func newMockWriter() *mockWriter {
 	}
 }
 
-func (m *mockWriter) Write(ctx context.Context, data []byte) error {
+func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -47,7 +48,7 @@ func (m *mockWriter) Write(ctx context.Context, data []byte) error {
 		return err
 	}
 
-	m.writes = append(m.writes, data)
+	m.writes = append(m.writes, append([]byte(nil), data.Message...))
 	return nil
 }
 
@@ -376,10 +377,10 @@ func TestJSONGenerator_VeryFastRate(t *testing.T) {
 	assert.Greater(t, len(writes), 5, "Expected many logs with fast rate")
 }
 
-// discardWriter implements generatorWriter for benchmarking - discards all data
+// discardWriter implements output.Writer for benchmarking - discards all data
 type discardWriter struct{}
 
-func (d *discardWriter) Write(ctx context.Context, data []byte) error {
+func (d *discardWriter) Write(ctx context.Context, data output.LogRecord) error {
 	// Discard the data - do nothing
 	return nil
 }

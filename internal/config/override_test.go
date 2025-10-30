@@ -33,6 +33,10 @@ func TestOverrideDefaults(t *testing.T) {
 				Workers: 1,
 				Rate:    1 * time.Second,
 			},
+			Winevt: WinevtGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
 		},
 		Output: Output{
 			UDP: UDPOutputConfig{Workers: 1},
@@ -71,6 +75,8 @@ func TestOverrideFlags(t *testing.T) {
 		"--generator-type", "json",
 		"--generator-json-workers", "5",
 		"--generator-json-rate", "500ms",
+		"--generator-winevt-workers", "4",
+		"--generator-winevt-rate", "200ms",
 		"--output-type", "tcp",
 		"--output-tcp-host", "127.0.0.1",
 		"--output-tcp-port", "9090",
@@ -100,6 +106,10 @@ func TestOverrideFlags(t *testing.T) {
 			JSON: JSONGeneratorConfig{
 				Workers: 5,
 				Rate:    500 * time.Millisecond,
+			},
+			Winevt: WinevtGeneratorConfig{
+				Workers: 4,
+				Rate:    200 * time.Millisecond,
 			},
 		},
 		Output: Output{
@@ -140,6 +150,8 @@ func TestOverrideEnvs(t *testing.T) {
 	t.Setenv("BLITZ_GENERATOR_TYPE", "json")
 	t.Setenv("BLITZ_GENERATOR_JSON_WORKERS", "3")
 	t.Setenv("BLITZ_GENERATOR_JSON_RATE", "250ms")
+	t.Setenv("BLITZ_GENERATOR_WINEVT_WORKERS", "2")
+	t.Setenv("BLITZ_GENERATOR_WINEVT_RATE", "750ms")
 	t.Setenv("BLITZ_OUTPUT_TYPE", "udp")
 	t.Setenv("BLITZ_OUTPUT_UDP_HOST", "example.com")
 	t.Setenv("BLITZ_OUTPUT_UDP_PORT", "8080")
@@ -167,6 +179,10 @@ func TestOverrideEnvs(t *testing.T) {
 			JSON: JSONGeneratorConfig{
 				Workers: 3,
 				Rate:    250 * time.Millisecond,
+			},
+			Winevt: WinevtGeneratorConfig{
+				Workers: 2,
+				Rate:    750 * time.Millisecond,
 			},
 		},
 		Output: Output{
@@ -238,6 +254,10 @@ func TestOverrideOTLPGrpcFlags(t *testing.T) {
 				Workers: 1,
 				Rate:    1 * time.Second,
 			},
+			Winevt: WinevtGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
 		},
 		Output: Output{
 			Type: OutputTypeOTLPGrpc,
@@ -297,6 +317,10 @@ func TestOverrideOTLPGrpcEnvs(t *testing.T) {
 		Logging: Logging{Type: LoggingTypeStdout, Level: LogLevelInfo},
 		Generator: Generator{
 			JSON: JSONGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
+			Winevt: WinevtGeneratorConfig{
 				Workers: 1,
 				Rate:    1 * time.Second,
 			},
@@ -369,6 +393,10 @@ func TestOverrideTCPTLSFlags(t *testing.T) {
 				Workers: 1,
 				Rate:    1 * time.Second,
 			},
+			Winevt: WinevtGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
 		},
 		Output: Output{
 			Type: OutputTypeTCP,
@@ -436,6 +464,10 @@ func TestOverrideTCPTLSEnvs(t *testing.T) {
 		Logging: Logging{Type: LoggingTypeStdout, Level: LogLevelInfo},
 		Generator: Generator{
 			JSON: JSONGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
+			Winevt: WinevtGeneratorConfig{
 				Workers: 1,
 				Rate:    1 * time.Second,
 			},

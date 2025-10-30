@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/goccy/go-json"
 	"github.com/observiq/blitz/internal/workermanager"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -49,15 +48,6 @@ const (
 	// DefaultOTLPGrpcStopTimeout is the default timeout for graceful shutdown
 	DefaultOTLPGrpcStopTimeout = 30 * time.Second
 )
-
-// jsonLog represents a parsed JSON log entry
-type jsonLog struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Level       string    `json:"level"`
-	Environment string    `json:"environment"`
-	Location    string    `json:"location"`
-	Message     string    `json:"message"`
-}
 
 // OTLPGrpcOption is a functional option for configuring OTLP gRPC output
 type OTLPGrpcOption func(*OTLPGrpcConfig) error
@@ -336,9 +326,9 @@ func NewOTLPGrpc(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) 
 // Write shall not be called after Stop is called.
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
-func (o *OTLPGrpc) Write(ctx context.Context, data []byte) error {
+func (o *OTLPGrpc) Write(ctx context.Context, data LogRecord) error {
 	select {
-	case o.dataChan <- data:
+	case o.dataChan <- data.Message:
 		// Record logs received
 		o.otlpLogsReceived.Add(ctx, 1,
 			metric.WithAttributeSet(
@@ -488,7 +478,7 @@ func (o *OTLPGrpc) connect() (*grpc.ClientConn, error) {
 
 // logBatch holds a batch of logs to be sent
 type logBatch struct {
-	logs    []jsonLog
+	logs    [][]byte
 	maxSize int
 	timer   *time.Timer
 	mu      sync.Mutex
@@ -497,7 +487,7 @@ type logBatch struct {
 // newLogBatch creates a new log batch
 func newLogBatch(maxSize int, timeout time.Duration) *logBatch {
 	return &logBatch{
-		logs:    make([]jsonLog, 0, maxSize),
+		logs:    make([][]byte, 0, maxSize),
 		maxSize: maxSize,
 		timer:   time.NewTimer(timeout),
 	}
@@ -508,12 +498,9 @@ func (b *logBatch) add(data []byte) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	var jsonLog jsonLog
-	if err := json.Unmarshal(data, &jsonLog); err != nil {
-		// Skip invalid JSON
-		return
-	}
-	b.logs = append(b.logs, jsonLog)
+	copied := make([]byte, len(data))
+	copy(copied, data)
+	b.logs = append(b.logs, copied)
 }
 
 // isFull returns true if the batch is full
@@ -531,11 +518,11 @@ func (b *logBatch) isEmpty() bool {
 }
 
 // getAndClear returns all logs and clears the batch
-func (b *logBatch) getAndClear() []jsonLog {
+func (b *logBatch) getAndClear() [][]byte {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	logs := b.logs
-	b.logs = make([]jsonLog, 0, b.maxSize)
+	b.logs = make([][]byte, 0, b.maxSize)
 	return logs
 }
 
@@ -605,8 +592,8 @@ func (o *OTLPGrpc) flushBatch(client collectorlogs.LogsServiceClient, batch *log
 	return o.sendBatch(client, batch)
 }
 
-// buildOTLPRequest builds an OTLP ExportLogsServiceRequest from JSON logs
-func (o *OTLPGrpc) buildOTLPRequest(logs []jsonLog) *collectorlogs.ExportLogsServiceRequest {
+// buildOTLPRequest builds an OTLP ExportLogsServiceRequest from raw log bytes
+func (o *OTLPGrpc) buildOTLPRequest(logs [][]byte) *collectorlogs.ExportLogsServiceRequest {
 	resourceLogs := &logspb.ResourceLogs{
 		Resource: &resourcepb.Resource{
 			Attributes: []*commonpb.KeyValue{
@@ -627,15 +614,21 @@ func (o *OTLPGrpc) buildOTLPRequest(logs []jsonLog) *collectorlogs.ExportLogsSer
 		},
 	}
 
-	for _, jsonLog := range logs {
+	for _, logEntry := range logs {
+		timestamp := time.Now()
+		severityText := ""
+		severityNumber := logspb.SeverityNumber_SEVERITY_NUMBER_INFO
+		environment := ""
+		location := ""
+
 		logRecord := &logspb.LogRecord{
-			TimeUnixNano:         timeToUnixNanoUint64(jsonLog.Timestamp),
+			TimeUnixNano:         timeToUnixNanoUint64(timestamp),
 			ObservedTimeUnixNano: timeToUnixNanoUint64(time.Now()),
-			SeverityNumber:       o.mapSeverityNumber(jsonLog.Level),
-			SeverityText:         jsonLog.Level,
+			SeverityNumber:       severityNumber,
+			SeverityText:         severityText,
 			Body: &commonpb.AnyValue{
 				Value: &commonpb.AnyValue_StringValue{
-					StringValue: jsonLog.Message,
+					StringValue: string(logEntry),
 				},
 			},
 			Attributes: []*commonpb.KeyValue{
@@ -643,7 +636,7 @@ func (o *OTLPGrpc) buildOTLPRequest(logs []jsonLog) *collectorlogs.ExportLogsSer
 					Key: "environment",
 					Value: &commonpb.AnyValue{
 						Value: &commonpb.AnyValue_StringValue{
-							StringValue: jsonLog.Environment,
+							StringValue: environment,
 						},
 					},
 				},
@@ -651,7 +644,7 @@ func (o *OTLPGrpc) buildOTLPRequest(logs []jsonLog) *collectorlogs.ExportLogsSer
 					Key: "location",
 					Value: &commonpb.AnyValue{
 						Value: &commonpb.AnyValue_StringValue{
-							StringValue: jsonLog.Location,
+							StringValue: location,
 						},
 					},
 				},
@@ -663,6 +656,20 @@ func (o *OTLPGrpc) buildOTLPRequest(logs []jsonLog) *collectorlogs.ExportLogsSer
 	return &collectorlogs.ExportLogsServiceRequest{
 		ResourceLogs: []*logspb.ResourceLogs{resourceLogs},
 	}
+}
+
+// recordSendError records metrics for send errors
+func (o *OTLPGrpc) recordSendError(errorType string, err error) {
+	ctx := context.Background()
+
+	o.otlpSendErrors.Add(ctx, 1,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_otlp_grpc"),
+				attribute.String("error_type", errorType),
+			),
+		),
+	)
 }
 
 // mapSeverityNumber maps string log levels to OTLP severity numbers
@@ -681,18 +688,4 @@ func (o *OTLPGrpc) mapSeverityNumber(level string) logspb.SeverityNumber {
 	default:
 		return logspb.SeverityNumber_SEVERITY_NUMBER_INFO
 	}
-}
-
-// recordSendError records metrics for send errors
-func (o *OTLPGrpc) recordSendError(errorType string, err error) {
-	ctx := context.Background()
-
-	o.otlpSendErrors.Add(ctx, 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_otlp_grpc"),
-				attribute.String("error_type", errorType),
-			),
-		),
-	)
 }

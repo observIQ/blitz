@@ -12,6 +12,8 @@ const (
 	GeneratorTypeNop GeneratorType = "nop"
 	// GeneratorTypeJSON represents JSON generator
 	GeneratorTypeJSON GeneratorType = "json"
+	// GeneratorTypeWinevt represents Windows Event XML generator
+	GeneratorTypeWinevt GeneratorType = "winevt"
 )
 
 // Generator contains configuration for log generators
@@ -20,6 +22,8 @@ type Generator struct {
 	Type GeneratorType `yaml:"type,omitempty" mapstructure:"type,omitempty"`
 	// JSON contains JSON generator configuration
 	JSON JSONGeneratorConfig `yaml:"json,omitempty" mapstructure:"json,omitempty"`
+	// Winevt contains Windows Event generator configuration
+	Winevt WinevtGeneratorConfig `yaml:"winevt,omitempty" mapstructure:"winevt,omitempty"`
 }
 
 // Validate validates the generator configuration
@@ -36,8 +40,12 @@ func (g *Generator) Validate() error {
 		if err := g.JSON.Validate(); err != nil {
 			return fmt.Errorf("JSON generator validation failed: %w", err)
 		}
+	case GeneratorTypeWinevt:
+		if err := g.Winevt.Validate(); err != nil {
+			return fmt.Errorf("winevt generator validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json", g.Type)
+		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt", g.Type)
 	}
 
 	return nil
