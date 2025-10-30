@@ -187,7 +187,7 @@ func (g *JSONLogGenerator) worker(workerID int, writer output.Writer) {
 
 // generateAndWriteLog generates a random log and writes it
 func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID int) error {
-	data, err := generateRandomLog()
+	logRecord, err := generateRandomLog()
 	if err != nil {
 		g.recordWriteError("unknown", err)
 		return fmt.Errorf("generate random log: %w", err)
@@ -206,7 +206,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID in
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, output.LogRecord{Message: data}); err != nil {
+	if err := writer.Write(ctx, logRecord); err != nil {
 		// Classify error type
 		errorType := "unknown"
 		if ctx.Err() == context.DeadlineExceeded {
@@ -220,7 +220,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID in
 }
 
 // generateRandomLog creates a random log entry
-func generateRandomLog() (string, error) {
+func generateRandomLog() (output.LogRecord, error) {
 	// Use fast random generator with gosec nosec comment
 	messageIndex := rand.Intn(len(logMessages))  // #nosec G404
 	levelIndex := rand.Intn(len(severityLevels)) // #nosec G404
@@ -237,9 +237,23 @@ func generateRandomLog() (string, error) {
 
 	b, err := json.Marshal(j)
 	if err != nil {
-		return "", fmt.Errorf("marshal JSON log: %w", err)
+		return output.LogRecord{}, fmt.Errorf("marshal JSON log: %w", err)
 	}
-	return string(b), nil
+
+	return output.LogRecord{
+		Message: string(b),
+		ParseFunc: func(message string) (map[string]any, error) {
+			var parsed map[string]any
+			if err := json.Unmarshal([]byte(message), &parsed); err != nil {
+				return nil, fmt.Errorf("unmarshal JSON log: %w", err)
+			}
+			return parsed, nil
+		},
+		Metadata: output.LogRecordMetadata{
+			Timestamp: j.Timestamp,
+			Severity:  j.Level,
+		},
+	}, nil
 }
 
 // logMessages contains 100 unique log messages of approximately 500 bytes each

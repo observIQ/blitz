@@ -136,7 +136,7 @@ type OTLPGrpc struct {
 	workers       int
 	insecure      bool
 	tlsConfig     *tls.Config
-	dataChan      chan string
+	dataChan      chan *logspb.LogRecord
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
@@ -264,7 +264,7 @@ func NewOTLPGrpc(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) 
 		workers:              cfg.workers,
 		insecure:             cfg.insecure,
 		tlsConfig:            cfg.tlsConfig,
-		dataChan:             make(chan string, DefaultOTLPGrpcChannelSize),
+		dataChan:             make(chan *logspb.LogRecord, DefaultOTLPGrpcChannelSize),
 		ctx:                  ctx,
 		cancel:               cancel,
 		meter:                meter,
@@ -327,8 +327,63 @@ func NewOTLPGrpc(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) 
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
 func (o *OTLPGrpc) Write(ctx context.Context, data LogRecord) error {
+	// Build OTLP log record before batching
+	timestamp := time.Now()
+	severityText := "INFO"
+	severityNumber := logspb.SeverityNumber_SEVERITY_NUMBER_INFO
+	environment := ""
+	location := ""
+
+	var body *commonpb.AnyValue
+	if data.ParseFunc != nil {
+		parsed, err := data.ParseFunc(data.Message)
+		if err != nil {
+			o.logger.Warn("ParseFunc error; using raw message", zap.Error(err))
+			body = &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: data.Message}}
+		} else {
+			body = o.convertMapToAnyValue(parsed)
+			if body == nil {
+				o.logger.Warn("ParseFunc returned unsupported map; using raw message")
+				body = &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: data.Message}}
+			}
+		}
+
+	} else {
+		body = &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: data.Message}}
+	}
+
+	if !data.Metadata.Timestamp.IsZero() {
+		timestamp = data.Metadata.Timestamp
+	}
+
+	if data.Metadata.Severity != "" {
+		severityText = data.Metadata.Severity
+	}
+
+	if severityText != "" {
+		severityNumber = o.mapSeverityNumber(severityText)
+	}
+
+	record := &logspb.LogRecord{
+		TimeUnixNano:         timeToUnixNanoUint64(timestamp),
+		ObservedTimeUnixNano: timeToUnixNanoUint64(time.Now()),
+		SeverityNumber:       severityNumber,
+		SeverityText:         severityText,
+		Body:                 body,
+		Attributes: []*commonpb.KeyValue{
+			{
+				Key:   "environment",
+				Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: environment}},
+			},
+			{
+				Key:   "location",
+				Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: location}},
+			},
+		},
+	}
+
 	select {
-	case o.dataChan <- data.Message:
+	case o.dataChan <- record:
 		// Record logs received
 		o.otlpLogsReceived.Add(ctx, 1,
 			metric.WithAttributeSet(
@@ -398,7 +453,7 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 
 	for {
 		select {
-		case data, ok := <-o.dataChan:
+		case rec, ok := <-o.dataChan:
 			if !ok {
 				o.logger.Info("OTLP gRPC worker exiting - channel closed", zap.Int("worker_id", id))
 				// Flush remaining logs
@@ -409,7 +464,7 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 			}
 
 			// Add to batch
-			batch.add(data)
+			batch.add(rec)
 
 			// Send batch if it's full
 			if batch.isFull() {
@@ -478,7 +533,7 @@ func (o *OTLPGrpc) connect() (*grpc.ClientConn, error) {
 
 // logBatch holds a batch of logs to be sent
 type logBatch struct {
-	logs    []string
+	logs    []*logspb.LogRecord
 	maxSize int
 	timer   *time.Timer
 	mu      sync.Mutex
@@ -487,14 +542,14 @@ type logBatch struct {
 // newLogBatch creates a new log batch
 func newLogBatch(maxSize int, timeout time.Duration) *logBatch {
 	return &logBatch{
-		logs:    make([]string, 0, maxSize),
+		logs:    make([]*logspb.LogRecord, 0, maxSize),
 		maxSize: maxSize,
 		timer:   time.NewTimer(timeout),
 	}
 }
 
 // add adds a log to the batch
-func (b *logBatch) add(data string) {
+func (b *logBatch) add(data *logspb.LogRecord) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -516,11 +571,11 @@ func (b *logBatch) isEmpty() bool {
 }
 
 // getAndClear returns all logs and clears the batch
-func (b *logBatch) getAndClear() []string {
+func (b *logBatch) getAndClear() []*logspb.LogRecord {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	logs := b.logs
-	b.logs = make([]string, 0, b.maxSize)
+	b.logs = make([]*logspb.LogRecord, 0, b.maxSize)
 	return logs
 }
 
@@ -590,8 +645,8 @@ func (o *OTLPGrpc) flushBatch(client collectorlogs.LogsServiceClient, batch *log
 	return o.sendBatch(client, batch)
 }
 
-// buildOTLPRequest builds an OTLP ExportLogsServiceRequest from raw log bytes
-func (o *OTLPGrpc) buildOTLPRequest(logs []string) *collectorlogs.ExportLogsServiceRequest {
+// buildOTLPRequest builds an OTLP ExportLogsServiceRequest from prepared LogRecord entries
+func (o *OTLPGrpc) buildOTLPRequest(logs []*logspb.LogRecord) *collectorlogs.ExportLogsServiceRequest {
 	resourceLogs := &logspb.ResourceLogs{
 		Resource: &resourcepb.Resource{
 			Attributes: []*commonpb.KeyValue{
@@ -612,47 +667,87 @@ func (o *OTLPGrpc) buildOTLPRequest(logs []string) *collectorlogs.ExportLogsServ
 		},
 	}
 
-	for _, logEntry := range logs {
-		timestamp := time.Now()
-		severityText := ""
-		severityNumber := logspb.SeverityNumber_SEVERITY_NUMBER_INFO
-		environment := ""
-		location := ""
-
-		logRecord := &logspb.LogRecord{
-			TimeUnixNano:         timeToUnixNanoUint64(timestamp),
-			ObservedTimeUnixNano: timeToUnixNanoUint64(time.Now()),
-			SeverityNumber:       severityNumber,
-			SeverityText:         severityText,
-			Body: &commonpb.AnyValue{
-				Value: &commonpb.AnyValue_StringValue{
-					StringValue: logEntry,
-				},
-			},
-			Attributes: []*commonpb.KeyValue{
-				{
-					Key: "environment",
-					Value: &commonpb.AnyValue{
-						Value: &commonpb.AnyValue_StringValue{
-							StringValue: environment,
-						},
-					},
-				},
-				{
-					Key: "location",
-					Value: &commonpb.AnyValue{
-						Value: &commonpb.AnyValue_StringValue{
-							StringValue: location,
-						},
-					},
-				},
-			},
+	for _, logRecord := range logs {
+		if logRecord == nil {
+			continue
 		}
 		resourceLogs.ScopeLogs[0].LogRecords = append(resourceLogs.ScopeLogs[0].LogRecords, logRecord)
 	}
 
 	return &collectorlogs.ExportLogsServiceRequest{
 		ResourceLogs: []*logspb.ResourceLogs{resourceLogs},
+	}
+}
+
+// convertMapToAnyValue converts map[string]any to OTLP AnyValue (kvlist)
+func (o *OTLPGrpc) convertMapToAnyValue(m map[string]any) *commonpb.AnyValue {
+	kvs := make([]*commonpb.KeyValue, 0, len(m))
+	for k, v := range m {
+		av := o.toAnyValue(v)
+		if av == nil {
+			o.logger.Warn("Unsupported value in map; dropping key", zap.String("key", k), zap.String("type", fmt.Sprintf("%T", v)))
+			continue
+		}
+		kvs = append(kvs, &commonpb.KeyValue{Key: k, Value: av})
+	}
+	return &commonpb.AnyValue{
+		Value: &commonpb.AnyValue_KvlistValue{
+			KvlistValue: &commonpb.KeyValueList{Values: kvs},
+		},
+	}
+}
+
+// toAnyValue converts common Go types to OTLP AnyValue; returns nil for unsupported
+func (o *OTLPGrpc) toAnyValue(v any) *commonpb.AnyValue {
+	switch x := v.(type) {
+	case nil:
+		return nil
+	case string:
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: x}}
+	case bool:
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_BoolValue{BoolValue: x}}
+	case int:
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: int64(x)}}
+	case int32:
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: int64(x)}}
+	case int64:
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: x}}
+	case uint:
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: int64(x)}}
+	case uint32:
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: int64(x)}}
+	case uint64:
+		// Best-effort: may overflow into negative if > MaxInt64
+		if x > ^uint64(0)>>1 {
+			// too large; use double
+			return &commonpb.AnyValue{Value: &commonpb.AnyValue_DoubleValue{DoubleValue: float64(x)}}
+		}
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: int64(x)}}
+	case float32:
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_DoubleValue{DoubleValue: float64(x)}}
+	case float64:
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_DoubleValue{DoubleValue: x}}
+	case []any:
+		values := make([]*commonpb.AnyValue, 0, len(x))
+		for _, e := range x {
+			av := o.toAnyValue(e)
+			if av == nil {
+				o.logger.Warn("Unsupported value in array; dropping element", zap.String("type", fmt.Sprintf("%T", e)))
+				continue
+			}
+			values = append(values, av)
+		}
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_ArrayValue{ArrayValue: &commonpb.ArrayValue{Values: values}}}
+	case []string:
+		values := make([]*commonpb.AnyValue, 0, len(x))
+		for _, s := range x {
+			values = append(values, &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: s}})
+		}
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_ArrayValue{ArrayValue: &commonpb.ArrayValue{Values: values}}}
+	case map[string]any:
+		return o.convertMapToAnyValue(x)
+	default:
+		return nil
 	}
 }
 
