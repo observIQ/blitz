@@ -24,7 +24,7 @@ var DefaultIPs = []string{
 }
 
 // RenderTemplate renders the selected template with randomized values.
-func RenderTemplate(opts RenderOptions) ([]byte, error) {
+func RenderTemplate(opts RenderOptions) (string, error) {
 	templateName := opts.TemplateName
 	if templateName == "" {
 		templateName = ExampleTemplateName
@@ -33,7 +33,7 @@ func RenderTemplate(opts RenderOptions) ([]byte, error) {
 	templates := AllTemplates()
 	tpl, ok := templates[templateName]
 	if !ok {
-		return nil, fmt.Errorf("unknown template: %s", opts.TemplateName)
+		return "", fmt.Errorf("unknown template: %s", opts.TemplateName)
 	}
 
 	ips := opts.IPs
@@ -44,5 +44,5 @@ func RenderTemplate(opts RenderOptions) ([]byte, error) {
 	ip := ips[rand.Intn(len(ips))] // #nosec G404 - non-crypto random is fine
 
 	out := strings.ReplaceAll(tpl, "{{IP_ADDRESS}}", ip)
-	return []byte(out), nil
+	return out, nil
 }

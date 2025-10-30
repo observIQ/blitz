@@ -172,7 +172,7 @@ func BenchmarkTCP_1Worker(b *testing.B) {
 	defer tcp.Stop(context.Background())
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -207,7 +207,7 @@ func BenchmarkTCP_10Workers(b *testing.B) {
 	defer tcp.Stop(context.Background())
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -243,7 +243,7 @@ func BenchmarkTCP_1Worker_Sequential(b *testing.B) {
 	defer tcp.Stop(context.Background())
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	ctx := context.Background()
@@ -277,7 +277,7 @@ func BenchmarkTCP_10Workers_Sequential(b *testing.B) {
 	defer tcp.Stop(context.Background())
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	ctx := context.Background()
@@ -370,7 +370,7 @@ func BenchmarkTCP_TLS_1Worker(b *testing.B) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -408,7 +408,7 @@ func BenchmarkTCP_TLS_10Workers(b *testing.B) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -446,7 +446,7 @@ func BenchmarkTCP_TLS_1Worker_Sequential(b *testing.B) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	ctx := context.Background()
@@ -482,7 +482,7 @@ func BenchmarkTCP_TLS_10Workers_Sequential(b *testing.B) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	ctx := context.Background()

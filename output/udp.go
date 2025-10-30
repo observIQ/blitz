@@ -33,7 +33,7 @@ type UDP struct {
 	host          string
 	port          string
 	workers       int
-	dataChan      chan []byte
+	dataChan      chan string
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
@@ -119,7 +119,7 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 		host:                host,
 		port:                port,
 		workers:             workers,
-		dataChan:            make(chan []byte, DefaultUDPChannelSize),
+		dataChan:            make(chan string, DefaultUDPChannelSize),
 		ctx:                 ctx,
 		cancel:              cancel,
 		meter:               meter,
@@ -273,7 +273,7 @@ func (u *UDP) connect() (net.Conn, error) {
 }
 
 // sendData sends data to the UDP connection with a timeout
-func (u *UDP) sendData(conn net.Conn, data []byte) error {
+func (u *UDP) sendData(conn net.Conn, data string) error {
 	// Set write timeout
 	if err := conn.SetWriteDeadline(time.Now().Add(DefaultUDPWriteTimeout)); err != nil {
 		u.recordSendError("unknown", err)
@@ -281,7 +281,7 @@ func (u *UDP) sendData(conn net.Conn, data []byte) error {
 	}
 
 	// Send the data
-	bytesWritten, err := conn.Write(data)
+	bytesWritten, err := conn.Write([]byte(data))
 	if err != nil {
 		// Classify error type
 		errorType := "unknown"

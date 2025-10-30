@@ -162,7 +162,14 @@ func (g *WinevtGenerator) generateAndWrite(writer output.Writer, workerID int) e
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, output.LogRecord{Message: data}); err != nil {
+	logRecord := output.LogRecord{
+		Message: data,
+		Metadata: output.LogRecordMetadata{
+			Severity: "WARN",
+		},
+	}
+
+	if err := writer.Write(ctx, logRecord); err != nil {
 		errorType := "unknown"
 		if ctx.Err() == context.DeadlineExceeded {
 			errorType = "timeout"

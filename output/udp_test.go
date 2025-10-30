@@ -165,8 +165,8 @@ func TestUDP_Integration(t *testing.T) {
 	}
 
 	// Test data to send
-	testData1 := []byte("Hello, UDP!")
-	testData2 := []byte("Second UDP message")
+	testData1 := "Hello, UDP!"
+	testData2 := "Second UDP message"
 
 	// Send first message
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -255,7 +255,7 @@ func TestUDP_WriteAfterStop(t *testing.T) {
 		}
 	}()
 
-	err = udp.Write(ctx, LogRecord{Message: []byte("This should fail")})
+	err = udp.Write(ctx, LogRecord{Message: "This should fail"})
 	if err != nil {
 		// Error is also expected due to race condition
 		if !strings.Contains(err.Error(), "UDP output is shutting down") {

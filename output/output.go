@@ -2,17 +2,26 @@ package output
 
 import (
 	"context"
+	"time"
 )
 
 type LogRecord struct {
 	// Message is the raw log message
-	Message []byte
+	Message string
 
 	// ParseFunc is an optional function that will be
-	// used by some outputs to parse the message.
-	// TODO(jsirianni): Implement to support parsing JSON
-	// with OTLP output.
-	// ParseFunc func(message []byte) (any, error)
+	// used by some outputs to parse the message to a
+	// map[string]any structure.
+	ParseFunc func(message string) (map[string]any, error)
+
+	// Metadata is the metadata for a log record.
+	Metadata LogRecordMetadata
+}
+
+// LogRecordMetadata is the metadata for a log record.
+type LogRecordMetadata struct {
+	Timestamp time.Time
+	Severity  string
 }
 
 // Writer can consume log records.
