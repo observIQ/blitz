@@ -220,7 +220,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID in
 }
 
 // generateRandomLog creates a random log entry
-func generateRandomLog() ([]byte, error) {
+func generateRandomLog() (string, error) {
 	// Use fast random generator with gosec nosec comment
 	messageIndex := rand.Intn(len(logMessages))  // #nosec G404
 	levelIndex := rand.Intn(len(severityLevels)) // #nosec G404
@@ -235,7 +235,11 @@ func generateRandomLog() ([]byte, error) {
 		Message:     logMessages[messageIndex],
 	}
 
-	return json.Marshal(j)
+	b, err := json.Marshal(j)
+	if err != nil {
+		return "", fmt.Errorf("marshal JSON log: %w", err)
+	}
+	return string(b), nil
 }
 
 // logMessages contains 100 unique log messages of approximately 500 bytes each

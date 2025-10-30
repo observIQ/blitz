@@ -65,7 +65,7 @@ func BenchmarkUDP_1Worker(b *testing.B) {
 	defer udp.Stop(context.Background())
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -100,7 +100,7 @@ func BenchmarkUDP_10Workers(b *testing.B) {
 	defer udp.Stop(context.Background())
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -136,7 +136,7 @@ func BenchmarkUDP_1Worker_Sequential(b *testing.B) {
 	defer udp.Stop(context.Background())
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	ctx := context.Background()
@@ -170,7 +170,7 @@ func BenchmarkUDP_10Workers_Sequential(b *testing.B) {
 	defer udp.Stop(context.Background())
 
 	// Test data
-	testData := []byte("benchmark test data")
+	testData := "benchmark test data"
 
 	b.ResetTimer()
 	ctx := context.Background()

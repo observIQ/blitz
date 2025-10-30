@@ -136,7 +136,7 @@ type OTLPGrpc struct {
 	workers       int
 	insecure      bool
 	tlsConfig     *tls.Config
-	dataChan      chan []byte
+	dataChan      chan string
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
@@ -264,7 +264,7 @@ func NewOTLPGrpc(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) 
 		workers:              cfg.workers,
 		insecure:             cfg.insecure,
 		tlsConfig:            cfg.tlsConfig,
-		dataChan:             make(chan []byte, DefaultOTLPGrpcChannelSize),
+		dataChan:             make(chan string, DefaultOTLPGrpcChannelSize),
 		ctx:                  ctx,
 		cancel:               cancel,
 		meter:                meter,
@@ -478,7 +478,7 @@ func (o *OTLPGrpc) connect() (*grpc.ClientConn, error) {
 
 // logBatch holds a batch of logs to be sent
 type logBatch struct {
-	logs    [][]byte
+	logs    []string
 	maxSize int
 	timer   *time.Timer
 	mu      sync.Mutex
@@ -487,20 +487,18 @@ type logBatch struct {
 // newLogBatch creates a new log batch
 func newLogBatch(maxSize int, timeout time.Duration) *logBatch {
 	return &logBatch{
-		logs:    make([][]byte, 0, maxSize),
+		logs:    make([]string, 0, maxSize),
 		maxSize: maxSize,
 		timer:   time.NewTimer(timeout),
 	}
 }
 
 // add adds a log to the batch
-func (b *logBatch) add(data []byte) {
+func (b *logBatch) add(data string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	copied := make([]byte, len(data))
-	copy(copied, data)
-	b.logs = append(b.logs, copied)
+	b.logs = append(b.logs, data)
 }
 
 // isFull returns true if the batch is full
@@ -518,11 +516,11 @@ func (b *logBatch) isEmpty() bool {
 }
 
 // getAndClear returns all logs and clears the batch
-func (b *logBatch) getAndClear() [][]byte {
+func (b *logBatch) getAndClear() []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	logs := b.logs
-	b.logs = make([][]byte, 0, b.maxSize)
+	b.logs = make([]string, 0, b.maxSize)
 	return logs
 }
 
@@ -593,7 +591,7 @@ func (o *OTLPGrpc) flushBatch(client collectorlogs.LogsServiceClient, batch *log
 }
 
 // buildOTLPRequest builds an OTLP ExportLogsServiceRequest from raw log bytes
-func (o *OTLPGrpc) buildOTLPRequest(logs [][]byte) *collectorlogs.ExportLogsServiceRequest {
+func (o *OTLPGrpc) buildOTLPRequest(logs []string) *collectorlogs.ExportLogsServiceRequest {
 	resourceLogs := &logspb.ResourceLogs{
 		Resource: &resourcepb.Resource{
 			Attributes: []*commonpb.KeyValue{
@@ -628,7 +626,7 @@ func (o *OTLPGrpc) buildOTLPRequest(logs [][]byte) *collectorlogs.ExportLogsServ
 			SeverityText:         severityText,
 			Body: &commonpb.AnyValue{
 				Value: &commonpb.AnyValue_StringValue{
-					StringValue: string(logEntry),
+					StringValue: logEntry,
 				},
 			},
 			Attributes: []*commonpb.KeyValue{

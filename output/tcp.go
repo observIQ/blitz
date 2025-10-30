@@ -38,7 +38,7 @@ type TCP struct {
 	port          string
 	workers       int
 	tlsConfig     *tls.Config
-	dataChan      chan []byte
+	dataChan      chan string
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
@@ -134,7 +134,7 @@ func NewTCP(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.C
 		port:                port,
 		workers:             workers,
 		tlsConfig:           tlsConfig,
-		dataChan:            make(chan []byte, DefaultTCPChannelSize),
+		dataChan:            make(chan string, DefaultTCPChannelSize),
 		ctx:                 ctx,
 		cancel:              cancel,
 		meter:               meter,
@@ -307,7 +307,7 @@ func (t *TCP) connect() (net.Conn, error) {
 }
 
 // sendData sends data to the TCP connection with a timeout
-func (t *TCP) sendData(conn net.Conn, data []byte) error {
+func (t *TCP) sendData(conn net.Conn, data string) error {
 	startTime := time.Now()
 
 	// Set write timeout
@@ -317,7 +317,7 @@ func (t *TCP) sendData(conn net.Conn, data []byte) error {
 	}
 
 	// Append newline to data before sending
-	dataWithNewline := append(data, '\n')
+	dataWithNewline := append([]byte(data), '\n')
 
 	// Send the data
 	bytesWritten, err := conn.Write(dataWithNewline)

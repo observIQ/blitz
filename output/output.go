@@ -6,7 +6,7 @@ import (
 
 type LogRecord struct {
 	// Message is the raw log message
-	Message []byte
+	Message string
 
 	// ParseFunc is an optional function that will be
 	// used by some outputs to parse the message.
