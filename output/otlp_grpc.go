@@ -326,9 +326,9 @@ func NewOTLPGrpc(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) 
 // Write shall not be called after Stop is called.
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
-func (o *OTLPGrpc) Write(ctx context.Context, data []byte) error {
+func (o *OTLPGrpc) Write(ctx context.Context, data LogRecord) error {
 	select {
-	case o.dataChan <- data:
+	case o.dataChan <- data.Message:
 		// Record logs received
 		o.otlpLogsReceived.Add(ctx, 1,
 			metric.WithAttributeSet(
@@ -337,7 +337,6 @@ func (o *OTLPGrpc) Write(ctx context.Context, data []byte) error {
 				),
 			),
 		)
-		o.logger.Info("log received and pushed to channel")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -411,7 +410,6 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 
 			// Add to batch
 			batch.add(data)
-			o.logger.Info("log added to batch")
 
 			// Send batch if it's full
 			if batch.isFull() {
@@ -427,7 +425,6 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 						zap.Error(err))
 					return
 				}
-				o.logger.Info("batch sent")
 				batch = newLogBatch(o.maxExportBatchSize, o.batchTimeout)
 			}
 
@@ -597,14 +594,6 @@ func (o *OTLPGrpc) flushBatch(client collectorlogs.LogsServiceClient, batch *log
 
 // buildOTLPRequest builds an OTLP ExportLogsServiceRequest from raw log bytes
 func (o *OTLPGrpc) buildOTLPRequest(logs [][]byte) *collectorlogs.ExportLogsServiceRequest {
-	type parsedLog struct {
-		Timestamp   time.Time `json:"timestamp"`
-		Level       string    `json:"level"`
-		Environment string    `json:"environment"`
-		Location    string    `json:"location"`
-		Message     string    `json:"message"`
-	}
-
 	resourceLogs := &logspb.ResourceLogs{
 		Resource: &resourcepb.Resource{
 			Attributes: []*commonpb.KeyValue{

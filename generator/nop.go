@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
 )
 
@@ -24,7 +25,7 @@ func NewNopGenerator(logger *zap.Logger) (*NopGenerator, error) {
 }
 
 // Start starts the nop generator (performs no work)
-func (g *NopGenerator) Start(writer generatorWriter) error {
+func (g *NopGenerator) Start(writer output.Writer) error {
 	g.logger.Info("Starting NOP generator (no work performed)")
 	return nil
 }

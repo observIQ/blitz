@@ -9,6 +9,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	json "github.com/goccy/go-json"
+	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -99,7 +100,7 @@ func NewJSONGenerator(logger *zap.Logger, workers int, rate time.Duration) (*JSO
 
 // Start starts the JSON log generator and writes data using the
 // provided generator writer.
-func (g *JSONLogGenerator) Start(writer generatorWriter) error {
+func (g *JSONLogGenerator) Start(writer output.Writer) error {
 	g.logger.Info("Starting JSON log generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate))
@@ -153,7 +154,7 @@ func (g *JSONLogGenerator) Stop(ctx context.Context) error {
 }
 
 // worker runs a single worker goroutine
-func (g *JSONLogGenerator) worker(workerID int, writer generatorWriter) {
+func (g *JSONLogGenerator) worker(workerID int, writer output.Writer) {
 	defer g.wg.Done()
 
 	g.logger.Debug("Starting worker", zap.Int("worker_id", workerID))
@@ -185,7 +186,7 @@ func (g *JSONLogGenerator) worker(workerID int, writer generatorWriter) {
 }
 
 // generateAndWriteLog generates a random log and writes it
-func (g *JSONLogGenerator) generateAndWriteLog(writer generatorWriter, workerID int) error {
+func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID int) error {
 	data, err := generateRandomLog()
 	if err != nil {
 		g.recordWriteError("unknown", err)
@@ -205,7 +206,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(writer generatorWriter, workerID 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, data); err != nil {
+	if err := writer.Write(ctx, output.LogRecord{Message: data}); err != nil {
 		// Classify error type
 		errorType := "unknown"
 		if ctx.Err() == context.DeadlineExceeded {

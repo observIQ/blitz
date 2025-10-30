@@ -178,7 +178,7 @@ func BenchmarkTCP_1Worker(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := tcp.Write(ctx, testData)
+			err := tcp.Write(ctx, LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -213,7 +213,7 @@ func BenchmarkTCP_10Workers(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := tcp.Write(ctx, testData)
+			err := tcp.Write(ctx, LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -248,7 +248,7 @@ func BenchmarkTCP_1Worker_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := tcp.Write(ctx, testData)
+		err := tcp.Write(ctx, LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}
@@ -282,7 +282,7 @@ func BenchmarkTCP_10Workers_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := tcp.Write(ctx, testData)
+		err := tcp.Write(ctx, LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}
@@ -376,7 +376,7 @@ func BenchmarkTCP_TLS_1Worker(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := tcp.Write(ctx, testData)
+			err := tcp.Write(ctx, LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -414,7 +414,7 @@ func BenchmarkTCP_TLS_10Workers(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := tcp.Write(ctx, testData)
+			err := tcp.Write(ctx, LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -451,7 +451,7 @@ func BenchmarkTCP_TLS_1Worker_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := tcp.Write(ctx, testData)
+		err := tcp.Write(ctx, LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}
@@ -487,7 +487,7 @@ func BenchmarkTCP_TLS_10Workers_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := tcp.Write(ctx, testData)
+		err := tcp.Write(ctx, LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}

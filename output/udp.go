@@ -172,9 +172,9 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 // Write shall not be called after Stop is called.
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
-func (u *UDP) Write(ctx context.Context, data []byte) error {
+func (u *UDP) Write(ctx context.Context, data LogRecord) error {
 	select {
-	case u.dataChan <- data:
+	case u.dataChan <- data.Message:
 		// Record logs received
 		u.udpLogsReceived.Add(ctx, 1,
 			metric.WithAttributeSet(

@@ -24,7 +24,7 @@ func NewNopOutput(logger *zap.Logger) (*NopOutput, error) {
 }
 
 // Write performs no work (data is discarded)
-func (o *NopOutput) Write(ctx context.Context, data []byte) error {
+func (o *NopOutput) Write(ctx context.Context, data LogRecord) error {
 	// No-op: data is discarded
 	return nil
 }

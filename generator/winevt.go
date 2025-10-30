@@ -8,6 +8,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/internal/winevt/templates"
+	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -78,7 +79,7 @@ func NewWinevtGenerator(logger *zap.Logger, workers int, rate time.Duration) (*W
 }
 
 // Start starts the Windows Event generator.
-func (g *WinevtGenerator) Start(writer generatorWriter) error {
+func (g *WinevtGenerator) Start(writer output.Writer) error {
 	g.logger.Info("Starting Windows Event generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
@@ -120,7 +121,7 @@ func (g *WinevtGenerator) Stop(ctx context.Context) error {
 	}
 }
 
-func (g *WinevtGenerator) worker(workerID int, writer generatorWriter) {
+func (g *WinevtGenerator) worker(workerID int, writer output.Writer) {
 	defer g.wg.Done()
 	g.logger.Debug("Starting worker", zap.Int("worker_id", workerID))
 
@@ -147,7 +148,7 @@ func (g *WinevtGenerator) worker(workerID int, writer generatorWriter) {
 	}
 }
 
-func (g *WinevtGenerator) generateAndWrite(writer generatorWriter, workerID int) error {
+func (g *WinevtGenerator) generateAndWrite(writer output.Writer, workerID int) error {
 	data, err := templates.RenderTemplate(templates.RenderOptions{})
 	if err != nil {
 		g.recordWriteError("unknown", err)
@@ -161,7 +162,7 @@ func (g *WinevtGenerator) generateAndWrite(writer generatorWriter, workerID int)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, data); err != nil {
+	if err := writer.Write(ctx, output.LogRecord{Message: data}); err != nil {
 		errorType := "unknown"
 		if ctx.Err() == context.DeadlineExceeded {
 			errorType = "timeout"
@@ -169,7 +170,6 @@ func (g *WinevtGenerator) generateAndWrite(writer generatorWriter, workerID int)
 		g.recordWriteError(errorType, err)
 		return err
 	}
-	g.logger.Info("wrote log")
 	return nil
 }
 

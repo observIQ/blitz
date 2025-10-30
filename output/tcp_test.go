@@ -177,7 +177,7 @@ func TestTCP_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err = tcp.Write(ctx, testData1)
+	err = tcp.Write(ctx, LogRecord{Message: testData1})
 	if err != nil {
 		t.Errorf("First Write() failed: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestTCP_Integration(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Send second message
-	err = tcp.Write(ctx, testData2)
+	err = tcp.Write(ctx, LogRecord{Message: testData2})
 	if err != nil {
 		t.Errorf("Second Write() failed: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestTCP_WriteAfterStop(t *testing.T) {
 		}
 	}()
 
-	err = tcp.Write(ctx, []byte("This should fail"))
+	err = tcp.Write(ctx, LogRecord{Message: []byte("This should fail")})
 	if err != nil {
 		// Error is also expected due to race condition
 		if !strings.Contains(err.Error(), "TCP output is shutting down") {
@@ -416,7 +416,7 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err = tcp.Write(ctx, testData1)
+	err = tcp.Write(ctx, LogRecord{Message: testData1})
 	if err != nil {
 		t.Errorf("First Write() failed: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Send second message
-	err = tcp.Write(ctx, testData2)
+	err = tcp.Write(ctx, LogRecord{Message: testData2})
 	if err != nil {
 		t.Errorf("Second Write() failed: %v", err)
 	}
