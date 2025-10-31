@@ -16,6 +16,8 @@ const (
 	OutputTypeUDP OutputType = "udp"
 	// OutputTypeOTLPGrpc represents OTLP gRPC output
 	OutputTypeOTLPGrpc OutputType = "otlp-grpc"
+	// OutputTypeS3 represents S3 output
+	OutputTypeS3 OutputType = "s3"
 )
 
 // Output contains configuration for output destinations
@@ -28,6 +30,8 @@ type Output struct {
 	TCP TCPOutputConfig `yaml:"tcp,omitempty" mapstructure:"tcp,omitempty"`
 	// OTLPGrpc contains OTLP gRPC output configuration
 	OTLPGrpc OTLPGrpcOutputConfig `yaml:"otlpGrpc,omitempty" mapstructure:"otlpGrpc,omitempty"`
+	// S3 contains S3 output configuration
+	S3 S3OutputConfig `yaml:"s3,omitempty" mapstructure:"s3,omitempty"`
 }
 
 // Validate validates the output configuration
@@ -52,8 +56,12 @@ func (o *Output) Validate() error {
 		if err := o.OTLPGrpc.Validate(); err != nil {
 			return fmt.Errorf("OTLP gRPC output validation failed: %w", err)
 		}
+	case OutputTypeS3:
+		if err := o.S3.Validate(); err != nil {
+			return fmt.Errorf("S3 output validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid output type: %s, must be one of: nop, tcp, udp, otlp-grpc", o.Type)
+		return fmt.Errorf("invalid output type: %s, must be one of: nop, tcp, udp, otlp-grpc, s3", o.Type)
 	}
 
 	return nil

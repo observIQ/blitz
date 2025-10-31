@@ -197,7 +197,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),
 		NewOverride("generator.winevt.workers", "number of winevt generator workers", 1),
 		NewOverride("generator.winevt.rate", "rate at which winevt logs are generated per worker", 1*time.Second),
-		NewOverride("output.type", "output type. One of: nop|tcp|udp|otlp-grpc", OutputTypeNop),
+		NewOverride("output.type", "output type. One of: nop|tcp|udp|otlp-grpc|s3", OutputTypeNop),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),
 		NewOverride("output.udp.workers", "number of UDP output workers", 1),
@@ -210,6 +210,15 @@ func DefaultOverrides() []*Override {
 		NewOverride("output.otlpGrpc.batchTimeout", "OTLP gRPC output batch timeout", DefaultOTLPGrpcBatchTimeout),
 		NewOverride("output.otlpGrpc.maxQueueSize", "OTLP gRPC output maximum queue size", DefaultOTLPGrpcMaxQueueSize),
 		NewOverride("output.otlpGrpc.maxExportBatchSize", "OTLP gRPC output maximum export batch size", DefaultOTLPGrpcMaxExportBatchSize),
+		// S3 output
+		NewOverride("output.s3.bucket", "S3 output bucket name", ""),
+		NewOverride("output.s3.region", "S3 output AWS region", DefaultS3Region),
+		NewOverride("output.s3.keyPrefix", "S3 output key prefix for uploaded objects (optional)", ""),
+		NewOverride("output.s3.workers", "number of S3 output workers", DefaultS3Workers),
+		NewOverride("output.s3.batchTimeout", "S3 output batch timeout", DefaultS3BatchTimeout),
+		NewOverride("output.s3.batchSize", "S3 output logs per batch", DefaultS3BatchSize),
+		NewOverride("output.s3.accessKeyID", "S3 output AWS access key ID (optional)", ""),
+		NewOverride("output.s3.secretAccessKey", "S3 output AWS secret access key (optional)", ""),
 	}
 
 	overrides = append(overrides, tcpTLSOverrides()...)

@@ -172,6 +172,33 @@ func main() {
 			logger.Error("Failed to create OTLP gRPC output", zap.Error(err))
 			os.Exit(1)
 		}
+	case config.OutputTypeS3:
+		// Build S3 options
+		s3Opts := []output.S3Option{}
+		if cfg.Output.S3.Region != "" {
+			s3Opts = append(s3Opts, output.WithS3Region(cfg.Output.S3.Region))
+		}
+		if cfg.Output.S3.KeyPrefix != "" {
+			s3Opts = append(s3Opts, output.WithS3KeyPrefix(cfg.Output.S3.KeyPrefix))
+		}
+		if cfg.Output.S3.Workers > 0 {
+			s3Opts = append(s3Opts, output.WithS3Workers(cfg.Output.S3.Workers))
+		}
+		if cfg.Output.S3.BatchTimeout > 0 {
+			s3Opts = append(s3Opts, output.WithS3BatchTimeout(cfg.Output.S3.BatchTimeout))
+		}
+		if cfg.Output.S3.BatchSize > 0 {
+			s3Opts = append(s3Opts, output.WithS3BatchSize(cfg.Output.S3.BatchSize))
+		}
+		if cfg.Output.S3.AccessKeyID != "" && cfg.Output.S3.SecretAccessKey != "" {
+			s3Opts = append(s3Opts, output.WithS3Credentials(cfg.Output.S3.AccessKeyID, cfg.Output.S3.SecretAccessKey))
+		}
+
+		outputInstance, err = output.NewS3(logger, cfg.Output.S3.Bucket, s3Opts...)
+		if err != nil {
+			logger.Error("Failed to create S3 output", zap.Error(err))
+			os.Exit(1)
+		}
 	default:
 		logger.Error("Invalid output type", zap.String("type", string(cfg.Output.Type)))
 		os.Exit(1)

@@ -62,6 +62,12 @@ func TestOverrideDefaults(t *testing.T) {
 					Insecure:             true,
 				},
 			},
+			S3: S3OutputConfig{
+				Region:       DefaultS3Region,
+				Workers:      DefaultS3Workers,
+				BatchTimeout: DefaultS3BatchTimeout,
+				BatchSize:    DefaultS3BatchSize,
+			},
 		},
 	}
 	require.Equal(t, expectedCfg, cfg)
@@ -81,6 +87,14 @@ func TestOverrideFlags(t *testing.T) {
 		"--output-tcp-host", "127.0.0.1",
 		"--output-tcp-port", "9090",
 		"--output-tcp-workers", "3",
+		"--output-s3-bucket", "my-bucket",
+		"--output-s3-region", "us-west-2",
+		"--output-s3-keyprefix", "logs/prefix",
+		"--output-s3-workers", "3",
+		"--output-s3-batchtimeout", "15s",
+		"--output-s3-batchsize", "5000",
+		"--output-s3-accesskeyid", "AKIA_TEST",
+		"--output-s3-secretaccesskey", "SECRET_TEST",
 	}
 
 	overrides := DefaultOverrides()
@@ -139,6 +153,16 @@ func TestOverrideFlags(t *testing.T) {
 					Insecure:             true,
 				},
 			},
+			S3: S3OutputConfig{
+				Bucket:          "my-bucket",
+				Region:          "us-west-2",
+				KeyPrefix:       "logs/prefix",
+				Workers:         3,
+				BatchTimeout:    15 * time.Second,
+				BatchSize:       5000,
+				AccessKeyID:     "AKIA_TEST",
+				SecretAccessKey: "SECRET_TEST",
+			},
 		},
 	}
 	require.Equal(t, expectedCfg, cfg)
@@ -156,6 +180,14 @@ func TestOverrideEnvs(t *testing.T) {
 	t.Setenv("BLITZ_OUTPUT_UDP_HOST", "example.com")
 	t.Setenv("BLITZ_OUTPUT_UDP_PORT", "8080")
 	t.Setenv("BLITZ_OUTPUT_UDP_WORKERS", "4")
+	t.Setenv("BLITZ_OUTPUT_S3_BUCKET", "env-bucket")
+	t.Setenv("BLITZ_OUTPUT_S3_REGION", "eu-central-1")
+	t.Setenv("BLITZ_OUTPUT_S3_KEYPREFIX", "env/prefix")
+	t.Setenv("BLITZ_OUTPUT_S3_WORKERS", "5")
+	t.Setenv("BLITZ_OUTPUT_S3_BATCHTIMEOUT", "45s")
+	t.Setenv("BLITZ_OUTPUT_S3_BATCHSIZE", "12000")
+	t.Setenv("BLITZ_OUTPUT_S3_ACCESSKEYID", "AKIA_ENV")
+	t.Setenv("BLITZ_OUTPUT_S3_SECRETACCESSKEY", "SECRET_ENV")
 
 	flagSet := pflag.NewFlagSet("test", pflag.PanicOnError)
 	overrides := DefaultOverrides()
@@ -213,6 +245,16 @@ func TestOverrideEnvs(t *testing.T) {
 					CertificateAuthority: []string{},
 					Insecure:             true,
 				},
+			},
+			S3: S3OutputConfig{
+				Bucket:          "env-bucket",
+				Region:          "eu-central-1",
+				KeyPrefix:       "env/prefix",
+				Workers:         5,
+				BatchTimeout:    45 * time.Second,
+				BatchSize:       12000,
+				AccessKeyID:     "AKIA_ENV",
+				SecretAccessKey: "SECRET_ENV",
 			},
 		},
 	}
