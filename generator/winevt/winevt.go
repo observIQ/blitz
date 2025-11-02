@@ -1,4 +1,4 @@
-package generator
+package winevt
 
 import (
 	"context"
@@ -31,8 +31,8 @@ type WinevtGenerator struct {
 	winevtWriteErrors   metric.Int64Counter
 }
 
-// NewWinevtGenerator creates a new Windows Event generator.
-func NewWinevtGenerator(logger *zap.Logger, workers int, rate time.Duration) (*WinevtGenerator, error) {
+// New creates a new Windows Event generator.
+func New(logger *zap.Logger, workers int, rate time.Duration) (*WinevtGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}

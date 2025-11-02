@@ -1,9 +1,10 @@
-package output
+package nop
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
 )
 
@@ -12,8 +13,8 @@ type NopOutput struct {
 	logger *zap.Logger
 }
 
-// NewNopOutput creates a new no-operation output
-func NewNopOutput(logger *zap.Logger) (*NopOutput, error) {
+// New creates a new no-operation output
+func New(logger *zap.Logger) (*NopOutput, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -24,7 +25,7 @@ func NewNopOutput(logger *zap.Logger) (*NopOutput, error) {
 }
 
 // Write performs no work (data is discarded)
-func (o *NopOutput) Write(ctx context.Context, data LogRecord) error {
+func (o *NopOutput) Write(ctx context.Context, data output.LogRecord) error {
 	// No-op: data is discarded
 	return nil
 }

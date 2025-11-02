@@ -1,4 +1,4 @@
-package generator
+package json
 
 import (
 	"context"
@@ -76,12 +76,12 @@ func (m *mockWriter) setDelay(delay time.Duration) {
 	m.delay = delay
 }
 
-func TestNewJSONGenerator(t *testing.T) {
+func TestNew(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	workers := 5
 	rate := 100 * time.Millisecond
 
-	generator, err := NewJSONGenerator(logger, workers, rate)
+	generator, err := New(logger, workers, rate)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, generator)
@@ -91,25 +91,25 @@ func TestNewJSONGenerator(t *testing.T) {
 	assert.NotNil(t, generator.stopCh)
 }
 
-func TestNewJSONGenerator_NilLogger(t *testing.T) {
-	generator, err := NewJSONGenerator(nil, 5, 100*time.Millisecond)
+func TestNew_NilLogger(t *testing.T) {
+	generator, err := New(nil, 5, 100*time.Millisecond)
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "logger cannot be nil")
 }
 
-func TestNewJSONGenerator_InvalidWorkers(t *testing.T) {
+func TestNew_InvalidWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Test zero workers
-	generator, err := NewJSONGenerator(logger, 0, 100*time.Millisecond)
+	generator, err := New(logger, 0, 100*time.Millisecond)
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
 
 	// Test negative workers
-	generator, err = NewJSONGenerator(logger, -1, 100*time.Millisecond)
+	generator, err = New(logger, -1, 100*time.Millisecond)
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
@@ -118,7 +118,7 @@ func TestNewJSONGenerator_InvalidWorkers(t *testing.T) {
 func TestJSONGenerator_Start(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := NewJSONGenerator(logger, 2, 50*time.Millisecond)
+	generator, err := New(logger, 2, 50*time.Millisecond)
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -161,7 +161,7 @@ func TestJSONGenerator_Start(t *testing.T) {
 func TestJSONGenerator_Stop_GracefulShutdown(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := NewJSONGenerator(logger, 3, 10*time.Millisecond)
+	generator, err := New(logger, 3, 10*time.Millisecond)
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -189,7 +189,7 @@ func TestJSONGenerator_WriteErrors_Backoff(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 	writer.setWriteError(errors.New("write failed"))
-	generator, err := NewJSONGenerator(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond)
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -212,7 +212,7 @@ func TestJSONGenerator_WriteErrors_Backoff(t *testing.T) {
 func TestJSONGenerator_ConcurrentWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := NewJSONGenerator(logger, 5, 20*time.Millisecond)
+	generator, err := New(logger, 5, 20*time.Millisecond)
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -245,7 +245,7 @@ func TestJSONGenerator_ConcurrentWorkers(t *testing.T) {
 func TestJSONGenerator_LogMessageVariety(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := NewJSONGenerator(logger, 1, 5*time.Millisecond)
+	generator, err := New(logger, 1, 5*time.Millisecond)
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -290,7 +290,7 @@ func TestJSONGenerator_LogMessageVariety(t *testing.T) {
 func TestJSONGenerator_LogMessageSize(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := NewJSONGenerator(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond)
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -327,7 +327,7 @@ func TestJSONGenerator_MultipleStartStop(t *testing.T) {
 
 	// Start and stop multiple times with new generator instances
 	for i := 0; i < 3; i++ {
-		generator, err := NewJSONGenerator(logger, 2, 20*time.Millisecond)
+		generator, err := New(logger, 2, 20*time.Millisecond)
 		require.NoError(t, err)
 
 		err = generator.Start(writer)
@@ -346,9 +346,9 @@ func TestJSONGenerator_MultipleStartStop(t *testing.T) {
 	assert.Greater(t, len(writes), 0, "Expected logs from multiple start/stop cycles")
 }
 
-func TestJSONGenerator_ZeroWorkers(t *testing.T) {
+func TestNew_ZeroWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	generator, err := NewJSONGenerator(logger, 0, 10*time.Millisecond)
+	generator, err := New(logger, 0, 10*time.Millisecond)
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
@@ -358,7 +358,7 @@ func TestJSONGenerator_ZeroWorkers(t *testing.T) {
 func TestJSONGenerator_VeryFastRate(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := NewJSONGenerator(logger, 1, 1*time.Millisecond)
+	generator, err := New(logger, 1, 1*time.Millisecond)
 	require.NoError(t, err)
 
 	err = generator.Start(writer)

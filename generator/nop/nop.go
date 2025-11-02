@@ -1,4 +1,4 @@
-package generator
+package nop
 
 import (
 	"context"
@@ -13,8 +13,8 @@ type NopGenerator struct {
 	logger *zap.Logger
 }
 
-// NewNopGenerator creates a new no-operation generator
-func NewNopGenerator(logger *zap.Logger) (*NopGenerator, error) {
+// New creates a new no-operation generator
+func New(logger *zap.Logger) (*NopGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}

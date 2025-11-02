@@ -1,4 +1,4 @@
-package output
+package tcp
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
 )
 
@@ -165,7 +166,7 @@ func BenchmarkTCP_1Worker(b *testing.B) {
 	}
 
 	// Create TCP client with 1 worker
-	tcp, err := NewTCP(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil)
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -178,7 +179,7 @@ func BenchmarkTCP_1Worker(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := tcp.Write(ctx, LogRecord{Message: testData})
+			err := tcp.Write(ctx, output.LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -200,7 +201,7 @@ func BenchmarkTCP_10Workers(b *testing.B) {
 	}
 
 	// Create TCP client with 10 workers
-	tcp, err := NewTCP(logger, host, port, 10, nil)
+	tcp, err := New(logger, host, port, 10, nil)
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -213,7 +214,7 @@ func BenchmarkTCP_10Workers(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := tcp.Write(ctx, LogRecord{Message: testData})
+			err := tcp.Write(ctx, output.LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -236,7 +237,7 @@ func BenchmarkTCP_1Worker_Sequential(b *testing.B) {
 	}
 
 	// Create TCP client with 1 worker
-	tcp, err := NewTCP(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil)
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -248,7 +249,7 @@ func BenchmarkTCP_1Worker_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := tcp.Write(ctx, LogRecord{Message: testData})
+		err := tcp.Write(ctx, output.LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}
@@ -270,7 +271,7 @@ func BenchmarkTCP_10Workers_Sequential(b *testing.B) {
 	}
 
 	// Create TCP client with 10 workers
-	tcp, err := NewTCP(logger, host, port, 10, nil)
+	tcp, err := New(logger, host, port, 10, nil)
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -282,7 +283,7 @@ func BenchmarkTCP_10Workers_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := tcp.Write(ctx, LogRecord{Message: testData})
+		err := tcp.Write(ctx, output.LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}
@@ -359,7 +360,7 @@ func BenchmarkTCP_TLS_1Worker(b *testing.B) {
 	}
 
 	// Create TCP client with 1 worker and TLS
-	tcp, err := NewTCP(logger, host, port, 1, tlsConfig)
+	tcp, err := New(logger, host, port, 1, tlsConfig)
 	if err != nil {
 		b.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
@@ -376,7 +377,7 @@ func BenchmarkTCP_TLS_1Worker(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := tcp.Write(ctx, LogRecord{Message: testData})
+			err := tcp.Write(ctx, output.LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -398,7 +399,7 @@ func BenchmarkTCP_TLS_10Workers(b *testing.B) {
 	}
 
 	// Create TCP client with 10 workers and TLS
-	tcp, err := NewTCP(logger, host, port, 10, tlsConfig)
+	tcp, err := New(logger, host, port, 10, tlsConfig)
 	if err != nil {
 		b.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
@@ -414,7 +415,7 @@ func BenchmarkTCP_TLS_10Workers(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := tcp.Write(ctx, LogRecord{Message: testData})
+			err := tcp.Write(ctx, output.LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -436,7 +437,7 @@ func BenchmarkTCP_TLS_1Worker_Sequential(b *testing.B) {
 	}
 
 	// Create TCP client with 1 worker and TLS
-	tcp, err := NewTCP(logger, host, port, 1, tlsConfig)
+	tcp, err := New(logger, host, port, 1, tlsConfig)
 	if err != nil {
 		b.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
@@ -451,7 +452,7 @@ func BenchmarkTCP_TLS_1Worker_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := tcp.Write(ctx, LogRecord{Message: testData})
+		err := tcp.Write(ctx, output.LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}
@@ -472,7 +473,7 @@ func BenchmarkTCP_TLS_10Workers_Sequential(b *testing.B) {
 	}
 
 	// Create TCP client with 10 workers and TLS
-	tcp, err := NewTCP(logger, host, port, 10, tlsConfig)
+	tcp, err := New(logger, host, port, 10, tlsConfig)
 	if err != nil {
 		b.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
@@ -487,7 +488,7 @@ func BenchmarkTCP_TLS_10Workers_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := tcp.Write(ctx, LogRecord{Message: testData})
+		err := tcp.Write(ctx, output.LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}

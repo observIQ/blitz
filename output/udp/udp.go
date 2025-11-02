@@ -1,4 +1,4 @@
-package output
+package udp
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/internal/workermanager"
+	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -47,8 +48,8 @@ type UDP struct {
 	udpSendErrors       metric.Int64Counter
 }
 
-// NewUDP creates a new UDP output instance
-func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
+// New creates a new UDP output instance
+func New(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 	var err error
 
 	if logger == nil {
@@ -172,7 +173,7 @@ func NewUDP(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 // Write shall not be called after Stop is called.
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
-func (u *UDP) Write(ctx context.Context, data LogRecord) error {
+func (u *UDP) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case u.dataChan <- data.Message:
 		// Record logs received

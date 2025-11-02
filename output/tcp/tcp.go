@@ -1,4 +1,4 @@
-package output
+package tcp
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/internal/workermanager"
+	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -53,8 +54,8 @@ type TCP struct {
 	tcpSendErrors       metric.Int64Counter
 }
 
-// NewTCP creates a new TCP output instance
-func NewTCP(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Config) (*TCP, error) {
+// New creates a new TCP output instance
+func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Config) (*TCP, error) {
 	var err error
 
 	if logger == nil {
@@ -189,7 +190,7 @@ func NewTCP(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.C
 // Write shall not be called after Stop is called.
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
-func (t *TCP) Write(ctx context.Context, data LogRecord) error {
+func (t *TCP) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case t.dataChan <- data.Message:
 		// Record logs received

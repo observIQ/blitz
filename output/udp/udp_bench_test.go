@@ -1,4 +1,4 @@
-package output
+package udp
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
 )
 
@@ -58,7 +59,7 @@ func BenchmarkUDP_1Worker(b *testing.B) {
 	}
 
 	// Create UDP client with 1 worker
-	udp, err := NewUDP(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1)
 	if err != nil {
 		b.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -71,7 +72,7 @@ func BenchmarkUDP_1Worker(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := udp.Write(ctx, LogRecord{Message: testData})
+			err := udp.Write(ctx, output.LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -93,7 +94,7 @@ func BenchmarkUDP_10Workers(b *testing.B) {
 	}
 
 	// Create UDP client with 10 workers
-	udp, err := NewUDP(logger, host, port, 10)
+	udp, err := New(logger, host, port, 10)
 	if err != nil {
 		b.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -106,7 +107,7 @@ func BenchmarkUDP_10Workers(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := udp.Write(ctx, LogRecord{Message: testData})
+			err := udp.Write(ctx, output.LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -129,7 +130,7 @@ func BenchmarkUDP_1Worker_Sequential(b *testing.B) {
 	}
 
 	// Create UDP client with 1 worker
-	udp, err := NewUDP(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1)
 	if err != nil {
 		b.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -141,7 +142,7 @@ func BenchmarkUDP_1Worker_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := udp.Write(ctx, LogRecord{Message: testData})
+		err := udp.Write(ctx, output.LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}
@@ -163,7 +164,7 @@ func BenchmarkUDP_10Workers_Sequential(b *testing.B) {
 	}
 
 	// Create UDP client with 10 workers
-	udp, err := NewUDP(logger, host, port, 10)
+	udp, err := New(logger, host, port, 10)
 	if err != nil {
 		b.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -175,7 +176,7 @@ func BenchmarkUDP_10Workers_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := udp.Write(ctx, LogRecord{Message: testData})
+		err := udp.Write(ctx, output.LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}

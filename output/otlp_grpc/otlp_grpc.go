@@ -1,4 +1,4 @@
-package output
+package otlpgrpc
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/internal/workermanager"
+	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -157,8 +158,8 @@ type OTLPGrpc struct {
 	maxExportBatchSize int
 }
 
-// NewOTLPGrpc creates a new OTLP gRPC output instance using functional options
-func NewOTLPGrpc(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
+// New creates a new OTLP gRPC output instance using functional options
+func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 	var err error
 
 	if logger == nil {
@@ -327,7 +328,7 @@ func NewOTLPGrpc(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) 
 // Write shall not be called after Stop is called.
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
-func (o *OTLPGrpc) Write(ctx context.Context, data LogRecord) error {
+func (o *OTLPGrpc) Write(ctx context.Context, data output.LogRecord) error {
 	// Build OTLP log record before batching
 	timestamp := time.Now()
 	severityText := "INFO"
@@ -366,8 +367,8 @@ func (o *OTLPGrpc) Write(ctx context.Context, data LogRecord) error {
 	}
 
 	record := &logspb.LogRecord{
-		TimeUnixNano:         timeToUnixNanoUint64(timestamp),
-		ObservedTimeUnixNano: timeToUnixNanoUint64(time.Now()),
+		TimeUnixNano:         output.TimeToUnixNanoUint64(timestamp),
+		ObservedTimeUnixNano: output.TimeToUnixNanoUint64(time.Now()),
 		SeverityNumber:       severityNumber,
 		SeverityText:         severityText,
 		Body:                 body,

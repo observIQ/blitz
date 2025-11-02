@@ -1,4 +1,4 @@
-package generator
+package json
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	json "github.com/goccy/go-json"
+	jsonlib "github.com/goccy/go-json"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -49,8 +49,8 @@ var environments = []string{"production", "development", "staging"}
 // locations contains random location values
 var locations = []string{"us-east1", "us-west1"}
 
-// NewJSONGenerator creates a new JSON log generator
-func NewJSONGenerator(logger *zap.Logger, workers int, rate time.Duration) (*JSONLogGenerator, error) {
+// New creates a new JSON log generator
+func New(logger *zap.Logger, workers int, rate time.Duration) (*JSONLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -235,7 +235,7 @@ func generateRandomLog() (output.LogRecord, error) {
 		Message:     logMessages[messageIndex],
 	}
 
-	b, err := json.Marshal(j)
+	b, err := jsonlib.Marshal(j)
 	if err != nil {
 		return output.LogRecord{}, fmt.Errorf("marshal JSON log: %w", err)
 	}
@@ -244,7 +244,7 @@ func generateRandomLog() (output.LogRecord, error) {
 		Message: string(b),
 		ParseFunc: func(message string) (map[string]any, error) {
 			var parsed map[string]any
-			if err := json.Unmarshal([]byte(message), &parsed); err != nil {
+			if err := jsonlib.Unmarshal([]byte(message), &parsed); err != nil {
 				return nil, fmt.Errorf("unmarshal JSON log: %w", err)
 			}
 			return parsed, nil

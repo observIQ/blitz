@@ -1,4 +1,4 @@
-package output
+package tcp
 
 import (
 	"context"
@@ -13,10 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
 )
 
-func TestNewTCP(t *testing.T) {
+func TestNew(t *testing.T) {
 	logger := zap.NewNop()
 
 	tests := []struct {
@@ -88,38 +89,38 @@ func TestNewTCP(t *testing.T) {
 			var err error
 
 			if tt.name == "nil logger" {
-				tcp, err = NewTCP(nil, tt.host, tt.port, tt.workers, nil)
+				tcp, err = New(nil, tt.host, tt.port, tt.workers, nil)
 			} else {
-				tcp, err = NewTCP(logger, tt.host, tt.port, tt.workers, nil)
+				tcp, err = New(logger, tt.host, tt.port, tt.workers, nil)
 			}
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("NewTCP() expected error but got none")
+					t.Errorf("New() expected error but got none")
 					return
 				}
 				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
-					t.Errorf("NewTCP() error = %v, want error containing %q", err, tt.errContains)
+					t.Errorf("New() error = %v, want error containing %q", err, tt.errContains)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("NewTCP() unexpected error = %v", err)
+				t.Errorf("New() unexpected error = %v", err)
 				return
 			}
 
 			if tcp == nil {
-				t.Errorf("NewTCP() returned nil TCP instance")
+				t.Errorf("New() returned nil TCP instance")
 				return
 			}
 
 			// Verify the configuration was set correctly
 			if tcp.host != tt.host {
-				t.Errorf("NewTCP() host = %v, want %v", tcp.host, tt.host)
+				t.Errorf("New() host = %v, want %v", tcp.host, tt.host)
 			}
 			if tcp.port != tt.port {
-				t.Errorf("NewTCP() port = %v, want %v", tcp.port, tt.port)
+				t.Errorf("New() port = %v, want %v", tcp.port, tt.port)
 			}
 
 			// Verify workers defaulting
@@ -128,20 +129,20 @@ func TestNewTCP(t *testing.T) {
 				expectedWorkers = DefaultTCPWorkers
 			}
 			if tcp.workers != expectedWorkers {
-				t.Errorf("NewTCP() workers = %v, want %v", tcp.workers, expectedWorkers)
+				t.Errorf("New() workers = %v, want %v", tcp.workers, expectedWorkers)
 			}
 
 			// Verify channel was created
 			if tcp.dataChan == nil {
-				t.Errorf("NewTCP() dataChan is nil")
+				t.Errorf("New() dataChan is nil")
 			}
 
 			// Verify context was created
 			if tcp.ctx == nil {
-				t.Errorf("NewTCP() ctx is nil")
+				t.Errorf("New() ctx is nil")
 			}
 			if tcp.cancel == nil {
-				t.Errorf("NewTCP() cancel is nil")
+				t.Errorf("New() cancel is nil")
 			}
 
 			// Clean up
@@ -164,7 +165,7 @@ func TestTCP_Integration(t *testing.T) {
 	}
 
 	// Create TCP client
-	tcp, err := NewTCP(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil)
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -177,7 +178,7 @@ func TestTCP_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err = tcp.Write(ctx, LogRecord{Message: testData1})
+	err = tcp.Write(ctx, output.LogRecord{Message: testData1})
 	if err != nil {
 		t.Errorf("First Write() failed: %v", err)
 	}
@@ -186,7 +187,7 @@ func TestTCP_Integration(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Send second message
-	err = tcp.Write(ctx, LogRecord{Message: testData2})
+	err = tcp.Write(ctx, output.LogRecord{Message: testData2})
 	if err != nil {
 		t.Errorf("Second Write() failed: %v", err)
 	}
@@ -243,7 +244,7 @@ func TestTCP_WriteAfterStop(t *testing.T) {
 	}
 
 	// Create TCP client
-	tcp, err := NewTCP(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil)
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -263,7 +264,7 @@ func TestTCP_WriteAfterStop(t *testing.T) {
 		}
 	}()
 
-	err = tcp.Write(ctx, LogRecord{Message: "This should fail"})
+	err = tcp.Write(ctx, output.LogRecord{Message: "This should fail"})
 	if err != nil {
 		// Error is also expected due to race condition
 		if !strings.Contains(err.Error(), "TCP output is shutting down") {
@@ -285,7 +286,7 @@ func TestTCP_StopTwice(t *testing.T) {
 	}
 
 	// Create TCP client
-	tcp, err := NewTCP(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil)
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -314,8 +315,8 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 	// Get the absolute path of the test file first
 	_, testFile, _, _ := runtime.Caller(0)
 	testDir := filepath.Dir(testFile)
-	// output/tcp_test.go -> output/ -> repo root
-	repoRoot := filepath.Join(testDir, "..")
+	// output/tcp/tcp_test.go -> output/tcp/ -> output/ -> repo root
+	repoRoot := filepath.Join(testDir, "..", "..")
 	certFile := filepath.Join(repoRoot, "cmd", "server", "tcp", "test_server.crt")
 	keyFile := filepath.Join(repoRoot, "cmd", "server", "tcp", "test_server.key")
 
@@ -400,7 +401,7 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 	}
 
 	// Create TCP client with TLS
-	tcp, err := NewTCP(logger, host, port, 1, clientTLSConfig)
+	tcp, err := New(logger, host, port, 1, clientTLSConfig)
 	if err != nil {
 		t.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
@@ -416,7 +417,7 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err = tcp.Write(ctx, LogRecord{Message: testData1})
+	err = tcp.Write(ctx, output.LogRecord{Message: testData1})
 	if err != nil {
 		t.Errorf("First Write() failed: %v", err)
 	}
@@ -425,7 +426,7 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Send second message
-	err = tcp.Write(ctx, LogRecord{Message: testData2})
+	err = tcp.Write(ctx, output.LogRecord{Message: testData2})
 	if err != nil {
 		t.Errorf("Second Write() failed: %v", err)
 	}

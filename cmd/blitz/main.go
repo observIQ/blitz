@@ -15,11 +15,18 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/generator"
+	"github.com/observiq/blitz/generator/json"
+	gennop "github.com/observiq/blitz/generator/nop"
+	"github.com/observiq/blitz/generator/winevt"
 	"github.com/observiq/blitz/internal/config"
 	"github.com/observiq/blitz/internal/logging"
 	"github.com/observiq/blitz/internal/service"
 	"github.com/observiq/blitz/internal/telemetry/metrics"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/output/nop"
+	otlpgrpc "github.com/observiq/blitz/output/otlp_grpc"
+	"github.com/observiq/blitz/output/tcp"
+	"github.com/observiq/blitz/output/udp"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -103,7 +110,7 @@ func main() {
 	var outputInstance output.Output
 	switch cfg.Output.Type {
 	case config.OutputTypeNop:
-		outputInstance, err = output.NewNopOutput(logger)
+		outputInstance, err = nop.New(logger)
 		if err != nil {
 			logger.Error("Failed to create NOP output", zap.Error(err))
 			os.Exit(1)
@@ -118,7 +125,7 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		outputInstance, err = output.NewTCP(
+		outputInstance, err = tcp.New(
 			logger,
 			cfg.Output.TCP.Host,
 			strconv.Itoa(cfg.Output.TCP.Port),
@@ -130,7 +137,7 @@ func main() {
 			os.Exit(1)
 		}
 	case config.OutputTypeUDP:
-		outputInstance, err = output.NewUDP(
+		outputInstance, err = udp.New(
 			logger,
 			cfg.Output.UDP.Host,
 			strconv.Itoa(cfg.Output.UDP.Port),
@@ -141,22 +148,22 @@ func main() {
 			os.Exit(1)
 		}
 	case config.OutputTypeOTLPGrpc:
-		opts := []output.OTLPGrpcOption{
-			output.WithHost(cfg.Output.OTLPGrpc.Host),
-			output.WithPort(strconv.Itoa(cfg.Output.OTLPGrpc.Port)),
-			output.WithWorkers(cfg.Output.OTLPGrpc.Workers),
+		opts := []otlpgrpc.OTLPGrpcOption{
+			otlpgrpc.WithHost(cfg.Output.OTLPGrpc.Host),
+			otlpgrpc.WithPort(strconv.Itoa(cfg.Output.OTLPGrpc.Port)),
+			otlpgrpc.WithWorkers(cfg.Output.OTLPGrpc.Workers),
 		}
 		if cfg.Output.OTLPGrpc.BatchTimeout > 0 {
-			opts = append(opts, output.WithBatchTimeout(cfg.Output.OTLPGrpc.BatchTimeout))
+			opts = append(opts, otlpgrpc.WithBatchTimeout(cfg.Output.OTLPGrpc.BatchTimeout))
 		}
 		if cfg.Output.OTLPGrpc.MaxQueueSize > 0 {
-			opts = append(opts, output.WithMaxQueueSize(cfg.Output.OTLPGrpc.MaxQueueSize))
+			opts = append(opts, otlpgrpc.WithMaxQueueSize(cfg.Output.OTLPGrpc.MaxQueueSize))
 		}
 		if cfg.Output.OTLPGrpc.MaxExportBatchSize > 0 {
-			opts = append(opts, output.WithMaxExportBatchSize(cfg.Output.OTLPGrpc.MaxExportBatchSize))
+			opts = append(opts, otlpgrpc.WithMaxExportBatchSize(cfg.Output.OTLPGrpc.MaxExportBatchSize))
 		}
 		// Set insecure flag
-		opts = append(opts, output.WithInsecure(cfg.Output.OTLPGrpc.Insecure))
+		opts = append(opts, otlpgrpc.WithInsecure(cfg.Output.OTLPGrpc.Insecure))
 		// If TLS is enabled and not insecure, set up TLS
 		if cfg.Output.OTLPGrpc.EnableTLS && !cfg.Output.OTLPGrpc.Insecure {
 			var tlsConfig *tls.Config
@@ -165,9 +172,9 @@ func main() {
 				logger.Error("Failed to convert TLS config for OTLP gRPC output", zap.Error(err))
 				os.Exit(1)
 			}
-			opts = append(opts, output.WithTLSConfig(tlsConfig))
+			opts = append(opts, otlpgrpc.WithTLSConfig(tlsConfig))
 		}
-		outputInstance, err = output.NewOTLPGrpc(logger, opts...)
+		outputInstance, err = otlpgrpc.New(logger, opts...)
 		if err != nil {
 			logger.Error("Failed to create OTLP gRPC output", zap.Error(err))
 			os.Exit(1)
@@ -181,13 +188,13 @@ func main() {
 	var generatorInstance generator.Generator
 	switch cfg.Generator.Type {
 	case config.GeneratorTypeNop:
-		generatorInstance, err = generator.NewNopGenerator(logger)
+		generatorInstance, err = gennop.New(logger)
 		if err != nil {
 			logger.Error("Failed to create NOP generator", zap.Error(err))
 			os.Exit(1)
 		}
 	case config.GeneratorTypeJSON:
-		generatorInstance, err = generator.NewJSONGenerator(
+		generatorInstance, err = json.New(
 			logger,
 			cfg.Generator.JSON.Workers,
 			cfg.Generator.JSON.Rate,
@@ -197,7 +204,7 @@ func main() {
 			os.Exit(1)
 		}
 	case config.GeneratorTypeWinevt:
-		generatorInstance, err = generator.NewWinevtGenerator(
+		generatorInstance, err = winevt.New(
 			logger,
 			cfg.Generator.Winevt.Workers,
 			cfg.Generator.Winevt.Rate,

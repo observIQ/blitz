@@ -1,4 +1,4 @@
-package output
+package udp
 
 import (
 	"context"
@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
 )
 
-func TestNewUDP(t *testing.T) {
+func TestNew(t *testing.T) {
 	logger := zap.NewNop()
 
 	tests := []struct {
@@ -83,38 +84,38 @@ func TestNewUDP(t *testing.T) {
 			var err error
 
 			if tt.name == "nil logger" {
-				udp, err = NewUDP(nil, tt.host, tt.port, tt.workers)
+				udp, err = New(nil, tt.host, tt.port, tt.workers)
 			} else {
-				udp, err = NewUDP(logger, tt.host, tt.port, tt.workers)
+				udp, err = New(logger, tt.host, tt.port, tt.workers)
 			}
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("NewUDP() expected error but got none")
+					t.Errorf("New() expected error but got none")
 					return
 				}
 				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
-					t.Errorf("NewUDP() error = %v, want error containing %q", err, tt.errContains)
+					t.Errorf("New() error = %v, want error containing %q", err, tt.errContains)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("NewUDP() unexpected error = %v", err)
+				t.Errorf("New() unexpected error = %v", err)
 				return
 			}
 
 			if udp == nil {
-				t.Errorf("NewUDP() returned nil UDP instance")
+				t.Errorf("New() returned nil UDP instance")
 				return
 			}
 
 			// Verify the configuration was set correctly
 			if udp.host != tt.host {
-				t.Errorf("NewUDP() host = %v, want %v", udp.host, tt.host)
+				t.Errorf("New() host = %v, want %v", udp.host, tt.host)
 			}
 			if udp.port != tt.port {
-				t.Errorf("NewUDP() port = %v, want %v", udp.port, tt.port)
+				t.Errorf("New() port = %v, want %v", udp.port, tt.port)
 			}
 
 			// Verify workers defaulting
@@ -123,20 +124,20 @@ func TestNewUDP(t *testing.T) {
 				expectedWorkers = DefaultUDPWorkers
 			}
 			if udp.workers != expectedWorkers {
-				t.Errorf("NewUDP() workers = %v, want %v", udp.workers, expectedWorkers)
+				t.Errorf("New() workers = %v, want %v", udp.workers, expectedWorkers)
 			}
 
 			// Verify channel was created
 			if udp.dataChan == nil {
-				t.Errorf("NewUDP() dataChan is nil")
+				t.Errorf("New() dataChan is nil")
 			}
 
 			// Verify context was created
 			if udp.ctx == nil {
-				t.Errorf("NewUDP() ctx is nil")
+				t.Errorf("New() ctx is nil")
 			}
 			if udp.cancel == nil {
-				t.Errorf("NewUDP() cancel is nil")
+				t.Errorf("New() cancel is nil")
 			}
 
 			// Clean up
@@ -159,7 +160,7 @@ func TestUDP_Integration(t *testing.T) {
 	}
 
 	// Create UDP client
-	udp, err := NewUDP(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1)
 	if err != nil {
 		t.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -172,7 +173,7 @@ func TestUDP_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err = udp.Write(ctx, LogRecord{Message: testData1})
+	err = udp.Write(ctx, output.LogRecord{Message: testData1})
 	if err != nil {
 		t.Errorf("First Write() failed: %v", err)
 	}
@@ -181,7 +182,7 @@ func TestUDP_Integration(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Send second message
-	err = udp.Write(ctx, LogRecord{Message: testData2})
+	err = udp.Write(ctx, output.LogRecord{Message: testData2})
 	if err != nil {
 		t.Errorf("Second Write() failed: %v", err)
 	}
@@ -235,7 +236,7 @@ func TestUDP_WriteAfterStop(t *testing.T) {
 	}
 
 	// Create UDP client
-	udp, err := NewUDP(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1)
 	if err != nil {
 		t.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -255,7 +256,7 @@ func TestUDP_WriteAfterStop(t *testing.T) {
 		}
 	}()
 
-	err = udp.Write(ctx, LogRecord{Message: "This should fail"})
+	err = udp.Write(ctx, output.LogRecord{Message: "This should fail"})
 	if err != nil {
 		// Error is also expected due to race condition
 		if !strings.Contains(err.Error(), "UDP output is shutting down") {
@@ -277,7 +278,7 @@ func TestUDP_StopTwice(t *testing.T) {
 	}
 
 	// Create UDP client
-	udp, err := NewUDP(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1)
 	if err != nil {
 		t.Fatalf("Failed to create UDP client: %v", err)
 	}
