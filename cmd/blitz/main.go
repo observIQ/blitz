@@ -72,9 +72,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Apply defaults for any empty fields
-	cfg.ApplyDefaults()
-
 	if err := cfg.Validate(); err != nil {
 		fmt.Printf("Failed to validate config: %s", err.Error())
 		os.Exit(1)

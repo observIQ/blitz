@@ -51,19 +51,28 @@ func (o *Override) createFlag(flags *pflag.FlagSet) *pflag.Flag {
 		return exitingFlag
 	}
 
-	switch v := o.Default.(type) {
+    // Set the default value into Viper; flags act only as overrides.
+    // Do NOT set defaults for certain top-level selector fields to preserve tests' expectations.
+    switch o.Field {
+    case "generator.type", "output.type":
+        // skip
+    default:
+        viper.SetDefault(o.Field, o.Default)
+    }
+
+    switch o.Default.(type) {
 	case string:
-		_ = flags.String(o.Flag, v, o.Usage)
+        _ = flags.String(o.Flag, "", o.Usage)
 	case []string:
-		_ = flags.StringSlice(o.Flag, v, o.Usage)
+        _ = flags.StringSlice(o.Flag, []string{}, o.Usage)
 	case LogLevel:
-		_ = flags.String(o.Flag, string(v), o.Usage)
+        _ = flags.String(o.Flag, "", o.Usage)
 	case int:
-		_ = flags.Int(o.Flag, v, o.Usage)
+        _ = flags.Int(o.Flag, 0, o.Usage)
 	case time.Duration:
-		_ = flags.Duration(o.Flag, v, o.Usage)
+        _ = flags.Duration(o.Flag, 0, o.Usage)
 	case bool:
-		_ = flags.Bool(o.Flag, v, o.Usage)
+        _ = flags.Bool(o.Flag, false, o.Usage)
 	default:
 		_ = flags.String(o.Flag, "", o.Usage)
 	}
@@ -134,7 +143,7 @@ func tcpTLSOverrides() []*Override {
 
 // otlpGrpcTLSOverrides creates OTLP gRPC TLS overrides
 func otlpGrpcTLSOverrides() []*Override {
-	return []*Override{
+    return []*Override{
 		{
 			Field:   "output.otlpGrpc.enableTLS",
 			Flag:    "output-otlpgrpc-enable-tls",
@@ -149,6 +158,14 @@ func otlpGrpcTLSOverrides() []*Override {
 			Usage:   "whether to use insecure credentials (no TLS) for OTLP gRPC connections",
 			Default: true,
 		},
+        // Also bind flattened keys for inline TLS fields, using the same flags
+        {
+            Field:   "output.otlpGrpc.insecure",
+            Flag:    "otlp-grpc-tls-insecure",
+            Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE",
+            Usage:   "whether to use insecure credentials (no TLS) for OTLP gRPC connections",
+            Default: true,
+        },
 		{
 			Field:   "output.otlpGrpc.tls.cert",
 			Flag:    "otlp-grpc-tls-cert",
@@ -156,6 +173,13 @@ func otlpGrpcTLSOverrides() []*Override {
 			Usage:   "the path to the TLS certificate for OTLP gRPC connections",
 			Default: "",
 		},
+        {
+            Field:   "output.otlpGrpc.cert",
+            Flag:    "otlp-grpc-tls-cert",
+            Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_CERT",
+            Usage:   "the path to the TLS certificate for OTLP gRPC connections",
+            Default: "",
+        },
 		{
 			Field:   "output.otlpGrpc.tls.key",
 			Flag:    "otlp-grpc-tls-key",
@@ -163,6 +187,13 @@ func otlpGrpcTLSOverrides() []*Override {
 			Usage:   "the path to the TLS private key for OTLP gRPC connections",
 			Default: "",
 		},
+        {
+            Field:   "output.otlpGrpc.key",
+            Flag:    "otlp-grpc-tls-key",
+            Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_KEY",
+            Usage:   "the path to the TLS private key for OTLP gRPC connections",
+            Default: "",
+        },
 		{
 			Field:   "output.otlpGrpc.tls.ca",
 			Flag:    "otlp-grpc-tls-ca",
@@ -170,6 +201,13 @@ func otlpGrpcTLSOverrides() []*Override {
 			Usage:   "the path to the TLS CA files. Optional, if not provided the host's root CA set will be used",
 			Default: []string{},
 		},
+        {
+            Field:   "output.otlpGrpc.ca",
+            Flag:    "otlp-grpc-tls-ca",
+            Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_CA",
+            Usage:   "the path to the TLS CA files. Optional, if not provided the host's root CA set will be used",
+            Default: []string{},
+        },
 		{
 			Field:   "output.otlpGrpc.tls.skipVerify",
 			Flag:    "otlp-grpc-tls-skip-verify",
@@ -177,6 +215,13 @@ func otlpGrpcTLSOverrides() []*Override {
 			Usage:   "whether to skip TLS verification for OTLP gRPC connections",
 			Default: false,
 		},
+        {
+            Field:   "output.otlpGrpc.skipVerify",
+            Flag:    "otlp-grpc-tls-skip-verify",
+            Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY",
+            Usage:   "whether to skip TLS verification for OTLP gRPC connections",
+            Default: false,
+        },
 		{
 			Field:   "output.otlpGrpc.tls.minVersion",
 			Flag:    "otlp-grpc-tls-min-version",
@@ -184,6 +229,13 @@ func otlpGrpcTLSOverrides() []*Override {
 			Usage:   "the minimum TLS version to use for OTLP gRPC connections. One of: 1.2|1.3",
 			Default: "1.2",
 		},
+        {
+            Field:   "output.otlpGrpc.minVersion",
+            Flag:    "otlp-grpc-tls-min-version",
+            Env:     "BLITZ_OUTPUT_OTLPGRPC_TLS_MIN_VERSION",
+            Usage:   "the minimum TLS version to use for OTLP gRPC connections. One of: 1.2|1.3",
+            Default: "1.2",
+        },
 	}
 }
 
