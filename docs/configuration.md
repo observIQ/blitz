@@ -78,7 +78,7 @@ The NOP (No Operation) generator performs no work and generates no data. It's us
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `tcp`, `udp`, `otlp-grpc` |
+| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `tcp`, `udp`, `otlp-grpc`, `file` |
 
 #### NOP Output Configuration
 
@@ -100,6 +100,7 @@ TLS is disabled by default. To enable TLS, provide both a certificate and privat
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
+| `output.tcp.enableTLS` | `--output-tcp-enable-tls` | `BLITZ_OUTPUT_TCP_ENABLE_TLS` | `false` | Enable TLS for TCP connections |
 | `output.tcp.tls.cert` | `--output-tcp-tls-cert` | `BLITZ_OUTPUT_TCP_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
 | `output.tcp.tls.key` | `--output-tcp-tls-key` | `BLITZ_OUTPUT_TCP_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
 | `output.tcp.tls.ca` | `--output-tcp-tls-ca` | `BLITZ_OUTPUT_TCP_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional, if not provided the host's root CA set will be used |
@@ -113,6 +114,18 @@ TLS is disabled by default. To enable TLS, provide both a certificate and privat
 | `output.udp.host` | `--output-udp-host` | `BLITZ_OUTPUT_UDP_HOST` | `""` | UDP target host (IP address or hostname) |
 | `output.udp.port` | `--output-udp-port` | `BLITZ_OUTPUT_UDP_PORT` | `0` | UDP target port (1-65535) |
 | `output.udp.workers` | `--output-udp-workers` | `BLITZ_OUTPUT_UDP_WORKERS` | `1` | Number of UDP output workers (must be ≥ 0) |
+
+#### File Output Configuration
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `output.file.path` | `--output-file-path` | `BLITZ_OUTPUT_FILE_PATH` | `""` | Destination file path (required when using file output) |
+| `output.file.workers` | `--output-file-workers` | `BLITZ_OUTPUT_FILE_WORKERS` | `1` | Number of File output workers (must be ≥ 0) |
+| `output.file.rotation.maxSizeMB` | `--output-file-rotation-maxsizemb` | `BLITZ_OUTPUT_FILE_ROTATION_MAXSIZEMB` | `100` | Maximum size in MB before rotation |
+| `output.file.rotation.maxBackups` | `--output-file-rotation-maxbackups` | `BLITZ_OUTPUT_FILE_ROTATION_MAXBACKUPS` | `7` | Maximum number of backups to retain |
+| `output.file.rotation.maxAgeDays` | `--output-file-rotation-maxagedays` | `BLITZ_OUTPUT_FILE_ROTATION_MAXAGEDAYS` | `30` | Maximum age in days to retain backups |
+| `output.file.rotation.compress` | `--output-file-rotation-compress` | `BLITZ_OUTPUT_FILE_ROTATION_COMPRESS` | `true` | Compress rotated files |
+| `output.file.rotation.localTime` | `--output-file-rotation-localtime` | `BLITZ_OUTPUT_FILE_ROTATION_LOCALTIME` | `false` | Use local time for backup timestamps |
 
 #### OTLP gRPC Output Configuration
 
@@ -133,6 +146,7 @@ By default, OTLP gRPC uses insecure credentials (no TLS). To enable TLS, set `in
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
+| `output.otlpGrpc.enableTLS` | `--output-otlpgrpc-enable-tls` | `BLITZ_OUTPUT_OTLPGRPC_ENABLE_TLS` | `false` | Enable TLS for OTLP gRPC connections |
 | `output.otlpGrpc.tls.insecure` | `--otlp-grpc-tls-insecure` | `BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE` | `true` | Whether to use insecure credentials (no TLS). When `true`, TLS is not used. When `false` and TLS certificates are provided, TLS will be enabled |
 | `output.otlpGrpc.tls.cert` | `--otlp-grpc-tls-cert` | `BLITZ_OUTPUT_OTLPGRPC_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
 | `output.otlpGrpc.tls.key` | `--otlp-grpc-tls-key` | `BLITZ_OUTPUT_OTLPGRPC_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
@@ -270,6 +284,7 @@ Duration values (like `generator.json.rate`) support the following formats:
 - `output.udp.port` - Required when using UDP output
 - `output.otlpGrpc.host` - Required when using OTLP gRPC output
 - `output.otlpGrpc.port` - Required when using OTLP gRPC output
+- `output.file.path` - Required when using File output
 
 ### Validation Constraints
 - `generator.json.workers` - Must be ≥ 1
@@ -286,7 +301,7 @@ Duration values (like `generator.json.rate`) support the following formats:
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
 - `logging.type` - Must be `stdout` (only supported type)
 - `generator.type` - Must be one of: `nop`, `json`, `winevt`
-- `output.type` - Must be one of: `nop`, `tcp`, `udp`, `otlp-grpc`
+- `output.type` - Must be one of: `nop`, `tcp`, `udp`, `otlp-grpc`, `file`
 
 ## Error Handling
 

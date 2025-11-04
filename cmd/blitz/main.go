@@ -23,6 +23,7 @@ import (
 	"github.com/observiq/blitz/internal/service"
 	"github.com/observiq/blitz/internal/telemetry/metrics"
 	"github.com/observiq/blitz/output"
+	fileout "github.com/observiq/blitz/output/file"
 	"github.com/observiq/blitz/output/nop"
 	otlpgrpc "github.com/observiq/blitz/output/otlp_grpc"
 	"github.com/observiq/blitz/output/tcp"
@@ -70,9 +71,6 @@ func main() {
 		fmt.Printf("Failed to unmarshal config: %s", err.Error())
 		os.Exit(1)
 	}
-
-	// Apply defaults for any empty fields
-	cfg.ApplyDefaults()
 
 	if err := cfg.Validate(); err != nil {
 		fmt.Printf("Failed to validate config: %s", err.Error())
@@ -177,6 +175,24 @@ func main() {
 		outputInstance, err = otlpgrpc.New(logger, opts...)
 		if err != nil {
 			logger.Error("Failed to create OTLP gRPC output", zap.Error(err))
+			os.Exit(1)
+		}
+	case config.OutputTypeFile:
+		rot := fileout.RotationOptions{
+			MaxSizeMB:  cfg.Output.File.Rotation.MaxSizeMB,
+			MaxBackups: cfg.Output.File.Rotation.MaxBackups,
+			MaxAgeDays: cfg.Output.File.Rotation.MaxAgeDays,
+			Compress:   cfg.Output.File.Rotation.Compress,
+			LocalTime:  cfg.Output.File.Rotation.LocalTime,
+		}
+		outputInstance, err = fileout.New(
+			logger,
+			cfg.Output.File.Path,
+			cfg.Output.File.Workers,
+			rot,
+		)
+		if err != nil {
+			logger.Error("Failed to create File output", zap.Error(err))
 			os.Exit(1)
 		}
 	default:
