@@ -48,6 +48,16 @@ func TestOverrideDefaults(t *testing.T) {
 					CertificateAuthority: []string{},
 				},
 			},
+			File: FileOutputConfig{
+				Workers: 1,
+				Rotation: FileRotationConfig{
+					MaxSizeMB:  DefaultFileRotationMaxSizeMB,
+					MaxBackups: DefaultFileRotationMaxBackups,
+					MaxAgeDays: DefaultFileRotationMaxAgeDays,
+					Compress:   true,
+					LocalTime:  false,
+				},
+			},
 			OTLPGrpc: OTLPGrpcOutputConfig{
 				Host:               DefaultOTLPGrpcHost,
 				Port:               DefaultOTLPGrpcPort,
@@ -81,6 +91,13 @@ func TestOverrideFlags(t *testing.T) {
 		"--output-tcp-host", "127.0.0.1",
 		"--output-tcp-port", "9090",
 		"--output-tcp-workers", "3",
+		"--output-file-path", "/tmp/blitz.log",
+		"--output-file-workers", "2",
+		"--output-file-rotation-maxsizemb", "50",
+		"--output-file-rotation-maxbackups", "5",
+		"--output-file-rotation-maxagedays", "10",
+		"--output-file-rotation-compress", "true",
+		"--output-file-rotation-localtime", "true",
 	}
 
 	overrides := DefaultOverrides()
@@ -125,6 +142,17 @@ func TestOverrideFlags(t *testing.T) {
 					CertificateAuthority: []string{},
 				},
 			},
+			File: FileOutputConfig{
+				Path:    "/tmp/blitz.log",
+				Workers: 2,
+				Rotation: FileRotationConfig{
+					MaxSizeMB:  50,
+					MaxBackups: 5,
+					MaxAgeDays: 10,
+					Compress:   true,
+					LocalTime:  true,
+				},
+			},
 			OTLPGrpc: OTLPGrpcOutputConfig{
 				Host:               DefaultOTLPGrpcHost,
 				Port:               DefaultOTLPGrpcPort,
@@ -156,6 +184,13 @@ func TestOverrideEnvs(t *testing.T) {
 	t.Setenv("BLITZ_OUTPUT_UDP_HOST", "example.com")
 	t.Setenv("BLITZ_OUTPUT_UDP_PORT", "8080")
 	t.Setenv("BLITZ_OUTPUT_UDP_WORKERS", "4")
+	t.Setenv("BLITZ_OUTPUT_FILE_PATH", "/env/blitz.log")
+	t.Setenv("BLITZ_OUTPUT_FILE_WORKERS", "3")
+	t.Setenv("BLITZ_OUTPUT_FILE_ROTATION_MAXSIZEMB", "75")
+	t.Setenv("BLITZ_OUTPUT_FILE_ROTATION_MAXBACKUPS", "6")
+	t.Setenv("BLITZ_OUTPUT_FILE_ROTATION_MAXAGEDAYS", "20")
+	t.Setenv("BLITZ_OUTPUT_FILE_ROTATION_COMPRESS", "false")
+	t.Setenv("BLITZ_OUTPUT_FILE_ROTATION_LOCALTIME", "true")
 
 	flagSet := pflag.NewFlagSet("test", pflag.PanicOnError)
 	overrides := DefaultOverrides()
@@ -198,6 +233,17 @@ func TestOverrideEnvs(t *testing.T) {
 				TLS: TLS{
 					MinTLSVersion:        "1.2",
 					CertificateAuthority: []string{},
+				},
+			},
+			File: FileOutputConfig{
+				Path:    "/env/blitz.log",
+				Workers: 3,
+				Rotation: FileRotationConfig{
+					MaxSizeMB:  75,
+					MaxBackups: 6,
+					MaxAgeDays: 20,
+					Compress:   false,
+					LocalTime:  true,
 				},
 			},
 			OTLPGrpc: OTLPGrpcOutputConfig{
@@ -270,6 +316,16 @@ func TestOverrideOTLPGrpcFlags(t *testing.T) {
 					CertificateAuthority: []string{},
 				},
 			},
+			File: FileOutputConfig{
+				Workers: 1,
+				Rotation: FileRotationConfig{
+					MaxSizeMB:  DefaultFileRotationMaxSizeMB,
+					MaxBackups: DefaultFileRotationMaxBackups,
+					MaxAgeDays: DefaultFileRotationMaxAgeDays,
+					Compress:   true,
+					LocalTime:  false,
+				},
+			},
 			OTLPGrpc: OTLPGrpcOutputConfig{
 				Host:               "collector.example.com",
 				Port:               4317,
@@ -334,6 +390,16 @@ func TestOverrideOTLPGrpcEnvs(t *testing.T) {
 				TLS: TLS{
 					MinTLSVersion:        "1.2",
 					CertificateAuthority: []string{},
+				},
+			},
+			File: FileOutputConfig{
+				Workers: 1,
+				Rotation: FileRotationConfig{
+					MaxSizeMB:  DefaultFileRotationMaxSizeMB,
+					MaxBackups: DefaultFileRotationMaxBackups,
+					MaxAgeDays: DefaultFileRotationMaxAgeDays,
+					Compress:   true,
+					LocalTime:  false,
 				},
 			},
 			OTLPGrpc: OTLPGrpcOutputConfig{
@@ -414,6 +480,16 @@ func TestOverrideTCPTLSFlags(t *testing.T) {
 					MinTLSVersion:        "1.2",
 				},
 			},
+			File: FileOutputConfig{
+				Workers: 1,
+				Rotation: FileRotationConfig{
+					MaxSizeMB:  DefaultFileRotationMaxSizeMB,
+					MaxBackups: DefaultFileRotationMaxBackups,
+					MaxAgeDays: DefaultFileRotationMaxAgeDays,
+					Compress:   true,
+					LocalTime:  false,
+				},
+			},
 			OTLPGrpc: OTLPGrpcOutputConfig{
 				Host:               DefaultOTLPGrpcHost,
 				Port:               DefaultOTLPGrpcPort,
@@ -486,6 +562,16 @@ func TestOverrideTCPTLSEnvs(t *testing.T) {
 					CertificateAuthority: []string{"/env/ca1.pem", "/env/ca2.pem"},
 					InsecureSkipVerify:   true,
 					MinTLSVersion:        "1.3",
+				},
+			},
+			File: FileOutputConfig{
+				Workers: 1,
+				Rotation: FileRotationConfig{
+					MaxSizeMB:  DefaultFileRotationMaxSizeMB,
+					MaxBackups: DefaultFileRotationMaxBackups,
+					MaxAgeDays: DefaultFileRotationMaxAgeDays,
+					Compress:   true,
+					LocalTime:  false,
 				},
 			},
 			OTLPGrpc: OTLPGrpcOutputConfig{

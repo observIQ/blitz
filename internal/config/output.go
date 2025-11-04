@@ -16,6 +16,8 @@ const (
 	OutputTypeUDP OutputType = "udp"
 	// OutputTypeOTLPGrpc represents OTLP gRPC output
 	OutputTypeOTLPGrpc OutputType = "otlp-grpc"
+	// OutputTypeFile represents File output
+	OutputTypeFile OutputType = "file"
 )
 
 // Output contains configuration for output destinations
@@ -28,6 +30,8 @@ type Output struct {
 	TCP TCPOutputConfig `yaml:"tcp,omitempty" mapstructure:"tcp,omitempty"`
 	// OTLPGrpc contains OTLP gRPC output configuration
 	OTLPGrpc OTLPGrpcOutputConfig `yaml:"otlpGrpc,omitempty" mapstructure:"otlpGrpc,omitempty"`
+	// File contains File output configuration
+	File FileOutputConfig `yaml:"file,omitempty" mapstructure:"file,omitempty"`
 }
 
 // Validate validates the output configuration
@@ -52,8 +56,12 @@ func (o *Output) Validate() error {
 		if err := o.OTLPGrpc.Validate(); err != nil {
 			return fmt.Errorf("OTLP gRPC output validation failed: %w", err)
 		}
+	case OutputTypeFile:
+		if err := o.File.Validate(); err != nil {
+			return fmt.Errorf("File output validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid output type: %s, must be one of: nop, tcp, udp, otlp-grpc", o.Type)
+		return fmt.Errorf("invalid output type: %s, must be one of: nop, tcp, udp, otlp-grpc, file", o.Type)
 	}
 
 	return nil

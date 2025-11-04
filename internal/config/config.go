@@ -97,4 +97,18 @@ func (c *Config) ApplyDefaults() {
 	if c.Output.OTLPGrpc.MaxExportBatchSize == 0 {
 		c.Output.OTLPGrpc.MaxExportBatchSize = DefaultOTLPGrpcMaxExportBatchSize
 	}
+
+	// Apply File output defaults
+	if c.Output.File.Workers == 0 {
+		c.Output.File.Workers = DefaultFileWorkers
+	}
+	if c.Output.File.Rotation.MaxSizeMB == 0 {
+		c.Output.File.Rotation.MaxSizeMB = DefaultFileRotationMaxSizeMB
+	}
+	if c.Output.File.Rotation.MaxBackups == 0 {
+		c.Output.File.Rotation.MaxBackups = DefaultFileRotationMaxBackups
+	}
+	if c.Output.File.Rotation.MaxAgeDays == 0 {
+		c.Output.File.Rotation.MaxAgeDays = DefaultFileRotationMaxAgeDays
+	}
 }
