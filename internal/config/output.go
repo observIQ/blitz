@@ -16,6 +16,8 @@ const (
 	OutputTypeTCP OutputType = "tcp"
 	// OutputTypeUDP represents UDP output
 	OutputTypeUDP OutputType = "udp"
+	// OutputTypeSyslog represents Syslog output (wrapping TCP/UDP)
+	OutputTypeSyslog OutputType = "syslog"
 	// OutputTypeOTLPGrpc represents OTLP gRPC output
 	OutputTypeOTLPGrpc OutputType = "otlp-grpc"
 	// OutputTypeFile represents File output
@@ -30,6 +32,8 @@ type Output struct {
 	UDP UDPOutputConfig `yaml:"udp,omitempty" mapstructure:"udp,omitempty"`
 	// TCP contains TCP output configuration
 	TCP TCPOutputConfig `yaml:"tcp,omitempty" mapstructure:"tcp,omitempty"`
+	// Syslog contains Syslog output configuration
+	Syslog SyslogOutputConfig `yaml:"syslog,omitempty" mapstructure:"syslog,omitempty"`
 	// OTLPGrpc contains OTLP gRPC output configuration
 	OTLPGrpc OTLPGrpcOutputConfig `yaml:"otlpGrpc,omitempty" mapstructure:"otlpGrpc,omitempty"`
 	// File contains File output configuration
@@ -56,6 +60,10 @@ func (o *Output) Validate() error {
 		if err := o.UDP.Validate(); err != nil {
 			return fmt.Errorf("UDP output validation failed: %w", err)
 		}
+	case OutputTypeSyslog:
+		if err := o.Syslog.Validate(); err != nil {
+			return fmt.Errorf("Syslog output validation failed: %w", err)
+		}
 	case OutputTypeOTLPGrpc:
 		if err := o.OTLPGrpc.Validate(); err != nil {
 			return fmt.Errorf("OTLP gRPC output validation failed: %w", err)
@@ -65,7 +73,7 @@ func (o *Output) Validate() error {
 			return fmt.Errorf("File output validation failed: %w", err)
 		}
 	default:
-		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, otlp-grpc, file", o.Type)
+		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file", o.Type)
 	}
 
 	return nil
