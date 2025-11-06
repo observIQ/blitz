@@ -48,6 +48,9 @@ This rule describes how to add a new component to Blitz, either a generator or a
   - Add a section detailing the component’s configuration table (YAML path, flag, env, default, description).
   - Include at least one focused example configuration snippet.
   - Update validation rules if new constraints are introduced.
+ - Update `docs/metrics.md`:
+   - Document any new metrics emitted by the component (names, types, descriptions, labels).
+   - Ensure naming follows the existing `blitz.<component>.<metric>` pattern and labels remain consistent.
 
 ### Testing
 - Add unit tests in the new package as appropriate.
