@@ -14,6 +14,8 @@ const (
 	GeneratorTypeJSON GeneratorType = "json"
 	// GeneratorTypeWinevt represents Windows Event XML generator
 	GeneratorTypeWinevt GeneratorType = "winevt"
+	// GeneratorTypePaloAlto represents Palo Alto syslog generator
+	GeneratorTypePaloAlto GeneratorType = "palo-alto"
 )
 
 // Generator contains configuration for log generators
@@ -24,6 +26,8 @@ type Generator struct {
 	JSON JSONGeneratorConfig `yaml:"json,omitempty" mapstructure:"json,omitempty"`
 	// Winevt contains Windows Event generator configuration
 	Winevt WinevtGeneratorConfig `yaml:"winevt,omitempty" mapstructure:"winevt,omitempty"`
+	// PaloAlto contains Palo Alto generator configuration
+	PaloAlto PaloAltoGeneratorConfig `yaml:"paloAlto,omitempty" mapstructure:"paloAlto,omitempty"`
 }
 
 // Validate validates the generator configuration
@@ -44,8 +48,12 @@ func (g *Generator) Validate() error {
 		if err := g.Winevt.Validate(); err != nil {
 			return fmt.Errorf("winevt generator validation failed: %w", err)
 		}
+	case GeneratorTypePaloAlto:
+		if err := g.PaloAlto.Validate(); err != nil {
+			return fmt.Errorf("palo-alto generator validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt", g.Type)
+		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto", g.Type)
 	}
 
 	return nil

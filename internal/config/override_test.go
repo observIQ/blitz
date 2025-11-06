@@ -37,6 +37,10 @@ func TestOverrideDefaults(t *testing.T) {
 				Workers: 1,
 				Rate:    1 * time.Second,
 			},
+			PaloAlto: PaloAltoGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
 		},
 		Output: Output{
 			UDP: UDPOutputConfig{Host: "", Port: 0, Workers: 1},
@@ -94,6 +98,8 @@ func TestOverrideFlags(t *testing.T) {
 		"--generator-json-rate", "500ms",
 		"--generator-winevt-workers", "4",
 		"--generator-winevt-rate", "200ms",
+		"--generator-paloalto-workers", "6",
+		"--generator-paloalto-rate", "750ms",
 		"--output-type", "otlp-grpc",
 
 		// UDP options
@@ -164,6 +170,10 @@ func TestOverrideFlags(t *testing.T) {
 				Workers: 4,
 				Rate:    200 * time.Millisecond,
 			},
+			PaloAlto: PaloAltoGeneratorConfig{
+				Workers: 6,
+				Rate:    750 * time.Millisecond,
+			},
 		},
 		Output: Output{
 			Type: OutputTypeOTLPGrpc,
@@ -225,6 +235,8 @@ func TestOverrideEnvs(t *testing.T) {
 	t.Setenv("BLITZ_GENERATOR_JSON_RATE", "250ms")
 	t.Setenv("BLITZ_GENERATOR_WINEVT_WORKERS", "2")
 	t.Setenv("BLITZ_GENERATOR_WINEVT_RATE", "750ms")
+	t.Setenv("BLITZ_GENERATOR_PALOALTO_WORKERS", "7")
+	t.Setenv("BLITZ_GENERATOR_PALOALTO_RATE", "150ms")
 
 	// Output selection
 	t.Setenv("BLITZ_OUTPUT_TYPE", "file")
@@ -295,6 +307,10 @@ func TestOverrideEnvs(t *testing.T) {
 			Winevt: WinevtGeneratorConfig{
 				Workers: 2,
 				Rate:    750 * time.Millisecond,
+			},
+			PaloAlto: PaloAltoGeneratorConfig{
+				Workers: 7,
+				Rate:    150 * time.Millisecond,
 			},
 		},
 		Output: Output{

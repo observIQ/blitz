@@ -50,7 +50,7 @@ Configuration files must be in YAML format and can be specified using the `--con
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt` |
+| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto` |
 
 #### NOP Generator Configuration
 
@@ -72,19 +72,36 @@ The NOP (No Operation) generator performs no work and generates no data. It's us
 | `generator.winevt.workers` | `--generator-winevt-workers` | `BLITZ_GENERATOR_WINEVT_WORKERS` | `1` | Number of winevt generator workers (must be ≥ 1) |
 | `generator.winevt.rate` | `--generator-winevt-rate` | `BLITZ_GENERATOR_WINEVT_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
 
+#### Palo Alto Generator Configuration
+
+The Palo Alto generator generates realistic Palo Alto firewall syslog entries in the standard Palo Alto log format.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `generator.paloAlto.workers` | `--generator-paloalto-workers` | `BLITZ_GENERATOR_PALOALTO_WORKERS` | `1` | Number of Palo Alto generator workers (must be ≥ 1) |
+| `generator.paloAlto.rate` | `--generator-paloalto-rate` | `BLITZ_GENERATOR_PALOALTO_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
+
 ### Output Configuration
 
 **Note:** Only a single output can be configured at a time.
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `tcp`, `udp`, `otlp-grpc`, `file` |
+| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `otlp-grpc`, `file` |
 
 #### NOP Output Configuration
 
 The NOP (No Operation) output performs no work and discards all data. It's useful for testing the application infrastructure without actually sending data to external destinations.
 
 **No additional configuration options are required for the NOP output.**
+
+#### Stdout Output Configuration
+
+The stdout output writes all generated logs to standard output (stdout). This is useful for debugging and testing.
+
+**Note:** The stdout output may not be suitable for piping to another process, as stdout is shared with the main blitz logger. Both application logs and generated log data will be written to stdout, which can make it difficult to separate them when piping.
+
+**No additional configuration options are required for the stdout output.**
 
 #### TCP Output Configuration
 
@@ -226,6 +243,23 @@ output:
 # This configuration performs no work and is useful for testing
 ```
 
+### Stdout Output Configuration
+
+```yaml
+logging:
+  type: stdout
+  level: info
+
+generator:
+  type: json
+  json:
+    workers: 2
+    rate: 500ms
+
+output:
+  type: stdout
+```
+
 ### Minimal Configuration (JSON + TCP)
 
 ```yaml
@@ -263,9 +297,30 @@ output:
     maxExportBatchSize: 512
 ```
 
+### Palo Alto Generator Configuration
+
+```yaml
+logging:
+  type: stdout
+  level: info
+
+generator:
+  type: palo-alto
+  paloAlto:
+    workers: 2
+    rate: 500ms
+
+output:
+  type: tcp
+  tcp:
+    host: 127.0.0.1
+    port: 514
+    workers: 3
+```
+
 ## Duration Format
 
-Duration values (like `generator.json.rate`) support the following formats:
+Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `generator.paloAlto.rate`) support the following formats:
 
 - `500ms` - 500 milliseconds
 - `1s` - 1 second
@@ -289,6 +344,10 @@ Duration values (like `generator.json.rate`) support the following formats:
 ### Validation Constraints
 - `generator.json.workers` - Must be ≥ 1
 - `generator.json.rate` - Must be > 0
+- `generator.winevt.workers` - Must be ≥ 1
+- `generator.winevt.rate` - Must be > 0
+- `generator.paloAlto.workers` - Must be ≥ 1
+- `generator.paloAlto.rate` - Must be > 0
 - `output.tcp.workers` - Must be ≥ 0
 - `output.udp.workers` - Must be ≥ 0
 - `output.otlpGrpc.workers` - Must be ≥ 0
@@ -300,8 +359,8 @@ Duration values (like `generator.json.rate`) support the following formats:
 - `output.otlpGrpc.batchTimeout` - Must be > 0 (duration format)
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
 - `logging.type` - Must be `stdout` (only supported type)
-- `generator.type` - Must be one of: `nop`, `json`, `winevt`
-- `output.type` - Must be one of: `nop`, `tcp`, `udp`, `otlp-grpc`, `file`
+- `generator.type` - Must be one of: `nop`, `json`, `winevt`, `palo-alto`
+- `output.type` - Must be one of: `nop`, `stdout`, `tcp`, `udp`, `otlp-grpc`, `file`
 
 ## Error Handling
 
@@ -325,6 +384,19 @@ Failed to read config file nonexistent.yaml: open nonexistent.yaml: no such file
 ### Overriding Configuration File with Flags
 ```bash
 ./blitz --config production.yaml --logging-level debug --generator-json-workers 5
+```
+
+### Using Palo Alto Generator
+```bash
+./blitz --generator-type palo-alto --generator-paloalto-workers 3 --generator-paloalto-rate 250ms
+```
+
+Or with environment variables:
+```bash
+export BLITZ_GENERATOR_TYPE=palo-alto
+export BLITZ_GENERATOR_PALOALTO_WORKERS=3
+export BLITZ_GENERATOR_PALOALTO_RATE=250ms
+./blitz
 ```
 
 ### Using Environment Variables

@@ -17,6 +17,7 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/json"
 	gennop "github.com/observiq/blitz/generator/nop"
+	"github.com/observiq/blitz/generator/paloalto"
 	"github.com/observiq/blitz/generator/winevt"
 	"github.com/observiq/blitz/internal/config"
 	"github.com/observiq/blitz/internal/logging"
@@ -26,6 +27,7 @@ import (
 	fileout "github.com/observiq/blitz/output/file"
 	"github.com/observiq/blitz/output/nop"
 	otlpgrpc "github.com/observiq/blitz/output/otlp_grpc"
+	stdoutout "github.com/observiq/blitz/output/stdout"
 	"github.com/observiq/blitz/output/tcp"
 	"github.com/observiq/blitz/output/udp"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -111,6 +113,12 @@ func main() {
 		outputInstance, err = nop.New(logger)
 		if err != nil {
 			logger.Error("Failed to create NOP output", zap.Error(err))
+			os.Exit(1)
+		}
+	case config.OutputTypeStdout:
+		outputInstance, err = stdoutout.New(logger)
+		if err != nil {
+			logger.Error("Failed to create stdout output", zap.Error(err))
 			os.Exit(1)
 		}
 	case config.OutputTypeTCP:
@@ -227,6 +235,16 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create winevt generator", zap.Error(err))
+			os.Exit(1)
+		}
+	case config.GeneratorTypePaloAlto:
+		generatorInstance, err = paloalto.New(
+			logger,
+			cfg.Generator.PaloAlto.Workers,
+			cfg.Generator.PaloAlto.Rate,
+		)
+		if err != nil {
+			logger.Error("Failed to create palo-alto generator", zap.Error(err))
 			os.Exit(1)
 		}
 	default:
