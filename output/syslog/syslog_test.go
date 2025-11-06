@@ -79,6 +79,9 @@ func TestFormatRFC3164(t *testing.T) {
 
 	// Fixed local time: use UTC but RFC3164 uses local; force Location to Local for stable test
 	loc := time.FixedZone("Local", 0)
+	origLocal := time.Local
+	time.Local = loc
+	defer func() { time.Local = origLocal }()
 	ts := time.Date(2025, 1, 2, 3, 4, 5, 0, loc)
 	err := s.Write(context.Background(), output.LogRecord{
 		Message: "hello",
