@@ -81,9 +81,9 @@ func TestOverrideDefaults(t *testing.T) {
 }
 
 func TestOverrideFlags(t *testing.T) {
-    // Ensure environment variables cannot interfere with flag-based expectations
-    t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE", "false")
-    t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY", "false")
+	// Ensure environment variables cannot interfere with flag-based expectations
+	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE", "false")
+	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY", "false")
 
 	flagSet := pflag.NewFlagSet("test", pflag.PanicOnError)
 	args := []string{
@@ -128,11 +128,11 @@ func TestOverrideFlags(t *testing.T) {
 		"--output-otlpgrpc-batchtimeout", "10s",
 		"--output-otlpgrpc-maxqueuesize", "4096",
 		"--output-otlpgrpc-maxexportbatchsize", "1024",
-        "--output-otlpgrpc-enable-tls", "true",
+		"--output-otlpgrpc-enable-tls", "true",
 		"--otlp-grpc-tls-cert", "/path/to/otlp_cert.pem",
 		"--otlp-grpc-tls-key", "/path/to/otlp_key.pem",
 		"--otlp-grpc-tls-ca", "/path/to/otlp_ca1.pem,/path/to/otlp_ca2.pem",
-        
+
 		"--otlp-grpc-tls-min-version", "1.3",
 	}
 
