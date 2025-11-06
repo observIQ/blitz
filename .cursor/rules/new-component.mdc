@@ -1,0 +1,77 @@
+---
+alwaysApply: true
+---
+
+## New Component Development (Generators or Outputs)
+
+This rule describes how to add a new component to Blitz, either a generator or an output, ensuring consistency across code, configuration, tests, and docs.
+
+### Scope
+- Components covered: generators (under `generator/`) and outputs (under `output/`).
+- Examples: `generator/foo`, `output/bar`.
+
+### Package and Code Structure
+- Implement each new component in its own Go package:
+  - Generators: `generator/<name>`
+  - Outputs: `output/<name>`
+- Follow the existing component API patterns:
+  - Generators export `New(logger, workers, rate, ...)` and implement the generator interface.
+  - Outputs export `New(logger, host, port, workers, ... )` and implement `output.Output`.
+- Adhere to Uber Go Style; use camelCase struct tags and prefer `any` over `interface{}`.
+- Ensure no unused imports or variables and keep code readable with meaningful names.
+
+### Configuration
+- Define configuration types and validation in `internal/config/`:
+  - Add a new config struct (e.g., `FooOutputConfig` or `BarGeneratorConfig`) with `yaml` and `mapstructure` tags.
+  - Add validation methods (e.g., `Validate() error`) mirroring existing patterns.
+  - If the component introduces a new top-level selectable type, add an `OutputType` or `GeneratorType` value in `internal/config/output.go` or `internal/config/generator.go` respectively and include it in validation.
+
+### Overrides (flags/env)
+- Update `internal/config/override.go`:
+  - Add default overrides for the new config fields using `NewOverride`.
+  - If the component has TLS options, add dedicated override helpers similar to existing TCP/OTLP helpers.
+  - Keep flag and env names consistent with our naming helpers (`createFlagName` and `createEnvName`).
+- Update `internal/config/override_test.go` to include:
+  - Defaults populated into the config struct.
+  - Flag-based overrides.
+  - Environment variable overrides.
+
+### Wiring in main
+- Update `cmd/blitz/main.go`:
+  - Extend `switch` over `cfg.Output.Type` or `cfg.Generator.Type` to construct the new component.
+  - Convert and pass any TLS config when applicable.
+  - Ensure errors are handled consistently with existing branches.
+
+### Documentation
+- Update `docs/configuration.md`:
+  - Add the new component to the valid values list for `output.type` or `generator.type`.
+  - Add a section detailing the component’s configuration table (YAML path, flag, env, default, description).
+  - Include at least one focused example configuration snippet.
+  - Update validation rules if new constraints are introduced.
+
+### Testing
+- Add unit tests in the new package as appropriate.
+- Update `internal/config/override_test.go` as described above.
+- If existing tests rely on exhaustive type lists, update them accordingly.
+- All tests must pass after changes.
+- Before opening a PR, run locally:
+  - `make test` (unit tests)
+  - `make lint` (linters and formatting checks)
+  - `make security` (static security checks)
+  All three must succeed.
+
+### Metrics (if applicable)
+- Use OpenTelemetry metrics following existing naming patterns (e.g., `blitz.<component>.<metric>`).
+- Avoid duplicating transport-level metrics if wrapping an existing transport; prefer wrapper-specific metrics.
+
+### Acceptance Checklist
+- [ ] New package added under `generator/` or `output/` with clear APIs.
+- [ ] Config struct and validation added to `internal/config/`.
+- [ ] Overrides added to `internal/config/override.go` (flags/env), with sensible defaults.
+- [ ] Tests updated in `internal/config/override_test.go` (defaults, flags, envs).
+- [ ] `cmd/blitz/main.go` wiring updated to construct and use the new component.
+- [ ] `docs/configuration.md` updated with configuration tables, examples, and valid type lists.
+- [ ] Lints pass, no unused code, idiomatic Go per Uber style.
+- [ ] `make test` passes locally.
+- [ ] `make lint` passes locally.
+- [ ] `make security` passes locally.

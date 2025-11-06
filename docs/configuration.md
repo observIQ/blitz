@@ -87,7 +87,7 @@ The Palo Alto generator generates realistic Palo Alto firewall syslog entries in
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `otlp-grpc`, `file` |
+| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file` |
 
 #### NOP Output Configuration
 
@@ -131,6 +131,43 @@ TLS is disabled by default. To enable TLS, provide both a certificate and privat
 | `output.udp.host` | `--output-udp-host` | `BLITZ_OUTPUT_UDP_HOST` | `""` | UDP target host (IP address or hostname) |
 | `output.udp.port` | `--output-udp-port` | `BLITZ_OUTPUT_UDP_PORT` | `0` | UDP target port (1-65535) |
 | `output.udp.workers` | `--output-udp-workers` | `BLITZ_OUTPUT_UDP_WORKERS` | `1` | Number of UDP output workers (must be ≥ 0) |
+
+#### Syslog Output Configuration
+
+The Syslog output formats messages per RFC 3164 or RFC 5424 and sends them via UDP or TCP (called "transport"). When using TCP transport, TLS can be enabled.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `output.syslog.host` | `--output-syslog-host` | `BLITZ_OUTPUT_SYSLOG_HOST` | `""` | Syslog target host (IP address or hostname) |
+| `output.syslog.port` | `--output-syslog-port` | `BLITZ_OUTPUT_SYSLOG_PORT` | `0` | Syslog target port (1-65535) |
+| `output.syslog.transport` | `--output-syslog-transport` | `BLITZ_OUTPUT_SYSLOG_TRANSPORT` | `udp` | Transport: `udp` or `tcp` |
+| `output.syslog.rfc` | `--output-syslog-rfc` | `BLITZ_OUTPUT_SYSLOG_RFC` | `5424` | Syslog format: `3164` or `5424` |
+| `output.syslog.workers` | `--output-syslog-workers` | `BLITZ_OUTPUT_SYSLOG_WORKERS` | `1` | Number of Syslog output workers (must be ≥ 0) |
+| `output.syslog.facility` | `--output-syslog-facility` | `BLITZ_OUTPUT_SYSLOG_FACILITY` | `1` | Syslog facility (0–23) |
+| `output.syslog.appName` | `--output-syslog-appname` | `BLITZ_OUTPUT_SYSLOG_APPNAME` | `blitz` | App name used in syslog header |
+| `output.syslog.hostname` | `--output-syslog-hostname` | `BLITZ_OUTPUT_SYSLOG_HOSTNAME` | `""` | Hostname used in syslog header |
+| `output.syslog.procId` | `--output-syslog-procid` | `BLITZ_OUTPUT_SYSLOG_PROCID` | `""` | Process ID used in syslog header |
+| `output.syslog.msgId` | `--output-syslog-msgid` | `BLITZ_OUTPUT_SYSLOG_MSGID` | `""` | Message ID used in syslog header |
+| `output.syslog.maxDatagramBytes` | `--output-syslog-maxdatagrambytes` | `BLITZ_OUTPUT_SYSLOG_MAXDATAGRAMBYTES` | `0` | UDP safety limit in bytes; if > 0, messages are truncated to fit |
+
+##### Syslog TLS Configuration (TCP transport only)
+
+TLS is disabled by default. To enable TLS for Syslog over TCP, set `enableTLS: true` and provide certificate and key.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `output.syslog.enableTLS` | `--output-syslog-enable-tls` | `BLITZ_OUTPUT_SYSLOG_ENABLE_TLS` | `false` | Enable TLS for Syslog over TCP |
+| `output.syslog.tls.cert` | `--output-syslog-tls-cert` | `BLITZ_OUTPUT_SYSLOG_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
+| `output.syslog.tls.key` | `--output-syslog-tls-key` | `BLITZ_OUTPUT_SYSLOG_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
+| `output.syslog.tls.ca` | `--output-syslog-tls-ca` | `BLITZ_OUTPUT_SYSLOG_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional |
+| `output.syslog.tls.skipVerify` | `--output-syslog-tls-skip-verify` | `BLITZ_OUTPUT_SYSLOG_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended) |
+| `output.syslog.tls.minVersion` | `--output-syslog-tls-min-version` | `BLITZ_OUTPUT_SYSLOG_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
+
+###### Framing and limitations
+
+- TCP transport currently uses newline-delimited (non-transparent) framing; octet-counting per RFC 6587 is not supported. Many syslog servers accept newline-delimited framing, but if your receiver requires octet-counting, this output will not work as-is.
+- UDP transport sends each formatted message as a single datagram. If `maxDatagramBytes` is set and the message would exceed it, the message is truncated to fit.
+- To avoid breaking framing, embedded CR/LF in messages are replaced with spaces during formatting.
 
 #### File Output Configuration
 
@@ -213,6 +250,31 @@ output:
     host: logs.example.com
     port: 514
     workers: 5
+```
+
+### Syslog over UDP
+
+```yaml
+logging:
+  type: stdout
+  level: info
+
+generator:
+  type: json
+  json:
+    workers: 2
+    rate: 500ms
+
+output:
+  type: syslog
+  syslog:
+    host: logs.example.com
+    port: 514
+    transport: udp
+    rfc: "5424"
+    workers: 2
+    facility: 1
+    appName: blitz
 ```
 
 ### Debug Configuration
@@ -337,6 +399,8 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `output.tcp.port` - Required when using TCP output
 - `output.udp.host` - Required when using UDP output
 - `output.udp.port` - Required when using UDP output
+- `output.syslog.host` - Required when using Syslog output
+- `output.syslog.port` - Required when using Syslog output
 - `output.otlpGrpc.host` - Required when using OTLP gRPC output
 - `output.otlpGrpc.port` - Required when using OTLP gRPC output
 - `output.file.path` - Required when using File output
@@ -350,9 +414,11 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `generator.paloAlto.rate` - Must be > 0
 - `output.tcp.workers` - Must be ≥ 0
 - `output.udp.workers` - Must be ≥ 0
+- `output.syslog.workers` - Must be ≥ 0
 - `output.otlpGrpc.workers` - Must be ≥ 0
 - `output.tcp.port` - Must be between 1 and 65535
 - `output.udp.port` - Must be between 1 and 65535
+- `output.syslog.port` - Must be between 1 and 65535
 - `output.otlpGrpc.port` - Must be between 1 and 65535
 - `output.otlpGrpc.maxQueueSize` - Must be ≥ 0
 - `output.otlpGrpc.maxExportBatchSize` - Must be ≥ 0
@@ -360,7 +426,7 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
 - `logging.type` - Must be `stdout` (only supported type)
 - `generator.type` - Must be one of: `nop`, `json`, `winevt`, `palo-alto`
-- `output.type` - Must be one of: `nop`, `stdout`, `tcp`, `udp`, `otlp-grpc`, `file`
+- `output.type` - Must be one of: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`
 
 ## Error Handling
 
@@ -437,6 +503,26 @@ output:
     host: logs.example.com
     port: 9090
     workers: 3
+    tls:
+      cert: /path/to/cert.pem
+      key: /path/to/key.pem
+      ca:
+        - /path/to/ca.pem
+      skipVerify: false
+      minVersion: "1.2"
+```
+
+### Syslog over TCP with TLS
+
+```yaml
+output:
+  type: syslog
+  syslog:
+    host: logs.example.com
+    port: 6514
+    transport: tcp
+    rfc: "5424"
+    enableTLS: true
     tls:
       cert: /path/to/cert.pem
       key: /path/to/key.pem

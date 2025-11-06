@@ -54,6 +54,25 @@ func TestOverrideDefaults(t *testing.T) {
 					CertificateAuthority: []string{},
 				},
 			},
+			Syslog: SyslogOutputConfig{
+				Host:      "",
+				Port:      0,
+				Transport: SyslogTransport("udp"),
+				RFC:       SyslogRFC("5424"),
+				Workers:   1,
+				Facility:  1,
+				AppName:   "blitz",
+				Hostname:  "",
+				ProcID:    "",
+				MsgID:     "",
+				// default 0 means no truncation
+				MaxDatagramBytes: 0,
+				EnableTLS:        false,
+				TLS: TLS{
+					MinTLSVersion:        "1.2",
+					CertificateAuthority: []string{},
+				},
+			},
 			File: FileOutputConfig{
 				Path:    "",
 				Workers: 1,
@@ -117,6 +136,25 @@ func TestOverrideFlags(t *testing.T) {
 		"--output-tcp-tls-ca", "/path/to/ca1.pem,/path/to/ca2.pem",
 		"--output-tcp-tls-skip-verify", "true",
 		"--output-tcp-tls-min-version", "1.2",
+
+		// Syslog options (including TLS)
+		"--output-syslog-host", "syslog.example.com",
+		"--output-syslog-port", "5514",
+		"--output-syslog-transport", "tcp",
+		"--output-syslog-rfc", "3164",
+		"--output-syslog-workers", "4",
+		"--output-syslog-facility", "3",
+		"--output-syslog-appname", "myapp",
+		"--output-syslog-hostname", "myhost",
+		"--output-syslog-procid", "pid42",
+		"--output-syslog-msgid", "msg42",
+		"--output-syslog-maxdatagrambytes", "1400",
+		"--output-syslog-enable-tls", "true",
+		"--output-syslog-tls-cert", "/path/to/syslog_cert.pem",
+		"--output-syslog-tls-key", "/path/to/syslog_key.pem",
+		"--output-syslog-tls-ca", "/path/to/sys_ca1.pem,/path/to/sys_ca2.pem",
+		"--output-syslog-tls-skip-verify", "true",
+		"--output-syslog-tls-min-version", "1.3",
 
 		// File options
 		"--output-file-path", "/tmp/blitz.log",
@@ -191,6 +229,28 @@ func TestOverrideFlags(t *testing.T) {
 					MinTLSVersion:        "1.2",
 				},
 			},
+			Syslog: SyslogOutputConfig{
+				Host:      "syslog.example.com",
+				Port:      5514,
+				Transport: SyslogTransport("tcp"),
+				RFC:       SyslogRFC("3164"),
+				Workers:   4,
+				Facility:  3,
+				AppName:   "myapp",
+				Hostname:  "myhost",
+				ProcID:    "pid42",
+				MsgID:     "msg42",
+				// set even though TCP ignores it; present for completeness
+				MaxDatagramBytes: 1400,
+				EnableTLS:        true,
+				TLS: TLS{
+					Certificate:          "/path/to/syslog_cert.pem",
+					PrivateKey:           "/path/to/syslog_key.pem",
+					CertificateAuthority: []string{"/path/to/sys_ca1.pem", "/path/to/sys_ca2.pem"},
+					InsecureSkipVerify:   true,
+					MinTLSVersion:        "1.3",
+				},
+			},
 			File: FileOutputConfig{
 				Path:    "/tmp/blitz.log",
 				Workers: 2,
@@ -256,6 +316,25 @@ func TestOverrideEnvs(t *testing.T) {
 	t.Setenv("BLITZ_OUTPUT_TCP_TLS_CA", "/env/ca1.pem,/env/ca2.pem")
 	t.Setenv("BLITZ_OUTPUT_TCP_TLS_SKIP_VERIFY", "true")
 	t.Setenv("BLITZ_OUTPUT_TCP_TLS_MIN_VERSION", "1.3")
+
+	// Syslog + TLS
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_HOST", "syslog.env.example")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_PORT", "6514")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_TRANSPORT", "tcp")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_RFC", "5424")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_WORKERS", "6")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_FACILITY", "4")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_APPNAME", "envapp")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_HOSTNAME", "envhost")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_PROCID", "envpid")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_MSGID", "envmsg")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_MAXDATAGRAMBYTES", "1200")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_ENABLE_TLS", "true")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_TLS_CERT", "/env/syslog_cert.pem")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_TLS_KEY", "/env/syslog_key.pem")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_TLS_CA", "/env/sys_ca1.pem,/env/sys_ca2.pem")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_TLS_SKIP_VERIFY", "false")
+	t.Setenv("BLITZ_OUTPUT_SYSLOG_TLS_MIN_VERSION", "1.2")
 
 	// File
 	t.Setenv("BLITZ_OUTPUT_FILE_PATH", "/env/blitz.log")
@@ -327,6 +406,27 @@ func TestOverrideEnvs(t *testing.T) {
 					CertificateAuthority: []string{"/env/ca1.pem", "/env/ca2.pem"},
 					InsecureSkipVerify:   true,
 					MinTLSVersion:        "1.3",
+				},
+			},
+			Syslog: SyslogOutputConfig{
+				Host:             "syslog.env.example",
+				Port:             6514,
+				Transport:        SyslogTransport("tcp"),
+				RFC:              SyslogRFC("5424"),
+				Workers:          6,
+				Facility:         4,
+				AppName:          "envapp",
+				Hostname:         "envhost",
+				ProcID:           "envpid",
+				MsgID:            "envmsg",
+				MaxDatagramBytes: 1200,
+				EnableTLS:        true,
+				TLS: TLS{
+					Certificate:          "/env/syslog_cert.pem",
+					PrivateKey:           "/env/syslog_key.pem",
+					CertificateAuthority: []string{"/env/sys_ca1.pem", "/env/sys_ca2.pem"},
+					InsecureSkipVerify:   false,
+					MinTLSVersion:        "1.2",
 				},
 			},
 			File: FileOutputConfig{

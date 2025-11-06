@@ -28,6 +28,7 @@ import (
 	"github.com/observiq/blitz/output/nop"
 	otlpgrpc "github.com/observiq/blitz/output/otlp_grpc"
 	stdoutout "github.com/observiq/blitz/output/stdout"
+	syslogout "github.com/observiq/blitz/output/syslog"
 	"github.com/observiq/blitz/output/tcp"
 	"github.com/observiq/blitz/output/udp"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -151,6 +152,35 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create UDP output", zap.Error(err))
+			os.Exit(1)
+		}
+	case config.OutputTypeSyslog:
+		var tlsConfig *tls.Config
+		if strings.ToLower(string(cfg.Output.Syslog.Transport)) == string(config.SyslogTransportTCP) && cfg.Output.Syslog.EnableTLS {
+			var tlsErr error
+			tlsConfig, tlsErr = cfg.Output.Syslog.TLS.Convert()
+			if tlsErr != nil {
+				logger.Error("Failed to convert TLS config for Syslog output", zap.Error(tlsErr))
+				os.Exit(1)
+			}
+		}
+		sysCfg := syslogout.Config{
+			Host:             cfg.Output.Syslog.Host,
+			Port:             cfg.Output.Syslog.Port,
+			Transport:        syslogout.Transport(strings.ToLower(string(cfg.Output.Syslog.Transport))),
+			RFC:              syslogout.RFCMode(cfg.Output.Syslog.RFC),
+			Workers:          cfg.Output.Syslog.Workers,
+			Facility:         cfg.Output.Syslog.Facility,
+			AppName:          cfg.Output.Syslog.AppName,
+			Hostname:         cfg.Output.Syslog.Hostname,
+			ProcID:           cfg.Output.Syslog.ProcID,
+			MsgID:            cfg.Output.Syslog.MsgID,
+			MaxDatagramBytes: cfg.Output.Syslog.MaxDatagramBytes,
+			TLSConfig:        tlsConfig,
+		}
+		outputInstance, err = syslogout.New(logger, sysCfg)
+		if err != nil {
+			logger.Error("Failed to create Syslog output", zap.Error(err))
 			os.Exit(1)
 		}
 	case config.OutputTypeOTLPGrpc:

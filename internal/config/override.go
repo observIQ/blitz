@@ -251,13 +251,24 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.winevt.rate", "rate at which winevt logs are generated per worker", 1*time.Second),
 		NewOverride("generator.paloAlto.workers", "number of palo-alto generator workers", 1),
 		NewOverride("generator.paloAlto.rate", "rate at which palo-alto logs are generated per worker", 1*time.Second),
-		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|otlp-grpc|file", OutputTypeNop),
+		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file", OutputTypeNop),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),
 		NewOverride("output.udp.workers", "number of UDP output workers", 1),
 		NewOverride("output.tcp.host", "TCP output target host", ""),
 		NewOverride("output.tcp.port", "TCP output target port", 0),
 		NewOverride("output.tcp.workers", "number of TCP output workers", 1),
+		NewOverride("output.syslog.host", "Syslog output target host", ""),
+		NewOverride("output.syslog.port", "Syslog output target port", 0),
+		NewOverride("output.syslog.transport", "Syslog transport. One of: tcp|udp", "udp"),
+		NewOverride("output.syslog.rfc", "Syslog RFC format. One of: 3164|5424", "5424"),
+		NewOverride("output.syslog.workers", "number of Syslog output workers", 1),
+		NewOverride("output.syslog.facility", "Syslog facility (0-23)", 1),
+		NewOverride("output.syslog.appName", "Syslog app name", "blitz"),
+		NewOverride("output.syslog.hostname", "Syslog hostname", ""),
+		NewOverride("output.syslog.procId", "Syslog process id", ""),
+		NewOverride("output.syslog.msgId", "Syslog message id", ""),
+		NewOverride("output.syslog.maxDatagramBytes", "Syslog UDP max datagram size (bytes). If <=0, no truncation", 0),
 		NewOverride("output.file.path", "File output destination path", ""),
 		NewOverride("output.file.workers", "number of File output workers", DefaultFileWorkers),
 		NewOverride("output.file.rotation.maxSizeMB", "File output rotation: maximum size in MB before rotation", DefaultFileRotationMaxSizeMB),
@@ -274,6 +285,55 @@ func DefaultOverrides() []*Override {
 	}
 
 	overrides = append(overrides, tcpTLSOverrides()...)
+	overrides = append(overrides, syslogTLSOverrides()...)
 	overrides = append(overrides, otlpGrpcTLSOverrides()...)
 	return overrides
+}
+
+// syslogTLSOverrides creates Syslog TLS overrides
+func syslogTLSOverrides() []*Override {
+	return []*Override{
+		{
+			Field:   "output.syslog.enableTLS",
+			Flag:    "output-syslog-enable-tls",
+			Env:     "BLITZ_OUTPUT_SYSLOG_ENABLE_TLS",
+			Usage:   "enable TLS for Syslog connections (transport tcp only)",
+			Default: false,
+		},
+		{
+			Field:   "output.syslog.tls.cert",
+			Flag:    "output-syslog-tls-cert",
+			Env:     "BLITZ_OUTPUT_SYSLOG_TLS_CERT",
+			Usage:   "the path to the TLS certificate for Syslog TCP connections",
+			Default: "",
+		},
+		{
+			Field:   "output.syslog.tls.key",
+			Flag:    "output-syslog-tls-key",
+			Env:     "BLITZ_OUTPUT_SYSLOG_TLS_KEY",
+			Usage:   "the path to the TLS private key for Syslog TCP connections",
+			Default: "",
+		},
+		{
+			Field:   "output.syslog.tls.ca",
+			Flag:    "output-syslog-tls-ca",
+			Env:     "BLITZ_OUTPUT_SYSLOG_TLS_CA",
+			Usage:   "the path to the TLS CA files for Syslog TCP connections",
+			Default: []string{},
+		},
+		{
+			Field:   "output.syslog.tls.skipVerify",
+			Flag:    "output-syslog-tls-skip-verify",
+			Env:     "BLITZ_OUTPUT_SYSLOG_TLS_SKIP_VERIFY",
+			Usage:   "whether to skip TLS verification for Syslog TCP connections",
+			Default: false,
+		},
+		{
+			Field:   "output.syslog.tls.minVersion",
+			Flag:    "output-syslog-tls-min-version",
+			Env:     "BLITZ_OUTPUT_SYSLOG_TLS_MIN_VERSION",
+			Usage:   "the minimum TLS version to use for Syslog TCP connections. One of: 1.2|1.3",
+			Default: "1.2",
+		},
+	}
 }
