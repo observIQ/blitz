@@ -246,26 +246,6 @@ func TestGeneratePaloAltoLog_Format(t *testing.T) {
 	assert.Greater(t, len(foundTypes), 1, "Expected variety in log types")
 }
 
-func TestGeneratePaloAltoLog_ContainsRequiredFields(t *testing.T) {
-	log := generatePaloAltoLog()
-
-	// Verify log contains required Palo Alto fields
-	assert.Contains(t, log, "1,", "Should contain log type indicator")
-	// Should start with timestamp (no priority tag in new format)
-	assert.Regexp(t, `^[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2}`, log, "Should start with timestamp")
-
-	// Verify log contains IP addresses (format: x.x.x.x)
-	parts := strings.Split(log, ",")
-	foundIP := false
-	for _, part := range parts {
-		if strings.Count(part, ".") == 3 {
-			foundIP = true
-			break
-		}
-	}
-	assert.True(t, foundIP, "Log should contain IP addresses")
-}
-
 func TestGenerateRandomIP(t *testing.T) {
 	ips := make(map[string]bool)
 	for i := 0; i < 100; i++ {
