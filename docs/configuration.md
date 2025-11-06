@@ -163,6 +163,12 @@ TLS is disabled by default. To enable TLS for Syslog over TCP, set `enableTLS: t
 | `output.syslog.tls.skipVerify` | `--output-syslog-tls-skip-verify` | `BLITZ_OUTPUT_SYSLOG_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended) |
 | `output.syslog.tls.minVersion` | `--output-syslog-tls-min-version` | `BLITZ_OUTPUT_SYSLOG_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
 
+###### Framing and limitations
+
+- TCP transport currently uses newline-delimited (non-transparent) framing; octet-counting per RFC 6587 is not supported. Many syslog servers accept newline-delimited framing, but if your receiver requires octet-counting, this output will not work as-is.
+- UDP transport sends each formatted message as a single datagram. If `maxDatagramBytes` is set and the message would exceed it, the message is truncated to fit.
+- To avoid breaking framing, embedded CR/LF in messages are replaced with spaces during formatting.
+
 #### File Output Configuration
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
