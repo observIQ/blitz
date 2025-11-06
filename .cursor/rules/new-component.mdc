@@ -54,6 +54,11 @@ This rule describes how to add a new component to Blitz, either a generator or a
 - Update `internal/config/override_test.go` as described above.
 - If existing tests rely on exhaustive type lists, update them accordingly.
 - All tests must pass after changes.
+- Before opening a PR, run locally:
+  - `make test` (unit tests)
+  - `make lint` (linters and formatting checks)
+  - `make security` (static security checks)
+  All three must succeed.
 
 ### Metrics (if applicable)
 - Use OpenTelemetry metrics following existing naming patterns (e.g., `blitz.<component>.<metric>`).
@@ -67,3 +72,6 @@ This rule describes how to add a new component to Blitz, either a generator or a
 - [ ] `cmd/blitz/main.go` wiring updated to construct and use the new component.
 - [ ] `docs/configuration.md` updated with configuration tables, examples, and valid type lists.
 - [ ] Lints pass, no unused code, idiomatic Go per Uber style.
+- [ ] `make test` passes locally.
+- [ ] `make lint` passes locally.
+- [ ] `make security` passes locally.
