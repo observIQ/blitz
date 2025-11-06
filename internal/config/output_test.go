@@ -60,7 +60,7 @@ func TestOutput_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "invalid output type: invalid, must be one of: nop, tcp, udp, otlp-grpc",
+			errMsg:  "invalid output type: invalid, must be one of: nop, stdout, tcp, udp, otlp-grpc, file",
 		},
 		{
 			name: "TCP output with invalid config",

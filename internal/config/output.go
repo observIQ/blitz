@@ -10,6 +10,8 @@ type OutputType string
 const (
 	// OutputTypeNop represents NOP output
 	OutputTypeNop OutputType = "nop"
+	// OutputTypeStdout represents stdout output
+	OutputTypeStdout OutputType = "stdout"
 	// OutputTypeTCP represents TCP output
 	OutputTypeTCP OutputType = "tcp"
 	// OutputTypeUDP represents UDP output
@@ -44,6 +46,8 @@ func (o *Output) Validate() error {
 	switch o.Type {
 	case OutputTypeNop:
 		// NOP output requires no additional validation
+	case OutputTypeStdout:
+		// Stdout output requires no additional validation
 	case OutputTypeTCP:
 		if err := o.TCP.Validate(); err != nil {
 			return fmt.Errorf("TCP output validation failed: %w", err)
@@ -61,7 +65,7 @@ func (o *Output) Validate() error {
 			return fmt.Errorf("File output validation failed: %w", err)
 		}
 	default:
-		return fmt.Errorf("invalid output type: %s, must be one of: nop, tcp, udp, otlp-grpc, file", o.Type)
+		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, otlp-grpc, file", o.Type)
 	}
 
 	return nil
