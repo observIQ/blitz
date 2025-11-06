@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/output/syslog/ident"
 	"github.com/observiq/blitz/output/tcp"
 	"github.com/observiq/blitz/output/udp"
 	"go.uber.org/zap"
@@ -178,9 +179,18 @@ func (s *Syslog) format(rec output.LogRecord) (string, error) {
 		lt := ts.Local()
 		// Ensure day is space-padded to width 2 (Jan _2 15:04:05)
 		timestamp := lt.Format("Jan _2 15:04:05")
-		hostname := dashIfEmpty(s.cfg.Hostname)
-		app := dashIfEmpty(s.cfg.AppName)
+		hostname := s.cfg.Hostname
+		if strings.TrimSpace(hostname) == "" {
+			hostname = ident.RandomHostname()
+		}
+		app := s.cfg.AppName
+		if strings.TrimSpace(app) == "" {
+			app = ident.RandomAppName()
+		}
 		proc := s.cfg.ProcID
+		if strings.TrimSpace(proc) == "" {
+			proc = ident.RandomProcID()
+		}
 		msg := sanitizeMessage(rec.Message)
 
 		var appPart string
@@ -196,10 +206,22 @@ func (s *Syslog) format(rec output.LogRecord) (string, error) {
 		// RFC 5424: <PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID [STRUCTURED-DATA] MSG
 		// Use RFC3339Nano in UTC per spec recommendation.
 		utc := ts.UTC().Format(time.RFC3339Nano)
-		hostname := dashIfEmpty(s.cfg.Hostname)
-		app := dashIfEmpty(s.cfg.AppName)
-		proc := dashIfEmpty(s.cfg.ProcID)
-		msgID := dashIfEmpty(s.cfg.MsgID)
+		hostname := s.cfg.Hostname
+		if strings.TrimSpace(hostname) == "" {
+			hostname = ident.RandomHostname()
+		}
+		app := s.cfg.AppName
+		if strings.TrimSpace(app) == "" {
+			app = ident.RandomAppName()
+		}
+		proc := s.cfg.ProcID
+		if strings.TrimSpace(proc) == "" {
+			proc = ident.RandomProcID()
+		}
+		msgID := s.cfg.MsgID
+		if strings.TrimSpace(msgID) == "" {
+			msgID = ident.RandomMsgID()
+		}
 		sd := "-" // no structured data initially
 		msg := sanitizeMessage(rec.Message)
 

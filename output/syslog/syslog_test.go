@@ -141,3 +141,75 @@ func TestStopDelegates(t *testing.T) {
 		t.Fatalf("expected stop to delegate to transport")
 	}
 }
+
+func TestRandomDefaultsRFC5424(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	cfg := Config{
+		Host:      "example.com",
+		Port:      514,
+		Transport: TransportUDP,
+		RFC:       RFC5424Mode,
+		Facility:  1,
+		// Intentionally leave Hostname, AppName, ProcID, MsgID empty
+	}
+	stub := &stubOutput{}
+	s := newWithTransport(logger, cfg, stub)
+
+	ts := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	err := s.Write(context.Background(), output.LogRecord{
+		Message: "hello",
+		Metadata: output.LogRecordMetadata{
+			Timestamp: ts,
+			Severity:  "info",
+		},
+	})
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	parts := strings.SplitN(stub.lastWrite, " ", 8)
+	if len(parts) < 7 {
+		t.Fatalf("unexpected formatted message: %q", stub.lastWrite)
+	}
+	hostname := parts[2]
+	app := parts[3]
+	proc := parts[4]
+	msgid := parts[5]
+	if hostname == "-" || app == "-" || proc == "-" || msgid == "-" {
+		t.Fatalf("expected random defaults, got hostname=%q app=%q proc=%q msgid=%q", hostname, app, proc, msgid)
+	}
+}
+
+func TestRandomDefaultsRFC3164(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	cfg := Config{
+		Host:      "example.com",
+		Port:      514,
+		Transport: TransportUDP,
+		RFC:       RFC3164Mode,
+		Facility:  1,
+		// Intentionally leave Hostname, AppName, ProcID empty
+	}
+	stub := &stubOutput{}
+	s := newWithTransport(logger, cfg, stub)
+
+	loc := time.FixedZone("Local", 0)
+	ts := time.Date(2025, 1, 2, 3, 4, 5, 0, loc)
+	err := s.Write(context.Background(), output.LogRecord{
+		Message: "hello",
+		Metadata: output.LogRecordMetadata{
+			Timestamp: ts,
+			Severity:  "warn",
+		},
+	})
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if strings.Contains(stub.lastWrite, " - ") {
+		t.Fatalf("unexpected dash defaults in RFC3164 formatted message: %q", stub.lastWrite)
+	}
+	if !strings.Contains(stub.lastWrite, ": ") {
+		t.Fatalf("expected RFC3164 tag separator ': ' in message: %q", stub.lastWrite)
+	}
+}
