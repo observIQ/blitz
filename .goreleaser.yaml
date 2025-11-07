@@ -30,7 +30,8 @@ builds:
       - -s -w
       - -X github.com/observiq/blitz/internal/build.Version={{ .Version }}
       - -X github.com/observiq/blitz/internal/build.BuildTime={{ .Date }}
-      - -X github.com/observiq/blitz/internal/build.Platform={{ .Os }}/{{ .Arch }}
+      - -X github.com/observiq/blitz/internal/build.BuildPlatform={{ if .Env.BUILD_HOST_OS }}{{ .Env.BUILD_HOST_OS }}/{{ .Env.BUILD_HOST_ARCH }}{{ else }}unknown{{ end }}
+      - -X github.com/observiq/blitz/internal/build.BinaryPlatform={{ .Os }}/{{ .Arch }}
       - -X github.com/observiq/blitz/internal/build.Commit={{ .FullCommit }}
 
 archives:

@@ -1,25 +1,28 @@
 package build
 
 var (
-	Version   string
-	BuildTime string
-	Platform  string
-	Commit    string
+	Version        string
+	BuildTime      string
+	BuildPlatform  string
+	BinaryPlatform string
+	Commit         string
 )
 
 type Info struct {
-	Version   string `json:"version"`
-	BuildTime string `json:"buildTime"`
-	Platform  string `json:"platform"`
-	Commit    string `json:"commit"`
+	Version        string `json:"version"`
+	BuildTime      string `json:"buildTime"`
+	BuildPlatform  string `json:"buildPlatform"`
+	BinaryPlatform string `json:"binaryPlatform"`
+	Commit         string `json:"commit"`
 }
 
 func GetInfo() Info {
 	return Info{
-		Version:   getValue(Version, "unknown"),
-		BuildTime: getValue(BuildTime, "unknown"),
-		Platform:  getValue(Platform, "unknown"),
-		Commit:    getValue(Commit, "unknown"),
+		Version:        getValue(Version, "unknown"),
+		BuildTime:      getValue(BuildTime, "unknown"),
+		BuildPlatform:  getValue(BuildPlatform, "unknown"),
+		BinaryPlatform: getValue(BinaryPlatform, "unknown"),
+		Commit:         getValue(Commit, "unknown"),
 	}
 }
 
