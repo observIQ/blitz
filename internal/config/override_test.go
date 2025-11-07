@@ -46,6 +46,14 @@ func TestOverrideDefaults(t *testing.T) {
 				Workers: 1,
 				Rate:    1 * time.Second,
 			},
+			ApacheCombined: ApacheCombinedGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
+			ApacheError: ApacheErrorGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
 		},
 		Output: Output{
 			UDP: UDPOutputConfig{Host: "", Port: 0, Workers: 1},
@@ -125,8 +133,12 @@ func TestOverrideFlags(t *testing.T) {
 		"--generator-winevt-rate", "200ms",
 		"--generator-paloalto-workers", "6",
 		"--generator-paloalto-rate", "750ms",
-		"--generator-apache-workers", "8",
-		"--generator-apache-rate", "300ms",
+		"--generator-apache-common-workers", "8",
+		"--generator-apache-common-rate", "300ms",
+		"--generator-apache-combined-workers", "10",
+		"--generator-apache-combined-rate", "150ms",
+		"--generator-apache-error-workers", "12",
+		"--generator-apache-error-rate", "200ms",
 		"--output-type", "otlp-grpc",
 
 		// UDP options
@@ -225,6 +237,14 @@ func TestOverrideFlags(t *testing.T) {
 				Workers: 8,
 				Rate:    300 * time.Millisecond,
 			},
+			ApacheCombined: ApacheCombinedGeneratorConfig{
+				Workers: 10,
+				Rate:    150 * time.Millisecond,
+			},
+			ApacheError: ApacheErrorGeneratorConfig{
+				Workers: 12,
+				Rate:    200 * time.Millisecond,
+			},
 		},
 		Output: Output{
 			Type: OutputTypeOTLPGrpc,
@@ -311,8 +331,12 @@ func TestOverrideEnvs(t *testing.T) {
 	t.Setenv("BLITZ_GENERATOR_WINEVT_RATE", "750ms")
 	t.Setenv("BLITZ_GENERATOR_PALOALTO_WORKERS", "7")
 	t.Setenv("BLITZ_GENERATOR_PALOALTO_RATE", "150ms")
-	t.Setenv("BLITZ_GENERATOR_APACHE_WORKERS", "9")
-	t.Setenv("BLITZ_GENERATOR_APACHE_RATE", "450ms")
+	t.Setenv("BLITZ_GENERATOR_APACHE_COMMON_WORKERS", "9")
+	t.Setenv("BLITZ_GENERATOR_APACHE_COMMON_RATE", "450ms")
+	t.Setenv("BLITZ_GENERATOR_APACHE_COMBINED_WORKERS", "11")
+	t.Setenv("BLITZ_GENERATOR_APACHE_COMBINED_RATE", "250ms")
+	t.Setenv("BLITZ_GENERATOR_APACHE_ERROR_WORKERS", "13")
+	t.Setenv("BLITZ_GENERATOR_APACHE_ERROR_RATE", "350ms")
 
 	// Output selection
 	t.Setenv("BLITZ_OUTPUT_TYPE", "file")
@@ -411,6 +435,14 @@ func TestOverrideEnvs(t *testing.T) {
 			Apache: ApacheGeneratorConfig{
 				Workers: 9,
 				Rate:    450 * time.Millisecond,
+			},
+			ApacheCombined: ApacheCombinedGeneratorConfig{
+				Workers: 11,
+				Rate:    250 * time.Millisecond,
+			},
+			ApacheError: ApacheErrorGeneratorConfig{
+				Workers: 13,
+				Rate:    350 * time.Millisecond,
 			},
 		},
 		Output: Output{

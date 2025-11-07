@@ -17,6 +17,8 @@ import (
 
 	"github.com/observiq/blitz/generator"
 	apachegen "github.com/observiq/blitz/generator/apache"
+	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
+	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
 	jsongen "github.com/observiq/blitz/generator/json"
 	gennop "github.com/observiq/blitz/generator/nop"
 	"github.com/observiq/blitz/generator/paloalto"
@@ -301,6 +303,26 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create Apache generator", zap.Error(err))
+			os.Exit(1)
+		}
+	case config.GeneratorTypeApacheCombined:
+		generatorInstance, err = apachecombinedgen.New(
+			logger,
+			cfg.Generator.ApacheCombined.Workers,
+			cfg.Generator.ApacheCombined.Rate,
+		)
+		if err != nil {
+			logger.Error("Failed to create Apache Combined generator", zap.Error(err))
+			os.Exit(1)
+		}
+	case config.GeneratorTypeApacheError:
+		generatorInstance, err = apacheerrorgen.New(
+			logger,
+			cfg.Generator.ApacheError.Workers,
+			cfg.Generator.ApacheError.Rate,
+		)
+		if err != nil {
+			logger.Error("Failed to create Apache Error generator", zap.Error(err))
 			os.Exit(1)
 		}
 	default:

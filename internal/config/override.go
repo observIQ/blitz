@@ -90,6 +90,7 @@ func createFlagName(field string) string {
 // createEnvName creates an environment variable name from a field
 func createEnvName(field string) string {
 	updatedField := strings.ReplaceAll(field, ".", "_")
+	updatedField = strings.ReplaceAll(updatedField, "-", "_")
 	updatedField = strings.ToUpper(updatedField)
 	return "BLITZ_" + updatedField
 }
@@ -245,7 +246,7 @@ func DefaultOverrides() []*Override {
 	overrides := []*Override{
 		NewOverride("logging.type", "output of the log. One of: stdout", LoggingTypeStdout),
 		NewOverride("logging.level", "log level to use. One of: debug|info|warn|error", LogLevelInfo),
-		NewOverride("generator.type", "generator type. One of: nop|json|winevt|palo-alto|apache-common", GeneratorTypeNop),
+		NewOverride("generator.type", "generator type. One of: nop|json|winevt|palo-alto|apache-common|apache-combined|apache-error", GeneratorTypeNop),
 		NewOverride("generator.json.workers", "number of JSON generator workers", 1),
 		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),
 		NewOverride("generator.json.type", "type of log to generate. One of: default|pii", logtypes.LogTypeDefault),
@@ -253,8 +254,12 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.winevt.rate", "rate at which winevt logs are generated per worker", 1*time.Second),
 		NewOverride("generator.paloAlto.workers", "number of palo-alto generator workers", 1),
 		NewOverride("generator.paloAlto.rate", "rate at which palo-alto logs are generated per worker", 1*time.Second),
-		NewOverride("generator.apache.workers", "number of Apache generator workers", 1),
-		NewOverride("generator.apache.rate", "rate at which Apache logs are generated per worker", 1*time.Second),
+		NewOverride("generator.apache-common.workers", "number of Apache Common generator workers", 1),
+		NewOverride("generator.apache-common.rate", "rate at which Apache Common logs are generated per worker", 1*time.Second),
+		NewOverride("generator.apache-combined.workers", "number of Apache Combined generator workers", 1),
+		NewOverride("generator.apache-combined.rate", "rate at which Apache Combined logs are generated per worker", 1*time.Second),
+		NewOverride("generator.apache-error.workers", "number of Apache Error generator workers", 1),
+		NewOverride("generator.apache-error.rate", "rate at which Apache Error logs are generated per worker", 1*time.Second),
 		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file", OutputTypeNop),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),
