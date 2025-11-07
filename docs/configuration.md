@@ -49,32 +49,6 @@ The packaged service runs:
 /usr/bin/blitz --config /etc/blitz/config.yaml
 ```
 
-By default, the packaged configuration logs to `/var/log/blitz/blitz.log` with automatic rotation. This can be overridden via the configuration file, environment variables, or systemd overrides.
-
-To set or override configuration via environment variables using systemd overrides:
-
-1) Create a drop-in override:
-
-```bash
-sudo systemctl edit blitz
-```
-
-2) Add environment variables under the `[Service]` section (see “Environment Variables” naming above):
-
-```
-[Service]
-Environment=BLITZ_OUTPUT_TYPE=tcp
-Environment=BLITZ_OUTPUT_TCP_HOST=127.0.0.1
-Environment=BLITZ_OUTPUT_TCP_PORT=5000
-```
-
-3) Reload and restart:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart blitz
-```
-
 Optionally, you can store many variables in `/etc/blitz/blitz.env` (loaded by the packaged systemd unit by default):
 
 ```
