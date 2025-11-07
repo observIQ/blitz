@@ -8,7 +8,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DOCS_DIR="${REPO_ROOT}/docs/man"
 BIN_DIR="${REPO_ROOT}/dist"
-BIN_PATH="${BIN_DIR}/blitz-man-gen"
 CONFIG_MD="${REPO_ROOT}/docs/configuration.md"
 METRICS_MD="${REPO_ROOT}/docs/metrics.md"
 

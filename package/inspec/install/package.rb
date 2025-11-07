@@ -23,11 +23,13 @@ describe file('/etc/blitz/blitz.env') do
     its('type') { should cmp 'file' }
 end
 
-describe file('/usr/share/doc/blitz/LICENSE') do
+%w[LICENSE configuration.md metrics.md].each do |doc_file|
+describe file("/usr/share/doc/blitz/#{doc_file}") do
     its('mode') { should cmp '0644' }
     its('owner') { should eq 'root' }
     its('group') { should eq 'root' }
     its('type') { should cmp 'file' }
+end
 end
 
 describe file('/usr/lib/systemd/system/blitz.service') do
@@ -52,4 +54,9 @@ describe systemd_service('blitz') do
     it { should be_installed }
     it { should_not be_enabled }
     it { should_not be_running }
+end
+
+describe json(command: 'blitz version') do
+    its(['buildPlatform']) { should eq 'linux/amd64' }
+    its(['binaryPlatform']) { should eq 'linux/amd64' }
 end
