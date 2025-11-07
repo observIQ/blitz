@@ -95,7 +95,7 @@ BLITZ_OUTPUT_TCP_PORT=5000
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common` |
+| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error` |
 
 #### NOP Generator Configuration
 
@@ -138,15 +138,53 @@ The Apache generator creates logs in Apache Common Log Format (CLF), a standard 
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.apache.workers` | `--generator-apache-workers` | `BLITZ_GENERATOR_APACHE_WORKERS` | `1` | Number of Apache generator workers (must be ≥ 1) |
-| `generator.apache.rate` | `--generator-apache-rate` | `BLITZ_GENERATOR_APACHE_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
+| `generator.apache-common.workers` | `--generator-apache-common-workers` | `BLITZ_GENERATOR_APACHE_COMMON_WORKERS` | `1` | Number of Apache Common generator workers (must be ≥ 1) |
+| `generator.apache-common.rate` | `--generator-apache-common-rate` | `BLITZ_GENERATOR_APACHE_COMMON_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
 
 **Example Apache Generator Configuration:**
 
 ```yaml
 generator:
   type: apache-common
-  apache:
+  apache-common:
+    workers: 5
+    rate: 100ms
+```
+
+#### Apache Combined Log Format Generator Configuration
+
+The Apache Combined generator creates logs in Apache Combined Log Format, which extends the Common Log Format by adding the Referer and User-Agent headers. The format follows the specification: `remotehost rfc931 authuser [date] "request" status bytes "referer" "user-agent"`.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `generator.apache-combined.workers` | `--generator-apache-combined-workers` | `BLITZ_GENERATOR_APACHE_COMBINED_WORKERS` | `1` | Number of Apache Combined generator workers (must be ≥ 1) |
+| `generator.apache-combined.rate` | `--generator-apache-combined-rate` | `BLITZ_GENERATOR_APACHE_COMBINED_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
+
+**Example Apache Combined Generator Configuration:**
+
+```yaml
+generator:
+  type: apache-combined
+  apache-combined:
+    workers: 5
+    rate: 100ms
+```
+
+#### Apache Error Log Format Generator Configuration
+
+The Apache Error generator creates logs in Apache Error Log Format, used for logging server errors, warnings, and other diagnostic information. The format follows the specification: `[timestamp] [level] [pid:tid] [client] message`.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `generator.apache-error.workers` | `--generator-apache-error-workers` | `BLITZ_GENERATOR_APACHE_ERROR_WORKERS` | `1` | Number of Apache Error generator workers (must be ≥ 1) |
+| `generator.apache-error.rate` | `--generator-apache-error-rate` | `BLITZ_GENERATOR_APACHE_ERROR_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
+
+**Example Apache Error Generator Configuration:**
+
+```yaml
+generator:
+  type: apache-error
+  apache-error:
     workers: 5
     rate: 100ms
 ```

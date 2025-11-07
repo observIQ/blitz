@@ -18,6 +18,10 @@ const (
 	GeneratorTypePaloAlto GeneratorType = "palo-alto"
 	// GeneratorTypeApache represents Apache Common Log Format generator
 	GeneratorTypeApache GeneratorType = "apache-common"
+	// GeneratorTypeApacheCombined represents Apache Combined Log Format generator
+	GeneratorTypeApacheCombined GeneratorType = "apache-combined"
+	// GeneratorTypeApacheError represents Apache Error Log Format generator
+	GeneratorTypeApacheError GeneratorType = "apache-error"
 )
 
 // Generator contains configuration for log generators
@@ -31,7 +35,11 @@ type Generator struct {
 	// PaloAlto contains Palo Alto generator configuration
 	PaloAlto PaloAltoGeneratorConfig `yaml:"paloAlto,omitempty" mapstructure:"paloAlto,omitempty"`
 	// Apache contains Apache generator configuration
-	Apache ApacheGeneratorConfig `yaml:"apache,omitempty" mapstructure:"apache,omitempty"`
+	Apache ApacheGeneratorConfig `yaml:"apache-common,omitempty" mapstructure:"apache-common,omitempty"`
+	// ApacheCombined contains Apache Combined generator configuration
+	ApacheCombined ApacheCombinedGeneratorConfig `yaml:"apache-combined,omitempty" mapstructure:"apache-combined,omitempty"`
+	// ApacheError contains Apache Error generator configuration
+	ApacheError ApacheErrorGeneratorConfig `yaml:"apache-error,omitempty" mapstructure:"apache-error,omitempty"`
 }
 
 // Validate validates the generator configuration
@@ -60,8 +68,16 @@ func (g *Generator) Validate() error {
 		if err := g.Apache.Validate(); err != nil {
 			return fmt.Errorf("apache generator validation failed: %w", err)
 		}
+	case GeneratorTypeApacheCombined:
+		if err := g.ApacheCombined.Validate(); err != nil {
+			return fmt.Errorf("apache-combined generator validation failed: %w", err)
+		}
+	case GeneratorTypeApacheError:
+		if err := g.ApacheError.Validate(); err != nil {
+			return fmt.Errorf("apache-error generator validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common", g.Type)
+		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error", g.Type)
 	}
 
 	return nil

@@ -31,10 +31,11 @@ This rule describes how to add a new component to Blitz, either a generator or a
   - Add default overrides for the new config fields using `NewOverride`.
   - If the component has TLS options, add dedicated override helpers similar to existing TCP/OTLP helpers.
   - Keep flag and env names consistent with our naming helpers (`createFlagName` and `createEnvName`).
-- Update `internal/config/override_test.go` to include:
-  - Defaults populated into the config struct.
-  - Flag-based overrides.
-  - Environment variable overrides.
+- **CRITICAL: Update `internal/config/override_test.go` to include ALL THREE test cases:**
+  - **TestOverrideDefaults**: Add the new config fields with their default values to the `expectedCfg` struct.
+  - **TestOverrideFlags**: Add command-line flag arguments (e.g., `--generator-foo-workers`, `--generator-foo-rate`) AND update the `expectedCfg` struct to reflect the overridden values (not defaults).
+  - **TestOverrideEnvs**: Add environment variable assignments (e.g., `BLITZ_GENERATOR_FOO_WORKERS`, `BLITZ_GENERATOR_FOO_RATE`) AND update the `expectedCfg` struct to reflect the overridden values (not defaults).
+- **This is absolutely critical** - missing override tests will cause configuration overrides to fail silently in production.
 
 ### Wiring in main
 - Update `cmd/blitz/main.go`:
