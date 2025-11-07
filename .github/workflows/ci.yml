@@ -158,6 +158,9 @@ jobs:
         run: |
           sudo apt-get install -y -f ./dist/linux/blitz_amd64.deb
 
+      - name: Start servce
+        run: sudo systemctl start blitz
+
       - name: Run install tests
         run: |
           sudo cinc-auditor exec package/inspec/install/package.rb

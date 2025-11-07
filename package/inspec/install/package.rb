@@ -56,6 +56,21 @@ describe systemd_service('blitz') do
     it { should_not be_running }
 end
 
+describe directory('/var/log/blitz') do
+    it { should exist }
+    its('mode') { should cmp '0755' }
+    its('owner') { should eq 'blitz' }
+    its('group') { should eq 'blitz' }
+end
+
+describe file('/var/log/blitz/blitz.log') do
+    it { should exist }
+    its('mode') { should cmp '0644' }
+    its('owner') { should eq 'blitz' }
+    its('group') { should eq 'blitz' }
+    its('type') { should cmp 'file' }
+end
+
 describe json(command: 'blitz version') do
     its(['buildPlatform']) { should eq 'linux/amd64' }
     its(['binaryPlatform']) { should eq 'linux/amd64' }

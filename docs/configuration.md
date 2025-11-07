@@ -39,14 +39,17 @@ Configuration files must be in YAML format and can be specified using the `--con
 
 When installed via the Linux packages (`.deb`/`.rpm`), Blitz provides:
 
-- Configuration file at `/etc/blitz/config.yaml`
+- Configuration file at `/etc/blitz/config.yaml` (configured for file logging by default)
 - A systemd service named `blitz`
+- Log directory at `/var/log/blitz` (created by the package)
 
 The packaged service runs:
 
 ```
 /usr/bin/blitz --config /etc/blitz/config.yaml
 ```
+
+By default, the packaged configuration logs to `/var/log/blitz/blitz.log` with automatic rotation. This can be overridden via the configuration file, environment variables, or systemd overrides.
 
 To set or override configuration via environment variables using systemd overrides:
 
@@ -86,8 +89,55 @@ BLITZ_OUTPUT_TCP_PORT=5000
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `logging.type` | `--logging-type` | `BLITZ_LOGGING_TYPE` | `stdout` | Output destination for logs. Currently only `stdout` is supported. |
+| `logging.type` | `--logging-type` | `BLITZ_LOGGING_TYPE` | `stdout` | Output destination for logs. Valid values: `stdout`, `file` |
 | `logging.level` | `--logging-level` | `BLITZ_LOGGING_LEVEL` | `info` | Log level. Valid values: `debug`, `info`, `warn`, `error` |
+
+#### Default Logging Behavior
+
+The default logging behavior depends on how Blitz is deployed:
+
+- **CLI (command-line)**: Logs to `stdout` by default. This is suitable for interactive use and when running Blitz directly.
+- **Linux packages** (`.deb`/`.rpm`): Logs to a file at `/var/log/blitz/blitz.log` with automatic rotation. The package includes a configuration file at `/etc/blitz/config.yaml` that sets file logging.
+- **Containers** (Docker): Logs to `stdout` by default. The container image sets `BLITZ_LOGGING_TYPE=stdout` as an environment variable.
+
+You can override the default behavior by setting `logging.type` in your configuration file, via command-line flags, or environment variables.
+
+#### File Logging Configuration
+
+When `logging.type` is set to `file`, logs are written to a file with automatic rotation.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `logging.file.path` | `--logging-file-path` | `BLITZ_LOGGING_FILE_PATH` | `/var/log/blitz/blitz.log` | File path for log output |
+| `logging.file.rotation.maxSizeMB` | `--logging-file-rotation-maxsizemb` | `BLITZ_LOGGING_FILE_ROTATION_MAXSIZEMB` | `100` | Maximum size in MB before rotation |
+| `logging.file.rotation.maxBackups` | `--logging-file-rotation-maxbackups` | `BLITZ_LOGGING_FILE_ROTATION_MAXBACKUPS` | `7` | Maximum number of backups to retain |
+| `logging.file.rotation.maxAgeDays` | `--logging-file-rotation-maxagedays` | `BLITZ_LOGGING_FILE_ROTATION_MAXAGEDAYS` | `30` | Maximum age in days to retain backups |
+| `logging.file.rotation.compress` | `--logging-file-rotation-compress` | `BLITZ_LOGGING_FILE_ROTATION_COMPRESS` | `true` | Compress rotated files |
+| `logging.file.rotation.localTime` | `--logging-file-rotation-localtime` | `BLITZ_LOGGING_FILE_ROTATION_LOCALTIME` | `false` | Use local time for backup timestamps |
+
+**Example File Logging Configuration:**
+
+```yaml
+logging:
+  type: file
+  level: info
+  file:
+    path: /var/log/blitz/blitz.log
+    rotation:
+      maxSizeMB: 100
+      maxBackups: 7
+      maxAgeDays: 30
+      compress: true
+      localTime: false
+```
+
+**Example Stdout Logging Configuration:**
+
+```yaml
+logging:
+  type: stdout
+  level: info
+```
 
 ### Generator Configuration
 
@@ -532,7 +582,8 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `output.otlpGrpc.maxExportBatchSize` - Must be ≥ 0
 - `output.otlpGrpc.batchTimeout` - Must be > 0 (duration format)
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
-- `logging.type` - Must be `stdout` (only supported type)
+- `logging.type` - Must be one of: `stdout`, `file`
+- `logging.file.path` - Required when `logging.type` is `file`
 - `generator.type` - Must be one of: `nop`, `json`, `winevt`, `palo-alto`
 - `output.type` - Must be one of: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`
 

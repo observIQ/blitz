@@ -1,3 +1,20 @@
 # Blitz configuration
 #
 # See "man blitz" or /usr/share/doc/blitz/configuration.md for usage.
+logging:
+  type: file
+  level: info
+  file:
+    path: /var/log/blitz/blitz.log
+    rotation:
+      maxSizeMB: 100
+      maxBackups: 7
+      maxAgeDays: 30
+      compress: true
+      localTime: false
+
+generator:
+  type: nop
+
+output:
+  type: nop

@@ -111,6 +111,12 @@ nfpms:
           mode: 0644
           owner: root
           group: root
+      - dst: /var/log/blitz
+        type: dir
+        file_info:
+          mode: 0755
+          owner: blitz
+          group: blitz
 
 dockers:
   - id: docker-amd64

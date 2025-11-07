@@ -27,7 +27,20 @@ func TestOverrideDefaults(t *testing.T) {
 
 	// build expected config and compare full struct
 	expectedCfg := &Config{
-		Logging: Logging{Type: LoggingTypeStdout, Level: LogLevelInfo},
+		Logging: Logging{
+			Type:  LoggingTypeStdout,
+			Level: LogLevelInfo,
+			File: LoggingFileConfig{
+				Path: DefaultLoggingFilePath,
+				Rotation: FileRotationConfig{
+					MaxSizeMB:  DefaultFileRotationMaxSizeMB,
+					MaxBackups: DefaultFileRotationMaxBackups,
+					MaxAgeDays: DefaultFileRotationMaxAgeDays,
+					Compress:   true,
+					LocalTime:  false,
+				},
+			},
+		},
 		Generator: Generator{
 			JSON: JSONGeneratorConfig{
 				Workers: 1,
@@ -125,6 +138,12 @@ func TestOverrideFlags(t *testing.T) {
 	args := []string{
 		"--logging-type", "stdout",
 		"--logging-level", "warn",
+		"--logging-file-path", "/test/logging/path.log",
+		"--logging-file-rotation-maxsizemb", "50",
+		"--logging-file-rotation-maxbackups", "5",
+		"--logging-file-rotation-maxagedays", "10",
+		"--logging-file-rotation-compress=false",
+		"--logging-file-rotation-localtime=true",
 		"--generator-type", "json",
 		"--generator-json-workers", "5",
 		"--generator-json-rate", "500ms",
@@ -217,7 +236,20 @@ func TestOverrideFlags(t *testing.T) {
 
 	// build expected config and compare full struct
 	expectedCfg := &Config{
-		Logging: Logging{Type: LoggingTypeStdout, Level: LogLevelWarn},
+		Logging: Logging{
+			Type:  LoggingTypeStdout,
+			Level: LogLevelWarn,
+			File: LoggingFileConfig{
+				Path: "/test/logging/path.log",
+				Rotation: FileRotationConfig{
+					MaxSizeMB:  50,
+					MaxBackups: 5,
+					MaxAgeDays: 10,
+					Compress:   false,
+					LocalTime:  true,
+				},
+			},
+		},
 		Generator: Generator{
 			Type: GeneratorTypeJSON,
 			JSON: JSONGeneratorConfig{
@@ -321,6 +353,12 @@ func TestOverrideEnvs(t *testing.T) {
 	// Logging
 	t.Setenv("BLITZ_LOGGING_TYPE", "stdout")
 	t.Setenv("BLITZ_LOGGING_LEVEL", "error")
+	t.Setenv("BLITZ_LOGGING_FILE_PATH", "/env/logging/path.log")
+	t.Setenv("BLITZ_LOGGING_FILE_ROTATION_MAXSIZEMB", "75")
+	t.Setenv("BLITZ_LOGGING_FILE_ROTATION_MAXBACKUPS", "6")
+	t.Setenv("BLITZ_LOGGING_FILE_ROTATION_MAXAGEDAYS", "20")
+	t.Setenv("BLITZ_LOGGING_FILE_ROTATION_COMPRESS", "false")
+	t.Setenv("BLITZ_LOGGING_FILE_ROTATION_LOCALTIME", "true")
 
 	// Generators
 	t.Setenv("BLITZ_GENERATOR_TYPE", "winevt")
@@ -416,7 +454,20 @@ func TestOverrideEnvs(t *testing.T) {
 
 	// build expected config and compare full struct
 	expectedCfg := &Config{
-		Logging: Logging{Type: LoggingTypeStdout, Level: LogLevelError},
+		Logging: Logging{
+			Type:  LoggingTypeStdout,
+			Level: LogLevelError,
+			File: LoggingFileConfig{
+				Path: "/env/logging/path.log",
+				Rotation: FileRotationConfig{
+					MaxSizeMB:  75,
+					MaxBackups: 6,
+					MaxAgeDays: 20,
+					Compress:   false,
+					LocalTime:  true,
+				},
+			},
+		},
 		Generator: Generator{
 			Type: GeneratorTypeWinevt,
 			JSON: JSONGeneratorConfig{

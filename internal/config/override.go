@@ -244,8 +244,14 @@ func otlpGrpcTLSOverrides() []*Override {
 // DefaultOverrides returns all overrides for the application
 func DefaultOverrides() []*Override {
 	overrides := []*Override{
-		NewOverride("logging.type", "output of the log. One of: stdout", LoggingTypeStdout),
+		NewOverride("logging.type", "output of the log. One of: stdout|file", LoggingTypeStdout),
 		NewOverride("logging.level", "log level to use. One of: debug|info|warn|error", LogLevelInfo),
+		NewOverride("logging.file.path", "file path for file logging", DefaultLoggingFilePath),
+		NewOverride("logging.file.rotation.maxSizeMB", "logging file rotation: maximum size in MB before rotation", DefaultFileRotationMaxSizeMB),
+		NewOverride("logging.file.rotation.maxBackups", "logging file rotation: maximum number of backups to retain", DefaultFileRotationMaxBackups),
+		NewOverride("logging.file.rotation.maxAgeDays", "logging file rotation: maximum age in days to retain backups", DefaultFileRotationMaxAgeDays),
+		NewOverride("logging.file.rotation.compress", "logging file rotation: compress rotated files", true),
+		NewOverride("logging.file.rotation.localTime", "logging file rotation: use local time for backup timestamps", false),
 		NewOverride("generator.type", "generator type. One of: nop|json|winevt|palo-alto|apache-common|apache-combined|apache-error", GeneratorTypeNop),
 		NewOverride("generator.json.workers", "number of JSON generator workers", 1),
 		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),
