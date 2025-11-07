@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/observiq/blitz/generator/json"
+	"github.com/observiq/blitz/internal/generator/logtypes"
 )
 
 // JSONGeneratorConfig contains configuration for JSON log generator
@@ -27,8 +27,11 @@ func (c *JSONGeneratorConfig) Validate() error {
 		return fmt.Errorf("JSON generator rate must be positive, got %v", c.Rate)
 	}
 
-	if c.Type != "" && c.Type != json.LogTypeDefault && c.Type != json.LogTypePII {
-		return fmt.Errorf("JSON generator type must be one of: %s, %s, got %q", json.LogTypeDefault, json.LogTypePII, c.Type)
+	switch c.Type {
+	case "", logtypes.LogTypeDefault, logtypes.LogTypePII:
+		// Valid log type, no error
+	default:
+		return fmt.Errorf("JSON generator type must be one of: %s, %s, got %q", logtypes.LogTypeDefault, logtypes.LogTypePII, c.Type)
 	}
 
 	return nil

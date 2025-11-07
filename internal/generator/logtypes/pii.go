@@ -4,26 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
-
-	jsonlib "github.com/goccy/go-json"
-	"github.com/observiq/blitz/output"
 )
-
-// piiLog represents a PII log entry with banking-related fields
-type piiLog struct {
-	Timestamp time.Time `json:"timestamp"`
-	Level     string    `json:"level"`
-	Message   string    `json:"message"`
-	Event     string    `json:"event,omitempty"`
-	Detail    string    `json:"detail,omitempty"`
-	Type      string    `json:"type,omitempty"`
-	Action    string    `json:"action,omitempty"`
-	Status    string    `json:"status,omitempty"`
-	UserID    string    `json:"user_id"`
-	SSN       string    `json:"ssn,omitempty"`
-	IBAN      string    `json:"iban"`
-	Phone     string    `json:"phone"`
-}
 
 var (
 	actions = []string{
@@ -127,19 +108,20 @@ func generatePhone(r *rand.Rand) string {
 		r.Intn(9000)+1000)
 }
 
-// GeneratePIILog creates a random log entry with PII fields
-func GeneratePIILog() (output.LogRecord, error) {
+// GeneratePIIData creates structured log data for the PII log type
+func GeneratePIIData() (*PIILogData, error) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
 
 	userID := generateUserID(r)
 	iban := generateIBAN(r)
 	phone := generatePhone(r)
 
-	var log piiLog
-	log.Timestamp = time.Now()
-	log.UserID = userID
-	log.IBAN = iban
-	log.Phone = phone
+	data := &PIILogData{
+		TimestampVal: time.Now(),
+		UserIDVal:    userID,
+		IBANVal:      iban,
+		PhoneVal:     phone,
+	}
 
 	if r.Float64() < errorProbability {
 		errorIdx := r.Intn(len(errorMessages))
@@ -156,41 +138,24 @@ func GeneratePIILog() (output.LogRecord, error) {
 			detail = errorDetail
 		}
 
-		log.Level = "ERROR"
-		log.Message = errorMsg
-		log.Event = errorMsg
-		log.Detail = detail
+		data.LevelVal = "ERROR"
+		data.MessageVal = errorMsg
+		data.EventVal = errorMsg
+		data.DetailVal = detail
 	} else {
 		ssn := generateSSN(r)
 		action := actions[r.Intn(len(actions))]
 		status := statuses[r.Intn(len(statuses))]
 		msg := messages[r.Intn(len(messages))]
 
-		log.Level = "INFO"
-		log.Message = msg
-		log.Type = "info"
-		log.Action = action
-		log.Status = status
-		log.SSN = ssn
+		data.LevelVal = "INFO"
+		data.MessageVal = msg
+		data.TypeVal = "info"
+		data.ActionVal = action
+		data.StatusVal = status
+		data.SSNVal = ssn
 	}
 
-	b, err := jsonlib.Marshal(log)
-	if err != nil {
-		return output.LogRecord{}, fmt.Errorf("marshal JSON log: %w", err)
-	}
-
-	return output.LogRecord{
-		Message: string(b),
-		ParseFunc: func(message string) (map[string]any, error) {
-			var parsed map[string]any
-			if err := jsonlib.Unmarshal([]byte(message), &parsed); err != nil {
-				return nil, fmt.Errorf("unmarshal JSON log: %w", err)
-			}
-			return parsed, nil
-		},
-		Metadata: output.LogRecordMetadata{
-			Timestamp: log.Timestamp,
-			Severity:  log.Level,
-		},
-	}, nil
+	return data, nil
 }
+

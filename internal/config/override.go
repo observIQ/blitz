@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/observiq/blitz/generator/json"
+	"github.com/observiq/blitz/internal/generator/logtypes"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -245,14 +245,16 @@ func DefaultOverrides() []*Override {
 	overrides := []*Override{
 		NewOverride("logging.type", "output of the log. One of: stdout", LoggingTypeStdout),
 		NewOverride("logging.level", "log level to use. One of: debug|info|warn|error", LogLevelInfo),
-		NewOverride("generator.type", "generator type. One of: nop|json|winevt|palo-alto", GeneratorTypeNop),
+		NewOverride("generator.type", "generator type. One of: nop|json|winevt|palo-alto|apache-common", GeneratorTypeNop),
 		NewOverride("generator.json.workers", "number of JSON generator workers", 1),
 		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),
-		NewOverride("generator.json.type", "type of log to generate. One of: default|pii", json.LogTypeDefault),
+		NewOverride("generator.json.type", "type of log to generate. One of: default|pii", logtypes.LogTypeDefault),
 		NewOverride("generator.winevt.workers", "number of winevt generator workers", 1),
 		NewOverride("generator.winevt.rate", "rate at which winevt logs are generated per worker", 1*time.Second),
 		NewOverride("generator.paloAlto.workers", "number of palo-alto generator workers", 1),
 		NewOverride("generator.paloAlto.rate", "rate at which palo-alto logs are generated per worker", 1*time.Second),
+		NewOverride("generator.apache.workers", "number of Apache generator workers", 1),
+		NewOverride("generator.apache.rate", "rate at which Apache logs are generated per worker", 1*time.Second),
 		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file", OutputTypeNop),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),
