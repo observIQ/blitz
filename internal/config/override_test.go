@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,164 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
+
+// getTestOverrideFlagsArgs returns the flag arguments used in TestOverrideFlags.
+// This function extracts the flags so they can be validated for coverage.
+func getTestOverrideFlagsArgs() []string {
+	return []string{
+		"--logging-type", "stdout",
+		"--logging-level", "warn",
+		"--logging-file-path", "/test/logging/path.log",
+		"--logging-file-rotation-maxsizemb", "50",
+		"--logging-file-rotation-maxbackups", "5",
+		"--logging-file-rotation-maxagedays", "10",
+		"--logging-file-rotation-compress=false",
+		"--logging-file-rotation-localtime=true",
+		"--generator-type", "json",
+		"--generator-json-workers", "5",
+		"--generator-json-rate", "500ms",
+		"--generator-json-type", "pii",
+		"--generator-winevt-workers", "4",
+		"--generator-winevt-rate", "200ms",
+		"--generator-paloalto-workers", "6",
+		"--generator-paloalto-rate", "750ms",
+		"--generator-apache-common-workers", "8",
+		"--generator-apache-common-rate", "300ms",
+		"--generator-apache-combined-workers", "10",
+		"--generator-apache-combined-rate", "150ms",
+		"--generator-apache-error-workers", "12",
+		"--generator-apache-error-rate", "200ms",
+		"--output-type", "otlp-grpc",
+		"--output-udp-host", "udp.example.com",
+		"--output-udp-port", "1514",
+		"--output-udp-workers", "2",
+		"--output-tcp-host", "127.0.0.1",
+		"--output-tcp-port", "9090",
+		"--output-tcp-workers", "3",
+		"--output-tcp-enable-tls", "true",
+		"--output-tcp-tls-cert", "/path/to/cert.pem",
+		"--output-tcp-tls-key", "/path/to/key.pem",
+		"--output-tcp-tls-ca", "/path/to/ca1.pem,/path/to/ca2.pem",
+		"--output-tcp-tls-skip-verify", "true",
+		"--output-tcp-tls-min-version", "1.2",
+		"--output-syslog-host", "syslog.example.com",
+		"--output-syslog-port", "5514",
+		"--output-syslog-transport", "tcp",
+		"--output-syslog-rfc", "3164",
+		"--output-syslog-workers", "4",
+		"--output-syslog-facility", "3",
+		"--output-syslog-appname", "myapp",
+		"--output-syslog-hostname", "myhost",
+		"--output-syslog-procid", "pid42",
+		"--output-syslog-msgid", "msg42",
+		"--output-syslog-maxdatagrambytes", "1400",
+		"--output-syslog-enable-tls", "true",
+		"--output-syslog-tls-cert", "/path/to/syslog_cert.pem",
+		"--output-syslog-tls-key", "/path/to/syslog_key.pem",
+		"--output-syslog-tls-ca", "/path/to/sys_ca1.pem,/path/to/sys_ca2.pem",
+		"--output-syslog-tls-skip-verify", "true",
+		"--output-syslog-tls-min-version", "1.3",
+		"--output-file-path", "/tmp/blitz.log",
+		"--output-file-workers", "2",
+		"--output-file-rotation-maxsizemb", "50",
+		"--output-file-rotation-maxbackups", "5",
+		"--output-file-rotation-maxagedays", "10",
+		"--output-file-rotation-compress", "true",
+		"--output-file-rotation-localtime", "true",
+		"--output-otlpgrpc-host", "collector.example.com",
+		"--output-otlpgrpc-port", "4317",
+		"--output-otlpgrpc-workers", "3",
+		"--output-otlpgrpc-batchtimeout", "10s",
+		"--output-otlpgrpc-maxqueuesize", "4096",
+		"--output-otlpgrpc-maxexportbatchsize", "1024",
+		"--output-otlpgrpc-enable-tls", "true",
+		"--otlp-grpc-tls-insecure=false",
+		"--otlp-grpc-tls-cert", "/path/to/otlp_cert.pem",
+		"--otlp-grpc-tls-key", "/path/to/otlp_key.pem",
+		"--otlp-grpc-tls-ca", "/path/to/otlp_ca1.pem,/path/to/otlp_ca2.pem",
+		"--otlp-grpc-tls-skip-verify=false",
+		"--otlp-grpc-tls-min-version", "1.3",
+	}
+}
+
+// getTestOverrideEnvs returns the environment variables used in TestOverrideEnvs.
+// This function extracts the env vars so they can be validated for coverage.
+func getTestOverrideEnvs() map[string]string {
+	return map[string]string{
+		"BLITZ_LOGGING_TYPE":                       "stdout",
+		"BLITZ_LOGGING_LEVEL":                      "error",
+		"BLITZ_LOGGING_FILE_PATH":                  "/env/logging/path.log",
+		"BLITZ_LOGGING_FILE_ROTATION_MAXSIZEMB":    "75",
+		"BLITZ_LOGGING_FILE_ROTATION_MAXBACKUPS":   "6",
+		"BLITZ_LOGGING_FILE_ROTATION_MAXAGEDAYS":   "20",
+		"BLITZ_LOGGING_FILE_ROTATION_COMPRESS":     "false",
+		"BLITZ_LOGGING_FILE_ROTATION_LOCALTIME":    "true",
+		"BLITZ_GENERATOR_TYPE":                     "winevt",
+		"BLITZ_GENERATOR_JSON_WORKERS":             "3",
+		"BLITZ_GENERATOR_JSON_RATE":                "250ms",
+		"BLITZ_GENERATOR_JSON_TYPE":                "default",
+		"BLITZ_GENERATOR_WINEVT_WORKERS":           "2",
+		"BLITZ_GENERATOR_WINEVT_RATE":              "750ms",
+		"BLITZ_GENERATOR_PALOALTO_WORKERS":         "7",
+		"BLITZ_GENERATOR_PALOALTO_RATE":            "150ms",
+		"BLITZ_GENERATOR_APACHE_COMMON_WORKERS":    "9",
+		"BLITZ_GENERATOR_APACHE_COMMON_RATE":       "450ms",
+		"BLITZ_GENERATOR_APACHE_COMBINED_WORKERS":  "11",
+		"BLITZ_GENERATOR_APACHE_COMBINED_RATE":     "250ms",
+		"BLITZ_GENERATOR_APACHE_ERROR_WORKERS":     "13",
+		"BLITZ_GENERATOR_APACHE_ERROR_RATE":        "350ms",
+		"BLITZ_OUTPUT_TYPE":                        "file",
+		"BLITZ_OUTPUT_UDP_HOST":                    "udp.env.example",
+		"BLITZ_OUTPUT_UDP_PORT":                    "5514",
+		"BLITZ_OUTPUT_UDP_WORKERS":                 "4",
+		"BLITZ_OUTPUT_TCP_HOST":                    "tcp.env.example",
+		"BLITZ_OUTPUT_TCP_PORT":                    "8081",
+		"BLITZ_OUTPUT_TCP_WORKERS":                 "2",
+		"BLITZ_OUTPUT_TCP_ENABLE_TLS":              "true",
+		"BLITZ_OUTPUT_TCP_TLS_CERT":                "/env/cert.pem",
+		"BLITZ_OUTPUT_TCP_TLS_KEY":                 "/env/key.pem",
+		"BLITZ_OUTPUT_TCP_TLS_CA":                  "/env/ca1.pem,/env/ca2.pem",
+		"BLITZ_OUTPUT_TCP_TLS_SKIP_VERIFY":         "true",
+		"BLITZ_OUTPUT_TCP_TLS_MIN_VERSION":         "1.3",
+		"BLITZ_OUTPUT_SYSLOG_HOST":                 "syslog.env.example",
+		"BLITZ_OUTPUT_SYSLOG_PORT":                 "6514",
+		"BLITZ_OUTPUT_SYSLOG_TRANSPORT":            "tcp",
+		"BLITZ_OUTPUT_SYSLOG_RFC":                  "5424",
+		"BLITZ_OUTPUT_SYSLOG_WORKERS":              "6",
+		"BLITZ_OUTPUT_SYSLOG_FACILITY":             "4",
+		"BLITZ_OUTPUT_SYSLOG_APPNAME":              "envapp",
+		"BLITZ_OUTPUT_SYSLOG_HOSTNAME":             "envhost",
+		"BLITZ_OUTPUT_SYSLOG_PROCID":               "envpid",
+		"BLITZ_OUTPUT_SYSLOG_MSGID":                "envmsg",
+		"BLITZ_OUTPUT_SYSLOG_MAXDATAGRAMBYTES":     "1200",
+		"BLITZ_OUTPUT_SYSLOG_ENABLE_TLS":           "true",
+		"BLITZ_OUTPUT_SYSLOG_TLS_CERT":             "/env/syslog_cert.pem",
+		"BLITZ_OUTPUT_SYSLOG_TLS_KEY":              "/env/syslog_key.pem",
+		"BLITZ_OUTPUT_SYSLOG_TLS_CA":               "/env/sys_ca1.pem,/env/sys_ca2.pem",
+		"BLITZ_OUTPUT_SYSLOG_TLS_SKIP_VERIFY":      "false",
+		"BLITZ_OUTPUT_SYSLOG_TLS_MIN_VERSION":      "1.2",
+		"BLITZ_OUTPUT_FILE_PATH":                   "/env/blitz.log",
+		"BLITZ_OUTPUT_FILE_WORKERS":                "3",
+		"BLITZ_OUTPUT_FILE_ROTATION_MAXSIZEMB":     "75",
+		"BLITZ_OUTPUT_FILE_ROTATION_MAXBACKUPS":    "6",
+		"BLITZ_OUTPUT_FILE_ROTATION_MAXAGEDAYS":    "20",
+		"BLITZ_OUTPUT_FILE_ROTATION_COMPRESS":      "false",
+		"BLITZ_OUTPUT_FILE_ROTATION_LOCALTIME":     "true",
+		"BLITZ_OUTPUT_OTLPGRPC_HOST":               "collector.env.example",
+		"BLITZ_OUTPUT_OTLPGRPC_PORT":               "4318",
+		"BLITZ_OUTPUT_OTLPGRPC_WORKERS":            "5",
+		"BLITZ_OUTPUT_OTLPGRPC_BATCHTIMEOUT":       "15s",
+		"BLITZ_OUTPUT_OTLPGRPC_MAXQUEUESIZE":       "8192",
+		"BLITZ_OUTPUT_OTLPGRPC_MAXEXPORTBATCHSIZE": "2048",
+		"BLITZ_OUTPUT_OTLPGRPC_ENABLE_TLS":         "true",
+		"BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE":       "false",
+		"BLITZ_OUTPUT_OTLPGRPC_TLS_CERT":           "/env/otlp_cert.pem",
+		"BLITZ_OUTPUT_OTLPGRPC_TLS_KEY":            "/env/otlp_key.pem",
+		"BLITZ_OUTPUT_OTLPGRPC_TLS_CA":             "/env/otlp_ca1.pem,/env/otlp_ca2.pem",
+		"BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY":    "false",
+		"BLITZ_OUTPUT_OTLPGRPC_TLS_MIN_VERSION":    "1.2",
+	}
+}
 
 func TestOverrideDefaults(t *testing.T) {
 	flagSet := pflag.NewFlagSet("test", pflag.PanicOnError)
@@ -131,93 +290,12 @@ func TestOverrideDefaults(t *testing.T) {
 
 func TestOverrideFlags(t *testing.T) {
 	// Ensure environment variables cannot interfere with flag-based expectations
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE", "false")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY", "false")
+	// Unset these env vars to prevent interference with flag parsing
+	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE", "")
+	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY", "")
 
 	flagSet := pflag.NewFlagSet("test", pflag.PanicOnError)
-	args := []string{
-		"--logging-type", "stdout",
-		"--logging-level", "warn",
-		"--logging-file-path", "/test/logging/path.log",
-		"--logging-file-rotation-maxsizemb", "50",
-		"--logging-file-rotation-maxbackups", "5",
-		"--logging-file-rotation-maxagedays", "10",
-		"--logging-file-rotation-compress=false",
-		"--logging-file-rotation-localtime=true",
-		"--generator-type", "json",
-		"--generator-json-workers", "5",
-		"--generator-json-rate", "500ms",
-		"--generator-json-type", "pii",
-		"--generator-winevt-workers", "4",
-		"--generator-winevt-rate", "200ms",
-		"--generator-paloalto-workers", "6",
-		"--generator-paloalto-rate", "750ms",
-		"--generator-apache-common-workers", "8",
-		"--generator-apache-common-rate", "300ms",
-		"--generator-apache-combined-workers", "10",
-		"--generator-apache-combined-rate", "150ms",
-		"--generator-apache-error-workers", "12",
-		"--generator-apache-error-rate", "200ms",
-		"--output-type", "otlp-grpc",
-
-		// UDP options
-		"--output-udp-host", "udp.example.com",
-		"--output-udp-port", "1514",
-		"--output-udp-workers", "2",
-
-		// TCP options (including TLS)
-		"--output-tcp-host", "127.0.0.1",
-		"--output-tcp-port", "9090",
-		"--output-tcp-workers", "3",
-		"--output-tcp-enable-tls", "true",
-		"--output-tcp-tls-cert", "/path/to/cert.pem",
-		"--output-tcp-tls-key", "/path/to/key.pem",
-		"--output-tcp-tls-ca", "/path/to/ca1.pem,/path/to/ca2.pem",
-		"--output-tcp-tls-skip-verify", "true",
-		"--output-tcp-tls-min-version", "1.2",
-
-		// Syslog options (including TLS)
-		"--output-syslog-host", "syslog.example.com",
-		"--output-syslog-port", "5514",
-		"--output-syslog-transport", "tcp",
-		"--output-syslog-rfc", "3164",
-		"--output-syslog-workers", "4",
-		"--output-syslog-facility", "3",
-		"--output-syslog-appname", "myapp",
-		"--output-syslog-hostname", "myhost",
-		"--output-syslog-procid", "pid42",
-		"--output-syslog-msgid", "msg42",
-		"--output-syslog-maxdatagrambytes", "1400",
-		"--output-syslog-enable-tls", "true",
-		"--output-syslog-tls-cert", "/path/to/syslog_cert.pem",
-		"--output-syslog-tls-key", "/path/to/syslog_key.pem",
-		"--output-syslog-tls-ca", "/path/to/sys_ca1.pem,/path/to/sys_ca2.pem",
-		"--output-syslog-tls-skip-verify", "true",
-		"--output-syslog-tls-min-version", "1.3",
-
-		// File options
-		"--output-file-path", "/tmp/blitz.log",
-		"--output-file-workers", "2",
-		"--output-file-rotation-maxsizemb", "50",
-		"--output-file-rotation-maxbackups", "5",
-		"--output-file-rotation-maxagedays", "10",
-		"--output-file-rotation-compress", "true",
-		"--output-file-rotation-localtime", "true",
-
-		// OTLP gRPC options (including TLS)
-		"--output-otlpgrpc-host", "collector.example.com",
-		"--output-otlpgrpc-port", "4317",
-		"--output-otlpgrpc-workers", "3",
-		"--output-otlpgrpc-batchtimeout", "10s",
-		"--output-otlpgrpc-maxqueuesize", "4096",
-		"--output-otlpgrpc-maxexportbatchsize", "1024",
-		"--output-otlpgrpc-enable-tls", "true",
-		"--otlp-grpc-tls-cert", "/path/to/otlp_cert.pem",
-		"--otlp-grpc-tls-key", "/path/to/otlp_key.pem",
-		"--otlp-grpc-tls-ca", "/path/to/otlp_ca1.pem,/path/to/otlp_ca2.pem",
-
-		"--otlp-grpc-tls-min-version", "1.3",
-	}
+	args := getTestOverrideFlagsArgs()
 
 	overrides := DefaultOverrides()
 	for _, override := range overrides {
@@ -228,7 +306,7 @@ func TestOverrideFlags(t *testing.T) {
 
 	viper.SetConfigType("yaml")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
+	// NOTE: Do NOT call viper.AutomaticEnv() here - we're testing flag overrides without environment variables
 
 	cfg := NewConfig()
 	err := viper.Unmarshal(cfg)
@@ -350,93 +428,8 @@ func TestOverrideFlags(t *testing.T) {
 }
 
 func TestOverrideEnvs(t *testing.T) {
-	// Logging
-	t.Setenv("BLITZ_LOGGING_TYPE", "stdout")
-	t.Setenv("BLITZ_LOGGING_LEVEL", "error")
-	t.Setenv("BLITZ_LOGGING_FILE_PATH", "/env/logging/path.log")
-	t.Setenv("BLITZ_LOGGING_FILE_ROTATION_MAXSIZEMB", "75")
-	t.Setenv("BLITZ_LOGGING_FILE_ROTATION_MAXBACKUPS", "6")
-	t.Setenv("BLITZ_LOGGING_FILE_ROTATION_MAXAGEDAYS", "20")
-	t.Setenv("BLITZ_LOGGING_FILE_ROTATION_COMPRESS", "false")
-	t.Setenv("BLITZ_LOGGING_FILE_ROTATION_LOCALTIME", "true")
-
-	// Generators
-	t.Setenv("BLITZ_GENERATOR_TYPE", "winevt")
-	t.Setenv("BLITZ_GENERATOR_JSON_WORKERS", "3")
-	t.Setenv("BLITZ_GENERATOR_JSON_RATE", "250ms")
-	t.Setenv("BLITZ_GENERATOR_JSON_TYPE", "default")
-	t.Setenv("BLITZ_GENERATOR_WINEVT_WORKERS", "2")
-	t.Setenv("BLITZ_GENERATOR_WINEVT_RATE", "750ms")
-	t.Setenv("BLITZ_GENERATOR_PALOALTO_WORKERS", "7")
-	t.Setenv("BLITZ_GENERATOR_PALOALTO_RATE", "150ms")
-	t.Setenv("BLITZ_GENERATOR_APACHE_COMMON_WORKERS", "9")
-	t.Setenv("BLITZ_GENERATOR_APACHE_COMMON_RATE", "450ms")
-	t.Setenv("BLITZ_GENERATOR_APACHE_COMBINED_WORKERS", "11")
-	t.Setenv("BLITZ_GENERATOR_APACHE_COMBINED_RATE", "250ms")
-	t.Setenv("BLITZ_GENERATOR_APACHE_ERROR_WORKERS", "13")
-	t.Setenv("BLITZ_GENERATOR_APACHE_ERROR_RATE", "350ms")
-
-	// Output selection
-	t.Setenv("BLITZ_OUTPUT_TYPE", "file")
-
-	// UDP
-	t.Setenv("BLITZ_OUTPUT_UDP_HOST", "udp.env.example")
-	t.Setenv("BLITZ_OUTPUT_UDP_PORT", "5514")
-	t.Setenv("BLITZ_OUTPUT_UDP_WORKERS", "4")
-
-	// TCP + TLS
-	t.Setenv("BLITZ_OUTPUT_TCP_HOST", "tcp.env.example")
-	t.Setenv("BLITZ_OUTPUT_TCP_PORT", "8081")
-	t.Setenv("BLITZ_OUTPUT_TCP_WORKERS", "2")
-	t.Setenv("BLITZ_OUTPUT_TCP_ENABLE_TLS", "true")
-	t.Setenv("BLITZ_OUTPUT_TCP_TLS_CERT", "/env/cert.pem")
-	t.Setenv("BLITZ_OUTPUT_TCP_TLS_KEY", "/env/key.pem")
-	t.Setenv("BLITZ_OUTPUT_TCP_TLS_CA", "/env/ca1.pem,/env/ca2.pem")
-	t.Setenv("BLITZ_OUTPUT_TCP_TLS_SKIP_VERIFY", "true")
-	t.Setenv("BLITZ_OUTPUT_TCP_TLS_MIN_VERSION", "1.3")
-
-	// Syslog + TLS
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_HOST", "syslog.env.example")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_PORT", "6514")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_TRANSPORT", "tcp")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_RFC", "5424")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_WORKERS", "6")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_FACILITY", "4")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_APPNAME", "envapp")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_HOSTNAME", "envhost")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_PROCID", "envpid")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_MSGID", "envmsg")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_MAXDATAGRAMBYTES", "1200")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_ENABLE_TLS", "true")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_TLS_CERT", "/env/syslog_cert.pem")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_TLS_KEY", "/env/syslog_key.pem")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_TLS_CA", "/env/sys_ca1.pem,/env/sys_ca2.pem")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_TLS_SKIP_VERIFY", "false")
-	t.Setenv("BLITZ_OUTPUT_SYSLOG_TLS_MIN_VERSION", "1.2")
-
-	// File
-	t.Setenv("BLITZ_OUTPUT_FILE_PATH", "/env/blitz.log")
-	t.Setenv("BLITZ_OUTPUT_FILE_WORKERS", "3")
-	t.Setenv("BLITZ_OUTPUT_FILE_ROTATION_MAXSIZEMB", "75")
-	t.Setenv("BLITZ_OUTPUT_FILE_ROTATION_MAXBACKUPS", "6")
-	t.Setenv("BLITZ_OUTPUT_FILE_ROTATION_MAXAGEDAYS", "20")
-	t.Setenv("BLITZ_OUTPUT_FILE_ROTATION_COMPRESS", "false")
-	t.Setenv("BLITZ_OUTPUT_FILE_ROTATION_LOCALTIME", "true")
-
-	// OTLP gRPC + TLS
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_HOST", "collector.env.example")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_PORT", "4318")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_WORKERS", "5")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_BATCHTIMEOUT", "15s")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_MAXQUEUESIZE", "8192")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_MAXEXPORTBATCHSIZE", "2048")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_ENABLE_TLS", "true")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE", "false")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_CERT", "/env/otlp_cert.pem")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_KEY", "/env/otlp_key.pem")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_CA", "/env/otlp_ca1.pem,/env/otlp_ca2.pem")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY", "false")
-	t.Setenv("BLITZ_OUTPUT_OTLPGRPC_TLS_MIN_VERSION", "1.2")
+	envs := getTestOverrideEnvs()
+	setEnvs(t, envs)
 
 	flagSet := pflag.NewFlagSet("test", pflag.PanicOnError)
 	overrides := DefaultOverrides()
@@ -564,4 +557,80 @@ func TestOverrideEnvs(t *testing.T) {
 		},
 	}
 	require.Equal(t, expectedCfg, cfg)
+}
+
+// setEnvs sets the given environment variables.
+func setEnvs(t *testing.T, envs map[string]string) {
+	for k, v := range envs {
+		t.Setenv(k, v)
+	}
+}
+
+// TestOverrideCoverage validates that all configuration overrides are tested in
+// TestOverrideFlags and TestOverrideEnvs. This test ensures complete coverage
+// and helps prevent missing test cases when new overrides are added.
+func TestOverrideCoverage(t *testing.T) {
+	allOverrides := DefaultOverrides()
+	testedFlags := getTestOverrideFlagsArgs()
+	testedEnvs := getTestOverrideEnvs()
+
+	// Build sets of tested flags and env vars for quick lookup
+	testedFlagSet := make(map[string]bool)
+	for i := 0; i < len(testedFlags); i++ {
+		if strings.HasPrefix(testedFlags[i], "--") {
+			flagName := strings.TrimPrefix(testedFlags[i], "--")
+			// Handle both --flag value and --flag=value formats
+			if idx := strings.Index(flagName, "="); idx != -1 {
+				flagName = flagName[:idx]
+			}
+			testedFlagSet[flagName] = true
+		}
+	}
+
+	testedEnvSet := make(map[string]bool)
+	for env := range testedEnvs {
+		testedEnvSet[env] = true
+	}
+
+	// Track missing coverage
+	var missingFlags []string
+	var missingEnvs []string
+
+	// Check each override
+	for _, override := range allOverrides {
+		// Check flag coverage
+		if !testedFlagSet[override.Flag] {
+			missingFlags = append(missingFlags, fmt.Sprintf("  - Flag: %s (Field: %s, Env: %s)", override.Flag, override.Field, override.Env))
+		}
+
+		// Check env coverage
+		if !testedEnvSet[override.Env] {
+			missingEnvs = append(missingEnvs, fmt.Sprintf("  - Env: %s (Field: %s, Flag: %s)", override.Env, override.Field, override.Flag))
+		}
+	}
+
+	// Report any missing coverage
+	if len(missingFlags) > 0 || len(missingEnvs) > 0 {
+		var report strings.Builder
+		report.WriteString("Missing test coverage detected:\n\n")
+
+		if len(missingFlags) > 0 {
+			report.WriteString(fmt.Sprintf("Missing flags in TestOverrideFlags (%d):\n", len(missingFlags)))
+			for _, missing := range missingFlags {
+				report.WriteString(missing)
+				report.WriteString("\n")
+			}
+			report.WriteString("\n")
+		}
+
+		if len(missingEnvs) > 0 {
+			report.WriteString(fmt.Sprintf("Missing env vars in TestOverrideEnvs (%d):\n", len(missingEnvs)))
+			for _, missing := range missingEnvs {
+				report.WriteString(missing)
+				report.WriteString("\n")
+			}
+		}
+
+		t.Errorf("%s", report.String())
+	}
 }
