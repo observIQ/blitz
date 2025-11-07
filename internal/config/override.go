@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/observiq/blitz/generator/json"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -247,6 +248,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.type", "generator type. One of: nop|json|winevt|palo-alto", GeneratorTypeNop),
 		NewOverride("generator.json.workers", "number of JSON generator workers", 1),
 		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),
+		NewOverride("generator.json.type", "type of log to generate. One of: default|pii", json.LogTypeDefault),
 		NewOverride("generator.winevt.workers", "number of winevt generator workers", 1),
 		NewOverride("generator.winevt.rate", "rate at which winevt logs are generated per worker", 1*time.Second),
 		NewOverride("generator.paloAlto.workers", "number of palo-alto generator workers", 1),

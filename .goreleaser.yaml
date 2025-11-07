@@ -28,6 +28,10 @@ builds:
       - timetzdata
     ldflags:
       - -s -w
+      - -X github.com/observiq/blitz/internal/build.Version={{ .Version }}
+      - -X github.com/observiq/blitz/internal/build.BuildTime={{ .Date }}
+      - -X github.com/observiq/blitz/internal/build.Platform={{ .Os }}/{{ .Arch }}
+      - -X github.com/observiq/blitz/internal/build.Commit={{ .FullCommit }}
 
 archives:
   - id: archive

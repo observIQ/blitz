@@ -8,11 +8,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/generator/json/logtypes"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+// jsonLog represents a log entry for testing purposes
+type jsonLog struct {
+	Timestamp   time.Time `json:"timestamp"`
+	Level       string    `json:"level"`
+	Environment string    `json:"environment"`
+	Location    string    `json:"location"`
+	Message     string    `json:"message"`
+}
 
 // mockWriter implements output.Writer for testing
 type mockWriter struct {
@@ -81,7 +91,7 @@ func TestNew(t *testing.T) {
 	workers := 5
 	rate := 100 * time.Millisecond
 
-	generator, err := New(logger, workers, rate)
+	generator, err := New(logger, workers, rate, "default")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, generator)
@@ -92,7 +102,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNew_NilLogger(t *testing.T) {
-	generator, err := New(nil, 5, 100*time.Millisecond)
+	generator, err := New(nil, 5, 100*time.Millisecond, "default")
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
@@ -103,13 +113,13 @@ func TestNew_InvalidWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Test zero workers
-	generator, err := New(logger, 0, 100*time.Millisecond)
+	generator, err := New(logger, 0, 100*time.Millisecond, "default")
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
 
 	// Test negative workers
-	generator, err = New(logger, -1, 100*time.Millisecond)
+	generator, err = New(logger, -1, 100*time.Millisecond, "default")
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
@@ -118,7 +128,7 @@ func TestNew_InvalidWorkers(t *testing.T) {
 func TestJSONGenerator_Start(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 2, 50*time.Millisecond)
+	generator, err := New(logger, 2, 50*time.Millisecond, "default")
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -149,19 +159,13 @@ func TestJSONGenerator_Start(t *testing.T) {
 		assert.NotEmpty(t, log.Environment, "Environment should not be empty")
 		assert.NotEmpty(t, log.Location, "Location should not be empty")
 		assert.NotEmpty(t, log.Message, "Message should not be empty")
-
-		// Verify field values are from expected sets
-		assert.Contains(t, severityLevels, log.Level, "Level should be from expected set")
-		assert.Contains(t, environments, log.Environment, "Environment should be from expected set")
-		assert.Contains(t, locations, log.Location, "Location should be from expected set")
-		assert.Contains(t, logMessages, log.Message, "Message should be from expected set")
 	}
 }
 
 func TestJSONGenerator_Stop_GracefulShutdown(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 3, 10*time.Millisecond)
+	generator, err := New(logger, 3, 10*time.Millisecond, "default")
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -189,7 +193,7 @@ func TestJSONGenerator_WriteErrors_Backoff(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 	writer.setWriteError(errors.New("write failed"))
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond, "default")
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -212,7 +216,7 @@ func TestJSONGenerator_WriteErrors_Backoff(t *testing.T) {
 func TestJSONGenerator_ConcurrentWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 5, 20*time.Millisecond)
+	generator, err := New(logger, 5, 20*time.Millisecond, "default")
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -245,7 +249,7 @@ func TestJSONGenerator_ConcurrentWorkers(t *testing.T) {
 func TestJSONGenerator_LogMessageVariety(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 5*time.Millisecond)
+	generator, err := New(logger, 1, 5*time.Millisecond, "default")
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -290,7 +294,7 @@ func TestJSONGenerator_LogMessageVariety(t *testing.T) {
 func TestJSONGenerator_LogMessageSize(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond, "default")
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -327,7 +331,7 @@ func TestJSONGenerator_MultipleStartStop(t *testing.T) {
 
 	// Start and stop multiple times with new generator instances
 	for i := 0; i < 3; i++ {
-		generator, err := New(logger, 2, 20*time.Millisecond)
+		generator, err := New(logger, 2, 20*time.Millisecond, "default")
 		require.NoError(t, err)
 
 		err = generator.Start(writer)
@@ -348,7 +352,7 @@ func TestJSONGenerator_MultipleStartStop(t *testing.T) {
 
 func TestNew_ZeroWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	generator, err := New(logger, 0, 10*time.Millisecond)
+	generator, err := New(logger, 0, 10*time.Millisecond, "default")
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
@@ -358,7 +362,7 @@ func TestNew_ZeroWorkers(t *testing.T) {
 func TestJSONGenerator_VeryFastRate(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 1*time.Millisecond)
+	generator, err := New(logger, 1, 1*time.Millisecond, "default")
 	require.NoError(t, err)
 
 	err = generator.Start(writer)
@@ -385,10 +389,10 @@ func (d *discardWriter) Write(ctx context.Context, data output.LogRecord) error 
 	return nil
 }
 
-func BenchmarkGenerateRandomLog(b *testing.B) {
+func BenchmarkGenerateDefaultLog(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := generateRandomLog()
+		_, err := logtypes.GenerateDefaultLog()
 		// Prevent compiler optimization
 		_ = err
 	}

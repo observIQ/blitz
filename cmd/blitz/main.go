@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,10 +16,11 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/generator"
-	"github.com/observiq/blitz/generator/json"
+	jsongen "github.com/observiq/blitz/generator/json"
 	gennop "github.com/observiq/blitz/generator/nop"
 	"github.com/observiq/blitz/generator/paloalto"
 	"github.com/observiq/blitz/generator/winevt"
+	"github.com/observiq/blitz/internal/build"
 	"github.com/observiq/blitz/internal/config"
 	"github.com/observiq/blitz/internal/logging"
 	"github.com/observiq/blitz/internal/service"
@@ -38,6 +40,18 @@ import (
 )
 
 func main() {
+	// Handle version command
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		info := build.GetInfo()
+		jsonData, err := json.MarshalIndent(info, "", "  ")
+		if err != nil {
+			fmt.Printf("Failed to marshal version info: %s\n", err.Error())
+			os.Exit(1)
+		}
+		fmt.Println(string(jsonData))
+		os.Exit(0)
+	}
+
 	// Bind overrides to flags and environment variables
 	flags := pflag.NewFlagSet("blitz", pflag.ExitOnError)
 
@@ -248,10 +262,11 @@ func main() {
 			os.Exit(1)
 		}
 	case config.GeneratorTypeJSON:
-		generatorInstance, err = json.New(
+		generatorInstance, err = jsongen.New(
 			logger,
 			cfg.Generator.JSON.Workers,
 			cfg.Generator.JSON.Rate,
+			cfg.Generator.JSON.Type,
 		)
 		if err != nil {
 			logger.Error("Failed to create JSON generator", zap.Error(err))
