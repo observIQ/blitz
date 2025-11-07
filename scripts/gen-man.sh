@@ -45,13 +45,45 @@ fi
 TMP_MD="$(mktemp)"
 trap 'rm -f "${TMP_MD}"' EXIT
 
-# Create a combined markdown and append the configuration and metrics documents as-is
+# Collect component documentation files
+GENERATOR_DOCS="${REPO_ROOT}/docs/generator"
+OUTPUT_DOCS="${REPO_ROOT}/docs/output"
+
+# Create a combined markdown and append the configuration, metrics, and component documents
+# Strip the Table of Contents from configuration.md for man page (TOC is not useful in man pages)
 {
   cat "${DOCS_DIR}/blitz.1.md"
   echo
-  cat "${CONFIG_MD}"
+  # Remove TOC section (from "## Table of Contents" to the blank line before "Blitz supports configuration")
+  sed '/^## Table of Contents$/,/^Blitz supports configuration/{ /^Blitz supports configuration/!d; }' "${CONFIG_MD}"
   echo
   cat "${METRICS_MD}"
+  echo
+  echo "# Components"
+  echo
+  echo "## Generators"
+  echo
+  # Add generator docs in alphabetical order
+  if [ -d "${GENERATOR_DOCS}" ]; then
+    while IFS= read -r doc; do
+      if [ -f "${doc}" ]; then
+        cat "${doc}"
+        echo
+      fi
+    done < <(find "${GENERATOR_DOCS}" -maxdepth 1 -name "*.md" -type f 2>/dev/null | sort)
+  fi
+  echo
+  echo "## Outputs"
+  echo
+  # Add output docs in alphabetical order
+  if [ -d "${OUTPUT_DOCS}" ]; then
+    while IFS= read -r doc; do
+      if [ -f "${doc}" ]; then
+        cat "${doc}"
+        echo
+      fi
+    done < <(find "${OUTPUT_DOCS}" -maxdepth 1 -name "*.md" -type f 2>/dev/null | sort)
+  fi
 } > "${TMP_MD}"
 
 echo "Generating ${OUT_MAN} from combined markdown..."

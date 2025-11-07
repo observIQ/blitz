@@ -14,6 +14,8 @@ Requirements:
   - `docs/metrics.md` (update metrics for new/changed components)
   - `docs/man/blitz.1.md`
 - The source of truth for the man page is `docs/man/blitz.1.md`. Do not edit generated files.
+- **README.md Components section**: All component entries (generators and outputs) MUST include links to their documentation using full GitHub URLs: `https://github.com/observiq/blitz/blob/main/docs/generator/<name>.md` or `https://github.com/observiq/blitz/blob/main/docs/output/<name>.md`
+- **Configuration Documentation TOC**: The table of contents (TOC) in `docs/configuration.md` MUST be updated whenever configuration options, sections, or examples are added, removed, or renamed. The TOC must accurately reflect all sections and subsections in the document.
 
 Man page generation:
 - Generated files (`docs/man/blitz.1`, `docs/man/blitz.1.gz`) are not committed; they are reproducibly generated.
@@ -29,6 +31,7 @@ Tooling:
 
 Acceptance checklist for CLI changes:
 - [ ] `docs/configuration.md` updated for flags/behavior changes.
+- [ ] Table of contents in `docs/configuration.md` updated to reflect any new, removed, or renamed sections.
 - [ ] `docs/man/blitz.1.md` updated to reflect changes.
 - [ ] `make man` succeeds locally.
 - [ ] CI man generation step passes.

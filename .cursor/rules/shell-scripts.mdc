@@ -1,0 +1,27 @@
+---
+alwaysApply: true
+---
+
+Title: Shell script quality and validation
+
+Scope:
+- Applies to all shell scripts (`.sh` files) in the codebase.
+- Includes scripts in `scripts/`, `package/scripts/`, and any other directories.
+
+Requirements:
+- **Shellcheck validation**: Any modification to a shell script MUST be validated using `shellcheck`.
+- **MANDATORY**: When editing or creating a shell script, the AI assistant MUST run `shellcheck <path to script>` to validate the script.
+- All shellcheck errors and warnings must be addressed before the changes are considered complete.
+- Shellcheck should be run automatically as part of the editing workflow for shell scripts.
+
+Tooling:
+- `shellcheck` must be installed and available in the PATH.
+- If `shellcheck` is not installed, install it using your system's package manager:
+  - macOS: `brew install shellcheck`
+  - Linux: `apt-get install shellcheck` or `yum install shellcheck`
+  - Or download from: https://github.com/koalaman/shellcheck
+
+Acceptance checklist for shell script changes:
+- [ ] `shellcheck <path to script>` passes without errors.
+- [ ] All shellcheck warnings have been addressed or explicitly ignored with appropriate comments.
+- [ ] Script follows shell scripting best practices (proper quoting, error handling, etc.).

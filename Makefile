@@ -44,4 +44,4 @@ man-check: man
 	@git diff --quiet || (echo "Man pages are out of date. Run 'make man' and commit the changes." && git --no-pager status --porcelain && exit 1)
 
 release-test:
-	@eval $$(./scripts/set-build-host.sh) && goreleaser release --clean --skip=publish --parallelism=2 --skip=sign --snapshot
+	@source ./scripts/set-build-host.sh && goreleaser release --clean --skip=publish --parallelism=2 --skip=sign --snapshot
