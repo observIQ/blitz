@@ -40,7 +40,7 @@ var (
 
 // Logging contains configuration for logging.
 type Logging struct {
-	// Type indicates where logs should be written, defaulting to "file".
+	// Type indicates where logs should be written.
 	Type string `mapstructure:"type" yaml:"type,omitempty"`
 
 	// Level is the log level to use, defaulting to "info".

@@ -14,18 +14,11 @@ import (
 )
 
 // NewLogger returns a new Logger for the specified config.
-// If the config is empty, it defaults to file at info level.
 func NewLogger(cfg loaderconfig.Logging) (*zap.Logger, error) {
 	level := parseZapLevel(cfg.Level)
 
-	// Default to file when empty.
-	output := strings.TrimSpace(strings.ToLower(cfg.Type))
-	if output == "" {
-		output = loaderconfig.LoggingTypeFile
-	}
-
 	var core zapcore.Core
-	switch output {
+	switch cfg.Type {
 	case loaderconfig.LoggingTypeStdout:
 		core = newStdoutCore(level)
 	case loaderconfig.LoggingTypeFile:
