@@ -53,7 +53,10 @@ end
 describe systemd_service('blitz') do
     it { should be_installed }
     it { should_not be_enabled }
-    it { should_not be_running }
+
+    # Service does not auto start, however, CI
+    # will start it before running inspec.
+    it { should be_running }
 end
 
 describe directory('/var/log/blitz') do
@@ -65,7 +68,7 @@ end
 
 describe file('/var/log/blitz/blitz.log') do
     it { should exist }
-    its('mode') { should cmp '0644' }
+    its('mode') { should cmp '0600' }
     its('owner') { should eq 'blitz' }
     its('group') { should eq 'blitz' }
     its('type') { should cmp 'file' }
