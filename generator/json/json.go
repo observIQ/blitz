@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/observiq/blitz/generator/json/logtypes"
+	jsonlib "github.com/goccy/go-json"
+	"github.com/observiq/blitz/internal/generator/logtypes"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -17,9 +18,9 @@ import (
 
 const (
 	// LogTypeDefault is the default log type
-	LogTypeDefault = "default"
+	LogTypeDefault = logtypes.LogTypeDefault
 	// LogTypePII is the PII log type
-	LogTypePII = "pii"
+	LogTypePII = logtypes.LogTypePII
 )
 
 // JSONLogGenerator generates JSON log data with configurable workers
@@ -187,19 +188,34 @@ func (g *JSONLogGenerator) worker(workerID int, writer output.Writer) {
 
 // generateAndWriteLog generates a random log and writes it
 func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID int) error {
-	var logRecord output.LogRecord
+	var logData logtypes.LogData
 	var err error
 
 	switch g.logType {
 	case LogTypePII:
-		logRecord, err = logtypes.GeneratePIILog()
+		var piiData *logtypes.PIILogData
+		piiData, err = logtypes.GeneratePIIData()
+		if err == nil {
+			logData = piiData
+		}
 	default:
-		logRecord, err = logtypes.GenerateDefaultLog()
+		var defaultData *logtypes.DefaultLogData
+		defaultData, err = logtypes.GenerateDefaultLogData()
+		if err == nil {
+			logData = defaultData
+		}
 	}
 
 	if err != nil {
 		g.recordWriteError("unknown", err)
 		return fmt.Errorf("generate random log: %w", err)
+	}
+
+	// Format log data as JSON
+	logRecord, err := formatAsJSON(logData)
+	if err != nil {
+		g.recordWriteError("unknown", err)
+		return fmt.Errorf("format log as JSON: %w", err)
 	}
 
 	// Record logs generated counter
@@ -226,6 +242,79 @@ func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID in
 	}
 
 	return nil
+}
+
+// formatAsJSON converts LogData to a JSON-formatted LogRecord
+func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
+	var jsonData any
+	var timestamp time.Time
+	var severity string
+
+	switch d := data.(type) {
+	case *logtypes.DefaultLogData:
+		jsonData = map[string]any{
+			"timestamp":   d.TimestampVal,
+			"level":       d.LevelVal,
+			"environment": d.EnvironmentVal,
+			"location":    d.LocationVal,
+			"message":     d.MessageVal,
+		}
+		timestamp = d.TimestampVal
+		severity = d.LevelVal
+	case *logtypes.PIILogData:
+		jsonData = map[string]any{
+			"timestamp": d.TimestampVal,
+			"level":     d.LevelVal,
+			"message":   d.MessageVal,
+			"user_id":   d.UserIDVal,
+			"iban":      d.IBANVal,
+			"phone":     d.PhoneVal,
+		}
+		timestamp = d.TimestampVal
+		severity = d.LevelVal
+
+		// Add optional fields if they are not empty
+		if d.EventVal != "" {
+			jsonData.(map[string]any)["event"] = d.EventVal
+		}
+		if d.DetailVal != "" {
+			jsonData.(map[string]any)["detail"] = d.DetailVal
+		}
+		if d.TypeVal != "" {
+			jsonData.(map[string]any)["type"] = d.TypeVal
+		}
+		if d.ActionVal != "" {
+			jsonData.(map[string]any)["action"] = d.ActionVal
+		}
+		if d.StatusVal != "" {
+			jsonData.(map[string]any)["status"] = d.StatusVal
+		}
+		if d.SSNVal != "" {
+			jsonData.(map[string]any)["ssn"] = d.SSNVal
+		}
+	default:
+		return output.LogRecord{}, fmt.Errorf("unsupported log data type: %T", data)
+	}
+
+	b, err := jsonlib.Marshal(jsonData)
+	if err != nil {
+		return output.LogRecord{}, fmt.Errorf("marshal JSON log: %w", err)
+	}
+
+	return output.LogRecord{
+		Message: string(b),
+		ParseFunc: func(message string) (map[string]any, error) {
+			var parsed map[string]any
+			if err := jsonlib.Unmarshal([]byte(message), &parsed); err != nil {
+				return nil, fmt.Errorf("unmarshal JSON log: %w", err)
+			}
+			return parsed, nil
+		},
+		Metadata: output.LogRecordMetadata{
+			Timestamp: timestamp,
+			Severity:  severity,
+		},
+	}, nil
 }
 
 // recordWriteError records metrics for write errors

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/observiq/blitz/generator/json/logtypes"
+	"github.com/observiq/blitz/internal/generator/logtypes"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -392,7 +392,7 @@ func (d *discardWriter) Write(ctx context.Context, data output.LogRecord) error 
 func BenchmarkGenerateDefaultLog(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := logtypes.GenerateDefaultLog()
+		_, err := logtypes.GenerateDefaultLogData()
 		// Prevent compiler optimization
 		_ = err
 	}

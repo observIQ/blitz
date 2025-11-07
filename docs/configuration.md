@@ -95,7 +95,7 @@ BLITZ_OUTPUT_TCP_PORT=5000
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto` |
+| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common` |
 
 #### NOP Generator Configuration
 
@@ -131,6 +131,25 @@ The Palo Alto generator generates realistic Palo Alto firewall syslog entries in
 |-----------|-----------|---------------------|---------|-------------|
 | `generator.paloAlto.workers` | `--generator-paloalto-workers` | `BLITZ_GENERATOR_PALOALTO_WORKERS` | `1` | Number of Palo Alto generator workers (must be ≥ 1) |
 | `generator.paloAlto.rate` | `--generator-paloalto-rate` | `BLITZ_GENERATOR_PALOALTO_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
+
+#### Apache Common Log Format Generator Configuration
+
+The Apache generator creates logs in Apache Common Log Format (CLF), a standard format used by Apache HTTP Server and many other web servers. The format follows the specification: `remotehost rfc931 authuser [date] "request" status bytes`.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `generator.apache.workers` | `--generator-apache-workers` | `BLITZ_GENERATOR_APACHE_WORKERS` | `1` | Number of Apache generator workers (must be ≥ 1) |
+| `generator.apache.rate` | `--generator-apache-rate` | `BLITZ_GENERATOR_APACHE_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
+
+**Example Apache Generator Configuration:**
+
+```yaml
+generator:
+  type: apache-common
+  apache:
+    workers: 5
+    rate: 100ms
+```
 
 ### Output Configuration
 

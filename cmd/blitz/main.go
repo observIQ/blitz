@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/generator"
+	apachegen "github.com/observiq/blitz/generator/apache"
 	jsongen "github.com/observiq/blitz/generator/json"
 	gennop "github.com/observiq/blitz/generator/nop"
 	"github.com/observiq/blitz/generator/paloalto"
@@ -290,6 +291,16 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create palo-alto generator", zap.Error(err))
+			os.Exit(1)
+		}
+	case config.GeneratorTypeApache:
+		generatorInstance, err = apachegen.New(
+			logger,
+			cfg.Generator.Apache.Workers,
+			cfg.Generator.Apache.Rate,
+		)
+		if err != nil {
+			logger.Error("Failed to create Apache generator", zap.Error(err))
 			os.Exit(1)
 		}
 	default:

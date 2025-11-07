@@ -1,22 +1,9 @@
 package logtypes
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
-
-	jsonlib "github.com/goccy/go-json"
-	"github.com/observiq/blitz/output"
 )
-
-// jsonLog represents a single log entry with random values
-type jsonLog struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Level       string    `json:"level"`
-	Environment string    `json:"environment"`
-	Location    string    `json:"location"`
-	Message     string    `json:"message"`
-}
 
 // severityLevels contains random log severity levels
 var severityLevels = []string{"DEBUG", "INFO", "WARN", "ERROR", "FATAL"}
@@ -155,39 +142,20 @@ var logMessages = []string{
 	"Security orchestration and automation, playbook_count=50, automation_level=80%, response_time=reduced_75%, analyst_productivity=increased_50%, false_positive_reduction=60%, integration_count=100, workflow_efficiency=optimized",
 }
 
-// GenerateDefaultLog creates a random log entry with the default format
-func GenerateDefaultLog() (output.LogRecord, error) {
+// GenerateDefaultLogData creates structured log data for the default log type
+func GenerateDefaultLogData() (*DefaultLogData, error) {
 	// Use fast random generator with gosec nosec comment
 	messageIndex := rand.Intn(len(logMessages))  // #nosec G404
 	levelIndex := rand.Intn(len(severityLevels)) // #nosec G404
 	envIndex := rand.Intn(len(environments))     // #nosec G404
-	locationIndex := rand.Intn(len(locations))   // #nosec G404
+	locationIndex := rand.Intn(len(locations))    // #nosec G404
 
-	j := jsonLog{
-		Timestamp:   time.Now(),
-		Level:       severityLevels[levelIndex],
-		Environment: environments[envIndex],
-		Location:    locations[locationIndex],
-		Message:     logMessages[messageIndex],
-	}
-
-	b, err := jsonlib.Marshal(j)
-	if err != nil {
-		return output.LogRecord{}, fmt.Errorf("marshal JSON log: %w", err)
-	}
-
-	return output.LogRecord{
-		Message: string(b),
-		ParseFunc: func(message string) (map[string]any, error) {
-			var parsed map[string]any
-			if err := jsonlib.Unmarshal([]byte(message), &parsed); err != nil {
-				return nil, fmt.Errorf("unmarshal JSON log: %w", err)
-			}
-			return parsed, nil
-		},
-		Metadata: output.LogRecordMetadata{
-			Timestamp: j.Timestamp,
-			Severity:  j.Level,
-		},
+	return &DefaultLogData{
+		TimestampVal:   time.Now(),
+		LevelVal:       severityLevels[levelIndex],
+		EnvironmentVal: environments[envIndex],
+		LocationVal:    locations[locationIndex],
+		MessageVal:     logMessages[messageIndex],
 	}, nil
 }
+
