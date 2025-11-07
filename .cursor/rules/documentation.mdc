@@ -1,0 +1,34 @@
+---
+alwaysApply: true
+---
+
+Title: Documentation updates and man page generation
+
+Scope:
+- Applies to all changes that affect the `blitz` CLI behavior, flags, or configuration.
+- Applies to man page source and generation.
+
+Requirements:
+- Any change to `blitz` command behavior or flags MUST update:
+  - `docs/configuration.md`
+  - `docs/metrics.md` (update metrics for new/changed components)
+  - `docs/man/blitz.1.md`
+- The source of truth for the man page is `docs/man/blitz.1.md`. Do not edit generated files.
+
+Man page generation:
+- Generated files (`docs/man/blitz.1`, `docs/man/blitz.1.gz`) are not committed; they are reproducibly generated.
+- Use:
+  - `make man` to generate locally.
+  - CI runs the generation to catch failures.
+  - GoReleaser runs generation in `before.hooks` and packages `docs/man/blitz.1.gz` into Linux packages.
+ - The generator injects the full contents of `docs/configuration.md` and `docs/metrics.md` into the man page output. Keep all documents up to date.
+
+Tooling:
+- New doc tooling must be added to `make install-tools` (not installed dynamically in scripts).
+- The man generator script (`scripts/gen-man.sh`) may only check for required tools and fail if missing.
+
+Acceptance checklist for CLI changes:
+- [ ] `docs/configuration.md` updated for flags/behavior changes.
+- [ ] `docs/man/blitz.1.md` updated to reflect changes.
+- [ ] `make man` succeeds locally.
+- [ ] CI man generation step passes.

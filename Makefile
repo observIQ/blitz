@@ -1,18 +1,21 @@
 SHELL := /bin/bash
 
-.PHONY: tools test lint security all
+.PHONY: tools test lint security all man man-check
 
 TOOLS := \
     github.com/securego/gosec/v2/cmd/gosec@latest \
-    github.com/mgechev/revive@latest
+    github.com/mgechev/revive@latest \
+    github.com/cpuguy83/go-md2man/v2@latest
 
 all: install-tools test lint security
 
 install-tools:
 	go get -tool github.com/securego/gosec/v2/cmd/gosec
 	go get -tool github.com/mgechev/revive
+	go get -tool github.com/cpuguy83/go-md2man/v2
 	go tool -n gosec >/dev/null
 	go tool -n revive >/dev/null
+	go tool -n go-md2man >/dev/null
 
 test:
 	go test ./...
@@ -31,3 +34,11 @@ tidy:
 
 bench:
 	go test -bench=. ./...
+
+man:
+	bash ./scripts/gen-man.sh
+
+# CI helper: regenerate man pages and fail if the repo becomes dirty
+man-check: man
+	@echo "Verifying generated man pages are up to date..."
+	@git diff --quiet || (echo "Man pages are out of date. Run 'make man' and commit the changes." && git --no-pager status --porcelain && exit 1)

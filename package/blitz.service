@@ -1,5 +1,7 @@
+# See "man blitz" or /usr/share/doc/blitz/configuration.md for usage.
 [Unit]
 Description=Blitz
+Documentation=https://github.com/observiq/blitz/tree/main/docs
 After=network.target
 
 [Service]
@@ -7,6 +9,7 @@ Type=simple
 User=blitz
 Group=blitz
 ExecStart=/usr/bin/blitz --config /etc/blitz/config.yaml
+EnvironmentFile=-/etc/blitz/blitz.env
 Restart=on-failure
 RestartSec=5s
 AmbientCapabilities=

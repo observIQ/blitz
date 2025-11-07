@@ -1,6 +1,11 @@
 version: 2
 project_name: blitz
 
+before:
+  hooks:
+    - make install-tools
+    - make man
+
 builds:
   - id: blitz
     main: ./cmd/blitz
@@ -37,6 +42,8 @@ archives:
     wrap_in_directory: true
     files:
       - LICENSE
+      - docs/configuration.md
+      - docs/metrics.md
 
 nfpms:
   - id: linux-packages
@@ -68,10 +75,35 @@ nfpms:
           mode: 0640
           owner: blitz
           group: blitz
+      - src: package/blitz.env
+        dst: /etc/blitz/blitz.env
+        type: config
+        file_info:
+          mode: 0640
+          owner: blitz
+          group: blitz
       - src: package/blitz.service
         dst: /usr/lib/systemd/system/blitz.service
         file_info:
           mode: 0640
+          owner: root
+          group: root
+      - src: docs/man/blitz.1.gz
+        dst: /usr/share/man/man1/blitz.1.gz
+        file_info:
+          mode: 0644
+          owner: root
+          group: root
+      - src: docs/configuration.md
+        dst: /usr/share/doc/blitz/configuration.md
+        file_info:
+          mode: 0644
+          owner: root
+          group: root
+      - src: docs/metrics.md
+        dst: /usr/share/doc/blitz/metrics.md
+        file_info:
+          mode: 0644
           owner: root
           group: root
 

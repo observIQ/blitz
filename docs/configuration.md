@@ -35,6 +35,51 @@ Configuration files must be in YAML format and can be specified using the `--con
 ./blitz --config config.yaml
 ```
 
+### Linux packages and systemd
+
+When installed via the Linux packages (`.deb`/`.rpm`), Blitz provides:
+
+- Configuration file at `/etc/blitz/config.yaml`
+- A systemd service named `blitz`
+
+The packaged service runs:
+
+```
+/usr/bin/blitz --config /etc/blitz/config.yaml
+```
+
+To set or override configuration via environment variables using systemd overrides:
+
+1) Create a drop-in override:
+
+```bash
+sudo systemctl edit blitz
+```
+
+2) Add environment variables under the `[Service]` section (see “Environment Variables” naming above):
+
+```
+[Service]
+Environment=BLITZ_OUTPUT_TYPE=tcp
+Environment=BLITZ_OUTPUT_TCP_HOST=127.0.0.1
+Environment=BLITZ_OUTPUT_TCP_PORT=5000
+```
+
+3) Reload and restart:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart blitz
+```
+
+Optionally, you can store many variables in `/etc/blitz/blitz.env` (loaded by the packaged systemd unit by default):
+
+```
+BLITZ_OUTPUT_TYPE=tcp
+BLITZ_OUTPUT_TCP_HOST=127.0.0.1
+BLITZ_OUTPUT_TCP_PORT=5000
+```
+
 ## Configuration Options
 
 ### Logging Configuration

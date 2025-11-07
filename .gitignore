@@ -2,3 +2,5 @@
 blitz
 dist/
 cmd/blitz/blitz
+docs/man/blitz.1
+docs/man/blitz.1.gz

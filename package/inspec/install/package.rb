@@ -15,6 +15,13 @@ describe file('/etc/blitz/config.yaml') do
     its('group') { should eq 'blitz' }
     its('type') { should cmp 'file' }
 end
+ 
+describe file('/etc/blitz/blitz.env') do
+    its('mode') { should cmp '0640' }
+    its('owner') { should eq 'blitz' }
+    its('group') { should eq 'blitz' }
+    its('type') { should cmp 'file' }
+end
 
 describe file('/usr/share/doc/blitz/LICENSE') do
     its('mode') { should cmp '0644' }
