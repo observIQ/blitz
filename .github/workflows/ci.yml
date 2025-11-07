@@ -124,6 +124,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Set build host platform
+        run: |
+          echo "BUILD_HOST_OS=$(go env GOHOSTOS)" >> $GITHUB_ENV
+          echo "BUILD_HOST_ARCH=$(go env GOHOSTARCH)" >> $GITHUB_ENV
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -132,6 +137,8 @@ jobs:
           args: release --clean --skip=publish --skip=sign --skip=validate --snapshot --split
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          BUILD_HOST_OS: ${{ env.BUILD_HOST_OS }}
+          BUILD_HOST_ARCH: ${{ env.BUILD_HOST_ARCH }}
 
       - name: Download CINC (Inspec)
         run: |
