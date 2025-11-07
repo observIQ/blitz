@@ -10,8 +10,10 @@ import (
 type LogLevel string
 
 const (
-	// LoggingTypeStdout writes logs to stdout (only supported type).
+	// LoggingTypeStdout writes logs to stdout.
 	LoggingTypeStdout = "stdout"
+	// LoggingTypeFile writes logs to a file with rotation.
+	LoggingTypeFile = "file"
 
 	// LogLevelDebug is the debug log level.
 	LogLevelDebug LogLevel = "debug"
@@ -23,6 +25,12 @@ const (
 	LogLevelError LogLevel = "error"
 )
 
+// Default logging file path
+const (
+	// DefaultLoggingFilePath is the default path for file logging
+	DefaultLoggingFilePath = "/var/log/blitz/blitz.log"
+)
+
 var (
 	// errInvalidLoggingType is returned when an invalid logging type is provided.
 	errInvalidLoggingType = errors.New("invalid logging type")
@@ -32,21 +40,41 @@ var (
 
 // Logging contains configuration for logging.
 type Logging struct {
-	// Type indicates where logs should be written, defaulting to "stdout".
+	// Type indicates where logs should be written.
 	Type string `mapstructure:"type" yaml:"type,omitempty"`
 
 	// Level is the log level to use, defaulting to "info".
 	Level LogLevel `mapstructure:"level" yaml:"level,omitempty"`
+
+	// File contains file logging configuration (only used when Type is "file").
+	File LoggingFileConfig `mapstructure:"file,omitempty" yaml:"file,omitempty"`
+}
+
+// LoggingFileConfig contains configuration for file logging.
+type LoggingFileConfig struct {
+	// Path is the destination file path for logs.
+	Path string `mapstructure:"path,omitempty" yaml:"path,omitempty"`
+
+	// Rotation contains rotation options for log files.
+	Rotation FileRotationConfig `mapstructure:"rotation,omitempty" yaml:"rotation,omitempty"`
 }
 
 // Validate validates the logging configuration.
 func (l *Logging) Validate() error {
-	// Type is optional; empty means use default. If set, must be stdout.
-	switch strings.ToLower(strings.TrimSpace(l.Type)) {
-	case "":
-		// allow empty, defaults applied elsewhere (overrides)
+	// Type must be set. Config overrides will ensure it's set at runtime.
+	trimmedType := strings.ToLower(strings.TrimSpace(l.Type))
+	if trimmedType == "" {
+		return fmt.Errorf("%w: logging.type is required", errInvalidLoggingType)
+	}
+
+	switch trimmedType {
 	case LoggingTypeStdout:
 		// ok
+	case LoggingTypeFile:
+		// ok, but path must be set
+		if strings.TrimSpace(l.File.Path) == "" {
+			return fmt.Errorf("logging.file.path is required when logging.type is file")
+		}
 	default:
 		return fmt.Errorf("%w: %s", errInvalidLoggingType, l.Type)
 	}

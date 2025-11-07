@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -9,30 +8,32 @@ import (
 
 func TestLoggingValidate(t *testing.T) {
 	cases := []struct {
-		name     string
-		logging  Logging
-		expected error
+		name           string
+		logging        Logging
+		expectedErrMsg string
 	}{
-		{name: "empty-ok", logging: Logging{}, expected: nil},
-		{name: "stdout-ok", logging: Logging{Type: "stdout"}, expected: nil},
-		{name: "invalid-type", logging: Logging{Type: "file"}, expected: errInvalidLoggingType},
-		{name: "empty-level-ok", logging: Logging{Type: "stdout", Level: ""}, expected: nil},
-		{name: "debug-ok", logging: Logging{Type: "stdout", Level: LogLevelDebug}, expected: nil},
-		{name: "info-ok", logging: Logging{Type: "stdout", Level: LogLevelInfo}, expected: nil},
-		{name: "warn-ok", logging: Logging{Type: "stdout", Level: LogLevelWarn}, expected: nil},
-		{name: "error-ok", logging: Logging{Type: "stdout", Level: LogLevelError}, expected: nil},
-		{name: "invalid-level", logging: Logging{Type: "stdout", Level: "verbose"}, expected: errInvalidLoggingLevel},
+		{name: "empty-type-error", logging: Logging{}, expectedErrMsg: "logging.type is required"},
+		{name: "stdout-ok", logging: Logging{Type: "stdout"}, expectedErrMsg: ""},
+		{name: "file-without-path", logging: Logging{Type: "file"}, expectedErrMsg: "logging.file.path is required"},
+		{name: "file-with-path-ok", logging: Logging{Type: "file", File: LoggingFileConfig{Path: "/var/log/blitz.log"}}, expectedErrMsg: ""},
+		{name: "invalid-type", logging: Logging{Type: "invalid"}, expectedErrMsg: "invalid logging type"},
+		{name: "empty-level-ok", logging: Logging{Type: "stdout", Level: ""}, expectedErrMsg: ""},
+		{name: "debug-ok", logging: Logging{Type: "stdout", Level: LogLevelDebug}, expectedErrMsg: ""},
+		{name: "info-ok", logging: Logging{Type: "stdout", Level: LogLevelInfo}, expectedErrMsg: ""},
+		{name: "warn-ok", logging: Logging{Type: "stdout", Level: LogLevelWarn}, expectedErrMsg: ""},
+		{name: "error-ok", logging: Logging{Type: "stdout", Level: LogLevelError}, expectedErrMsg: ""},
+		{name: "invalid-level", logging: Logging{Type: "stdout", Level: "verbose"}, expectedErrMsg: "invalid logging level"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.logging.Validate()
-			if tc.expected == nil {
+			if tc.expectedErrMsg == "" {
 				require.NoError(t, err)
-				return
+			} else {
+				require.Error(t, err)
+				require.ErrorContains(t, err, tc.expectedErrMsg)
 			}
-			require.Error(t, err)
-			require.True(t, errors.Is(err, tc.expected))
 		})
 	}
 }

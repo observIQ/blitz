@@ -23,6 +23,8 @@ COPY --from=basefs /etc/passwd /etc/passwd
 
 COPY blitz /blitz
 
+ENV BLITZ_LOGGING_TYPE=stdout
+
 USER 10001
 ENTRYPOINT ["/blitz"]
 
