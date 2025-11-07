@@ -32,6 +32,7 @@ func TestOverrideDefaults(t *testing.T) {
 			JSON: JSONGeneratorConfig{
 				Workers: 1,
 				Rate:    1 * time.Second,
+				Type:    "default",
 			},
 			Winevt: WinevtGeneratorConfig{
 				Workers: 1,
@@ -115,6 +116,7 @@ func TestOverrideFlags(t *testing.T) {
 		"--generator-type", "json",
 		"--generator-json-workers", "5",
 		"--generator-json-rate", "500ms",
+		"--generator-json-type", "pii",
 		"--generator-winevt-workers", "4",
 		"--generator-winevt-rate", "200ms",
 		"--generator-paloalto-workers", "6",
@@ -203,6 +205,7 @@ func TestOverrideFlags(t *testing.T) {
 			JSON: JSONGeneratorConfig{
 				Workers: 5,
 				Rate:    500 * time.Millisecond,
+				Type:    "pii",
 			},
 			Winevt: WinevtGeneratorConfig{
 				Workers: 4,
@@ -293,6 +296,7 @@ func TestOverrideEnvs(t *testing.T) {
 	t.Setenv("BLITZ_GENERATOR_TYPE", "winevt")
 	t.Setenv("BLITZ_GENERATOR_JSON_WORKERS", "3")
 	t.Setenv("BLITZ_GENERATOR_JSON_RATE", "250ms")
+	t.Setenv("BLITZ_GENERATOR_JSON_TYPE", "default")
 	t.Setenv("BLITZ_GENERATOR_WINEVT_WORKERS", "2")
 	t.Setenv("BLITZ_GENERATOR_WINEVT_RATE", "750ms")
 	t.Setenv("BLITZ_GENERATOR_PALOALTO_WORKERS", "7")
@@ -382,6 +386,7 @@ func TestOverrideEnvs(t *testing.T) {
 			JSON: JSONGeneratorConfig{
 				Workers: 3,
 				Rate:    250 * time.Millisecond,
+				Type:    "default",
 			},
 			Winevt: WinevtGeneratorConfig{
 				Workers: 2,

@@ -43,6 +43,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set build host platform
+        run: |
+          echo "BUILD_HOST_OS=$(go env GOHOSTOS)" >> $GITHUB_ENV
+          echo "BUILD_HOST_ARCH=$(go env GOHOSTARCH)" >> $GITHUB_ENV
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -53,3 +58,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           DOCKER_REGISTRY: ghcr.io
+          BUILD_HOST_OS: ${{ env.BUILD_HOST_OS }}
+          BUILD_HOST_ARCH: ${{ env.BUILD_HOST_ARCH }}

@@ -131,3 +131,7 @@ For detailed configuration options, see the [Configuration Guide](/docs/configur
 ## Community
 
 The Blitz is an open source project. If you'd like to contribute, take a look at our [contribution guidelines](/docs/CONTRIBUTING.md) and [developer guide](/docs/development.md). We look forward to building with you.
+
+## Similar Tools
+
+- [flog](https://github.com/mingrammer/flog) - A fake log generator for common log formats

@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: tools test lint security all man man-check
+.PHONY: tools test lint security all man man-check release release-test
 
 TOOLS := \
     github.com/securego/gosec/v2/cmd/gosec@latest \
@@ -42,3 +42,6 @@ man:
 man-check: man
 	@echo "Verifying generated man pages are up to date..."
 	@git diff --quiet || (echo "Man pages are out of date. Run 'make man' and commit the changes." && git --no-pager status --porcelain && exit 1)
+
+release-test:
+	@eval $$(./scripts/set-build-host.sh) && goreleaser release --clean --skip=publish --parallelism=2 --skip=sign --snapshot

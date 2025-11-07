@@ -21,9 +21,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Run ShellCheck
+      - name: Run ShellCheck (package/scripts)
         run: |
           find package/scripts -type f -name "*.sh" -exec shellcheck {} +
+
+      - name: Run ShellCheck (scripts)
+        run: |
+          find scripts -type f -name "*.sh" -exec shellcheck {} +
 
   setup:
     name: Setup environment
@@ -124,6 +128,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Set build host platform
+        run: |
+          echo "BUILD_HOST_OS=$(go env GOHOSTOS)" >> $GITHUB_ENV
+          echo "BUILD_HOST_ARCH=$(go env GOHOSTARCH)" >> $GITHUB_ENV
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -132,6 +141,8 @@ jobs:
           args: release --clean --skip=publish --skip=sign --skip=validate --snapshot --split
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          BUILD_HOST_OS: ${{ env.BUILD_HOST_OS }}
+          BUILD_HOST_ARCH: ${{ env.BUILD_HOST_ARCH }}
 
       - name: Download CINC (Inspec)
         run: |

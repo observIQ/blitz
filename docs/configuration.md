@@ -105,10 +105,16 @@ The NOP (No Operation) generator performs no work and generates no data. It's us
 
 #### JSON Generator Configuration
 
+The JSON generator creates structured JSON log entries. Two log types are supported:
+
+- **default**: Generates logs with standard fields (timestamp, level, environment, location, message)
+- **pii**: Generates logs with personally identifiable information (PII) fields including SSN, IBAN, phone numbers, and user IDs, suitable for testing PII detection and redaction systems
+
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
 | `generator.json.workers` | `--generator-json-workers` | `BLITZ_GENERATOR_JSON_WORKERS` | `1` | Number of JSON generator workers (must be ≥ 1) |
 | `generator.json.rate` | `--generator-json-rate` | `BLITZ_GENERATOR_JSON_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
+| `generator.json.type` | `--generator-json-type` | `BLITZ_GENERATOR_JSON_TYPE` | `default` | Type of log to generate. Valid values: `default`, `pii` |
 
 #### Windows Event (winevt) Generator Configuration
 
