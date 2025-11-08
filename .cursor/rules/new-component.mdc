@@ -44,11 +44,29 @@ This rule describes how to add a new component to Blitz, either a generator or a
   - Ensure errors are handled consistently with existing branches.
 
 ### Documentation
+- Create component documentation file:
+  - **Generators**: Create `docs/generator/<component-name>.md`
+  - **Outputs**: Create `docs/output/<component-name>.md`
+  - Each component doc must include:
+    - **Description**: Purpose of the component
+    - **Example Logs** (for generators): Show example log output produced by the component
+    - **Data Mutation** (for outputs): Explain how the output transforms data (if at all)
+    - **Configuration Table**: Complete table with YAML path, flag name, environment variable, default, and description for all configuration options
+    - **Example Configuration**: At least one YAML configuration example
+  - Follow the format of existing component docs (e.g., `docs/generator/json.md`, `docs/output/tcp.md`)
+  - Component docs are automatically included in man pages via `gen-man.sh`
+- Update `README.md`:
+  - Add the new component to the Components section with a brief, high-level description.
+  - Place generators under "Generators" and outputs under "Outputs".
+  - Keep descriptions concise (one sentence) and focused on what the component does.
+  - **REQUIRED: Link to the component documentation using full GitHub URL format**: `https://github.com/observiq/blitz/blob/main/docs/generator/<name>.md` or `https://github.com/observiq/blitz/blob/main/docs/output/<name>.md`
+  - All component entries in the README Components section MUST include links to their documentation files using this full GitHub URL format.
 - Update `docs/configuration.md`:
   - Add the new component to the valid values list for `output.type` or `generator.type`.
-  - Add a section detailing the component’s configuration table (YAML path, flag, env, default, description).
-  - Include at least one focused example configuration snippet.
+  - Add a link to the component documentation in the list of component links (do NOT include detailed configuration tables in the main config doc).
   - Update validation rules if new constraints are introduced.
+  - Keep only global configuration in the main config doc; component-specific details belong in component docs.
+  - **Update the table of contents (TOC)** if any new sections, subsections, or example configurations are added.
  - Update `docs/metrics.md`:
    - Document any new metrics emitted by the component (names, types, descriptions, labels).
    - Ensure naming follows the existing `blitz.<component>.<metric>` pattern and labels remain consistent.
@@ -74,7 +92,16 @@ This rule describes how to add a new component to Blitz, either a generator or a
 - [ ] Overrides added to `internal/config/override.go` (flags/env), with sensible defaults.
 - [ ] Tests updated in `internal/config/override_test.go` (defaults, flags, envs).
 - [ ] `cmd/blitz/main.go` wiring updated to construct and use the new component.
-- [ ] `docs/configuration.md` updated with configuration tables, examples, and valid type lists.
+- [ ] Component documentation file created in `docs/generator/<name>.md` or `docs/output/<name>.md` with:
+  - [ ] Description of component purpose
+  - [ ] Example logs (generators) or data mutation explanation (outputs)
+  - [ ] Complete configuration table
+  - [ ] Example YAML configuration
+- [ ] `README.md` Components section updated with the new component, brief description, and link to component doc.
+- [ ] `docs/configuration.md` updated with component link (not detailed config tables).
+- [ ] Table of contents in `docs/configuration.md` updated if new sections or examples were added.
+- [ ] `docs/metrics.md` updated with any new metrics (if applicable).
+- [ ] `make man` generates man page successfully with component docs included.
 - [ ] Lints pass, no unused code, idiomatic Go per Uber style.
 - [ ] `make test` passes locally.
 - [ ] `make lint` passes locally.

@@ -10,6 +10,30 @@ A load generation tool for Bindplane managed collectors.
 - [Development Guide](/docs/development.md) - Guidelines for contributing to the project
 - [Contributing Guidelines](/docs/CONTRIBUTING.md) - How to contribute to the project
 
+## Components
+
+Blitz consists of generators that create log data and outputs that send data to destinations.
+
+### Generators
+
+- **[nop](https://github.com/observiq/blitz/blob/main/docs/generator/nop.md)** - No operation generator for testing infrastructure without generating data
+- **[json](https://github.com/observiq/blitz/blob/main/docs/generator/json.md)** - Generates structured JSON logs
+- **[winevt](https://github.com/observiq/blitz/blob/main/docs/generator/winevt.md)** - Generates Windows Event logs in unparsed XML format
+- **[palo-alto](https://github.com/observiq/blitz/blob/main/docs/generator/palo-alto.md)** - Generates realistic Palo Alto firewall syslog entries
+- **[apache-common](https://github.com/observiq/blitz/blob/main/docs/generator/apache-common.md)** - Generates Apache Common Log Format (CLF) entries
+- **[apache-combined](https://github.com/observiq/blitz/blob/main/docs/generator/apache-combined.md)** - Generates Apache Combined Log Format entries with referer and user-agent
+- **[apache-error](https://github.com/observiq/blitz/blob/main/docs/generator/apache-error.md)** - Generates Apache Error Log Format entries for server diagnostics
+
+### Outputs
+
+- **[nop](https://github.com/observiq/blitz/blob/main/docs/output/nop.md)** - No operation output for testing infrastructure without sending data
+- **[stdout](https://github.com/observiq/blitz/blob/main/docs/output/stdout.md)** - Writes logs to standard output for debugging and testing
+- **[tcp](https://github.com/observiq/blitz/blob/main/docs/output/tcp.md)** - Sends logs over TCP connections with optional TLS encryption
+- **[udp](https://github.com/observiq/blitz/blob/main/docs/output/udp.md)** - Sends logs over UDP connections
+- **[syslog](https://github.com/observiq/blitz/blob/main/docs/output/syslog.md)** - Formats and sends logs via syslog (RFC 3164 or 5424) over UDP or TCP
+- **[otlp-grpc](https://github.com/observiq/blitz/blob/main/docs/output/otlp-grpc.md)** - Sends logs via OpenTelemetry Protocol (OTLP) over gRPC
+- **[file](https://github.com/observiq/blitz/blob/main/docs/output/file.md)** - Writes logs to files with automatic rotation and compression
+
 ## Installation
 
 ### CLI

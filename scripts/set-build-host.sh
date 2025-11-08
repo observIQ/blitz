@@ -10,3 +10,6 @@
 # binary's version command.
 BUILD_HOST_OS=$(go env GOHOSTOS)
 BUILD_HOST_ARCH=$(go env GOHOSTARCH)
+
+export BUILD_HOST_OS
+export BUILD_HOST_ARCH

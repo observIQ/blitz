@@ -1,5 +1,44 @@
 # Blitz Configuration
 
+## Table of Contents
+
+- [Configuration Methods](#configuration-methods)
+  - [Command-line Flags](#command-line-flags)
+  - [Environment Variables](#environment-variables)
+  - [Configuration File](#configuration-file)
+  - [Linux packages and systemd](#linux-packages-and-systemd)
+- [Configuration Options](#configuration-options)
+  - [Logging Configuration](#logging-configuration)
+    - [Default Logging Behavior](#default-logging-behavior)
+    - [File Logging Configuration](#file-logging-configuration)
+  - [Generator Configuration](#generator-configuration)
+  - [Output Configuration](#output-configuration)
+- [Example Configurations](#example-configurations)
+  - [Basic TCP Output Configuration](#basic-tcp-output-configuration)
+  - [High-Performance UDP Configuration](#high-performance-udp-configuration)
+  - [Syslog over UDP](#syslog-over-udp)
+  - [Debug Configuration](#debug-configuration)
+  - [Minimal Configuration (NOP)](#minimal-configuration-nop)
+  - [Stdout Output Configuration](#stdout-output-configuration)
+  - [Minimal Configuration (JSON + TCP)](#minimal-configuration-json--tcp)
+  - [OTLP gRPC Output Configuration](#otlp-grpc-output-configuration)
+  - [Palo Alto Generator Configuration](#palo-alto-generator-configuration)
+- [Duration Format](#duration-format)
+- [Validation Rules](#validation-rules)
+  - [Required Fields](#required-fields)
+  - [Validation Constraints](#validation-constraints)
+- [Error Handling](#error-handling)
+- [Usage Examples](#usage-examples)
+  - [Using Configuration File Only](#using-configuration-file-only)
+  - [Overriding Configuration File with Flags](#overriding-configuration-file-with-flags)
+  - [Using Palo Alto Generator](#using-palo-alto-generator)
+  - [Using Environment Variables](#using-environment-variables)
+  - [Using OTLP gRPC Output](#using-otlp-grpc-output)
+  - [Mixed Configuration Methods](#mixed-configuration-methods)
+  - [Using TLS with TCP Output](#using-tls-with-tcp-output)
+  - [Syslog over TCP with TLS](#syslog-over-tcp-with-tls)
+  - [Using TLS with OTLP gRPC Output](#using-tls-with-otlp-grpc-output)
+
 Blitz supports configuration through multiple methods with the following priority order (highest to lowest):
 
 1. **Command-line flags** (highest priority)
@@ -121,97 +160,15 @@ logging:
 |-----------|-----------|---------------------|---------|-------------|
 | `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error` |
 
-#### NOP Generator Configuration
+For detailed configuration options for each generator, see the individual generator documentation:
 
-The NOP (No Operation) generator performs no work and generates no data. It's useful for testing the application infrastructure without generating actual log data.
-
-**No additional configuration options are required for the NOP generator.**
-
-#### JSON Generator Configuration
-
-The JSON generator creates structured JSON log entries. Two log types are supported:
-
-- **default**: Generates logs with standard fields (timestamp, level, environment, location, message)
-- **pii**: Generates logs with personally identifiable information (PII) fields including SSN, IBAN, phone numbers, and user IDs, suitable for testing PII detection and redaction systems
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `generator.json.workers` | `--generator-json-workers` | `BLITZ_GENERATOR_JSON_WORKERS` | `1` | Number of JSON generator workers (must be ≥ 1) |
-| `generator.json.rate` | `--generator-json-rate` | `BLITZ_GENERATOR_JSON_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
-| `generator.json.type` | `--generator-json-type` | `BLITZ_GENERATOR_JSON_TYPE` | `default` | Type of log to generate. Valid values: `default`, `pii` |
-
-#### Windows Event (winevt) Generator Configuration
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `generator.winevt.workers` | `--generator-winevt-workers` | `BLITZ_GENERATOR_WINEVT_WORKERS` | `1` | Number of winevt generator workers (must be ≥ 1) |
-| `generator.winevt.rate` | `--generator-winevt-rate` | `BLITZ_GENERATOR_WINEVT_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
-
-#### Palo Alto Generator Configuration
-
-The Palo Alto generator generates realistic Palo Alto firewall syslog entries in the standard Palo Alto log format.
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `generator.paloAlto.workers` | `--generator-paloalto-workers` | `BLITZ_GENERATOR_PALOALTO_WORKERS` | `1` | Number of Palo Alto generator workers (must be ≥ 1) |
-| `generator.paloAlto.rate` | `--generator-paloalto-rate` | `BLITZ_GENERATOR_PALOALTO_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
-
-#### Apache Common Log Format Generator Configuration
-
-The Apache generator creates logs in Apache Common Log Format (CLF), a standard format used by Apache HTTP Server and many other web servers. The format follows the specification: `remotehost rfc931 authuser [date] "request" status bytes`.
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `generator.apache-common.workers` | `--generator-apache-common-workers` | `BLITZ_GENERATOR_APACHE_COMMON_WORKERS` | `1` | Number of Apache Common generator workers (must be ≥ 1) |
-| `generator.apache-common.rate` | `--generator-apache-common-rate` | `BLITZ_GENERATOR_APACHE_COMMON_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
-
-**Example Apache Generator Configuration:**
-
-```yaml
-generator:
-  type: apache-common
-  apache-common:
-    workers: 5
-    rate: 100ms
-```
-
-#### Apache Combined Log Format Generator Configuration
-
-The Apache Combined generator creates logs in Apache Combined Log Format, which extends the Common Log Format by adding the Referer and User-Agent headers. The format follows the specification: `remotehost rfc931 authuser [date] "request" status bytes "referer" "user-agent"`.
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `generator.apache-combined.workers` | `--generator-apache-combined-workers` | `BLITZ_GENERATOR_APACHE_COMBINED_WORKERS` | `1` | Number of Apache Combined generator workers (must be ≥ 1) |
-| `generator.apache-combined.rate` | `--generator-apache-combined-rate` | `BLITZ_GENERATOR_APACHE_COMBINED_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
-
-**Example Apache Combined Generator Configuration:**
-
-```yaml
-generator:
-  type: apache-combined
-  apache-combined:
-    workers: 5
-    rate: 100ms
-```
-
-#### Apache Error Log Format Generator Configuration
-
-The Apache Error generator creates logs in Apache Error Log Format, used for logging server errors, warnings, and other diagnostic information. The format follows the specification: `[timestamp] [level] [pid:tid] [client] message`.
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `generator.apache-error.workers` | `--generator-apache-error-workers` | `BLITZ_GENERATOR_APACHE_ERROR_WORKERS` | `1` | Number of Apache Error generator workers (must be ≥ 1) |
-| `generator.apache-error.rate` | `--generator-apache-error-rate` | `BLITZ_GENERATOR_APACHE_ERROR_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
-
-**Example Apache Error Generator Configuration:**
-
-```yaml
-generator:
-  type: apache-error
-  apache-error:
-    workers: 5
-    rate: 100ms
-```
+- [NOP Generator](https://github.com/observiq/blitz/blob/main/docs/generator/nop.md)
+- [JSON Generator](https://github.com/observiq/blitz/blob/main/docs/generator/json.md)
+- [Windows Event (winevt) Generator](https://github.com/observiq/blitz/blob/main/docs/generator/winevt.md)
+- [Palo Alto Generator](https://github.com/observiq/blitz/blob/main/docs/generator/palo-alto.md)
+- [Apache Common Log Format Generator](https://github.com/observiq/blitz/blob/main/docs/generator/apache-common.md)
+- [Apache Combined Log Format Generator](https://github.com/observiq/blitz/blob/main/docs/generator/apache-combined.md)
+- [Apache Error Log Format Generator](https://github.com/observiq/blitz/blob/main/docs/generator/apache-error.md)
 
 ### Output Configuration
 
@@ -221,124 +178,15 @@ generator:
 |-----------|-----------|---------------------|---------|-------------|
 | `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file` |
 
-#### NOP Output Configuration
+For detailed configuration options for each output, see the individual output documentation:
 
-The NOP (No Operation) output performs no work and discards all data. It's useful for testing the application infrastructure without actually sending data to external destinations.
-
-**No additional configuration options are required for the NOP output.**
-
-#### Stdout Output Configuration
-
-The stdout output writes all generated logs to standard output (stdout). This is useful for debugging and testing.
-
-**Note:** The stdout output may not be suitable for piping to another process, as stdout is shared with the main blitz logger. Both application logs and generated log data will be written to stdout, which can make it difficult to separate them when piping.
-
-**No additional configuration options are required for the stdout output.**
-
-#### TCP Output Configuration
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `output.tcp.host` | `--output-tcp-host` | `BLITZ_OUTPUT_TCP_HOST` | `""` | TCP target host (IP address or hostname) |
-| `output.tcp.port` | `--output-tcp-port` | `BLITZ_OUTPUT_TCP_PORT` | `0` | TCP target port (1-65535) |
-| `output.tcp.workers` | `--output-tcp-workers` | `BLITZ_OUTPUT_TCP_WORKERS` | `1` | Number of TCP output workers (must be ≥ 0) |
-
-##### TCP TLS Configuration
-
-TLS is disabled by default. To enable TLS, provide both a certificate and private key.
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `output.tcp.enableTLS` | `--output-tcp-enable-tls` | `BLITZ_OUTPUT_TCP_ENABLE_TLS` | `false` | Enable TLS for TCP connections |
-| `output.tcp.tls.cert` | `--output-tcp-tls-cert` | `BLITZ_OUTPUT_TCP_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
-| `output.tcp.tls.key` | `--output-tcp-tls-key` | `BLITZ_OUTPUT_TCP_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
-| `output.tcp.tls.ca` | `--output-tcp-tls-ca` | `BLITZ_OUTPUT_TCP_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional, if not provided the host's root CA set will be used |
-| `output.tcp.tls.skipVerify` | `--output-tcp-tls-skip-verify` | `BLITZ_OUTPUT_TCP_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended for production) |
-| `output.tcp.tls.minVersion` | `--output-tcp-tls-min-version` | `BLITZ_OUTPUT_TCP_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
-
-#### UDP Output Configuration
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `output.udp.host` | `--output-udp-host` | `BLITZ_OUTPUT_UDP_HOST` | `""` | UDP target host (IP address or hostname) |
-| `output.udp.port` | `--output-udp-port` | `BLITZ_OUTPUT_UDP_PORT` | `0` | UDP target port (1-65535) |
-| `output.udp.workers` | `--output-udp-workers` | `BLITZ_OUTPUT_UDP_WORKERS` | `1` | Number of UDP output workers (must be ≥ 0) |
-
-#### Syslog Output Configuration
-
-The Syslog output formats messages per RFC 3164 or RFC 5424 and sends them via UDP or TCP (called "transport"). When using TCP transport, TLS can be enabled.
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `output.syslog.host` | `--output-syslog-host` | `BLITZ_OUTPUT_SYSLOG_HOST` | `""` | Syslog target host (IP address or hostname) |
-| `output.syslog.port` | `--output-syslog-port` | `BLITZ_OUTPUT_SYSLOG_PORT` | `0` | Syslog target port (1-65535) |
-| `output.syslog.transport` | `--output-syslog-transport` | `BLITZ_OUTPUT_SYSLOG_TRANSPORT` | `udp` | Transport: `udp` or `tcp` |
-| `output.syslog.rfc` | `--output-syslog-rfc` | `BLITZ_OUTPUT_SYSLOG_RFC` | `5424` | Syslog format: `3164` or `5424` |
-| `output.syslog.workers` | `--output-syslog-workers` | `BLITZ_OUTPUT_SYSLOG_WORKERS` | `1` | Number of Syslog output workers (must be ≥ 0) |
-| `output.syslog.facility` | `--output-syslog-facility` | `BLITZ_OUTPUT_SYSLOG_FACILITY` | `1` | Syslog facility (0–23) |
-| `output.syslog.appName` | `--output-syslog-appname` | `BLITZ_OUTPUT_SYSLOG_APPNAME` | `blitz` | App name used in syslog header |
-| `output.syslog.hostname` | `--output-syslog-hostname` | `BLITZ_OUTPUT_SYSLOG_HOSTNAME` | `""` | Hostname used in syslog header |
-| `output.syslog.procId` | `--output-syslog-procid` | `BLITZ_OUTPUT_SYSLOG_PROCID` | `""` | Process ID used in syslog header |
-| `output.syslog.msgId` | `--output-syslog-msgid` | `BLITZ_OUTPUT_SYSLOG_MSGID` | `""` | Message ID used in syslog header |
-| `output.syslog.maxDatagramBytes` | `--output-syslog-maxdatagrambytes` | `BLITZ_OUTPUT_SYSLOG_MAXDATAGRAMBYTES` | `0` | UDP safety limit in bytes; if > 0, messages are truncated to fit |
-
-##### Syslog TLS Configuration (TCP transport only)
-
-TLS is disabled by default. To enable TLS for Syslog over TCP, set `enableTLS: true` and provide certificate and key.
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `output.syslog.enableTLS` | `--output-syslog-enable-tls` | `BLITZ_OUTPUT_SYSLOG_ENABLE_TLS` | `false` | Enable TLS for Syslog over TCP |
-| `output.syslog.tls.cert` | `--output-syslog-tls-cert` | `BLITZ_OUTPUT_SYSLOG_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
-| `output.syslog.tls.key` | `--output-syslog-tls-key` | `BLITZ_OUTPUT_SYSLOG_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
-| `output.syslog.tls.ca` | `--output-syslog-tls-ca` | `BLITZ_OUTPUT_SYSLOG_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional |
-| `output.syslog.tls.skipVerify` | `--output-syslog-tls-skip-verify` | `BLITZ_OUTPUT_SYSLOG_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended) |
-| `output.syslog.tls.minVersion` | `--output-syslog-tls-min-version` | `BLITZ_OUTPUT_SYSLOG_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
-
-###### Framing and limitations
-
-- TCP transport currently uses newline-delimited (non-transparent) framing; octet-counting per RFC 6587 is not supported. Many syslog servers accept newline-delimited framing, but if your receiver requires octet-counting, this output will not work as-is.
-- UDP transport sends each formatted message as a single datagram. If `maxDatagramBytes` is set and the message would exceed it, the message is truncated to fit.
-- To avoid breaking framing, embedded CR/LF in messages are replaced with spaces during formatting.
-
-#### File Output Configuration
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `output.file.path` | `--output-file-path` | `BLITZ_OUTPUT_FILE_PATH` | `""` | Destination file path (required when using file output) |
-| `output.file.workers` | `--output-file-workers` | `BLITZ_OUTPUT_FILE_WORKERS` | `1` | Number of File output workers (must be ≥ 0) |
-| `output.file.rotation.maxSizeMB` | `--output-file-rotation-maxsizemb` | `BLITZ_OUTPUT_FILE_ROTATION_MAXSIZEMB` | `100` | Maximum size in MB before rotation |
-| `output.file.rotation.maxBackups` | `--output-file-rotation-maxbackups` | `BLITZ_OUTPUT_FILE_ROTATION_MAXBACKUPS` | `7` | Maximum number of backups to retain |
-| `output.file.rotation.maxAgeDays` | `--output-file-rotation-maxagedays` | `BLITZ_OUTPUT_FILE_ROTATION_MAXAGEDAYS` | `30` | Maximum age in days to retain backups |
-| `output.file.rotation.compress` | `--output-file-rotation-compress` | `BLITZ_OUTPUT_FILE_ROTATION_COMPRESS` | `true` | Compress rotated files |
-| `output.file.rotation.localTime` | `--output-file-rotation-localtime` | `BLITZ_OUTPUT_FILE_ROTATION_LOCALTIME` | `false` | Use local time for backup timestamps |
-
-#### OTLP gRPC Output Configuration
-
-The OTLP gRPC output sends logs to an OpenTelemetry collector via gRPC using the OTLP protocol.
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `output.otlpGrpc.host` | `--output-otlpgrpc-host` | `BLITZ_OUTPUT_OTLPGRPC_HOST` | `localhost` | OTLP gRPC target host (IP address or hostname) |
-| `output.otlpGrpc.port` | `--output-otlpgrpc-port` | `BLITZ_OUTPUT_OTLPGRPC_PORT` | `4317` | OTLP gRPC target port (1-65535) |
-| `output.otlpGrpc.workers` | `--output-otlpgrpc-workers` | `BLITZ_OUTPUT_OTLPGRPC_WORKERS` | `1` | Number of OTLP gRPC output workers (must be ≥ 0) |
-| `output.otlpGrpc.batchTimeout` | `--output-otlpgrpc-batchtimeout` | `BLITZ_OUTPUT_OTLPGRPC_BATCHTIMEOUT` | `1s` | Timeout for batching log records before sending (duration format) |
-| `output.otlpGrpc.maxQueueSize` | `--output-otlpgrpc-maxqueuesize` | `BLITZ_OUTPUT_OTLPGRPC_MAXQUEUESIZE` | `100` | Maximum queue size for batching logs (must be ≥ 0) |
-| `output.otlpGrpc.maxExportBatchSize` | `--output-otlpgrpc-maxexportbatchsize` | `BLITZ_OUTPUT_OTLPGRPC_MAXEXPORTBATCHSIZE` | `200` | Maximum number of logs per export batch (must be ≥ 0) |
-
-##### OTLP gRPC TLS Configuration
-
-By default, OTLP gRPC uses insecure credentials (no TLS). To enable TLS, set `insecure` to `false` and provide certificate and key files.
-
-| YAML Path | Flag Name | Environment Variable | Default | Description |
-|-----------|-----------|---------------------|---------|-------------|
-| `output.otlpGrpc.enableTLS` | `--output-otlpgrpc-enable-tls` | `BLITZ_OUTPUT_OTLPGRPC_ENABLE_TLS` | `false` | Enable TLS for OTLP gRPC connections |
-| `output.otlpGrpc.tls.insecure` | `--otlp-grpc-tls-insecure` | `BLITZ_OUTPUT_OTLPGRPC_TLS_INSECURE` | `true` | Whether to use insecure credentials (no TLS). When `true`, TLS is not used. When `false` and TLS certificates are provided, TLS will be enabled |
-| `output.otlpGrpc.tls.cert` | `--otlp-grpc-tls-cert` | `BLITZ_OUTPUT_OTLPGRPC_TLS_CERT` | `""` | Path to the TLS certificate file (PEM format) |
-| `output.otlpGrpc.tls.key` | `--otlp-grpc-tls-key` | `BLITZ_OUTPUT_OTLPGRPC_TLS_KEY` | `""` | Path to the TLS private key file (PEM format) |
-| `output.otlpGrpc.tls.ca` | `--otlp-grpc-tls-ca` | `BLITZ_OUTPUT_OTLPGRPC_TLS_CA` | `[]` | Paths to TLS CA certificate files (PEM format). Optional, if not provided the host's root CA set will be used |
-| `output.otlpGrpc.tls.skipVerify` | `--otlp-grpc-tls-skip-verify` | `BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY` | `false` | Whether to skip TLS certificate verification (not recommended for production) |
-| `output.otlpGrpc.tls.minVersion` | `--otlp-grpc-tls-min-version` | `BLITZ_OUTPUT_OTLPGRPC_TLS_MIN_VERSION` | `1.2` | Minimum TLS version. Valid values: `1.2`, `1.3` |
+- [NOP Output](https://github.com/observiq/blitz/blob/main/docs/output/nop.md)
+- [Stdout Output](https://github.com/observiq/blitz/blob/main/docs/output/stdout.md)
+- [TCP Output](https://github.com/observiq/blitz/blob/main/docs/output/tcp.md)
+- [UDP Output](https://github.com/observiq/blitz/blob/main/docs/output/udp.md)
+- [Syslog Output](https://github.com/observiq/blitz/blob/main/docs/output/syslog.md)
+- [OTLP gRPC Output](https://github.com/observiq/blitz/blob/main/docs/output/otlp-grpc.md)
+- [File Output](https://github.com/observiq/blitz/blob/main/docs/output/file.md)
 
 ## Example Configurations
 
