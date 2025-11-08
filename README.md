@@ -7,6 +7,7 @@ A load generation tool for Bindplane managed collectors.
 - [Configuration Guide](/docs/configuration.md) - Complete guide to configuring blitz with YAML files, environment variables, and command-line flags
 - [Architecture Overview](/docs/architecture.md) - Detailed explanation of the application architecture, components, and data flow
 - [Metrics Documentation](/docs/metrics.md) - Comprehensive guide to monitoring and metrics exposed by blitz
+- [Shell Completion](/docs/shell-completion.md) - Guide to installing and using shell autocompletion for bash, zsh, fish, and PowerShell
 - [Development Guide](/docs/development.md) - Guidelines for contributing to the project
 - [Contributing Guidelines](/docs/CONTRIBUTING.md) - How to contribute to the project
 
@@ -35,6 +36,13 @@ Blitz consists of generators that create log data and outputs that send data to 
 - **[file](https://github.com/observiq/blitz/blob/main/docs/output/file.md)** - Writes logs to files with automatic rotation and compression
 
 ## Installation
+
+Blitz supports the following platforms:
+- **Operating Systems**: Linux, macOS (Darwin), Windows, FreeBSD
+- **CPU Architectures**: amd64 (x86_64), arm64
+
+If your platform is not listed above, please [open an issue](https://github.com/observiq/blitz/issues)
+and we'll do our best to add support for it.
 
 ### CLI
 

@@ -43,5 +43,15 @@ man-check: man
 	@echo "Verifying generated man pages are up to date..."
 	@git diff --quiet || (echo "Man pages are out of date. Run 'make man' and commit the changes." && git --no-pager status --porcelain && exit 1)
 
+completion:
+	@echo "Generating bash completion script..."
+	@mkdir -p package/completions
+	@go run ./cmd/blitz completion bash > package/completions/blitz.bash || (echo "Failed to generate completion script. Ensure blitz binary can be built." && exit 1)
+
+# CI helper: regenerate completions and fail if the repo becomes dirty
+completion-check: completion
+	@echo "Verifying generated completion script is up to date..."
+	@git diff --quiet || (echo "Completion script is out of date. Run 'make completion' and commit the changes." && git --no-pager status --porcelain && exit 1)
+
 release-test:
 	@source ./scripts/set-build-host.sh && goreleaser release --clean --skip=publish --parallelism=2 --skip=sign --snapshot
