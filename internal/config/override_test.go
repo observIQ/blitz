@@ -201,6 +201,7 @@ func TestOverrideDefaults(t *testing.T) {
 			},
 		},
 		Generator: Generator{
+			Type: GeneratorTypeNop,
 			JSON: JSONGeneratorConfig{
 				Workers: 1,
 				Rate:    1 * time.Second,
@@ -228,7 +229,8 @@ func TestOverrideDefaults(t *testing.T) {
 			},
 		},
 		Output: Output{
-			UDP: UDPOutputConfig{Host: "", Port: 0, Workers: 1},
+			Type: OutputTypeNop,
+			UDP:  UDPOutputConfig{Host: "", Port: 0, Workers: 1},
 			TCP: TCPOutputConfig{
 				Host:      "",
 				Port:      0,

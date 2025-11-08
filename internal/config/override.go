@@ -53,13 +53,7 @@ func (o *Override) createFlag(flags *pflag.FlagSet) *pflag.Flag {
 	}
 
 	// Set the default value into Viper; flags act only as overrides.
-	// Do NOT set defaults for certain top-level selector fields to preserve tests' expectations.
-	switch o.Field {
-	case "generator.type", "output.type":
-		// skip
-	default:
-		viper.SetDefault(o.Field, o.Default)
-	}
+	viper.SetDefault(o.Field, o.Default)
 
 	switch o.Default.(type) {
 	case string:
