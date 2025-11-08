@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="docs/assets/blitz-logo-banner-neon-1.png" alt="Blitz">
+</div>
+
 # Blitz
 
 A load generation tool for Bindplane managed collectors.
