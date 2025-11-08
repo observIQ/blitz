@@ -245,7 +245,7 @@ jobs:
 
       - name: Install package
         run: |
-          sudo apt-get install -y -f ./dist/blitz_amd64.deb
+          sudo apt-get install -y -f ./dist/linux_amd64/blitz_amd64.deb
 
       - name: Start service
         run: sudo systemctl start blitz
