@@ -217,9 +217,19 @@ jobs:
           BUILD_HOST_OS: ${{ env.BUILD_HOST_OS }}
           BUILD_HOST_ARCH: ${{ env.BUILD_HOST_ARCH }}
 
+      - name: Prepare CINC directory
+        run: mkdir -p /tmp/cinc
+
+      - name: Cache CINC package
+        id: cache-cinc
+        uses: actions/cache@v4
+        with:
+          path: /tmp/cinc/cinc.deb
+          key: cinc-auditor-4.56.58
+
       - name: Download CINC (Inspec)
+        if: steps.cache-cinc.outputs.cache-hit != 'true'
         run: |
-          mkdir -p /tmp/cinc
           curl -L -o /tmp/cinc/cinc.deb $cinc_package
 
       - name: Install CINC
