@@ -1,6 +1,9 @@
 version: 2
 project_name: blitz
 
+partial:
+  by: target
+
 before:
   hooks:
     - make install-tools
