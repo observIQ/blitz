@@ -37,70 +37,85 @@ import (
 	"github.com/observiq/blitz/output/tcp"
 	"github.com/observiq/blitz/output/udp"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/spf13/pflag"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
-func main() {
-	// Handle version command
-	if len(os.Args) > 1 && os.Args[1] == "version" {
-		info := build.GetInfo()
-		jsonData, err := json.MarshalIndent(info, "", "  ")
-		if err != nil {
-			fmt.Printf("Failed to marshal version info: %s\n", err.Error())
-			os.Exit(1)
-		}
-		fmt.Println(string(jsonData))
-		os.Exit(0)
+var (
+	configFile string
+	rootCmd    = &cobra.Command{
+		Use:   "blitz",
+		Short: "A load generation tool for Bindplane managed collectors",
+		Long:  "Blitz is a load generation tool for Bindplane managed collectors.",
+		RunE:  run,
 	}
+)
 
-	// Bind overrides to flags and environment variables
-	flags := pflag.NewFlagSet("blitz", pflag.ExitOnError)
-
+func init() {
 	// Add config file flag
-	configFile := flags.String("config", "", "path to configuration file")
+	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "path to configuration file")
 
+	// Bind all configuration overrides to flags
 	for _, override := range config.DefaultOverrides() {
-		if err := override.Bind(flags); err != nil {
+		if err := override.Bind(rootCmd.PersistentFlags()); err != nil {
 			fmt.Printf("Failed to bind override %s: %s", override.Field, err.Error())
 			os.Exit(1)
 		}
 	}
-	if err := flags.Parse(os.Args[1:]); err != nil {
-		fmt.Printf("Failed to parse flags: %s", err.Error())
+
+	// Add version command
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Print version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			info := build.GetInfo()
+			jsonData, err := json.MarshalIndent(info, "", "  ")
+			if err != nil {
+				fmt.Printf("Failed to marshal version info: %s\n", err.Error())
+				os.Exit(1)
+			}
+			fmt.Println(string(jsonData))
+		},
+	})
+
+	// Add completion command
+	rootCmd.AddCommand(newCompletionCommand())
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
 
+func run(cmd *cobra.Command, args []string) error {
 	// Configure Viper to handle env overrides
 	viper.SetConfigType("yaml")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
 	// Read configuration file if provided
-	if *configFile != "" {
-		viper.SetConfigFile(*configFile)
+	if configFile != "" {
+		viper.SetConfigFile(configFile)
 		if err := viper.ReadInConfig(); err != nil {
-			fmt.Printf("Failed to read config file %s: %s", *configFile, err.Error())
-			os.Exit(1)
+			return fmt.Errorf("failed to read config file %s: %w", configFile, err)
 		}
 	}
 
 	cfg := config.NewConfig()
 	if err := viper.Unmarshal(cfg); err != nil {
-		fmt.Printf("Failed to unmarshal config: %s", err.Error())
-		os.Exit(1)
+		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		fmt.Printf("Failed to validate config: %s", err.Error())
-		os.Exit(1)
+		return fmt.Errorf("failed to validate config: %w", err)
 	}
 
 	logger, err := logging.NewLogger(cfg.Logging)
 	if err != nil {
-		fmt.Printf("Failed to initialize logger: %s", err.Error())
-		os.Exit(1)
+		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer func() { _ = logger.Sync() }()
 
@@ -112,7 +127,7 @@ func main() {
 
 	if err := setupMetrics(ctx, logger); err != nil {
 		logger.Error("Failed to setup metrics", zap.Error(err))
-		os.Exit(1)
+		return err
 	}
 
 	// Listen for OS signals
@@ -131,13 +146,13 @@ func main() {
 		outputInstance, err = nop.New(logger)
 		if err != nil {
 			logger.Error("Failed to create NOP output", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.OutputTypeStdout:
 		outputInstance, err = stdoutout.New(logger)
 		if err != nil {
 			logger.Error("Failed to create stdout output", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.OutputTypeTCP:
 		var tlsConfig *tls.Config
@@ -146,7 +161,7 @@ func main() {
 			tlsConfig, tlsErr = cfg.Output.TCP.TLS.Convert()
 			if tlsErr != nil {
 				logger.Error("Failed to convert TLS config for TCP output", zap.Error(tlsErr))
-				os.Exit(1)
+				return tlsErr
 			}
 		}
 		outputInstance, err = tcp.New(
@@ -158,7 +173,7 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create TCP output", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.OutputTypeUDP:
 		outputInstance, err = udp.New(
@@ -169,7 +184,7 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create UDP output", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.OutputTypeSyslog:
 		var tlsConfig *tls.Config
@@ -178,7 +193,7 @@ func main() {
 			tlsConfig, tlsErr = cfg.Output.Syslog.TLS.Convert()
 			if tlsErr != nil {
 				logger.Error("Failed to convert TLS config for Syslog output", zap.Error(tlsErr))
-				os.Exit(1)
+				return tlsErr
 			}
 		}
 		sysCfg := syslogout.Config{
@@ -198,7 +213,7 @@ func main() {
 		outputInstance, err = syslogout.New(logger, sysCfg)
 		if err != nil {
 			logger.Error("Failed to create Syslog output", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.OutputTypeOTLPGrpc:
 		opts := []otlpgrpc.OTLPGrpcOption{
@@ -223,14 +238,14 @@ func main() {
 			tlsConfig, err = cfg.Output.OTLPGrpc.TLS.Convert()
 			if err != nil {
 				logger.Error("Failed to convert TLS config for OTLP gRPC output", zap.Error(err))
-				os.Exit(1)
+				return err
 			}
 			opts = append(opts, otlpgrpc.WithTLSConfig(tlsConfig))
 		}
 		outputInstance, err = otlpgrpc.New(logger, opts...)
 		if err != nil {
 			logger.Error("Failed to create OTLP gRPC output", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.OutputTypeFile:
 		rot := fileout.RotationOptions{
@@ -248,11 +263,11 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create File output", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	default:
 		logger.Error("Invalid output type", zap.String("type", string(cfg.Output.Type)))
-		os.Exit(1)
+		return fmt.Errorf("invalid output type: %s", cfg.Output.Type)
 	}
 
 	// Configure generator
@@ -262,7 +277,7 @@ func main() {
 		generatorInstance, err = gennop.New(logger)
 		if err != nil {
 			logger.Error("Failed to create NOP generator", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.GeneratorTypeJSON:
 		generatorInstance, err = jsongen.New(
@@ -273,7 +288,7 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create JSON generator", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.GeneratorTypeWinevt:
 		generatorInstance, err = winevt.New(
@@ -283,7 +298,7 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create winevt generator", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.GeneratorTypePaloAlto:
 		generatorInstance, err = paloalto.New(
@@ -293,7 +308,7 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create palo-alto generator", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.GeneratorTypeApache:
 		generatorInstance, err = apachegen.New(
@@ -303,7 +318,7 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create Apache generator", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.GeneratorTypeApacheCombined:
 		generatorInstance, err = apachecombinedgen.New(
@@ -313,7 +328,7 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create Apache Combined generator", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	case config.GeneratorTypeApacheError:
 		generatorInstance, err = apacheerrorgen.New(
@@ -323,32 +338,33 @@ func main() {
 		)
 		if err != nil {
 			logger.Error("Failed to create Apache Error generator", zap.Error(err))
-			os.Exit(1)
+			return err
 		}
 	default:
 		logger.Error("Invalid generator type", zap.String("type", string(cfg.Generator.Type)))
-		os.Exit(1)
+		return fmt.Errorf("invalid generator type: %s", cfg.Generator.Type)
 	}
 
-	service, err := service.New(logger, generatorInstance, outputInstance)
+	svc, err := service.New(logger, generatorInstance, outputInstance)
 	if err != nil {
 		logger.Error("Failed to create service", zap.Error(err))
-		os.Exit(1)
+		return err
 	}
 
-	if err := service.Start(); err != nil {
+	if err := svc.Start(); err != nil {
 		logger.Error("Failed to start service", zap.Error(err))
-		os.Exit(1)
+		return err
 	}
 
 	<-ctx.Done()
 
-	if err := service.Stop(); err != nil {
+	if err := svc.Stop(); err != nil {
 		logger.Error("Failed to stop service", zap.Error(err))
-		os.Exit(1)
+		return err
 	}
 
 	logger.Info("blitz shutdown complete")
+	return nil
 }
 
 func setupMetrics(ctx context.Context, logger *zap.Logger) error {

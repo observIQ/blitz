@@ -13,15 +13,13 @@ builds:
     env:
       - CGO_ENABLED=0
     goos:
+      - freebsd
       - linux
       - darwin
       - windows
     goarch:
       - amd64
       - arm64
-    ignore:
-      - goos: windows
-        goarch: arm64
     flags:
       - -trimpath
     tags:
@@ -107,6 +105,12 @@ nfpms:
           group: root
       - src: docs/metrics.md
         dst: /usr/share/doc/blitz/metrics.md
+        file_info:
+          mode: 0644
+          owner: root
+          group: root
+      - src: package/completions/blitz.bash
+        dst: /etc/bash_completion.d/blitz
         file_info:
           mode: 0644
           owner: root
