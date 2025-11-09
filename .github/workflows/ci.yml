@@ -109,6 +109,7 @@ jobs:
     name: Build - ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
     needs: setup
+    if: github.event_name != 'merge_group'
     strategy:
       fail-fast: false
       matrix:
@@ -175,6 +176,7 @@ jobs:
     name: Merge Build
     runs-on: ubuntu-latest
     needs: [setup, build]
+    if: github.event_name != 'merge_group'
     env:
       cinc_package: https://packages.cinc.sh/files/stable/cinc-auditor/4.56.58/ubuntu/22.04/cinc-auditor_4.56.58-1_amd64.deb
     steps:
