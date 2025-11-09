@@ -70,7 +70,7 @@ PowerShell:
 func registerFlagCompletions(rootCmd *cobra.Command) {
 	// Generator type completions
 	_ = rootCmd.RegisterFlagCompletionFunc("generator-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"nop", "json", "winevt", "palo-alto", "apache-common", "apache-combined", "apache-error"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"nop", "json", "winevt", "palo-alto", "apache-common", "apache-combined", "apache-error", "nginx", "postgres"}, cobra.ShellCompDirectiveNoFileComp
 	})
 
 	// Output type completions

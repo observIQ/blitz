@@ -23,6 +23,7 @@ import (
 	"github.com/observiq/blitz/generator/nginx"
 	gennop "github.com/observiq/blitz/generator/nop"
 	"github.com/observiq/blitz/generator/paloalto"
+	"github.com/observiq/blitz/generator/postgres"
 	"github.com/observiq/blitz/generator/winevt"
 	"github.com/observiq/blitz/internal/build"
 	"github.com/observiq/blitz/internal/config"
@@ -349,6 +350,16 @@ func run(cmd *cobra.Command, args []string) error {
 		)
 		if err != nil {
 			logger.Error("Failed to create NGINX generator", zap.Error(err))
+			return err
+		}
+	case config.GeneratorTypePostgres:
+		generatorInstance, err = postgres.New(
+			logger,
+			cfg.Generator.Postgres.Workers,
+			cfg.Generator.Postgres.Rate,
+		)
+		if err != nil {
+			logger.Error("Failed to create PostgreSQL generator", zap.Error(err))
 			return err
 		}
 	default:
