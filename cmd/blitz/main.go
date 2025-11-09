@@ -20,6 +20,7 @@ import (
 	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
 	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
 	jsongen "github.com/observiq/blitz/generator/json"
+	"github.com/observiq/blitz/generator/nginx"
 	gennop "github.com/observiq/blitz/generator/nop"
 	"github.com/observiq/blitz/generator/paloalto"
 	"github.com/observiq/blitz/generator/winevt"
@@ -338,6 +339,16 @@ func run(cmd *cobra.Command, args []string) error {
 		)
 		if err != nil {
 			logger.Error("Failed to create Apache Error generator", zap.Error(err))
+			return err
+		}
+	case config.GeneratorTypeNginx:
+		generatorInstance, err = nginx.New(
+			logger,
+			cfg.Generator.Nginx.Workers,
+			cfg.Generator.Nginx.Rate,
+		)
+		if err != nil {
+			logger.Error("Failed to create NGINX generator", zap.Error(err))
 			return err
 		}
 	default:

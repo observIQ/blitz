@@ -37,6 +37,8 @@ func getTestOverrideFlagsArgs() []string {
 		"--generator-apache-combined-rate", "150ms",
 		"--generator-apache-error-workers", "12",
 		"--generator-apache-error-rate", "200ms",
+		"--generator-nginx-workers", "14",
+		"--generator-nginx-rate", "100ms",
 		"--output-type", "otlp-grpc",
 		"--output-udp-host", "udp.example.com",
 		"--output-udp-port", "1514",
@@ -116,6 +118,8 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_GENERATOR_APACHE_COMBINED_RATE":     "250ms",
 		"BLITZ_GENERATOR_APACHE_ERROR_WORKERS":     "13",
 		"BLITZ_GENERATOR_APACHE_ERROR_RATE":        "350ms",
+		"BLITZ_GENERATOR_NGINX_WORKERS":            "15",
+		"BLITZ_GENERATOR_NGINX_RATE":               "250ms",
 		"BLITZ_OUTPUT_TYPE":                        "file",
 		"BLITZ_OUTPUT_UDP_HOST":                    "udp.env.example",
 		"BLITZ_OUTPUT_UDP_PORT":                    "5514",
@@ -224,6 +228,10 @@ func TestOverrideDefaults(t *testing.T) {
 				Rate:    1 * time.Second,
 			},
 			ApacheError: ApacheErrorGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+			},
+			Nginx: NginxGeneratorConfig{
 				Workers: 1,
 				Rate:    1 * time.Second,
 			},
@@ -357,6 +365,10 @@ func TestOverrideFlags(t *testing.T) {
 				Workers: 12,
 				Rate:    200 * time.Millisecond,
 			},
+			Nginx: NginxGeneratorConfig{
+				Workers: 14,
+				Rate:    100 * time.Millisecond,
+			},
 		},
 		Output: Output{
 			Type: OutputTypeOTLPGrpc,
@@ -489,6 +501,10 @@ func TestOverrideEnvs(t *testing.T) {
 			ApacheError: ApacheErrorGeneratorConfig{
 				Workers: 13,
 				Rate:    350 * time.Millisecond,
+			},
+			Nginx: NginxGeneratorConfig{
+				Workers: 15,
+				Rate:    250 * time.Millisecond,
 			},
 		},
 		Output: Output{

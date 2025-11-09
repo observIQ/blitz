@@ -22,6 +22,8 @@ const (
 	GeneratorTypeApacheCombined GeneratorType = "apache-combined"
 	// GeneratorTypeApacheError represents Apache Error Log Format generator
 	GeneratorTypeApacheError GeneratorType = "apache-error"
+	// GeneratorTypeNginx represents NGINX Combined Log Format generator
+	GeneratorTypeNginx GeneratorType = "nginx"
 )
 
 // Generator contains configuration for log generators
@@ -40,6 +42,8 @@ type Generator struct {
 	ApacheCombined ApacheCombinedGeneratorConfig `yaml:"apache-combined,omitempty" mapstructure:"apache-combined,omitempty"`
 	// ApacheError contains Apache Error generator configuration
 	ApacheError ApacheErrorGeneratorConfig `yaml:"apache-error,omitempty" mapstructure:"apache-error,omitempty"`
+	// Nginx contains NGINX generator configuration
+	Nginx NginxGeneratorConfig `yaml:"nginx,omitempty" mapstructure:"nginx,omitempty"`
 }
 
 // Validate validates the generator configuration
@@ -76,8 +80,12 @@ func (g *Generator) Validate() error {
 		if err := g.ApacheError.Validate(); err != nil {
 			return fmt.Errorf("apache-error generator validation failed: %w", err)
 		}
+	case GeneratorTypeNginx:
+		if err := g.Nginx.Validate(); err != nil {
+			return fmt.Errorf("nginx generator validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error", g.Type)
+		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx", g.Type)
 	}
 
 	return nil

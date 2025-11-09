@@ -28,6 +28,7 @@ Blitz consists of generators that create log data and outputs that send data to 
 - **[apache-common](https://github.com/observiq/blitz/blob/main/docs/generator/apache-common.md)** - Generates Apache Common Log Format (CLF) entries
 - **[apache-combined](https://github.com/observiq/blitz/blob/main/docs/generator/apache-combined.md)** - Generates Apache Combined Log Format entries with referer and user-agent
 - **[apache-error](https://github.com/observiq/blitz/blob/main/docs/generator/apache-error.md)** - Generates Apache Error Log Format entries for server diagnostics
+- **[nginx](https://github.com/observiq/blitz/blob/main/docs/generator/nginx.md)** - Generates NGINX Combined Log Format entries matching NGINX's default log format
 
 ### Outputs
 
