@@ -158,7 +158,7 @@ logging:
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx` |
+| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres` |
 
 For detailed configuration options for each generator, see the individual generator documentation:
 
@@ -170,6 +170,7 @@ For detailed configuration options for each generator, see the individual genera
 - [Apache Combined Log Format Generator](https://github.com/observiq/blitz/blob/main/docs/generator/apache-combined.md)
 - [Apache Error Log Format Generator](https://github.com/observiq/blitz/blob/main/docs/generator/apache-error.md)
 - [NGINX Combined Log Format Generator](https://github.com/observiq/blitz/blob/main/docs/generator/nginx.md)
+- [PostgreSQL Log Format Generator](https://github.com/observiq/blitz/blob/main/docs/generator/postgres.md)
 
 ### Output Configuration
 

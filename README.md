@@ -29,6 +29,7 @@ Blitz consists of generators that create log data and outputs that send data to 
 - **[apache-combined](https://github.com/observiq/blitz/blob/main/docs/generator/apache-combined.md)** - Generates Apache Combined Log Format entries with referer and user-agent
 - **[apache-error](https://github.com/observiq/blitz/blob/main/docs/generator/apache-error.md)** - Generates Apache Error Log Format entries for server diagnostics
 - **[nginx](https://github.com/observiq/blitz/blob/main/docs/generator/nginx.md)** - Generates NGINX Combined Log Format entries matching NGINX's default log format
+- **[postgres](https://github.com/observiq/blitz/blob/main/docs/generator/postgres.md)** - Generates PostgreSQL log format entries including query logs, connections, and database events
 
 ### Outputs
 
