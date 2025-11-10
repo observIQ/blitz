@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/observiq/blitz/internal/winevt/templates"
+	"github.com/observiq/blitz/internal/generators/winevt/templates"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,4 +85,55 @@ func TestWinevtGenerator_GeneratesAndWrites(t *testing.T) {
 		}
 	}
 	assert.True(t, foundBoth, "expected to find IP address in both message and EventData")
+}
+
+func TestRenderTemplate_RandomSelection(t *testing.T) {
+	// Test that random template selection actually works by generating many templates
+	// and verifying we get all template types
+	exampleCount := 0
+	serviceControlManagerCount := 0
+	successfulLogonCount := 0
+
+	// Generate 150 templates with random selection
+	for i := 0; i < 150; i++ {
+		result, err := templates.RenderTemplate(templates.RenderOptions{})
+		require.NoError(t, err)
+
+		// Check which template was used by looking for unique identifiers
+		if strings.Contains(result, "EventID>4625</EventID") {
+			exampleCount++
+		} else if strings.Contains(result, "Service Control Manager") {
+			serviceControlManagerCount++
+		} else if strings.Contains(result, "EventID>4624</EventID") {
+			successfulLogonCount++
+			// Verify hostname templating worked
+			assert.Contains(t, result, "$", "expected hostname with trailing $ in SubjectUserName")
+			assert.Contains(t, result, "Account Name:\t\t", "expected account name field")
+		}
+	}
+
+	// We should have gotten all templates (with high probability)
+	// If random selection wasn't working, we'd only get one type
+	assert.Greater(t, exampleCount, 0, "expected to see example template at least once")
+	assert.Greater(t, serviceControlManagerCount, 0, "expected to see service control manager template at least once")
+	assert.Greater(t, successfulLogonCount, 0, "expected to see successful logon template at least once")
+
+	// Log the distribution for debugging
+	t.Logf("Template distribution: example=%d, service_control_manager=%d, successful_logon=%d", exampleCount, serviceControlManagerCount, successfulLogonCount)
+}
+
+func TestRenderTemplate_SuccessfulLogonHostname(t *testing.T) {
+	// Test that the successful logon template properly templates hostnames
+	result, err := templates.RenderTemplate(templates.RenderOptions{
+		TemplateName: templates.SuccessfulLogonTemplateName,
+		Hostnames:    []string{"test-host-123"},
+	})
+	require.NoError(t, err)
+
+	// Verify hostname appears in uppercase with $ in SubjectUserName
+	assert.Contains(t, result, "<Data Name='SubjectUserName'>TEST-HOST-123$</Data>")
+	// Verify hostname appears in lowercase in Computer field
+	assert.Contains(t, result, "<Computer>test-host-123</Computer>")
+	// Verify hostname appears in message
+	assert.Contains(t, result, "Account Name:\t\tTEST-HOST-123$")
 }
