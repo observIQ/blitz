@@ -2,8 +2,10 @@ name: Deploy GitHub Pages
 
 on:
   push:
-    branches:
-      - main
+    paths:
+      - 'README.md'
+      - 'docs/**'
+  pull_request:
     paths:
       - 'README.md'
       - 'docs/**'
@@ -15,7 +17,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: "pages-${{ github.ref }}"
   cancel-in-progress: false
 
 jobs:
@@ -50,10 +52,11 @@ jobs:
 
   deploy:
     environment:
-      name: github-pages
+      name: ${{ github.ref == 'refs/heads/main' && 'github-pages' || 'github-pages-preview' }}
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
