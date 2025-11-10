@@ -1,144 +1,5 @@
 // Package workermanager provides a robust worker management system with graceful reconnection
 // and exponential backoff for handling network operations that may fail.
-//
-// The WorkerManager is designed to manage goroutines that perform potentially failing operations,
-// such as network I/O, with automatic retry logic and graceful shutdown capabilities.
-//
-// Key Features:
-//   - Automatic worker restart with exponential backoff
-//   - Configurable retry policies with sane defaults
-//   - Context-aware shutdown
-//   - Comprehensive logging of failures and retries
-//   - Thread-safe worker count tracking
-//
-// Example Usage for TCP Output:
-//
-//	type TCPOutput struct {
-//		logger        *zap.Logger
-//		host          string
-//		port          string
-//		dataChan      chan []byte
-//		workerManager *workermanager.WorkerManager
-//	}
-//
-//	func NewTCPOutput(logger *zap.Logger, host, port string, workers int) (*TCPOutput, error) {
-//		tcp := &TCPOutput{
-//			logger:   logger.Named("tcp-output"),
-//			host:     host,
-//			port:     port,
-//			dataChan: make(chan []byte, 100),
-//		}
-//
-//		// Create worker manager with TCP worker function
-//		tcp.workerManager = workermanager.NewWorkerManager(
-//			tcp.logger,
-//			workers,
-//			tcp.tcpWorker,
-//		)
-//
-//		// Start the workers
-//		tcp.workerManager.Start()
-//		return tcp, nil
-//	}
-//
-//	func (t *TCPOutput) tcpWorker(id int) {
-//		// Establish TCP connection
-//		conn, err := net.Dial("tcp", net.JoinHostPort(t.host, t.port))
-//		if err != nil {
-//			t.logger.Error("Failed to connect", zap.Error(err))
-//			return // Worker manager will retry with backoff
-//		}
-//		defer conn.Close()
-//
-//		// Process data from channel
-//		for {
-//			select {
-//			case data, ok := <-t.dataChan:
-//				if !ok {
-//					return // Channel closed, exit gracefully
-//				}
-//				if _, err := conn.Write(data); err != nil {
-//					t.logger.Error("Failed to write data", zap.Error(err))
-//					return // Worker manager will retry with backoff
-//				}
-//			case <-t.ctx.Done():
-//				return // Context cancelled, exit gracefully
-//			}
-//		}
-//	}
-//
-//	func (t *TCPOutput) Stop() {
-//		close(t.dataChan)
-//		t.workerManager.Stop()
-//	}
-//
-// Example Usage for UDP Output:
-//
-//	type UDPOutput struct {
-//		logger        *zap.Logger
-//		host          string
-//		port          string
-//		dataChan      chan []byte
-//		workerManager *workermanager.WorkerManager
-//	}
-//
-//	func NewUDPOutput(logger *zap.Logger, host, port string, workers int) (*UDPOutput, error) {
-//		udp := &UDPOutput{
-//			logger:   logger.Named("udp-output"),
-//			host:     host,
-//			port:     port,
-//			dataChan: make(chan []byte, 100),
-//		}
-//
-//		// Create worker manager with UDP worker function
-//		udp.workerManager = workermanager.NewWorkerManager(
-//			udp.logger,
-//			workers,
-//			udp.udpWorker,
-//		)
-//
-//		// Start the workers
-//		udp.workerManager.Start()
-//		return udp, nil
-//	}
-//
-//	func (u *UDPOutput) udpWorker(id int) {
-//		// Establish UDP connection
-//		conn, err := net.Dial("udp", net.JoinHostPort(u.host, u.port))
-//		if err != nil {
-//			u.logger.Error("Failed to connect", zap.Error(err))
-//			return // Worker manager will retry with backoff
-//		}
-//		defer conn.Close()
-//
-//		// Process data from channel
-//		for {
-//			select {
-//			case data, ok := <-u.dataChan:
-//				if !ok {
-//					return // Channel closed, exit gracefully
-//				}
-//				if _, err := conn.Write(data); err != nil {
-//					u.logger.Error("Failed to write data", zap.Error(err))
-//					return // Worker manager will retry with backoff
-//				}
-//			case <-u.ctx.Done():
-//				return // Context cancelled, exit gracefully
-//			}
-//		}
-//	}
-//
-//	func (u *UDPOutput) Stop() {
-//		close(u.dataChan)
-//		u.workerManager.Stop()
-//	}
-//
-// The WorkerManager handles all the complexity of:
-//   - Restarting failed workers with exponential backoff
-//   - Logging retry attempts and failures
-//   - Graceful shutdown when Stop() is called
-//   - Tracking active worker count
-//   - Preventing resource leaks
 package workermanager
 
 import (
@@ -211,49 +72,36 @@ func (wm *WorkerManager) runWorker(id int) {
 		wm.mu.Unlock()
 	}()
 
-	// Create exponential backoff with sane defaults
 	backoffPolicy := backoff.NewExponentialBackOff(
 		backoff.WithInitialInterval(100*time.Millisecond),
 		backoff.WithMaxInterval(30*time.Second),
+		backoff.WithMaxElapsedTime(0), // No max elapsed time - retry forever
 		backoff.WithMultiplier(2),
 		backoff.WithRandomizationFactor(0.1),
 	)
 
 	for {
-		select {
-		case <-wm.ctx.Done():
+		// Check if context is cancelled before running worker
+		if wm.ctx.Err() != nil {
 			wm.logger.Info("Worker exiting - context cancelled", zap.Int("worker_id", id))
 			return
-		default:
-			// Run the worker function
-			wm.workerFunc(id)
+		}
 
-			// If worker function returns, it means it failed
-			// Check if we should retry
-			select {
-			case <-wm.ctx.Done():
-				wm.logger.Info("Worker exiting - context cancelled during backoff", zap.Int("worker_id", id))
-				return
-			default:
-				// Calculate next backoff delay
-				delay := backoffPolicy.NextBackOff()
-				if delay == backoff.Stop {
-					wm.logger.Error("Worker failed permanently - max retry time exceeded", zap.Int("worker_id", id))
-					return
-				}
+		// Run the worker function
+		wm.workerFunc(id)
 
-				wm.logger.Warn("Worker failed, retrying with backoff",
-					zap.Int("worker_id", id),
-					zap.Duration("delay", delay))
+		// If worker function returns, it means it failed - retry with backoff
+		delay := backoffPolicy.NextBackOff()
+		wm.logger.Warn("Worker failed, retrying with backoff",
+			zap.Int("worker_id", id),
+			zap.Duration("delay", delay))
 
-				// Wait for backoff delay or context cancellation
-				select {
-				case <-wm.ctx.Done():
-					return
-				case <-time.After(delay):
-					// Continue to retry
-				}
-			}
+		// Wait for backoff delay or context cancellation
+		select {
+		case <-wm.ctx.Done():
+			return
+		case <-time.After(delay):
+			// Continue to retry
 		}
 	}
 }

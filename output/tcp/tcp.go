@@ -23,7 +23,7 @@ const (
 	DefaultTCPWorkers = 1
 
 	// DefaultTCPConnectTimeout is the default timeout for establishing TCP connections
-	DefaultTCPConnectTimeout = 10 * time.Second
+	DefaultTCPConnectTimeout = 2 * time.Second
 
 	// DefaultTCPWriteTimeout is the default timeout for writing data to TCP connections
 	DefaultTCPWriteTimeout = 5 * time.Second
