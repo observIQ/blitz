@@ -1,0 +1,22 @@
+title: Blitz Documentation
+description: A load generation tool for Bindplane managed collectors
+theme: jekyll-theme-minimal
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: true
+include:
+  - generator
+  - output
+  - release
+  - man
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+
