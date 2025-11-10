@@ -212,11 +212,13 @@ func (wm *WorkerManager) runWorker(id int) {
 	}()
 
 	// Create exponential backoff with sane defaults
+	// Set MaxElapsedTime to 0 for infinite retries - workers should never stop retrying
 	backoffPolicy := backoff.NewExponentialBackOff(
 		backoff.WithInitialInterval(100*time.Millisecond),
 		backoff.WithMaxInterval(30*time.Second),
 		backoff.WithMultiplier(2),
 		backoff.WithRandomizationFactor(0.1),
+		backoff.WithMaxElapsedTime(0), // 0 means infinite retries
 	)
 
 	for {
@@ -225,6 +227,12 @@ func (wm *WorkerManager) runWorker(id int) {
 			wm.logger.Info("Worker exiting - context cancelled", zap.Int("worker_id", id))
 			return
 		default:
+			// Reset backoff at the start of each attempt
+			// This ensures that after a successful connection, if we fail again,
+			// we start with a fresh backoff interval rather than continuing from
+			// a potentially large accumulated interval
+			backoffPolicy.Reset()
+
 			// Run the worker function
 			wm.workerFunc(id)
 

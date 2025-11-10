@@ -3,8 +3,10 @@ package tcp
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/observiq/blitz/internal/workermanager"
@@ -191,6 +193,19 @@ func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Conf
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
 func (t *TCP) Write(ctx context.Context, data output.LogRecord) error {
+	// Check channel capacity before attempting write to provide better diagnostics
+	channelLen := len(t.dataChan)
+	channelCap := cap(t.dataChan)
+
+	// Log warning if channel is getting full (more than 80% capacity)
+	if channelLen > int(float64(channelCap)*0.8) {
+		t.logger.Warn("TCP output channel approaching capacity",
+			zap.Int("channel_length", channelLen),
+			zap.Int("channel_capacity", channelCap),
+			zap.Int("active_workers", t.workerManager.GetActiveWorkerCount()),
+		)
+	}
+
 	select {
 	case t.dataChan <- data.Message:
 		// Record logs received
@@ -203,7 +218,10 @@ func (t *TCP) Write(ctx context.Context, data output.LogRecord) error {
 		)
 		return nil
 	case <-ctx.Done():
-		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
+		// Provide more context in the error message
+		activeWorkers := t.workerManager.GetActiveWorkerCount()
+		return fmt.Errorf("context cancelled while waiting to write data (channel may be full or workers may be retrying): %w (channel: %d/%d, active workers: %d)",
+			ctx.Err(), channelLen, channelCap, activeWorkers)
 	case <-t.ctx.Done():
 		return fmt.Errorf("TCP output is shutting down")
 	}
@@ -284,11 +302,25 @@ func (t *TCP) connect() (net.Conn, error) {
 
 	dialer := &net.Dialer{
 		Timeout: DefaultTCPConnectTimeout,
+		// Enable TCP keepalive to detect broken connections
+		KeepAlive: 30 * time.Second,
 	}
 
 	conn, err := dialer.Dial("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to %s: %w", address, err)
+	}
+
+	// Enable TCP keepalive on the connection to help detect half-open connections
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		if err := tcpConn.SetKeepAlive(true); err != nil {
+			t.logger.Warn("Failed to enable TCP keepalive",
+				zap.Error(err))
+		}
+		if err := tcpConn.SetKeepAlivePeriod(30 * time.Second); err != nil {
+			t.logger.Warn("Failed to set TCP keepalive period",
+				zap.Error(err))
+		}
 	}
 
 	// If TLS is configured, upgrade the connection to TLS
@@ -323,10 +355,30 @@ func (t *TCP) sendData(conn net.Conn, data string) error {
 	// Send the data
 	bytesWritten, err := conn.Write(dataWithNewline)
 	if err != nil {
-		// Classify error type
+		// Classify error type for better diagnostics
 		errorType := "unknown"
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			errorType = "timeout"
+		errMsg := strings.ToLower(err.Error())
+
+		if netErr, ok := err.(net.Error); ok {
+			if netErr.Timeout() {
+				errorType = "timeout"
+			} else if netErr.Temporary() {
+				errorType = "temporary"
+			}
+		}
+		// Check for connection errors (broken pipe, connection reset, etc.)
+		// Use string matching as these are typically syscall errors that don't
+		// implement net.Error but indicate connection issues
+		if strings.Contains(errMsg, "broken pipe") ||
+			strings.Contains(errMsg, "connection reset") ||
+			strings.Contains(errMsg, "connection refused") ||
+			strings.Contains(errMsg, "no route to host") {
+			errorType = "connection_broken"
+		}
+
+		// Check for EOF which often indicates connection closed
+		if errors.Is(err, net.ErrClosed) {
+			errorType = "connection_closed"
 		}
 		t.recordSendError(errorType, err)
 		return fmt.Errorf("failed to write data: %w", err)
