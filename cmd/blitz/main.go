@@ -20,6 +20,7 @@ import (
 	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
 	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
 	jsongen "github.com/observiq/blitz/generator/json"
+	"github.com/observiq/blitz/generator/kubernetes"
 	"github.com/observiq/blitz/generator/nginx"
 	gennop "github.com/observiq/blitz/generator/nop"
 	"github.com/observiq/blitz/generator/paloalto"
@@ -360,6 +361,17 @@ func run(cmd *cobra.Command, args []string) error {
 		)
 		if err != nil {
 			logger.Error("Failed to create PostgreSQL generator", zap.Error(err))
+			return err
+		}
+	case config.GeneratorTypeKubernetes:
+		generatorInstance, err = kubernetes.New(
+			logger,
+			cfg.Generator.Kubernetes.Workers,
+			cfg.Generator.Kubernetes.Rate,
+			cfg.Generator.Kubernetes.Format,
+		)
+		if err != nil {
+			logger.Error("Failed to create Kubernetes generator", zap.Error(err))
 			return err
 		}
 	default:

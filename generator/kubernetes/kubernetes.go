@@ -1,0 +1,416 @@
+package kubernetes
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"math/rand"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/output"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	"go.uber.org/zap"
+)
+
+const (
+	componentName = "generator_kubernetes"
+	meterName     = "blitz-generator"
+
+	metricLogsGenerated = "blitz.generator.logs.generated"
+	metricWorkersActive = "blitz.generator.workers.active"
+	metricWriteErrors   = "blitz.generator.write.errors"
+
+	errorTypeUnknown = "unknown"
+	errorTypeTimeout = "timeout"
+
+	streamStdout = "stdout"
+	streamStderr = "stderr"
+	flagFull     = "F"
+
+	formatCRIO = "cri-o"
+)
+
+// ContainerLogFormat defines the interface for different container log formats
+type ContainerLogFormat interface {
+	Format(timestamp time.Time, stream string, appLog string) string
+}
+
+// CRIOFormat implements the CRI-O container log format
+type CRIOFormat struct{}
+
+// Format formats a log line in CRI-O format
+// Format: <timestamp> <stream> <flag> <app_log>
+// Example: 2025-11-10T21:11:47.71558575Z stdout F 21:11:47.715 request_id=GHbBizAYKNxBt5EAIz3x [info] Sent 200 in 1ms
+func (f *CRIOFormat) Format(timestamp time.Time, stream string, appLog string) string {
+	return fmt.Sprintf("%s %s %s %s", timestamp.Format(time.RFC3339Nano), stream, flagFull, appLog)
+}
+
+// Generator generates Kubernetes container log format log data
+type Generator struct {
+	logger  *zap.Logger
+	workers int
+	rate    time.Duration
+	format  ContainerLogFormat
+	wg      sync.WaitGroup
+	stopCh  chan struct{}
+	meter   metric.Meter
+
+	kubernetesLogsGenerated metric.Int64Counter
+	kubernetesActiveWorkers metric.Int64Gauge
+	kubernetesWriteErrors   metric.Int64Counter
+}
+
+// New creates a new Kubernetes container log generator
+func New(logger *zap.Logger, workers int, rate time.Duration, format string) (*Generator, error) {
+	if logger == nil {
+		return nil, fmt.Errorf("logger cannot be nil")
+	}
+
+	if workers < 1 {
+		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
+	}
+
+	var logFormat ContainerLogFormat
+	switch format {
+	case "", formatCRIO:
+		logFormat = &CRIOFormat{}
+	default:
+		return nil, fmt.Errorf("unsupported container log format: %s, must be one of: %s", format, formatCRIO)
+	}
+
+	meter := otel.Meter(meterName)
+
+	kubernetesLogsGenerated, err := meter.Int64Counter(
+		metricLogsGenerated,
+		metric.WithDescription("Total number of logs generated"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create logs generated counter: %w", err)
+	}
+
+	kubernetesActiveWorkers, err := meter.Int64Gauge(
+		metricWorkersActive,
+		metric.WithDescription("Number of active worker goroutines"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create active workers gauge: %w", err)
+	}
+
+	kubernetesWriteErrors, err := meter.Int64Counter(
+		metricWriteErrors,
+		metric.WithDescription("Total number of write errors"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create write errors counter: %w", err)
+	}
+
+	return &Generator{
+		logger:                  logger,
+		workers:                 workers,
+		rate:                    rate,
+		format:                  logFormat,
+		stopCh:                  make(chan struct{}),
+		meter:                   meter,
+		kubernetesLogsGenerated: kubernetesLogsGenerated,
+		kubernetesActiveWorkers: kubernetesActiveWorkers,
+		kubernetesWriteErrors:   kubernetesWriteErrors,
+	}, nil
+}
+
+// Start starts the Kubernetes container log generator and writes data using the
+// provided generator writer.
+func (g *Generator) Start(writer output.Writer) error {
+	g.logger.Info("Starting Kubernetes container log generator",
+		zap.Int("workers", g.workers),
+		zap.Duration("rate", g.rate),
+	)
+
+	for i := 0; i < g.workers; i++ {
+		g.wg.Add(1)
+		go g.worker(i, writer)
+	}
+
+	return nil
+}
+
+// Stop stops the Kubernetes container log generator and waits for all workers to finish.
+func (g *Generator) Stop(ctx context.Context) error {
+	g.logger.Info("Stopping Kubernetes container log generator")
+
+	close(g.stopCh)
+
+	done := make(chan struct{})
+	go func() {
+		g.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		g.logger.Info("Kubernetes container log generator stopped")
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// worker is the main worker loop that generates and writes logs
+func (g *Generator) worker(workerID int, writer output.Writer) {
+	defer g.wg.Done()
+
+	g.kubernetesActiveWorkers.Record(context.Background(), 1,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", componentName),
+				attribute.Int("worker_id", workerID),
+			),
+		),
+	)
+	defer g.kubernetesActiveWorkers.Record(context.Background(), 0,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", componentName),
+				attribute.Int("worker_id", workerID),
+			),
+		),
+	)
+
+	backoffConfig := backoff.NewExponentialBackOff()
+	backoffConfig.InitialInterval = g.rate
+	backoffConfig.MaxInterval = 5 * time.Second
+	backoffConfig.MaxElapsedTime = 0
+
+	backoffTicker := backoff.NewTicker(backoffConfig)
+	defer backoffTicker.Stop()
+
+	for {
+		select {
+		case <-g.stopCh:
+			g.logger.Debug("Worker stopping", zap.Int("worker_id", workerID))
+			return
+		case <-backoffTicker.C:
+			err := g.generateAndWriteLog(writer, workerID)
+			if err != nil {
+				g.logger.Error("Failed to write log",
+					zap.Int("worker_id", workerID),
+					zap.Error(err))
+				continue
+			}
+			backoffConfig.Reset()
+		}
+	}
+}
+
+// generateAndWriteLog generates a random log and writes it
+func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) error {
+	timestamp := time.Now()
+	stream := g.selectRandomStream()
+	appLog := g.generateApplicationLog()
+
+	logLine := g.format.Format(timestamp, stream, appLog)
+
+	logRecord := output.LogRecord{
+		Message: logLine,
+		ParseFunc: func(message string) (map[string]any, error) {
+			return parseContainerLog(message)
+		},
+		Metadata: output.LogRecordMetadata{
+			Timestamp: timestamp,
+			Severity:  g.extractSeverity(appLog),
+		},
+	}
+
+	g.kubernetesLogsGenerated.Add(context.Background(), 1,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", componentName),
+			),
+		),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := writer.Write(ctx, logRecord); err != nil {
+		errorType := errorTypeUnknown
+		if ctx.Err() == context.DeadlineExceeded {
+			errorType = errorTypeTimeout
+		}
+		g.recordWriteError(errorType, err)
+		return err
+	}
+
+	return nil
+}
+
+// selectRandomStream randomly selects stdout or stderr
+func (g *Generator) selectRandomStream() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
+	if r.Intn(2) == 0 {                                  // #nosec G404
+		return streamStdout
+	}
+	return streamStderr
+}
+
+// generateApplicationLog generates various application log formats
+func (g *Generator) generateApplicationLog() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
+	logType := r.Intn(3)                                 // #nosec G404
+
+	switch logType {
+	case 0:
+		return g.generateJSONWebAppLog(r)
+	case 1:
+		return g.generateDatabaseLog(r)
+	default:
+		return g.generateStructuredLog(r)
+	}
+}
+
+// generateJSONWebAppLog generates a JSON web application log
+func (g *Generator) generateJSONWebAppLog(r *rand.Rand) string {
+	requestID := generateRandomID(r, 16)
+	method := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}[r.Intn(5)] // #nosec G404
+	status := []int{200, 201, 400, 401, 403, 404, 500}[r.Intn(7)]          // #nosec G404
+	duration := r.Float64()*100 + 1                                        // #nosec G404
+	level := []string{"info", "warn", "error"}[r.Intn(3)]                  // #nosec G404
+
+	logData := map[string]any{
+		"timestamp":  time.Now().Format(time.RFC3339),
+		"request_id": requestID,
+		"level":      level,
+		"method":     method,
+		"status":     status,
+		"duration":   fmt.Sprintf("%.3fms", duration),
+		"message":    fmt.Sprintf("Sent %d in %.3fms", status, duration),
+	}
+
+	jsonBytes, err := json.Marshal(logData)
+	if err != nil {
+		return fmt.Sprintf("%s request_id=%s [%s] Sent %d in %.3fms",
+			time.Now().Format("15:04:05.000"), requestID, level, status, duration)
+	}
+
+	return string(jsonBytes)
+}
+
+// generateDatabaseLog generates a database-style unstructured log
+func (g *Generator) generateDatabaseLog(r *rand.Rand) string {
+	queries := []string{
+		"SELECT * FROM users WHERE id = $1",
+		"INSERT INTO orders (user_id, total) VALUES ($1, $2)",
+		"UPDATE products SET stock = stock - $1 WHERE id = $2",
+		"DELETE FROM sessions WHERE expires_at < NOW()",
+		"SELECT COUNT(*) FROM transactions WHERE created_at > $1",
+		"CREATE INDEX idx_user_email ON users(email)",
+		"ANALYZE users",
+		"VACUUM ANALYZE orders",
+	}
+
+	query := queries[r.Intn(len(queries))] // #nosec G404
+	duration := r.Float64()*50 + 0.5       // #nosec G404
+
+	return fmt.Sprintf("%s [LOG] duration: %.3f ms  statement: %s",
+		time.Now().Format("15:04:05.000"), duration, query)
+}
+
+// generateStructuredLog generates a structured key-value log
+func (g *Generator) generateStructuredLog(r *rand.Rand) string {
+	requestID := generateRandomID(r, 16)
+	level := []string{"info", "warn", "error", "debug"}[r.Intn(4)] // #nosec G404
+	messages := []string{
+		"User authentication failed",
+		"Cache miss for key",
+		"Rate limit exceeded",
+		"Database connection established",
+		"Session expired",
+		"File uploaded successfully",
+		"Background job completed",
+		"Health check passed",
+	}
+	message := messages[r.Intn(len(messages))] // #nosec G404
+
+	return fmt.Sprintf("%s request_id=%s [%s] %s",
+		time.Now().Format("15:04:05.000"), requestID, level, message)
+}
+
+// generateRandomID generates a random alphanumeric ID
+func generateRandomID(r *rand.Rand, length int) string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[r.Intn(len(charset))] // #nosec G404
+	}
+	return string(b)
+}
+
+// extractSeverity extracts severity from application log
+func (g *Generator) extractSeverity(appLog string) string {
+	if len(appLog) == 0 {
+		return "info"
+	}
+
+	lowerLog := appLog
+	if len(lowerLog) > 100 {
+		lowerLog = lowerLog[:100]
+	}
+
+	severityMap := map[string]string{
+		"error": "error",
+		"ERROR": "error",
+		"warn":  "warn",
+		"WARN":  "warn",
+		"info":  "info",
+		"INFO":  "info",
+		"debug": "debug",
+		"DEBUG": "debug",
+		"fatal": "fatal",
+		"FATAL": "fatal",
+	}
+
+	for key, value := range severityMap {
+		if strings.Contains(lowerLog, key) {
+			return value
+		}
+	}
+
+	return "info"
+}
+
+// parseContainerLog parses a container log line
+func parseContainerLog(message string) (map[string]any, error) {
+	parsed := make(map[string]any)
+
+	parts := strings.SplitN(message, " ", 4)
+	if len(parts) < 4 {
+		return parsed, nil
+	}
+
+	parsed["timestamp"] = parts[0]
+	parsed["stream"] = parts[1]
+	parsed["flag"] = parts[2]
+	parsed["log"] = parts[3]
+
+	return parsed, nil
+}
+
+// recordWriteError records a write error metric
+func (g *Generator) recordWriteError(errorType string, err error) {
+	g.kubernetesWriteErrors.Add(context.Background(), 1,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", componentName),
+				attribute.String("error_type", errorType),
+			),
+		),
+	)
+	g.logger.Debug("Recorded write error",
+		zap.String("error_type", errorType),
+		zap.Error(err),
+	)
+}

@@ -41,6 +41,9 @@ func getTestOverrideFlagsArgs() []string {
 		"--generator-nginx-rate", "100ms",
 		"--generator-postgres-workers", "16",
 		"--generator-postgres-rate", "80ms",
+		"--generator-kubernetes-workers", "18",
+		"--generator-kubernetes-rate", "60ms",
+		"--generator-kubernetes-format", "cri-o",
 		"--output-type", "otlp-grpc",
 		"--output-udp-host", "udp.example.com",
 		"--output-udp-port", "1514",
@@ -124,6 +127,9 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_GENERATOR_NGINX_RATE":               "250ms",
 		"BLITZ_GENERATOR_POSTGRES_WORKERS":         "17",
 		"BLITZ_GENERATOR_POSTGRES_RATE":            "300ms",
+		"BLITZ_GENERATOR_KUBERNETES_WORKERS":       "19",
+		"BLITZ_GENERATOR_KUBERNETES_RATE":          "250ms",
+		"BLITZ_GENERATOR_KUBERNETES_FORMAT":        "cri-o",
 		"BLITZ_OUTPUT_TYPE":                        "file",
 		"BLITZ_OUTPUT_UDP_HOST":                    "udp.env.example",
 		"BLITZ_OUTPUT_UDP_PORT":                    "5514",
@@ -242,6 +248,11 @@ func TestOverrideDefaults(t *testing.T) {
 			Postgres: PostgresGeneratorConfig{
 				Workers: 1,
 				Rate:    1 * time.Second,
+			},
+			Kubernetes: KubernetesGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
+				Format:  "cri-o",
 			},
 		},
 		Output: Output{
@@ -380,6 +391,11 @@ func TestOverrideFlags(t *testing.T) {
 			Postgres: PostgresGeneratorConfig{
 				Workers: 16,
 				Rate:    80 * time.Millisecond,
+			},
+			Kubernetes: KubernetesGeneratorConfig{
+				Workers: 18,
+				Rate:    60 * time.Millisecond,
+				Format:  "cri-o",
 			},
 		},
 		Output: Output{
@@ -521,6 +537,11 @@ func TestOverrideEnvs(t *testing.T) {
 			Postgres: PostgresGeneratorConfig{
 				Workers: 17,
 				Rate:    300 * time.Millisecond,
+			},
+			Kubernetes: KubernetesGeneratorConfig{
+				Workers: 19,
+				Rate:    250 * time.Millisecond,
+				Format:  "cri-o",
 			},
 		},
 		Output: Output{
