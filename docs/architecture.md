@@ -88,7 +88,7 @@ type Config struct {
 ##### Override System (`override.go`)
 - **Override Structure**: Defines configuration overrides with field mapping, flags, and environment variables
 - **Flag Generation**: Automatically creates command-line flags from configuration fields
-- **Environment Mapping**: Maps configuration fields to environment variables with `BINDPLANE_` prefix
+- **Environment Mapping**: Maps configuration fields to environment variables with `BLITZ_` prefix
 - **Validation**: Ensures configuration values meet requirements
 
 ##### Configuration Types:
