@@ -128,7 +128,7 @@ func run(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := setupMetrics(ctx, logger); err != nil {
+	if err := setupMetrics(ctx, cfg, logger); err != nil {
 		logger.Error("Failed to setup metrics", zap.Error(err))
 		return err
 	}
@@ -401,7 +401,7 @@ func run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func setupMetrics(ctx context.Context, logger *zap.Logger) error {
+func setupMetrics(ctx context.Context, cfg *config.Config, logger *zap.Logger) error {
 	logger.Info("starting metrics server")
 
 	prometheus, err := metrics.NewPrometheus()
@@ -414,7 +414,7 @@ func setupMetrics(ctx context.Context, logger *zap.Logger) error {
 	}
 
 	go func() {
-		err := httpServer(logger)
+		err := httpServer(cfg.Metrics.Port, logger)
 		if err != nil {
 			logger.Error("http server", zap.Error(err))
 		}
@@ -425,8 +425,8 @@ func setupMetrics(ctx context.Context, logger *zap.Logger) error {
 	return nil
 }
 
-func httpServer(logger *zap.Logger) error {
-	addr := net.JoinHostPort("0.0.0.0", "9100")
+func httpServer(port int, logger *zap.Logger) error {
+	addr := net.JoinHostPort("0.0.0.0", strconv.Itoa(port))
 
 	s := &http.Server{
 		Addr:              addr,

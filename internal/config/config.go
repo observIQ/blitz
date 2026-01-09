@@ -9,6 +9,8 @@ type Config struct {
 	Generator Generator `yaml:"generator,omitempty" mapstructure:"generator,omitempty"`
 	// Output configuration
 	Output Output `yaml:"output,omitempty" mapstructure:"output,omitempty"`
+	// Metrics configuration
+	Metrics Metrics `yaml:"metrics,omitempty" mapstructure:"metrics,omitempty"`
 }
 
 // Validate validates the entire configuration
@@ -20,6 +22,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Output.Validate(); err != nil {
+		return err
+	}
+	if err := c.Metrics.Validate(); err != nil {
 		return err
 	}
 	return nil
