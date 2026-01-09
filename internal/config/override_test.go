@@ -94,6 +94,7 @@ func getTestOverrideFlagsArgs() []string {
 		"--otlp-grpc-tls-ca", "/path/to/otlp_ca1.pem,/path/to/otlp_ca2.pem",
 		"--otlp-grpc-tls-skip-verify=false",
 		"--otlp-grpc-tls-min-version", "1.3",
+		"--metrics-port", "8080",
 	}
 }
 
@@ -180,6 +181,7 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_OUTPUT_OTLPGRPC_TLS_CA":             "/env/otlp_ca1.pem,/env/otlp_ca2.pem",
 		"BLITZ_OUTPUT_OTLPGRPC_TLS_SKIP_VERIFY":    "false",
 		"BLITZ_OUTPUT_OTLPGRPC_TLS_MIN_VERSION":    "1.2",
+		"BLITZ_METRICS_PORT":                       "9100",
 	}
 }
 
@@ -312,6 +314,9 @@ func TestOverrideDefaults(t *testing.T) {
 					Insecure:             true,
 				},
 			},
+		},
+		Metrics: Metrics{
+			Port: DefaultMetricsPort,
 		},
 	}
 	require.Equal(t, expectedCfg, cfg)
@@ -465,6 +470,9 @@ func TestOverrideFlags(t *testing.T) {
 				},
 			},
 		},
+		Metrics: Metrics{
+			Port: 8080,
+		},
 	}
 	require.Equal(t, expectedCfg, cfg)
 }
@@ -609,6 +617,9 @@ func TestOverrideEnvs(t *testing.T) {
 					MinTLSVersion:        "1.2",
 				},
 			},
+		},
+		Metrics: Metrics{
+			Port: 9100,
 		},
 	}
 	require.Equal(t, expectedCfg, cfg)
