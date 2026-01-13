@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/internal/useragent"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -251,7 +252,7 @@ func (g *ApacheCombinedLogGenerator) generateApacheCombinedLogData() (*apacheCom
 	data.referer = generateReferer(r)
 
 	// Generate user agent
-	data.userAgent = generateUserAgent(r)
+	data.userAgent = useragent.RandomUserAgent(r)
 
 	return data, nil
 }
@@ -348,23 +349,6 @@ func generateReferer(r *rand.Rand) string {
 	page := pages[r.Intn(len(pages))]       // #nosec G404
 
 	return fmt.Sprintf("%s%s", domain, page)
-}
-
-// generateUserAgent generates a random user agent string
-func generateUserAgent(r *rand.Rand) string {
-	userAgents := []string{
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
-		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
-		"curl/7.68.0",
-		"PostmanRuntime/7.32.3",
-		"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-	}
-
-	return userAgents[r.Intn(len(userAgents))] // #nosec G404
 }
 
 // formatAsApacheCombined converts apacheCombinedLogData to Apache Combined Log Format
