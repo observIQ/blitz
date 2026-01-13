@@ -283,7 +283,7 @@ jobs:
           make man-check
 
   completion-check:
-    name: Bash completion
+    name: Shell completion (bash, zsh)
     runs-on: ubuntu-latest
     needs: setup
     steps:
@@ -296,7 +296,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Generate and verify completion script
+      - name: Generate and verify completion scripts
         run: |
           make completion-check
 
