@@ -286,4 +286,3 @@ func BenchmarkPostgresGenerator(b *testing.B) {
 	defer cancel()
 	_ = generator.Stop(ctx)
 }
-

@@ -1,0 +1,4 @@
+<165>1 %Y-%m-%dT%H:%M:%SZ thor.example.com evntslog - ID47 [exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"] user connected
+<85>1 %Y-%m-%dT%H:%M:%SZ loki.example.com su - ID47 - BOM'su root' failed for lonvick on /dev/pts/8
+<28>1 %Y-%m-%dT%H:%M:%SZ thor.example.com scrooge - ID47 - disk-health-nurse[26783]: [ID 702911 user.error] m:SY-mon-full-500 c:H : partition health measures for /var did not suffice - still using 96% of partition space
+<27>1 %Y-%m-%dT%H:%M:%SZ baldur.example.com apache - ID47 - apache[17077]: "GET /foo/bar.html HTTP/1.1" 301 96 "-" "Mozilla/5.0 (Windows; U; Windows NT 5.1; fr; rv:1.9.2.12) Gecko/20101026 Firefox/3.6.12 ( .NET CLR 3.5.30729)" PID 18904 Time Taken 0

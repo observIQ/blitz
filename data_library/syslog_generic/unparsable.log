@@ -1,0 +1,6 @@
+<1377> I'm just a message that shouldn't parse
+%H:%M:%S,%3N INFO  [splunk] (mng.fulfill.core_Worker-1) Time={%Y-%m-%d %H:%M:%S,%3N} Message={Starting ManageEntitlementJob} LogLevel={Information} LogType={GENERIC_LOG} Class={com.odin.beehive.services.jobworkflow.amsjobs.ManageEntitlementJob} User={system}
+pstoffline(7516):Terminal:30, offline 0002 day(s)
+[coa-sync-service] - %Y-%m-%dT%H:%M:%S%:z  INFO [AccountService] Inserting 1165 rows into table... - {"appId":"0","appOwner":"app-architecture","appStack":"nestjs"}
+%b %e %T sys-cas-pl10 CAS_PROD[712]: Tue %b %e %T PDT %Y|CAS|[result=Service Access Granted,service=https://portal.ruckus.edu/uPortal/Login?...,requiredAttributes={}]|SERVICE_ACCESS_ENFORCEMENT_TRIGGERED|drodr246|10.13.49.165|172.16.156.55
+%b %e %T 10.142.0.75 80 <13>1 %Y-%m-%dT%H:%M:%S.%6N%:z rsyslog joe_sirianni - - -  test message
