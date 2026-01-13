@@ -1,15 +1,16 @@
 # File Generator
 
-The File generator reads log entries from files on disk. It supports three operational modes: reading from a single file, reading from all files in a directory, or reading from a pre-distributed package of sample logs. All timestamps in the log files should be in ctime format (e.g., `Thu Jan 13 15:30:45 2026`) or other standard formats that can be interpreted using ctime-like format patterns.
+The File generator reads log entries from files on disk and automatically processes timestamp directives. It supports reading from a single file, reading from all files in a directory, or reading from a pre-distributed package of sample logs. Timestamp directives in log entries (like `%c`, `%Y-%m-%dT%H:%M:%SZ`, etc.) are replaced with actual formatted timestamps on each log generation.
 
 ## Features
 
 - **Single file mode**: Read logs from a specified file path
 - **Directory mode**: Read logs from all files in a directory with optional glob pattern filtering
-- **Package mode**: Read logs from pre-distributed sample packages (15+ devices: Apache, NGINX, Palo Alto, Check Point, Fortinet, Cisco ASA, F5 BIG-IP, Linux IPtables, ISC BIND, PostFix, Squid, SonicWALL, Kubernetes, Okta, SNORT, and more)
+- **Auto-detection**: Mode can auto-detect whether source is a file or directory
+- **Package mode**: Read logs from pre-distributed sample packages (100+ devices: Apache, NGINX, Palo Alto, Check Point, Fortinet, Cisco ASA, F5 BIG-IP, Linux IPtables, ISC BIND, PostFix, Squid, SonicWALL, Kubernetes, Okta, SNORT, and more)
 - **Flexible rate limiting**: Configurable log generation rate per worker
 - **Multi-worker support**: Distribute file reading across multiple worker goroutines
-- **Ctime timestamp compatibility**: Support for logs with ctime-formatted timestamps and directives (%c, %Y-%m-%d, %H:%M:%S, etc.)
+- **Dynamic timestamp processing**: Automatic substitution of timestamp directives (`%c`, `%Y-%m-%dT%H:%M:%SZ`, `%Y-%m-%d`, etc.) with actual formatted times
 
 ## Example Logs
 
@@ -35,6 +36,21 @@ Fri Jan 14 08:22:17 2026 nginx.webserver.test nginx: 10.20.30.40 - - [Fri Jan 14
 Mon Jan 13 10:15:23 2026 checkpoint.firewall.test Check Point: orig=192.168.1.100 Rule=allow_http Action=Accept Protocol=tcp src=192.168.1.100 dst=203.0.113.1 sport=54321 dport=80
 ```
 
+## Timestamp Directives
+
+The File generator automatically processes timestamp directives in log files, replacing them with actual formatted timestamps. Use these directives in your log files to enable dynamic timestamp generation:
+
+| Directive | Format | Example |
+|-----------|--------|---------|
+| `%c` | Complete date and time | `Thu Jan 13 15:30:45 2026` |
+| `%Y-%m-%dT%H:%M:%SZ` | ISO 8601 UTC | `2026-01-13T15:30:45Z` |
+| `%Y-%m-%dT%H:%M:%S` | ISO 8601 local | `2026-01-13T15:30:45` |
+| `%Y-%m-%d` | ISO date only | `2026-01-13` |
+| `%H:%M:%S` | Time only | `15:30:45` |
+| `%b %e %T` | BSD format | `Jan 13 15:30:45` |
+| `%b %d %H:%M:%S` | Syslog format | `Jan 13 15:30:45` |
+| `%Y/%m/%d %H:%M:%S` | Common log format | `2026/01/13 15:30:45` |
+
 ## Configuration
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
@@ -42,15 +58,15 @@ Mon Jan 13 10:15:23 2026 checkpoint.firewall.test Check Point: orig=192.168.1.10
 | `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Set to `file` to use this generator. |
 | `generator.file.workers` | `--generator-file-workers` | `BLITZ_GENERATOR_FILE_WORKERS` | `1` | Number of worker goroutines (must be ≥ 1) |
 | `generator.file.rate` | `--generator-file-rate` | `BLITZ_GENERATOR_FILE_RATE` | `1s` | Rate at which logs are written per worker (duration format) |
-| `generator.file.mode` | `--generator-file-mode` | `BLITZ_GENERATOR_FILE_MODE` | `file` | File reading mode: `file`, `directory`, or `package` |
-| `generator.file.source` | `--generator-file-source` | `BLITZ_GENERATOR_FILE_SOURCE` | `` | File path, directory path, or package name depending on mode |
-| `generator.file.pattern` | `--generator-file-pattern` | `BLITZ_GENERATOR_FILE_PATTERN` | `*` | Glob pattern for directory mode (optional) |
+| `generator.file.mode` | `--generator-file-mode` | `BLITZ_GENERATOR_FILE_MODE` | `file` | File reading mode: `file`, `directory`, or `package`. For `file`/`directory`, auto-detection is performed on startup. |
+| `generator.file.source` | `--generator-file-source` | `BLITZ_GENERATOR_FILE_SOURCE` | `` | File path, directory path, or package name. Source type is auto-detected for `file`/`directory` modes. |
+| `generator.file.pattern` | `--generator-file-pattern` | `BLITZ_GENERATOR_FILE_PATTERN` | `*` | Glob pattern for filtering files when source is a directory (optional) |
 
 ## Example Configurations
 
-### Single File Mode
+### File or Directory Mode (Auto-Detected)
 
-Read logs from a single file:
+The generator automatically detects whether the source is a file or directory:
 
 ```yaml
 generator:
@@ -62,9 +78,7 @@ generator:
     source: /var/log/app.log
 ```
 
-### Directory Mode
-
-Read logs from all `.log` files in a directory:
+The source type is automatically detected. You can also specify a directory and the generator will read all files in it:
 
 ```yaml
 generator:
