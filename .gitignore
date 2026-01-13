@@ -1,5 +1,6 @@
 .gocache
 dist/
+blitz
 cmd/blitz/blitz
 docs/man/blitz.1
 docs/man/blitz.1.gz
