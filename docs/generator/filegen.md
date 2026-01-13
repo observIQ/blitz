@@ -1,4 +1,4 @@
-# File Generator
+# File Generator (filegen)
 
 The File generator reads log entries from files on disk and automatically processes timestamp directives. It supports reading from a single file, reading from all files in a directory, or reading from a pre-distributed package of sample logs. Timestamp directives in log entries (like `%c`, `%Y-%m-%dT%H:%M:%SZ`, etc.) are replaced with actual formatted timestamps on each log generation.
 
@@ -141,6 +141,8 @@ Each worker applies exponential backoff with initial interval set to the configu
 ## Timestamp Format Support
 
 Log files should contain timestamps in ctime format (e.g., `Thu Jan 13 15:30:45 2026`). The generator can interpret timestamps using ctime-like format patterns through the internal `ctime` package.
+
+For more information on ctime formatting, see the [ctime formatting guide](https://docs.bindplane.com/how-to-guides/ctime-formatting).
 
 ### Format Pattern Directives
 
