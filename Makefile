@@ -44,9 +44,11 @@ man-check: man
 	@git diff --quiet || (echo "Man pages are out of date. Run 'make man' and commit the changes." && git --no-pager status --porcelain && exit 1)
 
 completion:
-	@echo "Generating bash completion script..."
+	@echo "Generating bash and zsh completion scripts..."
 	@mkdir -p package/completions
-	@go run ./cmd/blitz completion bash > package/completions/blitz.bash || (echo "Failed to generate completion script. Ensure blitz binary can be built." && exit 1)
+	@go run ./cmd/blitz completion bash > package/completions/blitz.bash || (echo "Failed to generate bash completion script. Ensure blitz binary can be built." && exit 1)
+	@go run ./cmd/blitz completion zsh > package/completions/blitz.zsh || (echo "Failed to generate zsh completion script. Ensure blitz binary can be built." && exit 1)
+	@echo "✓ Bash and zsh completions generated successfully"
 
 # CI helper: regenerate completions and fail if the repo becomes dirty
 completion-check: completion
