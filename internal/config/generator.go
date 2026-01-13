@@ -29,7 +29,7 @@ const (
 	// GeneratorTypeKubernetes represents Kubernetes container log format generator
 	GeneratorTypeKubernetes GeneratorType = "kubernetes"
 	// GeneratorTypeFile represents File generator
-	GeneratorTypeFile GeneratorType = "file"
+	GeneratorTypeFile GeneratorType = "filegen"
 )
 
 // Generator contains configuration for log generators

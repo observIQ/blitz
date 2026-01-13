@@ -5,7 +5,7 @@ The File generator reads log entries from files on disk and automatically proces
 ## Features
 
 - **Single file mode**: Read logs from a specified file path
-- **Directory mode**: Read logs from all files in a directory with optional glob pattern filtering
+- **Directory mode**: Read logs from all files in a directory
 - **Auto-detection**: Mode can auto-detect whether source is a file or directory
 - **Package mode**: Read logs from pre-distributed sample packages (100+ devices: Apache, NGINX, Palo Alto, Check Point, Fortinet, Cisco ASA, F5 BIG-IP, Linux IPtables, ISC BIND, PostFix, Squid, SonicWALL, Kubernetes, Okta, SNORT, and more)
 - **Flexible rate limiting**: Configurable log generation rate per worker
@@ -55,12 +55,11 @@ The File generator automatically processes timestamp directives in log files, re
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Set to `file` to use this generator. |
+| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Set to `filegen` to use this generator. |
 | `generator.file.workers` | `--generator-file-workers` | `BLITZ_GENERATOR_FILE_WORKERS` | `1` | Number of worker goroutines (must be ≥ 1) |
 | `generator.file.rate` | `--generator-file-rate` | `BLITZ_GENERATOR_FILE_RATE` | `1s` | Rate at which logs are written per worker (duration format) |
 | `generator.file.mode` | `--generator-file-mode` | `BLITZ_GENERATOR_FILE_MODE` | `file` | File reading mode: `file`, `directory`, or `package`. For `file`/`directory`, auto-detection is performed on startup. |
 | `generator.file.source` | `--generator-file-source` | `BLITZ_GENERATOR_FILE_SOURCE` | `` | File path, directory path, or package name. Source type is auto-detected for `file`/`directory` modes. |
-| `generator.file.pattern` | `--generator-file-pattern` | `BLITZ_GENERATOR_FILE_PATTERN` | `*` | Glob pattern for filtering files when source is a directory (optional) |
 
 ## Example Configurations
 
@@ -70,7 +69,7 @@ The generator automatically detects whether the source is a file or directory:
 
 ```yaml
 generator:
-  type: file
+  type: filegen
   file:
     workers: 2
     rate: 100ms
@@ -83,13 +82,12 @@ The source type is automatically detected. You can also specify a directory and 
 ```yaml
 generator:
   type: file
+  file:gen
   file:
     workers: 2
     rate: 100ms
     mode: directory
     source: /var/log/application
-    pattern: "*.log"
-```
 
 ### Package Mode
 

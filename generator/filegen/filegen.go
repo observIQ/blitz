@@ -35,7 +35,6 @@ type FileLogGenerator struct {
 	rate    time.Duration
 	mode    Mode
 	source  string // file path or directory path or package name
-	pattern string // glob pattern for directory mode
 	stopCh  chan struct{}
 	wg      sync.WaitGroup
 	meter   metric.Meter
@@ -47,7 +46,7 @@ type FileLogGenerator struct {
 }
 
 // New creates a new File log generator
-func New(logger *zap.Logger, workers int, rate time.Duration, mode Mode, source, pattern string) (*FileLogGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, mode Mode, source string) (*FileLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -103,7 +102,6 @@ func New(logger *zap.Logger, workers int, rate time.Duration, mode Mode, source,
 		rate:          rate,
 		mode:          mode,
 		source:        source,
-		pattern:       pattern,
 		stopCh:        make(chan struct{}),
 		meter:         meter,
 		logsGenerated: logsGenerated,
@@ -216,34 +214,12 @@ func (g *FileLogGenerator) getFilesFromFile() ([]string, error) {
 	return []string{g.source}, nil
 }
 
-// getFilesFromDirectory returns all files matching the pattern in a directory
+// getFilesFromDirectory returns all files in a directory
 func (g *FileLogGenerator) getFilesFromDirectory() ([]string, error) {
-	pattern := g.pattern
-	if pattern == "" {
-		pattern = "*"
-	}
-
-	var files []string
-	err := filepath.Walk(g.source, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		// Match against pattern
-		matched, err := filepath.Match(pattern, filepath.Base(path))
-		if err != nil {
-			return err
-		}
-		if matched {
-			files = append(files, path)
-		}
-		return nil
-	})
-
+	pattern := filepath.Join(g.source, "*")
+	files, err := filepath.Glob(pattern)
 	if err != nil {
-		return nil, fmt.Errorf("walk directory: %w", err)
+		return nil, fmt.Errorf("glob directory: %w", err)
 	}
 
 	return files, nil

@@ -382,7 +382,6 @@ func run(cmd *cobra.Command, args []string) error {
 			cfg.Generator.File.Rate,
 			filegen.Mode(cfg.Generator.File.Mode),
 			cfg.Generator.File.Source,
-			cfg.Generator.File.Pattern,
 		)
 		if err != nil {
 			logger.Error("Failed to create File generator", zap.Error(err))

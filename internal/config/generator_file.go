@@ -15,8 +15,6 @@ type FileGeneratorConfig struct {
 	Mode string `yaml:"mode,omitempty" mapstructure:"mode,omitempty"`
 	// Source is the file path, directory path, or package name depending on mode
 	Source string `yaml:"source,omitempty" mapstructure:"source,omitempty"`
-	// Pattern is an optional glob pattern for directory mode
-	Pattern string `yaml:"pattern,omitempty" mapstructure:"pattern,omitempty"`
 }
 
 // Validate validates the File generator configuration

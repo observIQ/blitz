@@ -70,7 +70,6 @@ func TestNewFileLogGenerator(t *testing.T) {
 		rate    time.Duration
 		mode    Mode
 		source  string
-		pattern string
 		wantErr bool
 	}{
 		{
@@ -117,7 +116,7 @@ func TestNewFileLogGenerator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gen, err := New(logger, tt.workers, tt.rate, tt.mode, tt.source, tt.pattern)
+			gen, err := New(logger, tt.workers, tt.rate, tt.mode, tt.source)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, gen)
@@ -149,7 +148,7 @@ func TestFileLogGeneratorFileMode(t *testing.T) {
 	}
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 10*time.Millisecond, ModeFile, tmpfile.Name(), "")
+	gen, err := New(logger, 1, 10*time.Millisecond, ModeFile, tmpfile.Name())
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -193,8 +192,8 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Test with pattern
-	gen, err := New(logger, 1, 10*time.Millisecond, ModeDirectory, tmpdir, "*.log")
+	// Test with directory mode
+	gen, err := New(logger, 1, 10*time.Millisecond, ModeDirectory, tmpdir)
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -217,7 +216,7 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 func TestFileLogGeneratorNonexistentFile(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	gen, err := New(logger, 1, 100*time.Millisecond, ModeFile, "/nonexistent/path/file.log", "")
+	gen, err := New(logger, 1, 100*time.Millisecond, ModeFile, "/nonexistent/path/file.log")
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -238,7 +237,7 @@ func TestFileLogGeneratorStop(t *testing.T) {
 	require.NoError(t, err)
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 100*time.Millisecond, ModeFile, tmpfile.Name(), "")
+	gen, err := New(logger, 1, 100*time.Millisecond, ModeFile, tmpfile.Name())
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -264,7 +263,7 @@ func TestFileLogGeneratorWriteError(t *testing.T) {
 	require.NoError(t, err)
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 10*time.Millisecond, ModeFile, tmpfile.Name(), "")
+	gen, err := New(logger, 1, 10*time.Millisecond, ModeFile, tmpfile.Name())
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -294,7 +293,7 @@ func TestFileLogGeneratorMultipleWorkers(t *testing.T) {
 	}
 	tmpfile.Close()
 
-	gen, err := New(logger, 3, 10*time.Millisecond, ModeFile, tmpfile.Name(), "")
+	gen, err := New(logger, 3, 10*time.Millisecond, ModeFile, tmpfile.Name())
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -321,7 +320,7 @@ func TestTimestampProcessing(t *testing.T) {
 	require.NoError(t, err)
 	tmpFile.Close()
 
-	gen, err := New(logger, 1, 100*time.Millisecond, ModeFile, tmpFile.Name(), "")
+	gen, err := New(logger, 1, 100*time.Millisecond, ModeFile, tmpFile.Name())
 	require.NoError(t, err)
 
 	testCases := []struct {
