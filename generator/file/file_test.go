@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -18,18 +19,18 @@ import (
 // mockWriter implements output.Writer for testing
 type mockWriter struct {
 	mu       sync.Mutex
-	writes   [][]byte
+	writes   []output.LogRecord
 	writeErr error
 	delay    time.Duration
 }
 
 func newMockWriter() *mockWriter {
 	return &mockWriter{
-		writes: make([][]byte, 0),
+		writes: make([]output.LogRecord, 0),
 	}
 }
 
-func (m *mockWriter) Write(ctx context.Context, data []byte) error {
+func (m *mockWriter) Write(ctx context.Context, record output.LogRecord) error {
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -44,7 +45,7 @@ func (m *mockWriter) Write(ctx context.Context, data []byte) error {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.writes = append(m.writes, data)
+	m.writes = append(m.writes, record)
 	return nil
 }
 
@@ -52,10 +53,10 @@ func (m *mockWriter) Close(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockWriter) getWrites() [][]byte {
+func (m *mockWriter) getWrites() []output.LogRecord {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	writes := make([][]byte, len(m.writes))
+	writes := make([]output.LogRecord, len(m.writes))
 	copy(writes, m.writes)
 	return writes
 }

@@ -312,6 +312,7 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 
 // readAndWriteFile reads a file line by line and writes each line to the writer
 func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Writer) error {
+	// #nosec G304 - filename is controlled by the application, either from explicit config or from walking pre-packaged data library
 	file, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
