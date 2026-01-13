@@ -1,0 +1,8 @@
+<134>%c google-logs google-cloud: GCP audit log - Resource: projects/my-project - Action: compute.instances.create - User: user@example.com
+<134>%c google-logs google-cloud: Cloud Storage bucket access - Bucket: prod-data - Action: GetObject - Source IP: 192.168.1.50 - Success
+<134>%c google-logs google-cloud: Identity and Access Management change - Role assignment - User: admin@example.com - Role: roles/editor
+<134>%c google-logs google-cloud: Cloud SQL instance event - Instance: production-db - Event: Database backup completed - Size: 45GB
+<134>%c google-logs google-cloud: VPC Flow Logs - Source: 10.0.1.50 - Destination: 172.16.0.1:443 - Bytes sent: 1234567
+<134>%c google-logs google-cloud: Cloud Security Command Center - Finding: HIGH severity vulnerability - Resource: instance-1 - Remediation: Apply patch
+<134>%c google-logs google-cloud: BigQuery audit - Dataset: analytics_prod - Query executed - User: analyst@example.com - Rows scanned: 5000000
+<134>%c google-logs google-cloud: Workspace audit - User login - User: user@example.com - Source: 192.168.1.75 - Success

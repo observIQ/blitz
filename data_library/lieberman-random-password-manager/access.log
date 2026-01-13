@@ -1,0 +1,8 @@
+<135>%c lieberman-pam.test sshd[2847]: Accepted publickey for admin from 192.168.1.50 port 54321 ssh2
+<135>%c lieberman-pam.test sudo[3421]: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx
+<135>%c lieberman-pam.test sshd[2856]: Failed password for invalid user testuser from 10.20.30.40 port 49152 ssh2
+<135>%c lieberman-pam.test sudo[3452]: FAILED SU (to root) admin on /dev/pts/1
+<135>%c lieberman-pam.test sshd[2865]: Connection closed by 172.16.0.100 port 52341 [preauth]
+<135>%c lieberman-pam.test sudo[3463]: root : TTY=unknown ; PWD=/ ; USER=nobody ; COMMAND=/usr/bin/id
+<135>%c lieberman-pam.test sshd[2876]: Invalid user guest from 192.168.50.25 port 44280
+<135>%c lieberman-pam.test sudo[3475]: admin : COMMAND DENIED by policy for /bin/cat /etc/shadow

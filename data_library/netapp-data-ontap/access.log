@@ -1,0 +1,8 @@
+<134>%c netapp-cluster01.test ONTAP: Vserver=vs1, Event=vol_create, Volume=vol_prod_01, Size=1024GB, Aggregate=aggr1, Status=Success
+<134>%c netapp-cluster01.test ONTAP: Vserver=vs1, Event=snapshot_create, Volume=vol_prod_01, Snapshot=hourly.0, BaseSnapshot=hourly.1, Status=Success
+<134>%c netapp-cluster01.test ONTAP: Vserver=vs2, Event=lun_map, Lun=/vol/lun_db_01/db.lun, Igroup=igroup_servers, Status=Success, LunId=0
+<134>%c netapp-cluster01.test ONTAP: Vserver=vs1, Event=nfs_access, Client=192.168.10.50, Export=/vol/export_shared, Access=read_write, Status=Granted
+<134>%c netapp-cluster01.test ONTAP: Vserver=vs1, Event=cifs_session, Client=192.168.20.100, User=DOMAIN\\admin, Share=\\\\netapp\\share, Status=Connected
+<134>%c netapp-cluster01.test ONTAP: Node=node1, Event=disk_failure, ShelfId=1, BayId=5, SerialNumber=SSD123456, Status=Failed, Replacement=Required
+<134>%c netapp-cluster01.test ONTAP: Vserver=vs2, Event=quota_exceeded, Tree=/vol/home, User=user01, Quota=100GB, Used=105GB, Status=Exceeded
+<134>%c netapp-cluster01.test ONTAP: Vserver=vs1, Event=compression_status, Volume=vol_prod_01, Ratio=1.5, Savings=512GB, Status=Active

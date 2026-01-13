@@ -1,0 +1,3 @@
+<134>%c beyondtrust-pam session_start: User 'dba_admin' started privileged session to host 'prod-db-01.example.com' for UNIX/Linux
+<134>%c beyondtrust-pam session_end: Privileged session closed after 32 minutes, 4 commands executed
+<135>%c beyondtrust-pam policy_violation: Unauthorized privilege escalation attempt detected from user 'test_user' at 2026-01-13 10:15:30

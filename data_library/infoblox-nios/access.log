@@ -1,0 +1,8 @@
+<134>%c infoblox-nios Infoblox: DNS query - Query: www.example.com - Type: A - Response: 192.0.2.1 - Response time: 45ms
+<134>%c infoblox-nios Infoblox: DHCP lease allocation - IP: 192.168.1.50 - Client: workstation-001 - Lease time: 7 days - Status: Success
+<134>%c infoblox-nios Infoblox: DNS security check - Domain: suspicious-domain.ru - Reputation: MALICIOUS - Threat type: Malware - Action: BLOCK
+<134>%c infoblox-nios Infoblox: DNS RPZ policy applied - Policy: corporate-security - Redirect: ads.example.com -> 0.0.0.0 - Blocks: 5678
+<134>%c infoblox-nios Infoblox: DHCP failover - Primary server: 10.0.0.1 - Secondary server: 10.0.0.2 - Failover: SUCCESSFUL - Recovery time: 2 seconds
+<134>%c infoblox-nios Infoblox: DNS zone transfer - Zone: internal.example.com - Transfer type: AXFR - Status: Completed - Records: 2345
+<134>%c infoblox-nios Infoblox: Grid health check - Grid nodes: 3/3 online - Database sync: In sync - Last sync: 30 seconds ago
+<134>%c infoblox-nios Infoblox: Statistics report - DNS queries: 1.2M - DHCP requests: 456K - Cache hit rate: 87% - Average response time: 23ms

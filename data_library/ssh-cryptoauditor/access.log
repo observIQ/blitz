@@ -1,0 +1,8 @@
+<134>%c ssh-auditor.test SSH_Audit: EventType=UserLogin, User=admin, Method=PublicKey, ClientIP=192.168.1.100, Status=Success, LoginTime=%c
+<134>%c ssh-auditor.test SSH_Audit: EventType=FailedAuth, User=attacker, Method=Password, ClientIP=203.0.113.50, Attempts=5, Status=Failed
+<134>%c ssh-auditor.test SSH_Audit: EventType=CommandExecution, User=sysadmin, Command=rm -rf /important_dir, ClientIP=192.168.1.50, ExecutionTime=%c
+<134>%c ssh-auditor.test SSH_Audit: EventType=FileTransfer, User=app_user, Method=SCP, Direction=Upload, FileSize=524288000, Destination=192.168.1.100, Status=Success
+<134>%c ssh-auditor.test SSH_Audit: EventType=PrivilegeEscalation, User=developer, Command=sudo -i, ClientIP=192.168.1.100, EscalationTime=%c, Status=Granted
+<134>%c ssh-auditor.test SSH_Audit: EventType=SessionTermination, User=contractor, SessionDuration=7200s, ClientIP=198.51.100.100, EndTime=%c
+<134>%c ssh-auditor.test SSH_Audit: EventType=ConfigurationChange, Admin=root, Parameter=PermitRootLogin, OldValue=yes, NewValue=no, ChangeTime=%c
+<134>%c ssh-auditor.test SSH_Audit: EventType=KeyExchange, ClientIP=192.168.1.100, EncryptionAlgo=AES256, HashAlgo=SHA256, KeyExchangeTime=%c

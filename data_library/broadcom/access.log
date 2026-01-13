@@ -1,0 +1,3 @@
+<134>%c broadcom-device kernel: Disk I/O performance warning - Read latency 245ms on /dev/sda exceeded threshold of 100ms
+<134>%c broadcom-device kernel: Network interface eth0 status changed to DOWN - Link lost
+<135>%c broadcom-device kernel: Memory usage alert - Current: 89%, Threshold: 85% - Possible memory leak detected

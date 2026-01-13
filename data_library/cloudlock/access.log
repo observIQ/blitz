@@ -1,0 +1,3 @@
+{"event_id":"evt_lock_001","event_type":"suspicious_file_access","timestamp":"2026-01-13T10:15:30Z","user_email":"user@company.com","file_name":"confidential_salaries.xlsx","file_owner":"hr@company.com","action":"downloaded_to_external_device"}
+{"event_id":"evt_lock_002","event_type":"external_share","timestamp":"2026-01-13T10:16:45Z","user":"employee@company.com","resource":"Q:\\Departments\\Finance\\2026_Budget.pdf","shared_with":"external@gmail.com","permission":"view_only"}
+{"event_id":"evt_lock_003","event_type":"mass_download","timestamp":"2026-01-13T10:17:12Z","user":"departing_employee@company.com","location":"Q:\\Engineering","file_count":234,"total_size_gb":15.2}

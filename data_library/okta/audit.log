@@ -1,0 +1,3 @@
+%c [%Y-%m-%d %H:%M:%S] username: admin action: create_role source_ip: 192.168.1.100 status: SUCCESS
+%c [%Y-%m-%d %H:%M:%S] username: webapp_svc action: reset_mfa_device source_ip: 10.0.0.50 device_id: OKTA-123456 status: SUCCESS
+%c [%Y-%m-%d %H:%M:%S] username: user_guest action: login_attempt source_ip: 203.0.113.5 reason: INVALID_CREDENTIALS status: FAILURE

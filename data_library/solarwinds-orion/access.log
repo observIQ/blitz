@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "node_discovered", "node_name": "server-01.prod.local", "ip_address": "192.168.1.50", "node_type": "Windows Server", "version": "2019"}
+{"timestamp": "%c", "event_type": "interface_status_change", "node": "switch-01", "interface": "eth0", "status": "down", "status_change_time": "%c"}
+{"timestamp": "%c", "event_type": "performance_threshold_exceeded", "node": "appserver-02", "metric": "cpu_usage", "threshold": "80%", "current_value": "92%", "duration": "300s"}
+{"timestamp": "%c", "event_type": "syslog_received", "source": "192.168.1.100", "facility": "local0", "severity": "warning", "message": "Disk usage at 85%"}
+{"timestamp": "%c", "event_type": "trap_received", "trap_oid": "1.3.6.1.6.3.1.1.5.3.0", "source": "10.0.0.1", "description": "linkUp trap"}
+{"timestamp": "%c", "event_type": "alarm_generated", "alarm_id": "ALM_12345", "source": "database_server", "severity": "critical", "description": "High memory utilization"}
+{"timestamp": "%c", "event_type": "report_generated", "report_type": "availability_summary", "period": "daily", "up_percentage": "99.95%", "total_checks": 4320}
+{"timestamp": "%c", "event_type": "credential_rotation", "device": "firewall-01", "credential_type": "snmp", "rotation_time": "%c", "status": "success"}

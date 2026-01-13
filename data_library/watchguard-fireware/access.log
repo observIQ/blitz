@@ -1,0 +1,8 @@
+<134>%c hostname watchguard: evt_id=1001 severity=info action=connection_accept src=192.168.1.100 src_port=54321 dst=8.8.8.8 dst_port=443 protocol=TCP policy=Allow_Internet
+<134>%c hostname watchguard: evt_id=1002 severity=medium action=connection_deny src=10.20.30.40 src_port=55000 dst=203.0.113.60 dst_port=22 protocol=TCP reason=blocked_port
+<134>%c hostname watchguard: evt_id=1003 severity=high action=threat_detected src=192.168.50.100 threat_type=malware threat_name=Trojan.Generic action=quarantine
+<134>%c hostname watchguard: evt_id=1004 severity=info action=ssl_inspection src=172.16.0.50 dst=192.0.2.100 protocol=HTTPS certificate=CN=*.amazon.com status=verified
+<134>%c hostname watchguard: evt_id=1005 severity=critical action=dos_detected src=203.0.113.150 attack_type=SYN_Flood packet_rate=50000pps protocol=TCP action=rate_limit
+<134>%c hostname watchguard: evt_id=1006 severity=medium action=web_filter_block src=192.168.100.50 url=http://malicious-site.com category=malware action=blocked
+<134>%c hostname watchguard: evt_id=1007 severity=info action=vpn_client_connect user=jsmith client_ip=203.0.113.150 client_version=12.6.1 tunnel_protocol=TLS1.2
+<134>%c hostname watchguard: evt_id=1008 severity=high action=ips_signature_match src=10.30.40.50 dst=198.51.100.100 signature=WG-AlertProto-IPS-CVE-2021-XXXX classification=Exploit

@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "email_received", "direction": "inbound", "sender": "external@untrusted.com", "recipient": "user@company.com", "subject": "Urgent: Action Required", "spam_score": 8.5, "verdict": "spam", "action": "quarantine"}
+{"timestamp": "%c", "event_type": "phishing_detected", "direction": "inbound", "sender": "noreply@fake-bank.com", "recipient": "admin@company.com", "phishing_score": 98, "target": "bank_credentials", "action": "blocked"}
+{"timestamp": "%c", "event_type": "malware_detected", "direction": "inbound", "sender": "attacker@malicious.net", "recipient": "user@company.com", "attachment": "invoice.exe", "malware_name": "Trojan.Generic", "action": "dropped"}
+{"timestamp": "%c", "event_type": "dlp_violation", "direction": "outbound", "sender": "employee@company.com", "recipient": "competitor@rival.com", "content": "contains_source_code", "severity": "high", "action": "blocked"}
+{"timestamp": "%c", "event_type": "authentication_failure", "direction": "inbound", "sender": "attacker@evil.net", "reason": "spf_fail", "ip_address": "203.0.113.50", "attempts": 12, "action": "rejected"}
+{"timestamp": "%c", "event_type": "encryption_required", "direction": "outbound", "sender": "user@company.com", "recipient": "external@partner.com", "status": "tls_enforced", "action": "delivered"}
+{"timestamp": "%c", "event_type": "large_attachment_warning", "direction": "outbound", "sender": "admin@company.com", "recipient": "team@company.com", "attachment_size_mb": 450, "warning": "exceeds_limit", "action": "flagged"}
+{"timestamp": "%c", "event_type": "rate_limit_triggered", "sender": "mailing_list@company.com", "recipient_count": 5000, "emails_per_hour": 12000, "action": "throttled"}

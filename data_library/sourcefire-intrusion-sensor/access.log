@@ -1,0 +1,8 @@
+<134>%c sourcefire-ids.test IDS: Alert=Malware_Detected, AlertID=SID_2000001, ClassID=50, Signature=Trojan.Generic, SrcIP=192.0.2.100, DstIP=192.168.1.50, DstPort=443, Protocol=TCP, Severity=Critical, Action=block
+<134>%c sourcefire-ids.test IDS: Alert=Shellcode_Detected, AlertID=SID_1000001, ClassID=49, Signature=x86_Shellcode, SrcIP=203.0.113.100, DstIP=192.168.1.100, DstPort=80, Severity=Critical, Action=block
+<134>%c sourcefire-ids.test IDS: Alert=SQL_Injection, AlertID=SID_3000001, ClassID=8, Signature=SQL_Injection_Attack, SrcIP=10.20.30.40, DstIP=192.168.1.50, DstPort=443, Severity=High, Action=alert
+<134>%c sourcefire-ids.test IDS: Alert=Port_Scan, AlertID=SID_4000001, ClassID=14, Signature=Port_Scanner_Activity, SrcIP=198.51.100.100, DstIP=192.168.1.0/24, Protocol=TCP, Severity=Medium, Action=alert
+<134>%c sourcefire-ids.test IDS: Alert=FTP_Exploit, AlertID=SID_5000001, ClassID=12, Signature=FTP_CWD_Exploit, SrcIP=203.0.113.200, DstIP=192.168.1.100, DstPort=21, Severity=High, Action=block
+<134>%c sourcefire-ids.test IDS: Alert=Web_App_Attack, AlertID=SID_6000001, ClassID=4, Signature=XSS_Attack, SrcIP=192.0.2.150, DstIP=192.168.1.50, DstPort=80, Severity=High, Action=alert
+<134>%c sourcefire-ids.test IDS: Alert=Denial_Service, AlertID=SID_7000001, ClassID=3, Signature=DoS_Attack, SrcIP=203.0.113.50, DstIP=192.168.1.100, DstPort=443, Severity=Critical, Action=block
+<134>%c sourcefire-ids.test IDS: Alert=Policy_Violation, AlertID=SID_8000001, ClassID=2, Signature=Outbound_Proxy, SrcIP=192.168.1.100, DstIP=203.0.113.1, DstPort=8080, Severity=Medium, Action=alert

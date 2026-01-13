@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "user_authentication", "user": "admin@company.pingfederate.com", "authentication_method": "password", "result": "success", "ip_address": "192.168.1.100"}
+{"timestamp": "%c", "event_type": "oauth_token_issued", "client_id": "salesforce_app", "scope": "profile email", "result": "success", "lifetime": 3600}
+{"timestamp": "%c", "event_type": "saml_assertion_generated", "issuer": "pingfederate.company.com", "subject": "user@company.com", "audience": "office365", "result": "success"}
+{"timestamp": "%c", "event_type": "mfa_challenge_issued", "user": "user@company.pingfederate.com", "mfa_method": "totp", "result": "success"}
+{"timestamp": "%c", "event_type": "failed_authentication", "user": "attacker@unknown.com", "authentication_method": "password", "reason": "invalid_credential", "ip_address": "203.0.113.50", "attempts": 3}
+{"timestamp": "%c", "event_type": "policy_violation", "user": "contractor@company.pingfederate.com", "policy": "require_mfa", "action": "authentication_denied"}
+{"timestamp": "%c", "event_type": "session_timeout", "user": "user@company.pingfederate.com", "session_duration": 1800}
+{"timestamp": "%c", "event_type": "federation_metadata_published", "endpoint": "pingfederate.company.com/metadata", "result": "success"}

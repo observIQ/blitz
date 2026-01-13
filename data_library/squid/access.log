@@ -1,0 +1,3 @@
+%c CEF:0|Squid|Squid|5.8|%c|TCP_MISS|Low|src=192.168.1.100 spt=54321 dst=8.8.8.8 dpt=443 proto=https request=www.google.com/search?q=test act=Denied cs1Label=Category cs1=Search\ Engines bytes=%s
+%c CEF:0|Squid|Squid|5.8|%c|TCP_HIT|Low|src=192.168.1.101 spt=54322 dst=1.1.1.1 dpt=443 proto=https request=api.cloudflare.com/v4/ act=Allowed cs1Label=Category cs1=Technology
+%c CEF:0|Squid|Squid|5.8|%c|TCP_DENIED|High|src=192.168.1.102 spt=54323 dst=192.0.2.1 dpt=9999 proto=tcp request=malware.site.com act=Denied cs1Label=Category cs1=Malware\ \&\ Phishing

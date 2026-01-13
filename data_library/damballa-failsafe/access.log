@@ -1,0 +1,8 @@
+<134>%c damballa-threat01 Failsafe: Malware detection event - Detected: Win32/Trojan at 192.168.1.50 - BLOCKED
+<134>%c damballa-threat01 Failsafe: Phishing URL detected - URL: http://malicious-site.com/phish - Source: 10.0.0.100
+<134>%c damballa-threat01 Failsafe: Bot command & control communication attempt - Source: 172.16.0.25 - Destination: 203.0.113.50:8080
+<134>%c damballa-threat01 Failsafe: Ransomware signature match - Process: explorer.exe at 192.168.1.75 - QUARANTINED
+<134>%c damballa-threat01 Failsafe: Policy violation - Unauthorized software execution on 10.100.100.50
+<134>%c damballa-threat01 Failsafe: Exploit attempt blocked - CVE-2021-44228 (Log4j) from 192.168.2.30
+<134>%c damballa-threat01 Failsafe: Data exfiltration attempt detected - Destination: external-ip:443 - Size: 512MB
+<134>%c damballa-threat01 Failsafe: Update check completed - Threat definitions updated to version 2026.01.13

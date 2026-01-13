@@ -1,0 +1,8 @@
+<134>%c rsa-am.test RSA: EventType=TokenSync, SerialNumber=RSA123456, User=admin, Status=Success, Timestamp=%c
+<134>%c rsa-am.test RSA: EventType=AuthentationSuccess, User=vpn_user, AuthMethod=Token, ClientIP=192.168.1.100, Device=MyMobilePass, Status=Success
+<134>%c rsa-am.test RSA: EventType=AuthenticationFailure, User=contractor, AuthMethod=Token, ClientIP=203.0.113.50, Reason=InvalidOTP, Attempts=3, Status=Failed
+<134>%c rsa-am.test RSA: EventType=TokenExpired, SerialNumber=RSA789012, User=departed_employee, ExpiryDate=%c, Action=Deactivated
+<134>%c rsa-am.test RSA: EventType=TokenReset, RequestedBy=secadmin, ForUser=user@company.com, ResetReason=Lost_Device, ApprovedBy=manager@company.com, Status=Approved
+<134>%c rsa-am.test RSA: EventType=AdminActivity, Admin=secadmin, Action=UpdateSecurityPolicy, Parameter=PINLength, OldValue=4, NewValue=6, Status=Applied
+<134>%c rsa-am.test RSA: EventType=AuditLog, LogType=Authentication, StartDate=2026-01-01, EndDate=2026-01-13, RecordCount=54321, ExportedTo=secure_server
+<134>%c rsa-am.test RSA: EventType=ConfigurationBackup, BackupTime=%c, Status=Completed, SizeGB=2, VerificationStatus=Passed

@@ -1,0 +1,8 @@
+<137>%c metainfo-threat.test MetaIP: ThreatLevel=CRITICAL, ThreatType=Botnet, SuspiciousIP=192.0.2.50, Country=RU, ISP=Hacker_Services, PreviousSightings=1247, LastSeen=%c, Confidence=98
+<137>%c metainfo-threat.test MetaIP: ThreatLevel=HIGH, ThreatType=Malware_C2, SuspiciousIP=198.51.100.75, Country=CN, ISP=Cloud_Provider, PreviousSightings=567, LastSeen=%c, Confidence=89
+<137>%c metainfo-threat.test MetaIP: ThreatLevel=MEDIUM, ThreatType=Phishing, SuspiciousIP=203.0.113.100, Country=US, ISP=Compromised_Host, PreviousSightings=23, LastSeen=%c, Confidence=72
+<137>%c metainfo-threat.test MetaIP: ThreatLevel=CRITICAL, ThreatType=DDoS_Botnet, SuspiciousIP=192.0.2.150, Country=KP, ISP=Rogue_ISP, PreviousSightings=8945, LastSeen=%c, Confidence=99
+<137>%c metainfo-threat.test MetaIP: ThreatLevel=HIGH, ThreatType=Ransomware, SuspiciousIP=198.51.100.200, Country=IR, ISP=Hosting_Provider, PreviousSightings=234, LastSeen=%c, Confidence=85
+<137>%c metainfo-threat.test MetaIP: ThreatLevel=MEDIUM, ThreatType=Spyware, SuspiciousIP=203.0.113.25, Country=PK, ISP=ISP_Corp, PreviousSightings=45, LastSeen=%c, Confidence=68
+<137>%c metainfo-threat.test MetaIP: ThreatLevel=HIGH, ThreatType=Exploitkit, SuspiciousIP=192.0.2.200, Country=VN, ISP=Datacenter, PreviousSightings=567, LastSeen=%c, Confidence=87
+<137>%c metainfo-threat.test MetaIP: ThreatLevel=CRITICAL, ThreatType=Zero_Day_Source, SuspiciousIP=198.51.100.120, Country=KP, ISP=Unknown, PreviousSightings=0, LastSeen=%c, Confidence=100

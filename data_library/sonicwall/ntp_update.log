@@ -1,0 +1,1 @@
+<133>  id=firewall sn=12345678123 time="%Y-%m-%d %H:%M:%S" fw=10.0.0.253 pri=5 c=128 m=1231 msg="Time update from NTP server was successful" sess="None" n=1104 src=10.0.2.3:123:X0 dst=10.0.5.6:123:X1 proto=0/ntp note="Received reply from NTP server 10.2.2.5. Update system time from %m/%d/%Y %H:%M:%S.%3N to %m/%d/%Y %H:%M:%S.%3N"

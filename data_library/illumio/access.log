@@ -1,0 +1,8 @@
+<134>%c illumio-01 Illumio-ASP: Policy enforcement - Flow: 192.168.1.50 -> 10.0.0.100:443 - Policy: allow-https-to-db - Action: ALLOW
+<134>%c illumio-01 Illumio-ASP: Microsegmentation rule applied - Label: app-tier - Allowed connections: 234 - Blocked: 45
+<134>%c illumio-01 Illumio-ASP: Workload visibility - Workload: web-app-01 - Service port: 8080 - Discovered processes: 23 - Active connections: 156
+<134>%c illumio-01 Illumio-ASP: Policy violation alert - Source: 172.16.0.50 - Destination: 10.100.0.100 - Protocol: SSH - Action: BLOCKED - Reason: No policy
+<134>%c illumio-01 Illumio-ASP: Segmentation audit - Workloads in enforcement mode: 250 - Workloads in visibility only: 50 - Coverage: 86%
+<134>%c illumio-01 Illumio-ASP: Traffic policy update - Policy rule added - Source CIDR: 192.168.0.0/16 - Destination: secure-tier - Ports: 443 - Action: ALLOW
+<134>%c illumio-01 Illumio-ASP: Anomalous connection detection - Workload: db-server-01 - Unexpected connection from: 192.168.100.50 - Risk score: 8.5/10
+<134>%c illumio-01 Illumio-ASP: Compliance dashboard - Policy violations: 12 - Unmanaged workloads: 5 - Remediation needed: 8

@@ -1,0 +1,5 @@
+%a %b %d %H:%M:%S %Y checkpoint.firewall.test Check Point: orig=192.168.1.100 Rule=allow_http Action=Accept Protocol=tcp src=192.168.1.100 dst=203.0.113.1 sport=54321 dport=80
+%a %b %d %H:%M:%S %Y checkpoint.firewall.test Check Point: orig=10.0.0.50 Rule=deny_telnet Action=Drop Protocol=tcp src=10.0.0.50 dst=172.16.0.1 sport=54322 dport=23
+%a %b %d %H:%M:%S %Y checkpoint.firewall.test Check Point: orig=192.168.2.200 Rule=allow_ssh Action=Accept Protocol=tcp src=192.168.2.200 dst=203.0.113.2 sport=54323 dport=22
+%a %b %d %H:%M:%S %Y checkpoint.firewall.test Check Point: orig=10.20.30.40 Rule=ips_alert Action=Alert Protocol=udp src=10.20.30.40 dst=192.0.2.1 sport=53456 dport=53
+%a %b %d %H:%M:%S %Y checkpoint.firewall.test Check Point: orig=172.31.0.5 Rule=auth_failed Action=Drop Protocol=tcp src=172.31.0.5 dst=203.0.113.3 sport=54324 dport=443 reason=auth_timeout

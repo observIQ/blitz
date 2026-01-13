@@ -1,0 +1,8 @@
+<134>%c logbinder-collector.test EventLog: ComputerName=WORKSTATION01, EventType=Failure Audit, EventID=4625, Description=An account failed to log on, User=DOMAINNAME\adminuser, Workstation=WORKSTATION01, Status=0xc000006e
+<134>%c logbinder-collector.test EventLog: ComputerName=SERVER02, EventType=Success Audit, EventID=4624, Description=An account was successfully logged on, User=DOMAINNAME\svc_admin, LogonType=3, LogonProcess=kerberos
+<134>%c logbinder-collector.test EventLog: ComputerName=FILESERVER, EventType=Warning, EventID=4720, Description=A user account was created, NewUserName=tempuser, Caller=DOMAINNAME\administrator
+<134>%c logbinder-collector.test EventLog: ComputerName=DOMAINCTRL01, EventType=Success Audit, EventID=4662, Description=An operation was performed on an object, ObjectName=CN=Administrator, Operation=Delete, User=DOMAINNAME\backup_admin
+<134>%c logbinder-collector.test EventLog: ComputerName=EXCHANGE, EventType=Error, EventID=5000, Description=The service failed to start, ServiceName=MSExchangeIS, ErrorCode=0x8004010f
+<134>%c logbinder-collector.test EventLog: ComputerName=WORKSTATION03, EventType=Failure Audit, EventID=4673, Description=A privileged service was called, ServiceName=TokenHandle, Caller=SYSTEM, User=DOMAINNAME\guest
+<134>%c logbinder-collector.test EventLog: ComputerName=SERVER04, EventType=Success Audit, EventID=4698, Description=A scheduled task was created, TaskName=\Microsoft\Windows\UpdateOrchestrator\USO_UxBroker, Creator=DOMAINNAME\itadmin
+<134>%c logbinder-collector.test EventLog: ComputerName=WORKSTATION05, EventType=Warning, EventID=2004, Description=Failed to load driver, DriverName=ntfs.sys, ErrorCode=0xC000000E

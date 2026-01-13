@@ -1,0 +1,3 @@
+<134>%c barracuda-fw kernel: Spam filter block - Message from 192.0.2.10 to user@example.com blocked due to spam score 8.5
+<134>%c barracuda-fw kernel: Virus scan result - Attachment 'document.exe' detected as Trojan.Generic
+<135>%c barracuda-fw kernel: DLP policy violation - Confidential data pattern matched in outgoing email to external.user@external.com

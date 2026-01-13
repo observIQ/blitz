@@ -1,0 +1,7 @@
+<182>%Y-%m-%dT%H:%M:%S.%3NZ esxi-a vmkernel: cpu21:2097238)ScsiDeviceIO: 4124: Cmd(0x45b9309b77c8) 0x42, CmdSN 0xd82373 from world 20761373 to dev "t10.VMDRAID_Intel_Raid_1_VolumeVolume000000001" failed H:0xc D:0x0 P:0x0
+<14>%Y-%m-%dT%H:%M:%S.%3NZ esxi-b localcli[34364661]: Log for VMware ESXi version=7.0.3 build=build-22348816 option=Release
+<14>%Y-%m-%dT%H:%M:%S.%3NZ esxi-a localcli[34364628]: GetTypedFileSystems: fstype vfat
+<166>%Y-%m-%dT%H:%M:%S.%3NZ esxi-b healthd: info healthd[2100983] [Originator@6876 sub=PluginLauncher] Peak requested reservation (MB): 40, Peak requested reservation of children groups (MB): 40
+<164>%Y-%m-%dT%H:%M:%S.%3NZ esxi-a Hostd: warning hostd[2106157] [Originator@6876 sub=Default] load_v6_addresses: Ignore BMC V6 IP addr 56, not active, state=1
+<167>%Y-%m-%dT%H:%M:%S.%3NZ esxi-b healthd: verbose healthd[2100983] [Originator@6876 sub=PluginLauncher] Pushed plugin /usr/lib/vmware/healthd/plugins/bin/coreServicesStatus.py (34364599) for tracking
+<14>%Y-%m-%dT%H:%M:%S.%3NZ esxi-a localcli[34364582]: VsanUtil: ClearVsanHostEnterMaintenanceModeCallback: Cleared callback

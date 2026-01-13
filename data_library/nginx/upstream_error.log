@@ -1,0 +1,1 @@
+<187>%b %e %T company3-hst nginx: %F %H:%M:%S [error] 24881#24881: *416 connect() failed (111: Connection refused) while connecting to upstream, client: 198.51.100.111, server: ute-hst.company.com, request: "POST /api/v1/view/bill HTTP/1.1", upstream: "http://198.51.100.225:9000/v1/view/bill", host:"198.51.100.25:8080", referrer: "https://www.hst.company.com/web/totes/"

@@ -1,0 +1,8 @@
+<141>%c pirean-access.test AccessEvent: EventType=UserLogin, User=admin, System=MainApp, Status=Success, ClientIP=192.168.1.100, AuthMethod=Kerberos, Timestamp=%c
+<141>%c pirean-access.test AccessEvent: EventType=PrivilegeEscalation, User=contractor, System=MainApp, GrantedRole=Editor, GrantedBy=security_admin, Status=Approved
+<141>%c pirean-access.test AccessEvent: EventType=FailedAccess, User=external_user, System=MainApp, Status=Denied, Reason=InvalidCredential, Attempts=5
+<141>%c pirean-access.test AccessEvent: EventType=ResourceAccess, User=app_user, System=MainApp, ResourceName=SalesDatabase, AccessType=SELECT, Duration=300s
+<141>%c pirean-access.test AccessEvent: EventType=PolicyUpdate, Admin=security_admin, System=MainApp, PolicyName=RequireMFA, OldValue=false, NewValue=true
+<141>%c pirean-access.test AccessEvent: EventType=AuditReport, GeneratedBy=compliance_user, Report=QuarterlyAccess, StartDate=2025-10-01, EndDate=2025-12-31, Records=54321
+<141>%c pirean-access.test AccessEvent: EventType=RoleRevocation, User=departed_employee, System=MainApp, RevokedRoles=5, RevokedBy=hr_admin, Timestamp=%c
+<141>%c pirean-access.test AccessEvent: EventType=SessionTermination, User=inactive_user, System=MainApp, SessionDuration=86400, Reason=IdleTimeout

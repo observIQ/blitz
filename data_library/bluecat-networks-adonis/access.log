@@ -1,0 +1,3 @@
+<134>%c bluecat-dns named: DHCP lease assigned - IP 192.168.1.150 to MAC 00:11:22:33:44:55 for hostname 'workstation-42'
+<134>%c bluecat-dns named: DNS query - hostname 'api.example.com' resolved to 10.0.0.5 from client 192.168.1.100
+<135>%c bluecat-dns named: Zone transfer initiated from secondary nameserver 10.0.0.20 for zone 'example.com'

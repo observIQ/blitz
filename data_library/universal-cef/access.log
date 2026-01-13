@@ -1,0 +1,8 @@
+CEF:0|Acme|WebApp|1.0|SecurityAlert|LoginFailure|5|src=192.168.1.100 spt=54321 dst=192.0.2.50 dpt=443 proto=TCP act=deny msg=Invalid\ Credentials cs1=attacker cs1Label=username
+CEF:0|Secure|DataLoss|1.1|DataExfil|FileTransfer|9|src=192.168.1.100 spt=49152 dst=203.0.113.50 dpt=443 file=/confidential.xlsx fileSize=5242880 msg=Sensitive\ Document\ Transferred
+CEF:0|Network|IDS|2.0|Malware|Trojan_Detected|10|src=10.20.30.40 spt=60000 dst=198.51.100.100 dpt=8080 proto=TCP malware=Trojan.Generic severity=critical
+CEF:0|Enterprise|SIEM|3.0|Privilege|EscalationAttempt|8|src=192.168.50.100 spt=55555 dst=192.168.1.1 user=admin oldpriv=user newpriv=root msg=Unauthorized\ Escalation
+CEF:0|Cloud|WAF|1.5|WebAttack|SQLInjection|7|src=203.0.113.100 dpt=80 uri=/search?q=1'OR'1'='1 payload=SQL\ Injection msg=Web\ Application\ Attack
+CEF:0|Container|Runtime|2.1|Process|Suspicious|6|src=172.17.0.5 image=malicious:latest command=/bin/sh msg=Suspicious\ Container\ Process
+CEF:0|Endpoint|EDR|4.0|Threat|Ransomware|10|host=WORKSTATION01 file=C:\Users\admin\Documents\encrypted.exe severity=critical msg=Ransomware\ Detected
+CEF:0|Identity|IdP|1.2|Auth|MFABypass|9|src=192.0.2.150 user=admin@company.com method=compromised_mfa msg=MFA\ Bypass\ Detected

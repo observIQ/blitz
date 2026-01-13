@@ -1,0 +1,5 @@
+<190>%c cisco-asa.security.test ASA: %ASA-4-113008: [IKE] IKE received unsupported payload type (0x28) in message (M_ID=0). connection from 203.0.113.1 port 500 to 192.168.1.100 port 500 (192.168.1.100/vpn)
+<190>%c cisco-asa.security.test ASA: %ASA-6-429001: User 'vpn_user' authenticated.
+<190>%c cisco-asa.security.test ASA: %ASA-5-305013: Crypto connection termination: peer 203.0.113.1, Crypto socket 5, Reason: crypto session terminated normally
+<190>%c cisco-asa.security.test ASA: %ASA-4-713049: IKE Initiator: Received Notify message - INVALID_PAYLOAD_TYPE for SPI 0xdeadbeef
+<190>%c cisco-asa.security.test ASA: %ASA-6-419001: IP address assignment by DHCP pool [vpn] from 10.0.0.100 to 10.0.0.150 confirmed: addr 10.0.0.125 mask 255.255.255.0 for client address 172.31.0.5

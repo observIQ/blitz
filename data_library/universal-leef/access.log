@@ -1,0 +1,8 @@
+<134>%c hostname universal-leef: Event=LEEF:2.0|Reflex|EventManager|1.0|10001|src=192.168.1.100 spt=48900 dst=192.0.2.50 dpt=443 proto=TCP policy=Deny msg=Connection\ Blocked
+<134>%c hostname universal-leef: Event=LEEF:2.0|Reflex|EventManager|1.0|10002|src=10.20.30.40 spt=55000 dst=203.0.113.60 dpt=22 proto=TCP resource=/etc/passwd action=attempted msg=SSH\ Brute\ Force
+<134>%c hostname universal-leef: Event=LEEF:2.0|Reflex|EventManager|1.0|10003|src=192.168.50.100 user=admin endpoint=DESKTOP01 action=login_failure msg=Authentication\ Failed\ -\ Invalid\ Credentials
+<134>%c hostname universal-leef: Event=LEEF:2.0|Reflex|EventManager|1.0|10004|src=172.16.0.50 spt=51234 dst=198.51.100.100 dpt=80 protocol=HTTP uri=/admin msg=Directory\ Traversal\ Attempt
+<134>%c hostname universal-leef: Event=LEEF:2.0|Reflex|EventManager|1.0|10005|src=203.0.113.150 file=C:\Users\Public\malware.exe action=blocked severity=high msg=Malware\ Download\ Prevented
+<134>%c hostname universal-leef: Event=LEEF:2.0|Reflex|EventManager|1.0|10006|src=192.168.100.50 user=jsmith action=file_access resource=financial_report.xlsx msg=Sensitive\ Data\ Access
+<134>%c hostname universal-leef: Event=LEEF:2.0|Reflex|EventManager|1.0|10007|src=10.30.40.50 spt=54000 dst=192.0.2.100 dpt=443 tls_version=SSLv2 msg=Legacy\ Protocol\ Detected
+<134>%c hostname universal-leef: Event=LEEF:2.0|Reflex|EventManager|1.0|10008|src=172.17.0.100 container_id=abc123def456 action=exit_code exit_code=139 msg=Suspicious\ Process\ Termination

@@ -1,0 +1,8 @@
+<145>%c tropos-control.test ICS: EventType=NodeDiscovered, NodeID=NODE_12345, NodeType=Router, FirmwareVersion=3.2.1, DiscoveryTime=%c
+<145>%c tropos-control.test ICS: EventType=HealthStatus, NodeID=NODE_12346, CPUUsage=45%, MemoryUsage=78%, Status=Healthy, CheckTime=%c
+<145>%c tropos-control.test ICS: EventType=ConfigurationChange, NodeID=NODE_12347, Parameter=IPAddress, OldValue=192.168.1.100, NewValue=192.168.1.101, ApprovalStatus=Pending
+<145>%c tropos-control.test ICS: EventType=SecurityAlert, NodeID=NODE_12348, AlertType=UnauthorizedAccess, SourceIP=203.0.113.50, Attempts=5, Status=Blocked
+<145>%c tropos-control.test ICS: EventType=MeshLinkStatus, SourceNode=NODE_12349, DestinationNode=NODE_12350, LinkQuality=95%, PacketLoss=0.5%, Status=Excellent
+<145>%c tropos-control.test ICS: EventType=BackupComplete, BackupTime=%c, NodesBackedUp=45, DataSize=524288000, Status=Success
+<145>%c tropos-control.test ICS: EventType=FirmwareUpdate, NodeID=NODE_12351, UpdateVersion=3.3.0, UpdateStatus=InProgress, PercentComplete=75%
+<145>%c tropos-control.test ICS: EventType=CapacityAlert, NodeID=NODE_12352, Metric=StorageUsage, Threshold=80%, CurrentUsage=92%, AlertLevel=Critical

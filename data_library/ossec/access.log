@@ -1,0 +1,8 @@
+<134>%c ossec-manager.test ossec: Alert Level: 5, Rule: 5715, Description: System audit disabled, File: /var/log/audit/audit.log, Severity: High
+<134>%c ossec-manager.test ossec: Alert Level: 7, Rule: 1002, Description: Unknown problem signal received, Process: apache, PID: 5678, File: apache
+<134>%c ossec-manager.test ossec: Alert Level: 10, Rule: 20001, Description: Rootkit detection, File: /bin/login, Severity: Critical, Type: Rootkit.Linux
+<134>%c ossec-manager.test ossec: Alert Level: 8, Rule: 4001, Description: Suspicious process detected, Process: suspicious.scr, Parent: svchost.exe, PID: 1234
+<134>%c ossec-manager.test ossec: Alert Level: 4, Rule: 3001, Description: SSH configuration changed, File: /etc/ssh/sshd_config, MD5: a1b2c3d4e5f6, Size: 4578
+<134>%c ossec-manager.test ossec: Alert Level: 6, Rule: 1002, Description: Failed login attempt, User: admin, Source: 192.168.1.100, Attempts: 3
+<134>%c ossec-manager.test ossec: Alert Level: 9, Rule: 10001, Description: Malware detected, File: /tmp/malware.bin, SHA256: 1234567890abcdef
+<134>%c ossec-manager.test ossec: Alert Level: 5, Rule: 5716, Description: SELinux status changed, Status: disabled, Timestamp: %c

@@ -1,0 +1,8 @@
+<134>%c oracle-db.test Oracle: Audit=UserLogin, User=sys, Privilege=SYSDBA, LogonTime=%c, TerminalName=pts/0, ClientIP=192.168.1.100, Status=Success
+<134>%c oracle-db.test Oracle: Audit=SQLExecution, User=app_user, SQLText=SELECT * FROM employees, ExecutionTime=120ms, RowsAffected=5432, Status=Success
+<134>%c oracle-db.test Oracle: Audit=FailedLogin, User=unknown, LogonTime=%c, TerminalName=sql*plus, ClientIP=203.0.113.50, Status=Failure, ErrorCode=1017
+<134>%c oracle-db.test Oracle: Audit=PrivilegeGrant, GrantedBy=sys, Grantee=contractor, Privilege=EXECUTE, ObjectName=DBMS_SQL, Status=Success
+<134>%c oracle-db.test Oracle: Audit=TableAccess, User=analyst, AccessType=SELECT, TableName=salary, RowsRead=8934, SensitiveData=Y, Status=Audited
+<134>%c oracle-db.test Oracle: Audit=ArchiveFull, Threshold=90%, CurrentUsage=92%, SpaceAvailable=5GB, AlertLevel=Critical, Status=Generated
+<134>%c oracle-db.test Oracle: Audit=DatabaseParameter, Parameter=log_archive_dest_1, OldValue=/archive/log, NewValue=/backup/archive, ChangedBy=dba_admin, Status=Modified
+<134>%c oracle-db.test Oracle: Audit=BackupComplete, BackupType=Full, StartTime=%c, EndTime=%c, Duration=3600s, Status=Success, SizeGB=250

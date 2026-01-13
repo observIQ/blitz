@@ -1,0 +1,3 @@
+%a %b %d %H:%M:%S %Y snort[12345]: {WEB-SERVER:IIS:Mod-Security rfi-attempt} [1:2020061401:2] IIS known RFI attempt [Classification:Web-Based rfi] [Priority:1] {HTTP} 192.168.1.100:54321 -> 8.8.8.8:80
+%a %b %d %H:%M:%S %Y snort[12345]: {SHELLCODE:X86 ret2libc 0x...} [1:1794:4] Shellcode detected [Classification:Suspicious Command Execution] [Priority:1] {TCP} 192.168.1.150:12345 -> 10.0.0.50:22
+%a %b %d %H:%M:%S %Y snort[12345]: {NETWORK-DOS:Possible SYN flood} [1:100:8] SYN flood attempt [Classification:Denial of Service] [Priority:2] {TCP} 203.0.113.0:0 -> 192.168.1.200:443

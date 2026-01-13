@@ -1,0 +1,8 @@
+<134>%c sophos-endpoint.test Sophos: EventType=MalwareDetected, FileName=malware.exe, FileHash=a1b2c3d4e5f6, ThreatName=Trojan.Generic, Action=Quarantine, Timestamp=%c
+<134>%c sophos-endpoint.test Sophos: EventType=VirusFound, FileName=infected.zip, ThreatName=Virus.GenericA, Location=C:\Users\user\Downloads, Action=Removed
+<134>%c sophos-endpoint.test Sophos: EventType=PUPDetected, FileName=unwanted_software.exe, ThreatName=PUP.Optional.Adware, Action=Removed, RiskLevel=Low
+<134>%c sophos-endpoint.test Sophos: EventType=ScanCompleted, ScanType=Full, StartTime=%c, EndTime=%c, FilesScanned=543210, ThreatsFound=12
+<134>%c sophos-endpoint.test Sophos: EventType=DefinitionUpdate, UpdateType=Virus, Version=2026.01.13, UpdateTime=%c, Status=Success
+<134>%c sophos-endpoint.test Sophos: EventType=ExploitPrevented, ExploitType=BufferOverflow, TargetProcess=chrome.exe, Action=Blocked
+<134>%c sophos-endpoint.test Sophos: EventType=Heuristics, ThreatName=Heur.Generic, Score=95, Action=Quarantine, File=/tmp/unknown.bin
+<134>%c sophos-endpoint.test Sophos: EventType=WebFilterEvent, URL=malicious-site.com, Category=Malware, Action=Blocked, UserIP=192.168.1.100

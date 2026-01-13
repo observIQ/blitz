@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "query_execution", "user": "analyst@company.com", "database": "prod_warehouse", "query_id": "q_12345", "execution_time_ms": 5432, "rows_scanned": 987654}
+{"timestamp": "%c", "event_type": "data_share_created", "owner": "admin@company.com", "share_name": "sales_analytics_share", "recipients": 45, "objects_shared": 12}
+{"timestamp": "%c", "event_type": "user_provisioning", "user": "newemployee@company.com", "role": "analyst", "provisioned_by": "secadmin@company.com", "status": "success"}
+{"timestamp": "%c", "event_type": "failed_login", "user": "attacker@unknown.com", "ip_address": "192.0.2.100", "reason": "invalid_password", "attempts": 7}
+{"timestamp": "%c", "event_type": "warehouse_clone", "source": "prod_warehouse", "cloned_to": "test_warehouse", "cloned_by": "devops@company.com", "size_gb": 250}
+{"timestamp": "%c", "event_type": "security_event", "event_detail": "suspicious_network_activity", "source_ip": "198.51.100.50", "destination_ip": "snowflake.company.com"}
+{"timestamp": "%c", "event_type": "rbac_change", "user": "secadmin@company.com", "changed_user": "contractor@company.com", "new_role": "viewer", "previous_role": "editor"}
+{"timestamp": "%c", "event_type": "audit_log_export", "exported_by": "compliance@company.com", "period": "2026-Q1", "records": 543210, "destination": "secure_storage"}

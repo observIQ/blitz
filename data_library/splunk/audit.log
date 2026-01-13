@@ -1,0 +1,4 @@
+%a %b %d %H:%M:%S %Y splunk-audit: %c user=admin action=login result=success source_ip=192.168.1.100 session_id=6c8cd968b84f1a0c
+%a %b %d %H:%M:%S %Y splunk-audit: %c user=user1 action=create_saved_search result=success search_name="Production Errors" app=main
+%a %b %d %H:%M:%S %Y splunk-audit: %c user=analyst action=view_dashboard result=success dashboard_id=security_overview time_taken=234ms
+%a %b %d %H:%M:%S %Y splunk-audit: %c user=svc_account action=api_call api_method=POST api_path=/services/data/indexes result=success response_code=201

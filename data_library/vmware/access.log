@@ -1,0 +1,8 @@
+<134>%c hostname vmware: event_id=6001 host=ESXI01.domain.com event_type=vm_created vm_name=Web_Server_01 user=administrator memory_mb=4096 vcpus=2
+<134>%c hostname vmware: event_id=6002 host=ESXI02.domain.com event_type=snapshot_created vm_name=Database_Server description=Pre_Patch_Snapshot disk_size_gb=100
+<134>%c hostname vmware: event_id=6003 host=ESXI01.domain.com event_type=vm_migrated vm_name=App_Server_01 source_host=ESXI01 destination_host=ESXI03 duration_seconds=145
+<134>%c hostname vmware: event_id=6004 host=ESXI02.domain.com event_type=datastore_alarm alarm=Low_Disk_Space datastore=VMFS_Prod threshold_percent=90 available_gb=25
+<134>%c hostname vmware: event_id=6005 host=ESXI03.domain.com event_type=host_maintenance maintenance_mode=enabled user=admin reason=Patch_Deployment vms_evacuated=8
+<134>%c hostname vmware: event_id=6006 host=ESXI01.domain.com event_type=network_config nic=vmnic0 speed=10Gbps status=up vlan_count=12
+<134>%c hostname vmware: event_id=6007 host=ESXI02.domain.com event_type=guest_tool_install vm_name=Ubuntu_VM tool_version=11.3.5 status=success
+<134>%c hostname vmware: event_id=6008 host=ESXI03.domain.com event_type=storage_io_latency datastore=VMFS_Backup write_latency_ms=45 read_latency_ms=12 peak_iops=8500

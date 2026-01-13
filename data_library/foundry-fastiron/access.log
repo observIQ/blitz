@@ -1,0 +1,8 @@
+<134>%c foundry-sw01 Foundry-FastIron: STP cost value changed - Port 1 cost changed from 100 to 50
+<134>%c foundry-sw01 Foundry-FastIron: VLAN membership modification - Port 8 added to VLAN 50 by admin
+<134>%c foundry-sw01 Foundry-FastIron: Link state change - Port 16 link state changed from DOWN to UP (1G)
+<134>%c foundry-sw01 Foundry-FastIron: Spanning tree recalculation - Root bridge election completed - Root: 00:11:22:33:44:01
+<134>%c foundry-sw01 Foundry-FastIron: Port security event - MAC limit violation on port 24 - 3 unauthorized MACs detected
+<134>%c foundry-sw01 Foundry-FastIron: Access control list updated - ACL 100 permit rule added for 192.168.50.0/24 -> 10.0.0.0/8
+<134>%c foundry-sw01 Foundry-FastIron: SNMP configuration change - Read community string changed by administrator
+<134>%c foundry-sw01 Foundry-FastIron: Memory usage alert - Available memory: 256MB - Threshold: 300MB - Consider upgrade

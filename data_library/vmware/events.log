@@ -1,0 +1,4 @@
+%a %b %d %H:%M:%S %Y vmware-vc: %c [vCenter] [EventServer] [hostname.domain.com] [user@domain.com] [Task] [CreateFolder] Success - created folder 'vm-prod-01' in datacenter 'DC-East'
+%a %b %d %H:%M:%S %Y vmware-vc: %c [vCenter] [HostAgent] [esx-host-01.domain.com] [root] [Host] [PowerOn] VM powered on - VM Name: web-server-01, CPU: 2, Memory: 4GB
+%a %b %d %H:%M:%S %Y vmware-vc: %c [vCenter] [VIM] [security.login] [user@domain.com] [Authentication] [LoginSuccess] Successful login from 192.168.1.100:54321 to vCenter Server
+%a %b %d %H:%M:%S %Y vmware-vc: %c [vCenter] [Alarm] [DRS] [WARNING] Cluster 'Production' DRS recommendation triggered - load balancing recommended

@@ -1,0 +1,3 @@
+{"event_type":"file_operation","event_id":"nav_evt_123456","timestamp":"2026-01-13T10:15:30Z","source_system":"HDFS","operation":"READ","user":"hive_user","resource":"/user/hive/warehouse/sales_data","duration_ms":245,"bytes_transferred":1048576}
+{"event_type":"query_execution","event_id":"nav_evt_123457","timestamp":"2026-01-13T10:16:45Z","source_system":"HiveServer","query":"SELECT COUNT(*) FROM customers WHERE state='CA'","user":"analyst@corp.com","duration_ms":3456,"rows_returned":15234}
+{"event_type":"data_access_policy","event_id":"nav_evt_123458","timestamp":"2026-01-13T10:17:12Z","source_system":"Sentry","policy_rule":"restrict_pii_columns","enforcement":"DENIED","resource":"payments.card_number","user":"junior_analyst"}

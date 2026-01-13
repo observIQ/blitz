@@ -1,0 +1,3 @@
+%a %b %d %H:%M:%S %Y oracle-db: %c oracle@PROD-DB1 (SQLNet): [CONNECT_REQUEST] client: 192.168.1.100, database: PROD, user: appuser status: SUCCESS
+%a %b %d %H:%M:%S %Y oracle-db: %c oracle@PROD-DB1 (AUDIT): [AUDIT] user: dataowner, action: CREATE_TABLE, object: NEW_TAB_001, status: EXECUTED
+%a %b %d %H:%M:%S %Y oracle-db: %c oracle@PROD-DB1 (ERROR): ORA-12514: TNS:listener does not currently know of service requested in connect descriptor from 192.168.1.50:54323

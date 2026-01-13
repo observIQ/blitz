@@ -1,0 +1,8 @@
+<134>%c forcepoint-01 Forcepoint: DLP policy violation - User john.doe attempted to upload customer_data.xlsx to cloud storage - BLOCKED
+<134>%c forcepoint-01 Forcepoint: Web category block - Access to social-media.example.com blocked - Category: Social Media
+<134>%c forcepoint-01 Forcepoint: Advanced malware detection - File quarantined: suspicious_invoice.exe - Detection: Trojan.Dropper
+<134>%c forcepoint-01 Forcepoint: Encrypted traffic inspection - HTTPS traffic decrypted for inspection - Malware signature matched
+<134>%c forcepoint-01 Forcepoint: User override action - User request to access blocked website approved by manager - Session logged
+<134>%c forcepoint-01 Forcepoint: Bandwidth throttling applied - Streaming video traffic limited to 50% for user 192.168.1.50
+<134>%c forcepoint-01 Forcepoint: Certificate pinning - SSL certificate mismatch detected on domain bank.com from 10.0.0.100 - Blocked
+<134>%c forcepoint-01 Forcepoint: Reporting snapshot - Total users: 450 - Bandwidth consumed: 2.3TB - Violations: 156 - Top blocked category: Adult

@@ -1,0 +1,8 @@
+<138>%c ddos-mitigation.test DDoS: EventType=Attack_Detected, Severity=CRITICAL, Source_ASN=AS12345, Attack_Type=Volumetric_UDP, Bps=50000000, Pps=10000000, Duration=1800, Mitigation=Activated
+<138>%c ddos-mitigation.test DDoS: EventType=Attack_Detected, Severity=HIGH, Source_Countries=[CN,RU,KP], Attack_Type=Protocol_HTTP, Requests=5000000, Mitigation=Rate_Limit
+<138>%c ddos-mitigation.test DDoS: EventType=Attack_Ended, PreviousEvent=Attack_Detected, Duration=2400, TotalBps=75000000, TotalPps=15000000, Status=Mitigated
+<138>%c ddos-mitigation.test DDoS: EventType=Source_Blocked, BlockDuration=604800, Source_IP=192.0.2.100, Reason=Repeat_Attacker, PreviousAttacks=12
+<138>%c ddos-mitigation.test DDoS: EventType=Health_Alert, Target=webserver_cluster, Status=Degraded, Availability=45%, ActiveConnections=8500000, Threshold=10000000
+<138>%c ddos-mitigation.test DDoS: EventType=Scrubbing_Center_Alert, Status=High_Utilization, Traffic_Processed=100Gbps, Capacity=120Gbps, Percent_Full=83%
+<138>%c ddos-mitigation.test DDoS: EventType=False_Positive_Detected, Blocked_Traffic=legitimate_cdn, Duration=300, Impact=Resolved, ManualReview=Required
+<138>%c ddos-mitigation.test DDoS: EventType=Attack_Pattern_Detected, Pattern=HTTP_Flood, Signature_ID=SIG-2026-0001, Severity=HIGH, Auto_Mitigation=Applied

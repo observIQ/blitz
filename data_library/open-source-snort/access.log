@@ -1,0 +1,8 @@
+<134>%c snort-ids.test [1:1000001:1] HTTP CONNECT attempt to known malware site [Classification: Potentially Bad Traffic] [Priority: 2] {TCP} 192.168.1.100:54321 -> 203.0.113.50:443
+<134>%c snort-ids.test [1:2000001:1] SHELLCODE x86 inc ebx NOOP [Classification: Executable code was detected] [Priority: 1] {TCP} 192.0.2.100:49152 -> 192.168.1.1:80
+<134>%c snort-ids.test [1:3000001:1] SQL injection attack [Classification: Web Application Attack] [Priority: 1] {TCP} 10.20.30.40:60000 -> 192.168.1.50:443
+<134>%c snort-ids.test [1:4000001:1] Possible FTP bounce attack [Classification: Attempted Recon] [Priority: 3] {TCP} 203.0.113.100:54322 -> 198.51.100.200:25
+<134>%c snort-ids.test [1:5000001:1] Known malware User-Agent [Classification: Malware traffic] [Priority: 1] {TCP} 172.16.0.100:54323 -> 203.0.113.1:80
+<134>%c snort-ids.test [1:6000001:1] Suspicious ICMP echo reply [Classification: Suspicious Traffic] [Priority: 3] {ICMP} 192.0.2.200:0 -> 192.168.1.100:8
+<134>%c snort-ids.test [1:7000001:1] RPC port mapper request [Classification: Suspicious Traffic] [Priority: 3] {UDP} 10.20.30.50:54324 -> 192.168.1.1:111
+<134>%c snort-ids.test [1:8000001:1] Denial of Service attempt [Classification: Denial of Service Attack] [Priority: 2] {TCP} 203.0.113.200:12345 -> 192.168.1.100:80

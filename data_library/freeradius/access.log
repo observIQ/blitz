@@ -1,0 +1,8 @@
+<134>%c freeradius-01 radiusd: Auth request - User: john.doe - NAS: 192.168.1.1 - Service-Type: Framed-User - Response: Access-Accept
+<134>%c freeradius-01 radiusd: Failed authentication - User: invalid_user - NAS: 10.0.0.100 - Reason: Unknown user - Response: Access-Reject
+<134>%c freeradius-01 radiusd: Session started - User: alice.smith - Session ID: 12345abc - NAS: 172.16.1.10 - Framed-IP: 10.100.50.5
+<134>%c freeradius-01 radiusd: Accounting request - User: bob.jones - Session-Time: 3600 - Input-Octets: 1234567 - Output-Octets: 2345678
+<134>%c freeradius-01 radiusd: Session timeout - User: charlie.brown - NAS: 192.168.1.50 - Idle-Timeout: 1800 seconds exceeded
+<134>%c freeradius-01 radiusd: Password change request - User: dave.wilson - Status: SUCCESS - New password set via Change-Password-Request
+<134>%c freeradius-01 radiusd: Certificate authentication - User: vpn_service - Certificate: CN=vpn_service - Response: Access-Accept
+<134>%c freeradius-01 radiusd: Statistics - Total requests: 45678 - Auth: 23456, Accounting: 22222 - Active sessions: 234

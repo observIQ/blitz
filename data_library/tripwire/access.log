@@ -1,0 +1,8 @@
+<134>%c tripwire-fim.test Tripwire: EventType=FileChanged, FilePath=/etc/passwd, ChangeType=Modified, OriginalHash=abc123def456, NewHash=xyz789uvw012, Severity=Critical, ChangeTime=%c
+<134>%c tripwire-fim.test Tripwire: EventType=FileAdded, FilePath=/var/tmp/suspicious.sh, Owner=root, Permissions=755, Size=4096, FileHash=a1b2c3d4, AddedTime=%c
+<134>%c tripwire-fim.test Tripwire: EventType=FileDeleted, FilePath=/var/log/audit.log, PreviousSize=8388608, PreviousHash=def456abc123, DeletedTime=%c, Severity=High
+<134>%c tripwire-fim.test Tripwire: EventType=PermissionChanged, FilePath=/bin/sudo, OldPermissions=4755, NewPermissions=4777, ChangeTime=%c, Severity=Critical
+<134>%c tripwire-fim.test Tripwire: EventType=OwnershipChanged, FilePath=/root/.ssh, OldOwner=root, NewOwner=unknown, ChangeTime=%c, Severity=High
+<134>%c tripwire-fim.test Tripwire: EventType=DatabaseInitialized, Status=Complete, FilesMonitored=54321, InitializationTime=%c
+<134>%c tripwire-fim.test Tripwire: EventType=ReportGenerated, ReportType=Policy, StartTime=%c, EndTime=%c, ChangeCount=234, Status=Complete
+<134>%c tripwire-fim.test Tripwire: EventType=PolicyViolation, ViolationType=UnauthorizedChange, FileCount=5, SeverityLevel=Critical, ViolationTime=%c

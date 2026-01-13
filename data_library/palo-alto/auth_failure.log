@@ -1,0 +1,1 @@
+%b %e %T localhost 1,%Y/%m/%d %H:%M:%S,unknown,SYSTEM,auth,0,%Y/%m/%d %H:%M:%S,,auth-fail,,0,0,general,medium,failed authentication for user 'admin'. Reason: Invalid username/password. From: 10.0.10.55.,1718,0x0,0,0,0,0,,paloalto

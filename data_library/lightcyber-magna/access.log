@@ -1,0 +1,8 @@
+<136>%c lightcyber-analyst.test lightcyber: anomaly_type=lateral_movement, src_user=admin, src_host=workstation01, dst_host=fileserver, risk_score=85, action=detected
+<136>%c lightcyber-analyst.test lightcyber: anomaly_type=privilege_escalation, user=service_account, host=appserver02, old_privilege=user, new_privilege=admin, risk_score=92, action=alerted
+<136>%c lightcyber-analyst.test lightcyber: anomaly_type=data_exfiltration, src_user=contractor, src_host=contractor_laptop, dst_ip=203.0.113.50, bytes_transferred=2147483648, risk_score=95, action=blocked
+<136>%c lightcyber-analyst.test lightcyber: anomaly_type=brute_force, target_user=admin, src_ip=192.0.2.100, attempts=47, risk_score=88, action=blocked
+<136>%c lightcyber-analyst.test lightcyber: anomaly_type=unusual_logon, user=finance_mgr, src_ip=198.51.100.200, time_of_day=02:30, location=foreign, risk_score=78, action=flagged
+<136>%c lightcyber-analyst.test lightcyber: anomaly_type=malware_activity, host=endpoint005, process=explorer.exe.scr, parent_process=explorer.exe, risk_score=100, action=quarantined
+<136>%c lightcyber-analyst.test lightcyber: anomaly_type=policy_violation, user=dev_user, action_type=unauthorized_software_install, software=TOR, risk_score=82, action=audited
+<136>%c lightcyber-analyst.test lightcyber: anomaly_type=credential_theft, src_host=compromised_workstation, stolen_creds=3, exposed_domains=2, risk_score=99, action=emergency_response

@@ -1,0 +1,8 @@
+<140>%c onapsis-platform.test ERP_Security: Event=RoleCreation, User=sap_admin, Role=Z_CUSTOM_ADMIN, System=PR1, Status=Suspicious, RiskScore=78
+<140>%c onapsis-platform.test ERP_Security: Event=TransactionExecution, User=ap_user, Transaction=F-43, System=FI, Amount=500000, CurrencyCode=USD, Status=Completed
+<140>%c onapsis-platform.test ERP_Security: Event=FailedAuthorization, User=contractor, Authorization=HR_PAYROLL_CHANGE, System=HR, Reason=InsufficicientRole, Status=Denied
+<140>%c onapsis-platform.test ERP_Security: Event=UnusualActivity, User=sap_readonly, Activity=TableUpdate, Table=MKPF, System=MM, Frequency=Abnormal, RiskScore=92
+<140>%c onapsis-platform.test ERP_Security: Event=ConfigurationChange, User=basis_admin, ConfigItem=SMTPSettings, System=ERP, ChangeType=Modified, Status=Audited
+<140>%c onapsis-platform.test ERP_Security: Event=SecurityPatch, System=PR1, PatchID=ERP_2026_001, AppliedDate=%c, Components=12, Status=Verified
+<140>%c onapsis-platform.test ERP_Security: Event=UserProvisioning, User=newuser@company.com, Roles=3, System=ERP, RequestedBy=hr_admin, Status=Approved
+<140>%c onapsis-platform.test ERP_Security: Event=CriticalTableAccess, User=developer, Table=USR01, System=ERP, AccessType=SELECT, RowsRead=98765, RiskLevel=Critical

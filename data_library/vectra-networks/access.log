@@ -1,0 +1,8 @@
+<134>%c hostname vectra: threat_id=1 src=192.168.1.100 dst=192.0.2.50 protocol=tcp port=443 attack_type=command_control campaign_id=APT-001 severity=critical certainty=85 category=C2_Traffic
+<134>%c hostname vectra: threat_id=2 src=10.20.30.40 dst=203.0.113.60 protocol=tcp port=8080 attack_type=lateral_movement campaign_id=APT-001 severity=high certainty=92 category=Lateral_Movement
+<134>%c hostname vectra: threat_id=3 src=192.168.50.100 dst=192.168.1.1 protocol=icmp attack_type=reconnaissance campaign_id=CAMPAIGN-X severity=medium certainty=78 category=Reconnaissance
+<134>%c hostname vectra: threat_id=4 src=172.16.0.50 dst=198.51.100.100 protocol=tcp port=445 attack_type=persistence campaign_id=APT-001 severity=critical certainty=88 category=Persistence
+<134>%c hostname vectra: threat_id=5 src=203.0.113.150 dst=192.0.2.100 protocol=tcp port=3389 attack_type=credential_compromise campaign_id=CAMPAIGN-Y severity=high certainty=95 category=Credential_Compromise
+<134>%c hostname vectra: threat_id=6 src=192.168.100.50 dst=10.0.0.1 protocol=dns attack_type=data_exfiltration campaign_id=APT-001 severity=critical certainty=91 category=Data_Exfil
+<134>%c hostname vectra: threat_id=7 src=10.30.40.50 dst=203.0.113.200 protocol=tcp port=22 attack_type=exploitation campaign_id=CVE-2021-XXXX severity=critical certainty=89 category=Exploitation
+<134>%c hostname vectra: threat_id=8 src=172.17.0.100 dst=192.168.1.50 protocol=tcp port=5985 attack_type=command_execution campaign_id=APT-002 severity=high certainty=86 category=Command_Execution

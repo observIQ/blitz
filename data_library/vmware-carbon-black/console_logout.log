@@ -1,0 +1,1 @@
+LEEF:1.0|Carbon_Black|Protection|8.0.0.2141|Console_user_logout|cat=Session Management  sev=4  devTime=%b %e %Y %H:%M:%S.%3N UTC   msg=User 'admin' logged out.   externalId=22272   src=192.168.0.23   usrName=admin  dstHostName=tesla  receivedTime=%b %e %Y %H:%M:%S.%3N UTC

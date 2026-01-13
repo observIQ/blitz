@@ -1,0 +1,8 @@
+<134>%c sonicwall-nsa.test Firewall: EventType=ConnectionAllowed, SrcIP=192.168.1.100, DstIP=203.0.113.50, SrcPort=54321, DstPort=443, Protocol=TCP, Service=HTTPS, Action=Allow
+<134>%c sonicwall-nsa.test Firewall: EventType=ConnectionDenied, SrcIP=192.0.2.100, DstIP=192.168.1.1, DstPort=22, Protocol=TCP, Service=SSH, Action=Deny, Reason=PolicyBlock
+<134>%c sonicwall-nsa.test Firewall: EventType=ThreatDetected, ThreatType=Malware, ThreatName=Trojan.Generic, SrcIP=203.0.113.100, DstIP=192.168.1.50, Action=Block, Severity=Critical
+<134>%c sonicwall-nsa.test Firewall: EventType=IntrusionDetected, IPS_Signature=IPS_001, SrcIP=198.51.100.100, DstIP=192.168.1.100, DstPort=80, Action=Block, RiskLevel=High
+<134>%c sonicwall-nsa.test Firewall: EventType=VPNSessionStart, User=vpn_user, ClientIP=192.168.1.200, Authentication=Success, EncryptionAlgo=AES256, Duration=%c
+<134>%c sonicwall-nsa.test Firewall: EventType=BandwidthAlert, Interface=X1, CurrentUsage=850Mbps, Threshold=800Mbps, AlertLevel=Critical
+<134>%c sonicwall-nsa.test Firewall: EventType=FailoverEvent, PrimaryUnit=Down, BackupUnit=Active, SwitchoverTime=30s, Status=Completed
+<134>%c sonicwall-nsa.test Firewall: EventType=LogReview, StartDate=2026-01-13, EndDate=2026-01-13, EventsLogged=54321, CriticalEvents=45

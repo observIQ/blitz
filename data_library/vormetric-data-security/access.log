@@ -1,0 +1,8 @@
+<134>%c hostname vormetric: event_id=VOR-001 action=file_encrypt status=success user=admin source=/documents/report.pdf key_id=KEY-2024-001 encryption_algorithm=AES-256
+<134>%c hostname vormetric: event_id=VOR-002 action=access_attempt status=denied user=contractor resource=/financial/transactions.xlsx reason=insufficient_privilege
+<134>%c hostname vormetric: event_id=VOR-003 action=key_rotation key_id=KEY-2024-002 old_key_version=5 new_key_version=6 hosts_affected=12 status=completed
+<134>%c hostname vormetric: event_id=VOR-004 action=policy_violation violation_type=unauthorized_access source_ip=192.168.1.100 resource=/confidential/source_code.zip severity=critical
+<134>%c hostname vormetric: event_id=VOR-005 action=audit_log_access requester=auditor@company.com object=encrypted_files limit=1000 records_returned=987
+<134>%c hostname vormetric: event_id=VOR-006 action=certificate_update cert_name=DSS_Certificate issuer=Internal_CA expiry_date=2025-12-31 hosts_updated=8
+<134>%c hostname vormetric: event_id=VOR-007 action=data_classification file=/archive/backup_2024.tar classification_level=secret classification_reason=Contains_PII
+<134>%c hostname vormetric: event_id=VOR-008 action=compliance_check check_type=FIPS_140_2 result=compliant detailed_score=98 hosts_checked=15 last_check=%c

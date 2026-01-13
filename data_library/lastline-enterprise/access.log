@@ -1,0 +1,8 @@
+<134>%c lastline-sandbox.test lastline: verdict=malware, family=Trojan.Generic, sha256=8e0f1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6b7a8f9e0d1c2b3a4f5e6d7c8b9a, confidence=high
+<134>%c lastline-sandbox.test lastline: verdict=suspicious, family=Trojan.Heur, sha256=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a, confidence=medium
+<134>%c lastline-sandbox.test lastline: verdict=clean, sha256=f0e9d8c7b6a5949392919089888786858483828180807f7e7d7c7b7a797877, confidence=high
+<134>%c lastline-sandbox.test lastline: verdict=malware, family=Trojan.Ransom, sha256=1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef, confidence=high
+<134>%c lastline-sandbox.test lastline: verdict=suspicious, family=PUP.Generic, sha256=fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321, confidence=low
+<134>%c lastline-sandbox.test lastline: verdict=malware, family=Backdoor.Generic, sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, confidence=high
+<134>%c lastline-sandbox.test lastline: verdict=clean, sha256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, confidence=high
+<134>%c lastline-sandbox.test lastline: verdict=malware, family=Worm.Generic, sha256=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc, confidence=high

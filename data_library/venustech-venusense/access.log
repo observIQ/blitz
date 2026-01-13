@@ -1,0 +1,8 @@
+<134>%c hostname venusense: log_id=VEN-001 user=admin action=login source_ip=192.168.1.100 port=22 status=success user_role=administrator
+<134>%c hostname venusense: log_id=VEN-002 user=analyst action=search_file target=/sensitive/data.txt status=allowed risk_level=high search_type=content_based
+<134>%c hostname venusense: log_id=VEN-003 user=guest action=create_file filename=report.docx location=/home/guest status=success file_type=document classification=internal
+<134>%c hostname venusense: log_id=VEN-004 user=admin action=delete_file target=/archive/backup.zip status=denied reason=retention_policy file_size=2147483648
+<134>%c hostname venusense: log_id=VEN-005 user=contractor action=copy_file source=/projects/confidential.pdf destination=external_drive status=blocked dlp_match=credit_card_number
+<134>%c hostname venusense: log_id=VEN-006 user=admin action=policy_update policy_name=DataClassification change_type=add_rule severity=medium approval_status=approved
+<134>%c hostname venusense: log_id=VEN-007 user=analyst action=export_data format=csv destination=/tmp/dataset.csv status=success rows_exported=15000 timestamp=%c
+<134>%c hostname venusense: log_id=VEN-008 user=admin action=audit_trail query_type=user_activities filter=past_24h records_found=156 export_status=completed

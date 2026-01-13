@@ -1,0 +1,3 @@
+<134>%c dbprotect-server DbProtect: SQL injection attempt detected in query from user 'webapp' on database 'production' - Query: SELECT * FROM users WHERE id=1' OR '1'='1
+<134>%c dbprotect-server DbProtect: Database privilege escalation attempt by user 'guest' - attempted to grant DBA role
+<135>%c dbprotect-server DbProtect: Sensitive data access detected - user 'analyst' queried PII columns (SSN, DOB) from employees table

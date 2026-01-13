@@ -1,0 +1,3 @@
+<134>%c cilasoft-system DB_AUDIT: Table access detected - DB: LIBRARY, Table: ORDERHDRRPT, User: QSECURE, Operation: SELECT
+<134>%c cilasoft-system DB_AUDIT: Unauthorized modify attempt - DB: ORDERDATA, Table: CUSTOMERS, User: QCUSTOMER, Operation: UPDATE, Status: DENIED
+<135>%c cilasoft-system DB_AUDIT: Administrative action performed - User: QSYSADM, Operation: BACKUP, Target: PRODDB, Time: 10:15:30

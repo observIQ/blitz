@@ -1,0 +1,8 @@
+<134>%c extreme-sw01 ExtremeNetworks: VLAN creation - VLAN 2050 (Production-DMZ) created by admin
+<134>%c extreme-sw01 ExtremeNetworks: Port configuration change - Port 12 speed changed from 1G to 10G
+<134>%c extreme-sw01 ExtremeNetworks: STP topology change detected - Recalculating spanning tree - 3 ports affected
+<134>%c extreme-sw01 ExtremeNetworks: Link aggregation group created - LAG 1: Ports 1-4 configured - Load balancing enabled
+<134>%c extreme-sw01 ExtremeNetworks: MAC address table learning - 234 new MAC addresses learned in last 60 seconds
+<134>%c extreme-sw01 ExtremeNetworks: Port security violation - Unauthorized MAC address 00:11:22:33:44:55 on port 15 - Disabled
+<134>%c extreme-sw01 ExtremeNetworks: SNMP trap received - CPU utilization high: 87% - Memory: 92%
+<134>%c extreme-sw01 ExtremeNetworks: Configuration backup - Size: 1.2MB - Backup device: 10.100.1.5 - Status: SUCCESS

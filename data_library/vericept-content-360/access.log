@@ -1,0 +1,8 @@
+<134>%c hostname vericept: alert_id=VER-001 severity=high source=192.168.1.100 destination=192.0.2.50 protocol=tcp port=443 attack=SSL_Stripping status=detected action=blocked
+<134>%c hostname vericept: alert_id=VER-002 severity=critical source=10.20.30.40 destination=203.0.113.60 protocol=tcp port=22 attack=Brute_Force_SSH attempts=245 lockout_duration=300
+<134>%c hostname vericept: alert_id=VER-003 severity=medium source=192.168.50.100 destination=192.168.1.1 protocol=http uri=/admin attack=Path_Traversal payload_detected=../../etc/passwd
+<134>%c hostname vericept: alert_id=VER-004 severity=critical source=172.16.0.50 destination=198.51.100.100 protocol=tcp port=445 attack=Lateral_Movement_Detected movement_type=psexec
+<134>%c hostname vericept: alert_id=VER-005 severity=high source=203.0.113.150 destination=192.0.2.100 protocol=smtp port=25 attack=Email_Header_Injection detection_method=regex_match
+<134>%c hostname vericept: alert_id=VER-006 severity=critical source=192.168.100.50 destination=10.0.0.1 protocol=dns query=malware_c2.net action=sinkholed threat_category=C2
+<134>%c hostname vericept: alert_id=VER-007 severity=high source=10.30.40.50 destination=203.0.113.200 protocol=tcp port=3389 attack=RDP_Exploitation cve=CVE-2019-0708
+<134>%c hostname vericept: alert_id=VER-008 severity=medium source=172.17.0.100 destination=192.168.1.50 protocol=tcp port=8080 attack=Command_Injection command_detected=whoami;cat/etc/passwd

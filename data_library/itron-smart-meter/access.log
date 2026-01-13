@@ -1,0 +1,8 @@
+<134>%c itron-meter-01 SmartMeter: Meter reading collected - Meter ID: SMT-12345 - Timestamp: 2026-01-13 10:00:00 - Usage: 234.56 kWh
+<134>%c itron-meter-01 SmartMeter: Device connectivity status - Signal strength: -75dBm - Network: good - Last communication: 15 minutes ago
+<134>%c itron-meter-01 SmartMeter: Tamper alert - Meter ID: SMT-67890 - Type: Magnetic tampering - Location: 192 Oak Street - Alert timestamp: 2026-01-13 10:15:45
+<134>%c itron-meter-01 SmartMeter: Outage notification - Meter ID: SMT-45678 - Status: No power detected - Restoration time: Unknown - Customers affected: 1234
+<134>%c itron-meter-01 SmartMeter: Billing data processed - Billing period: Jan 2026 - Meters processed: 50000 - Success rate: 99.8% - Failed: 98
+<134>%c itron-meter-01 SmartMeter: Demand response event - Event ID: DR-2026-001 - Status: Active - Load reduction target: 50MW - Current reduction: 45MW
+<134>%c itron-meter-01 SmartMeter: Grid monitoring - Frequency: 60.01 Hz - Voltage: 240V nominal - Status: Normal - Grid health: Healthy
+<134>%c itron-meter-01 SmartMeter: Daily summary - Meters online: 49875 (99.75%) - Meters offline: 125 - New devices: 45 - Failed readings: 23

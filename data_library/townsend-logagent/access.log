@@ -1,0 +1,8 @@
+<134>%c townsend-logagent.test LogAgent: EventType=LogCollection, Source=Windows_EventLog, Event=Security, EventID=4625, Status=Forwarded, CollectionTime=%c
+<134>%c townsend-logagent.test LogAgent: EventType=LogParsing, Source=Apache_AccessLog, ParseStatus=Success, LogsProcessed=5432, RecordsExtracted=5432
+<134>%c townsend-logagent.test LogAgent: EventType=FilterApplied, Filter=HighRisk, InputRecords=10000, OutputRecords=234, FilterTime=%c
+<134>%c townsend-logagent.test LogAgent: EventType=EncryptionEnabled, SourceIP=192.168.1.100, DestinationIP=10.0.0.1, EncryptionAlgo=AES256, Status=Active
+<134>%c townsend-logagent.test LogAgent: EventType=CompressionStats, Source=Syslog_Stream, CompressionRatio=0.45, OriginalSize=1048576, CompressedSize=471859
+<134>%c townsend-logagent.test LogAgent: EventType=BufferOverflow, Alert=true, BufferSize=10485760, CurrentUsage=10485760, DroppedRecords=123, Status=Critical
+<134>%c townsend-logagent.test LogAgent: EventType=ConnectionStatus, Destination=SIEM_Server, Status=Connected, LastHeartbeat=%c, RecordsSent=987654
+<134>%c townsend-logagent.test LogAgent: EventType=AgentRestart, Reason=ConfigurationUpdate, RestartTime=%c, DowntimeDuration=30s, Status=Complete

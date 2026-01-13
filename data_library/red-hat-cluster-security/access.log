@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "image_scan_completed", "image": "myapp:v1.2.3", "registry": "quay.io", "vulnerabilities": 5, "critical": 1, "high": 2, "medium": 2, "status": "passed_with_waivers"}
+{"timestamp": "%c", "event_type": "pod_deployed", "pod_name": "app-prod-12345", "namespace": "production", "image": "myapp:v1.2.3", "deployment": "app-prod", "status": "running"}
+{"timestamp": "%c", "event_type": "rbac_policy_violation", "user": "developer@company.com", "action": "create_pod", "namespace": "kube-system", "reason": "unauthorized_namespace", "status": "denied"}
+{"timestamp": "%c", "event_type": "network_policy_enforcement", "pod": "frontend-app-01", "namespace": "production", "policy": "deny_external_ingress", "blocked_connections": 12, "status": "enforced"}
+{"timestamp": "%c", "event_type": "secret_access_audit", "user": "app-sa@production", "secret": "db-credentials", "namespace": "production", "action": "get", "status": "allowed"}
+{"timestamp": "%c", "event_type": "suspicious_activity", "pod": "rogue-pod-xyz", "container": "main", "activity": "privilege_escalation_attempt", "syscall": "setuid", "status": "blocked"}
+{"timestamp": "%c", "event_type": "resource_quota_exceeded", "namespace": "development", "resource": "cpu", "limit": "100cores", "current": "105cores", "status": "alert"}
+{"timestamp": "%c", "event_type": "cluster_event", "event": "node_failure", "node": "worker-03", "reason": "out_of_memory", "pods_affected": 23, "status": "critical"}

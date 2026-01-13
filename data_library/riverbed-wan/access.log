@@ -1,0 +1,8 @@
+<134>%c riverbed-wan.test WAN_Optimization: EventType=ConnectionEstablished, PrimaryDataCenter=DC_East, BranchOffice=Branch_NYC, OptimizationRatio=2.5, Bandwidth=100Mbps, Status=Active
+<134>%c riverbed-wan.test WAN_Optimization: EventType=DataDedup, SessionID=WAN_12345, DeduplicationRatio=3.2, SizeSaved=512MB, TimeElapsed=60s
+<134>%c riverbed-wan.test WAN_Optimization: EventType=LatencyAlert, Source=192.168.1.100, Destination=10.0.0.1, Latency=450ms, Threshold=200ms, Status=Degraded
+<134>%c riverbed-wan.test WAN_Optimization: EventType=CircuitFailover, PrimaryCircuit=MPLS_Primary, BackupCircuit=Internet_Backup, FailoverTime=30s, Status=Successful
+<134>%c riverbed-wan.test WAN_Optimization: EventType=QoSEnforcement, Application=VoIP, Priority=High, Bandwidth_Allocated=10Mbps, Status=Applied
+<134>%c riverbed-wan.test WAN_Optimization: EventType=CapacityThreshold, Current=850Mbps, Threshold=800Mbps, UtilizationPercent=92%, Status=AlertLevel
+<134>%c riverbed-wan.test WAN_Optimization: EventType=PacketLoss, SessionID=WAN_12346, PacketsLost=45, TotalPackets=50000, LossPercent=0.09, Status=Minor
+<134>%c riverbed-wan.test WAN_Optimization: EventType=ReportGenerated, Period=Daily, AverageThroughput=250Mbps, AverageLatency=75ms, PacketsProcessed=987654321

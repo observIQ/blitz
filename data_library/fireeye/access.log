@@ -1,0 +1,8 @@
+<134>%c fireeye-01 FireEye: Malware execution detected - Trojan.Emotet behavior observed on 192.168.1.50 - Process: winlogon.exe
+<134>%c fireeye-01 FireEye: File detonation result - Malicious: Document exploit macro detected in invoice_2026.docx
+<134>%c fireeye-01 FireEye: Command & Control activity - C2 callback detected - Destination: malicious-c2.net:443 - Blocked
+<134>%c fireeye-01 FireEye: Exploit prevention - Heap spray exploit attempt blocked on 10.0.0.100 - Attack type: Use-After-Free
+<134>%c fireeye-01 FireEye: Phishing email detected - Spear phishing campaign targeting executives - 12 samples detected
+<134>%c fireeye-01 FireEye: Ransomware variant identified - WannaCry/WannaCrypt variant detected - Encryption attempt blocked
+<134>%c fireeye-01 FireEye: Intelligence correlation - Event matches threat intelligence - Campaign: APT28 (Fancy Bear) - Confidence: High
+<134>%c fireeye-01 FireEye: Threat report generated - Dashboard: Real-time threats: 234 - Blocked: 198 - Allowed (monitored): 36

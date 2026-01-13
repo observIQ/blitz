@@ -1,0 +1,8 @@
+<134>%c honeycomb-fim FIM: File change detected - Path: /etc/passwd - Change: Content modified - Timestamp: 2026-01-13 10:14:30
+<134>%c honeycomb-fim FIM: Unauthorized file deletion - File: /var/www/html/index.html - Deleted by: apache - Process: httpd
+<134>%c honeycomb-fim FIM: Permission change alert - File: /root/.ssh/authorized_keys - Old: 600 - New: 644 - Modified by: root
+<134>%c honeycomb-fim FIM: New file creation monitoring - File: /tmp/suspicious.sh - Size: 2.3KB - Owner: nobody - Permissions: 755
+<134>%c honeycomb-fim FIM: Hash mismatch detection - File: /usr/bin/ssh - Expected hash: abc123... - Actual hash: def456... - Status: COMPROMISED
+<134>%c honeycomb-fim FIM: Integrity verification - Files checked: 45678 - Matches: 45600 - Mismatches: 78 - New files: 45
+<134>%c honeycomb-fim FIM: Baseline update - New baseline created - Files in baseline: 50000 - Hash algorithm: SHA256
+<134>%c honeycomb-fim FIM: Compliance report - Policy violations: 12 - Remediation actions: 10 - Still pending: 2

@@ -1,0 +1,8 @@
+<134>%c hostname digital-guardian: user=admin device=WORKSTATION01 event_type=file_access file=C:\Users\admin\confidential.pdf action=access status=allowed severity=medium
+<134>%c hostname digital-guardian: user=contractor device=LAPTOP02 event_type=usb_device_connect device_type=usb_flash manufacturer=SanDisk action=blocked policy=restrict_usb severity=high
+<134>%c hostname digital-guardian: user=jsmith device=SERVER01 event_type=clipboard_access source=C:\payroll\employee_salaries.xlsx action=log status=allowed severity=high
+<134>%c hostname digital-guardian: user=admin device=WORKSTATION01 event_type=screen_capture action=attempted status=blocked policy=disable_screenshot severity=medium
+<134>%c hostname digital-guardian: user=analyst device=DESKTOP05 event_type=file_transfer destination=cloud_storage file_type=spreadsheet action=blocked policy=no_cloud_sync severity=high
+<134>%c hostname digital-guardian: user=guest device=KIOSK01 event_type=print_document file=report.pdf printer=\\network_printer action=allowed after_watermark=applied severity=low
+<134>%c hostname digital-guardian: user=admin device=SERVER01 event_type=process_injection source_process=explorer.exe target_process=lsass.exe action=blocked policy=no_injection severity=critical
+<134>%c hostname digital-guardian: user=developer device=WORKSTATION03 event_type=code_export destination=github.com repo=private_project action=blocked policy=no_external_repo severity=high

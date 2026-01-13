@@ -1,0 +1,8 @@
+<134>%c generic-parser-01 PARSER: Event parsed - Source: 192.168.1.50 - Event type: security_event - Fields extracted: 12
+<134>%c generic-parser-01 PARSER: Parsing error recovered - Malformed syslog header - Event: attempt to extract fields from message
+<134>%c generic-parser-01 PARSER: Field mapping applied - Source IP mapped to field: src_ip - Destination IP mapped to: dst_ip
+<134>%c generic-parser-01 PARSER: Event correlation - 5 events correlated from same source 192.168.1.75
+<134>%c generic-parser-01 PARSER: Custom regex applied - Regex ID: CUSTOM-001 - Matched events: 234
+<134>%c generic-parser-01 PARSER: Enrichment data added - GeoIP: US, ISP: Example Corp - Event enriched with 8 fields
+<134>%c generic-parser-01 PARSER: Parser rule violation - Unknown event type encountered - Event buffered for manual review
+<134>%c generic-parser-01 PARSER: Performance metrics - Events processed: 45678 - Parse errors: 12 (0.03%) - Avg latency: 2.3ms

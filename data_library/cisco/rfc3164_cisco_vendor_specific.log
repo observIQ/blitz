@@ -1,0 +1,3 @@
+<43>240515: cs0155t-vss: %b %d %H:%M:%S: %SYS-3-USERLOG_ERR: Message from tty1(user id: anilkum): Hello Rohit
+<46>243593: ptncs-vss: %b %d %H:%M:%S: %HA_EM-6-LOG: CLIcmds: exit
+<45>240493: cs0155t-vss: %b %d %H:%M:%S: %SFF8472-5-THRESHOLD_VIOLATION: Te2/3/5: Rx power low warning; Operating value: -10.2 dBm, Threshold value:  -9.9 dBm.

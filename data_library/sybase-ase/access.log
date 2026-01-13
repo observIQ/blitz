@@ -1,0 +1,8 @@
+<134>%c sybase-ase.test isql: EventType=UserLogin, User=sa, Database=master, LoginStatus=Success, LoginTime=%c, ClientIP=192.168.1.100
+<134>%c sybase-ase.test isql: EventType=QueryExecution, User=app_user, Database=prod_db, Query=SELECT * FROM customers, ExecutionTime=500ms, RowsAffected=5432
+<134>%c sybase-ase.test isql: EventType=FailedLogin, User=attacker, Database=master, LoginStatus=Failed, Reason=InvalidPassword, Attempts=5
+<134>%c sybase-ase.test isql: EventType=PrivilegeChange, GrantedBy=dba_admin, GrantedTo=contractor, Privilege=db_accessadmin, Database=prod_db
+<134>%c sybase-ase.test isql: EventType=DatabaseBackup, Database=prod_db, BackupType=Full, StartTime=%c, EndTime=%c, SizeGB=250, Status=Success
+<134>%c sybase-ase.test isql: EventType=ErrorLog, EventID=1, Severity=16, ErrorNumber=1234, Description=Deadlock detected, Database=prod_db
+<134>%c sybase-ase.test isql: EventType=TransactionRollback, Database=prod_db, TransactionID=TX_12345, RollbackReason=UserInitiated, DurationSeconds=30
+<134>%c sybase-ase.test isql: EventType=StorageFull, Database=prod_db, CurrentSize=50GB, MaxSize=50GB, AlertLevel=Critical, FreeSpace=0MB

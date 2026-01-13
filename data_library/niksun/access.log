@@ -1,0 +1,8 @@
+<139>%c niksun-flow.test Flow: StartTime=%c, EndTime=%c, SrcIP=192.168.1.100, DstIP=203.0.113.50, Protocol=TCP, SrcPort=54321, DstPort=443, Packets=1523, Bytes=1048576, ThreatLevel=Low
+<139>%c niksun-flow.test Flow: StartTime=%c, EndTime=%c, SrcIP=10.20.30.40, DstIP=192.0.2.100, Protocol=TCP, SrcPort=49152, DstPort=22, Packets=45, Bytes=2048, ThreatLevel=High, Reason=SuspiciousBehaviour
+<139>%c niksun-flow.test Flow: StartTime=%c, EndTime=%c, SrcIP=172.16.0.100, DstIP=198.51.100.200, Protocol=UDP, SrcPort=53, DstPort=53, Packets=12345, Bytes=789012, ThreatLevel=Medium, Reason=DNSQuery_Anomaly
+<139>%c niksun-flow.test Flow: StartTime=%c, EndTime=%c, SrcIP=203.0.113.100, DstIP=192.168.1.1, Protocol=TCP, SrcPort=80, DstPort=45000, Packets=567, Bytes=321456, ThreatLevel=Critical, Reason=Botnet_Traffic
+<139>%c niksun-flow.test Flow: StartTime=%c, EndTime=%c, SrcIP=192.168.50.25, DstIP=203.0.113.1, Protocol=TCP, SrcPort=443, DstPort=12345, Packets=234, Bytes=156789, ThreatLevel=High, Reason=DataExfiltration
+<139>%c niksun-flow.test Flow: StartTime=%c, EndTime=%c, SrcIP=10.10.10.10, DstIP=8.8.8.8, Protocol=UDP, SrcPort=12345, DstPort=53, Packets=890, Bytes=45678, ThreatLevel=Medium, Reason=Tunneling_Detection
+<139>%c niksun-flow.test Flow: StartTime=%c, EndTime=%c, SrcIP=172.31.0.50, DstIP=192.0.2.200, Protocol=TCP, SrcPort=22, DstPort=60000, Packets=78, Bytes=34567, ThreatLevel=High, Reason=ReverseShell
+<139>%c niksun-flow.test Flow: StartTime=%c, EndTime=%c, SrcIP=203.0.113.25, DstIP=198.51.100.100, Protocol=TCP, SrcPort=5555, DstPort=443, Packets=456, Bytes=234567, ThreatLevel=Low
