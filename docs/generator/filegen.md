@@ -56,10 +56,10 @@ The File generator automatically processes timestamp directives in log files, re
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
 | `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Set to `filegen` to use this generator. |
-| `generator.file.workers` | `--generator-file-workers` | `BLITZ_GENERATOR_FILE_WORKERS` | `1` | Number of worker goroutines (must be ≥ 1) |
-| `generator.file.rate` | `--generator-file-rate` | `BLITZ_GENERATOR_FILE_RATE` | `1s` | Rate at which logs are written per worker (duration format) |
-| `generator.file.mode` | `--generator-file-mode` | `BLITZ_GENERATOR_FILE_MODE` | `file` | File reading mode: `file`, `directory`, or `package`. For `file`/`directory`, auto-detection is performed on startup. |
-| `generator.file.source` | `--generator-file-source` | `BLITZ_GENERATOR_FILE_SOURCE` | `` | File path, directory path, or package name. Source type is auto-detected for `file`/`directory` modes. |
+| `generator.filegen.workers` | `--generator-filegen-workers` | `BLITZ_GENERATOR_FILEGEN_WORKERS` | `1` | Number of worker goroutines (must be ≥ 1) |
+| `generator.filegen.rate` | `--generator-filegen-rate` | `BLITZ_GENERATOR_FILEGEN_RATE` | `1s` | Rate at which logs are written per worker (duration format) |
+| `generator.filegen.mode` | `--generator-filegen-mode` | `BLITZ_GENERATOR_FILEGEN_MODE` | `file` | File reading mode: `file` or `directory`. For `file`/`directory`, auto-detection is performed on startup. |
+| `generator.filegen.source` | `--generator-filegen-source` | `BLITZ_GENERATOR_FILEGEN_SOURCE` | `` | File path, directory path, or package name. Source type is auto-detected for `file`/`directory` modes. |
 
 ## Example Configurations
 
@@ -70,7 +70,7 @@ The generator automatically detects whether the source is a file or directory:
 ```yaml
 generator:
   type: filegen
-  file:
+  filegen:
     workers: 2
     rate: 100ms
     mode: file
@@ -81,13 +81,13 @@ The source type is automatically detected. You can also specify a directory and 
 
 ```yaml
 generator:
-  type: file
-  file:gen
-  file:
+  type: filegen
+  filegen:
     workers: 2
     rate: 100ms
     mode: directory
     source: /var/log/application
+```
 
 ### Package Mode
 
@@ -95,30 +95,20 @@ Read logs from a pre-distributed sample package:
 
 ```yaml
 generator:
-  type: file
-  file:
-    workers: 2
+  type: filegen
+  filegen:
+    workers: 1
     rate: 100ms
-    mode: package
-    source: apache
+    mode: directory
+    source: data_library/syslog_generic
 ```
-
-Available packages:
-- `apache` - Apache HTTP Server access logs
-- `nginx` - NGINX HTTP Server access logs
-- `palo-alto` - Palo Alto Networks threat and traffic logs
-- `checkpoint` - Check Point firewall logs
-- `fortinet` - Fortinet FortiGate security appliance logs
-- `cisco-asa` - Cisco ASA (Adaptive Security Appliance) VPN and firewall logs
-- `f5-bigip` - F5 Networks BIG-IP ASM (Application Security Manager) attack and violation logs
 
 ## Behavior
 
 ### File Discovery
 
 - **File mode**: Reads the specified file sequentially line by line
-- **Directory mode**: Discovers all files matching the pattern (default: `*`) and distributes them across workers
-- **Package mode**: Loads pre-packaged data library files from `package/data_library/<package-name>/`
+- **Directory mode**: Discovers all files in the directory and distributes them across workers
 
 ### Worker Distribution
 
@@ -189,6 +179,12 @@ If no files are found in the specified source:
 
 ## Data Library
 
-Pre-configured data library packages are available at `data_library/`:
+The following data library packages are included in the distribution at `data_library/`:
 
 - **syslog_generic**: Standard RFC 3164 and RFC 5424 syslog formatted logs representing generic syslog events across various device types
+
+To use data library packages, specify the directory path with directory mode:
+
+```bash
+blitz --generator-type=filegen --generator-filegen-mode=directory --generator-filegen-source=data_library/syslog_generic
+```

@@ -25,7 +25,6 @@ type Mode string
 const (
 	ModeFile      Mode = "file"
 	ModeDirectory Mode = "directory"
-	ModePackage   Mode = "package"
 )
 
 // FileLogGenerator generates log data by reading from files
@@ -61,9 +60,9 @@ func New(logger *zap.Logger, workers int, rate time.Duration, mode Mode, source 
 
 	// Validate mode
 	switch mode {
-	case ModeFile, ModeDirectory, ModePackage:
+	case ModeFile, ModeDirectory:
 	default:
-		return nil, fmt.Errorf("invalid mode %q, must be one of: file, directory, package", mode)
+		return nil, fmt.Errorf("invalid mode %q, must be one of: file, directory", mode)
 	}
 
 	if source == "" {
@@ -182,8 +181,6 @@ func (g *FileLogGenerator) Stop(ctx context.Context) error {
 // getFiles returns a list of files to read based on the mode or auto-detects from source
 func (g *FileLogGenerator) getFiles() ([]string, error) {
 	switch g.mode {
-	case ModePackage:
-		return g.getFilesFromPackage()
 	case ModeFile, ModeDirectory:
 		// For file/directory modes, auto-detect the source type
 		return g.getFilesFromAutoDetect()
@@ -225,9 +222,9 @@ func (g *FileLogGenerator) getFilesFromDirectory() ([]string, error) {
 	return files, nil
 }
 
-// getFilesFromPackage returns all files from the built-in data library
+// getFilesFromPackage returns all files from the data library directory
 func (g *FileLogGenerator) getFilesFromPackage() ([]string, error) {
-	// Data library files are in data_library/<packagename>/
+	// Data library files are in data_library/<packagename>/ (relative path)
 	packagesDir := filepath.Join("data_library", g.source)
 
 	var files []string
@@ -243,7 +240,7 @@ func (g *FileLogGenerator) getFilesFromPackage() ([]string, error) {
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("walk data library: %w", err)
+		return nil, fmt.Errorf("walk package directory: %w", err)
 	}
 
 	return files, nil
@@ -302,7 +299,7 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 
 // readAndWriteFile reads a file line by line and writes each line to the writer
 func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Writer) error {
-	// #nosec G304 - filename is controlled by the application, either from explicit config or from walking pre-packaged data library
+	// #nosec G304 - filename is controlled by the application, either from explicit config or from walking data library directory
 	file, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)

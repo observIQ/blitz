@@ -54,8 +54,8 @@ type Generator struct {
 	Postgres PostgresGeneratorConfig `yaml:"postgres,omitempty" mapstructure:"postgres,omitempty"`
 	// Kubernetes contains Kubernetes container log generator configuration
 	Kubernetes KubernetesGeneratorConfig `yaml:"kubernetes,omitempty" mapstructure:"kubernetes,omitempty"`
-	// File contains File generator configuration
-	File FileGeneratorConfig `yaml:"file,omitempty" mapstructure:"file,omitempty"`
+	// Filegen contains File generator configuration
+	Filegen FileGeneratorConfig `yaml:"filegen,omitempty" mapstructure:"filegen,omitempty"`
 }
 
 // Validate validates the generator configuration
@@ -105,11 +105,11 @@ func (g *Generator) Validate() error {
 			return fmt.Errorf("kubernetes generator validation failed: %w", err)
 		}
 	case GeneratorTypeFile:
-		if err := g.File.Validate(); err != nil {
-			return fmt.Errorf("file generator validation failed: %w", err)
+		if err := g.Filegen.Validate(); err != nil {
+			return fmt.Errorf("filegen generator validation failed: %w", err)
 		}
 	default:
-		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, file", g.Type)
+		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen", g.Type)
 	}
 
 	return nil
