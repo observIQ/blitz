@@ -33,10 +33,10 @@ const (
 	errorTypeTimeout = "timeout"
 
 	// severity levels
-	severityLog    = "LOG"
-	severityError  = "ERROR"
-	severityFatal  = "FATAL"
-	severityPanic  = "PANIC"
+	severityLog     = "LOG"
+	severityError   = "ERROR"
+	severityFatal   = "FATAL"
+	severityPanic   = "PANIC"
 	severityWarning = "WARNING"
 	severityNotice  = "NOTICE"
 	severityDebug   = "DEBUG"
@@ -325,9 +325,9 @@ func (g *Generator) generatePostgresLogData() (*postgresLogData, error) {
 
 	data := &postgresLogData{
 		timestamp:  time.Now(),
-		processID:  r.Intn(99999) + 1000, // #nosec G404
-		user:       users[r.Intn(len(users))], // #nosec G404
-		database:   databases[r.Intn(len(databases))], // #nosec G404
+		processID:  r.Intn(99999) + 1000,                    // #nosec G404
+		user:       users[r.Intn(len(users))],               // #nosec G404
+		database:   databases[r.Intn(len(databases))],       // #nosec G404
 		app:        applications[r.Intn(len(applications))], // #nosec G404
 		clientAddr: generateRandomIP(r),
 	}
@@ -448,4 +448,3 @@ func (g *Generator) recordWriteError(errorType string, err error) {
 		zap.Error(err),
 	)
 }
-

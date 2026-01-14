@@ -70,7 +70,7 @@ PowerShell:
 func registerFlagCompletions(rootCmd *cobra.Command) {
 	// Generator type completions
 	_ = rootCmd.RegisterFlagCompletionFunc("generator-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"nop", "json", "winevt", "palo-alto", "apache-common", "apache-combined", "apache-error", "nginx", "postgres", "kubernetes"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"nop", "json", "winevt", "palo-alto", "apache-common", "apache-combined", "apache-error", "nginx", "postgres", "kubernetes", "filegen"}, cobra.ShellCompDirectiveNoFileComp
 	})
 
 	// Output type completions
@@ -96,6 +96,11 @@ func registerFlagCompletions(rootCmd *cobra.Command) {
 	// Generator Kubernetes format completions
 	_ = rootCmd.RegisterFlagCompletionFunc("generator-kubernetes-format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"cri-o"}, cobra.ShellCompDirectiveNoFileComp
+	})
+
+	// Generator filegen mode completions
+	_ = rootCmd.RegisterFlagCompletionFunc("generator-filegen-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"file", "directory"}, cobra.ShellCompDirectiveNoFileComp
 	})
 
 	// Syslog transport completions
