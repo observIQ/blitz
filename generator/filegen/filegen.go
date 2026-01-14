@@ -191,6 +191,26 @@ func (g *FileLogGenerator) getFiles() ([]string, error) {
 
 // getFilesFromAutoDetect detects whether source is a file or directory and handles accordingly
 func (g *FileLogGenerator) getFilesFromAutoDetect() ([]string, error) {
+	// First, try to expand as a glob pattern
+	globFiles, err := filepath.Glob(g.source)
+	if err == nil && len(globFiles) > 0 {
+		// Filter out directories from glob results
+		var files []string
+		for _, f := range globFiles {
+			info, err := os.Stat(f)
+			if err != nil {
+				continue
+			}
+			if !info.IsDir() {
+				files = append(files, f)
+			}
+		}
+		if len(files) > 0 {
+			return files, nil
+		}
+	}
+
+	// If glob didn't match files, try as a literal path
 	info, err := os.Stat(g.source)
 	if err != nil {
 		return nil, fmt.Errorf("stat source: %w", err)

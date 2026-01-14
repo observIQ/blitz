@@ -6,8 +6,8 @@ The File generator reads log entries from files on disk and automatically proces
 
 - **Single file mode**: Read logs from a specified file path
 - **Directory mode**: Read logs from all files in a directory
+- **Glob pattern support**: Use wildcards to match multiple files or directories (e.g., `/var/log/*rfc5424*.log`, `/data/syslog_*/*.log`)
 - **Auto-detection**: Mode can auto-detect whether source is a file or directory
-- **Package mode**: Read logs from pre-distributed sample packages (100+ devices: Apache, NGINX, Palo Alto, Check Point, Fortinet, Cisco ASA, F5 BIG-IP, Linux IPtables, ISC BIND, PostFix, Squid, SonicWALL, Kubernetes, Okta, SNORT, and more)
 - **Flexible rate limiting**: Configurable log generation rate per worker
 - **Multi-worker support**: Distribute file reading across multiple worker goroutines
 - **Dynamic timestamp processing**: Automatic substitution of timestamp directives (`%c`, `%Y-%m-%dT%H:%M:%SZ`, `%Y-%m-%d`, etc.) with actual formatted times
@@ -109,6 +109,20 @@ generator:
 
 - **File mode**: Reads the specified file sequentially line by line
 - **Directory mode**: Discovers all files in the directory and distributes them across workers
+
+### Glob Patterns
+
+The source path supports standard glob patterns with wildcards (`*`, `?`, `[...]`), allowing flexible file selection:
+
+**File glob examples:**
+- `data_library/syslog_generic/unparsable.*` - Match files with `unparsable.` prefix
+- `/var/log/*rfc5424*.log` - Match RFC 5424 log files in any subdirectory name
+- `/data/*.log` - Match all `.log` files in `/data`
+
+**Directory glob examples:**
+- `data_library/syslog_*/*.log` - Match all `.log` files in directories starting with `syslog_`
+- `/var/log/*/access.log` - Match `access.log` files in any subdirectory of `/var/log`
+- `/data/*_logs/*.log` - Match all `.log` files in directories ending with `_logs`
 
 ### Worker Distribution
 

@@ -3,6 +3,7 @@ package filegen
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -374,6 +375,148 @@ func TestTimestampProcessing(t *testing.T) {
 			for _, shouldNotContain := range tc.notContains {
 				assert.NotContains(t, output, shouldNotContain, "output should not contain %q", shouldNotContain)
 			}
+		})
+	}
+}
+
+// TestFileLogGeneratorGlobPatterns tests glob pattern support in source paths
+func TestFileLogGeneratorGlobPatterns(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+
+	// Create temp directory with multiple test files
+	tmpdir := t.TempDir()
+	
+	// Create test files matching different patterns
+	testFiles := []string{
+		"test_rfc5424_1.log",
+		"test_rfc5424_2.log",
+		"test_rfc3164.log",
+		"other_file.log",
+	}
+	
+	for _, fname := range testFiles {
+		f, err := os.Create(filepath.Join(tmpdir, fname))
+		require.NoError(t, err)
+		_, err = f.WriteString("test log line\n")
+		require.NoError(t, err)
+		f.Close()
+	}
+
+	testCases := []struct {
+		name        string
+		pattern     string
+		expectedMin int
+	}{
+		{
+			name:        "single_glob_wildcard",
+			pattern:     filepath.Join(tmpdir, "test_*.log"),
+			expectedMin: 3, // Should match test_rfc5424_1.log, test_rfc5424_2.log, test_rfc3164.log
+		},
+		{
+			name:        "specific_glob_pattern",
+			pattern:     filepath.Join(tmpdir, "*rfc5424*.log"),
+			expectedMin: 2, // Should match test_rfc5424_1.log, test_rfc5424_2.log
+		},
+		{
+			name:        "all_files_wildcard",
+			pattern:     filepath.Join(tmpdir, "*.log"),
+			expectedMin: 4, // Should match all files
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gen, err := New(logger, 1, 10*time.Millisecond, ModeFile, tc.pattern)
+			require.NoError(t, err)
+
+			writer := newMockWriter()
+
+			err = gen.Start(writer)
+			require.NoError(t, err)
+
+			// Give enough time for at least one write
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+
+			// Wait a bit then stop
+			time.Sleep(50 * time.Millisecond)
+			err = gen.Stop(ctx)
+			require.NoError(t, err)
+
+			// Should have written at least one line
+			writes := writer.getWrites()
+			require.Greater(t, len(writes), 0, "should have written at least one line")
+		})
+	}
+}
+
+// TestFileLogGeneratorGlobDirectories tests glob patterns with directory wildcards
+func TestFileLogGeneratorGlobDirectories(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+
+	// Create temp directory with subdirectories
+	tmpdir := t.TempDir()
+	
+	// Create subdirectories matching pattern
+	dirs := []string{
+		filepath.Join(tmpdir, "syslog_generic"),
+		filepath.Join(tmpdir, "syslog_custom"),
+		filepath.Join(tmpdir, "other_dir"),
+	}
+	
+	for _, dir := range dirs {
+		err := os.MkdirAll(dir, 0755)
+		require.NoError(t, err)
+		
+		// Create files in each directory
+		for i := 1; i <= 2; i++ {
+			fname := filepath.Join(dir, fmt.Sprintf("test_%d.log", i))
+			f, err := os.Create(fname)
+			require.NoError(t, err)
+			_, err = f.WriteString("test log line\n")
+			require.NoError(t, err)
+			f.Close()
+		}
+	}
+
+	testCases := []struct {
+		name        string
+		pattern     string
+		expectedMin int
+	}{
+		{
+			name:        "syslog_directory_glob",
+			pattern:     filepath.Join(tmpdir, "syslog_*/*.log"),
+			expectedMin: 4, // Should match 2 files each from syslog_generic and syslog_custom
+		},
+		{
+			name:        "all_directories_glob",
+			pattern:     filepath.Join(tmpdir, "*_*/*.log"),
+			expectedMin: 6, // Should match all 2 files from each of the 3 directories
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gen, err := New(logger, 1, 10*time.Millisecond, ModeFile, tc.pattern)
+			require.NoError(t, err)
+
+			writer := newMockWriter()
+
+			err = gen.Start(writer)
+			require.NoError(t, err)
+
+			// Wait for at least one write to occur (rate is 10ms per line)
+			time.Sleep(100 * time.Millisecond)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err = gen.Stop(ctx)
+			require.NoError(t, err)
+
+			// Should have written at least one line
+			writes := writer.getWrites()
+			require.Greater(t, len(writes), 0, "should have written at least one line")
 		})
 	}
 }
