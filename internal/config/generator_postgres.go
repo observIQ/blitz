@@ -25,4 +25,3 @@ func (c *PostgresGeneratorConfig) Validate() error {
 
 	return nil
 }
-

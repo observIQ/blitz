@@ -19,6 +19,7 @@ import (
 	apachegen "github.com/observiq/blitz/generator/apache"
 	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
 	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
+	"github.com/observiq/blitz/generator/filegen"
 	jsongen "github.com/observiq/blitz/generator/json"
 	"github.com/observiq/blitz/generator/kubernetes"
 	"github.com/observiq/blitz/generator/nginx"
@@ -372,6 +373,18 @@ func run(cmd *cobra.Command, args []string) error {
 		)
 		if err != nil {
 			logger.Error("Failed to create Kubernetes generator", zap.Error(err))
+			return err
+		}
+	case config.GeneratorTypeFile:
+		generatorInstance, err = filegen.New(
+			logger,
+			cfg.Generator.Filegen.Workers,
+			cfg.Generator.Filegen.Rate,
+			filegen.Mode(cfg.Generator.Filegen.Mode),
+			cfg.Generator.Filegen.Source,
+		)
+		if err != nil {
+			logger.Error("Failed to create File generator", zap.Error(err))
 			return err
 		}
 	default:

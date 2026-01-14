@@ -50,6 +50,7 @@ archives:
       - LICENSE
       - docs/configuration.md
       - docs/metrics.md
+      - data_library/**
 
 nfpms:
   - id: linux-packages
@@ -116,6 +117,13 @@ nfpms:
         dst: /etc/bash_completion.d/blitz
         file_info:
           mode: 0644
+          owner: root
+          group: root
+      - src: data_library
+        dst: /usr/share/blitz/data_library
+        type: dir
+        file_info:
+          mode: 0755
           owner: root
           group: root
       - dst: /var/log/blitz

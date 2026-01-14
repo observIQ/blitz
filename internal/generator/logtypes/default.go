@@ -148,7 +148,7 @@ func GenerateDefaultLogData() (*DefaultLogData, error) {
 	messageIndex := rand.Intn(len(logMessages))  // #nosec G404
 	levelIndex := rand.Intn(len(severityLevels)) // #nosec G404
 	envIndex := rand.Intn(len(environments))     // #nosec G404
-	locationIndex := rand.Intn(len(locations))    // #nosec G404
+	locationIndex := rand.Intn(len(locations))   // #nosec G404
 
 	return &DefaultLogData{
 		TimestampVal:   time.Now(),
@@ -158,4 +158,3 @@ func GenerateDefaultLogData() (*DefaultLogData, error) {
 		MessageVal:     logMessages[messageIndex],
 	}, nil
 }
-
