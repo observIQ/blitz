@@ -1,0 +1,8 @@
+<134>%c nokia-ipso.test firewall: EventType=PacketDrop, Source=192.168.1.100, Destination=203.0.113.50, Protocol=tcp, SourcePort=54321, DestinationPort=443, Reason=PolicyDeny, Interface=eth0
+<134>%c nokia-ipso.test firewall: EventType=PacketPass, Source=192.168.1.200, Destination=10.0.0.1, Protocol=tcp, SourcePort=49152, DestinationPort=22, Reason=PolicyAllow, Interface=eth1
+<134>%c nokia-ipso.test firewall: EventType=AttackDetection, Source=192.0.2.100, Destination=192.168.1.1, AttackType=PortScan, Severity=High, ThreatLevel=Critical, Interface=eth2
+<134>%c nokia-ipso.test firewall: EventType=VPNConnection, User=vpnuser, Source=203.0.113.100, Destination=192.168.1.0/24, Status=Established, Duration=3600, Interface=vpn0
+<134>%c nokia-ipso.test firewall: EventType=AuthenticationFailure, Service=SSH, Source=198.51.100.50, Destination=192.168.1.50, Attempts=5, Status=Failed, Interface=eth0
+<134>%c nokia-ipso.test firewall: EventType=DDoSAttack, Source_Network=192.0.2.0/24, Target=192.168.1.100, AttackType=SYNFlood, Packets=500000, Status=Mitigated, Interface=eth1
+<134>%c nokia-ipso.test firewall: EventType=ThreatPrevention, ThreatType=Malware, Source=203.0.113.200, File=malicious.exe, Action=Quarantine, Interface=eth2
+<134>%c nokia-ipso.test firewall: EventType=PolicyUpdate, Status=Applied, Version=2026.01.13, ChangeCount=15, Severity=Informational, Interface=management

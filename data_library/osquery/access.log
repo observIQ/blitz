@@ -1,0 +1,8 @@
+{"timestamp": "%c", "name": "osquery", "host": "endpoint-001", "action": "added", "column": "pid", "value": "1234"}
+{"timestamp": "%c", "name": "osquery", "host": "endpoint-001", "action": "updated", "column": "memory", "value": "4096"}
+{"timestamp": "%c", "name": "osquery", "host": "workstation-042", "action": "removed", "column": "unused_port", "value": "54321"}
+{"timestamp": "%c", "name": "osquery", "host": "server-db-01", "action": "added", "table": "process_open_files", "columns": 8}
+{"timestamp": "%c", "name": "osquery", "host": "endpoint-055", "action": "scheduled_query_executed", "query": "select * from processes where name like '%svchost%'", "result_count": 3}
+{"timestamp": "%c", "name": "osquery", "host": "workstation-001", "action": "file_integrity_alert", "file": "/etc/passwd", "change": "modification", "new_hash": "a1b2c3d4e5f6"}
+{"timestamp": "%c", "name": "osquery", "host": "endpoint-100", "action": "startup", "version": "5.2.1", "config_hash": "xyz789abc"}
+{"timestamp": "%c", "name": "osquery", "host": "server-web-02", "action": "config_updated", "remote_source": "osquery_config_server", "checksum": "9876543210abcdef"}

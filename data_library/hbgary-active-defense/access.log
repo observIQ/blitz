@@ -1,0 +1,8 @@
+<134>%c hbgary-01 ActiveDefense: Intelligence report generated - Threat actors: 5 - Malware families: 23 - IOCs published: 456
+<134>%c hbgary-01 ActiveDefense: Threat actor attribution - Campaign ID: APT28-2026-01 - Attribution: Fancy Bear (Russia) - Confidence: 92%
+<134>%c hbgary-01 ActiveDefense: Exploit analysis - Sample: trojan.exe - Family: Emotet - Capabilities: Worm, Backdoor, Banker
+<134>%c hbgary-01 ActiveDefense: Command & Control tracking - C2 server: malware-c2.ru - Active botnet size: 45000 - Geographical distribution: 120 countries
+<134>%c hbgary-01 ActiveDefense: Vulnerability intelligence - CVE: CVE-2021-44228 (Log4Shell) - Exploit available: YES - Active exploitation: Widespread
+<134>%c hbgary-01 ActiveDefense: Phishing intelligence - Campaign detection - Target sector: Finance - Samples identified: 234 - Unique domains: 89
+<134>%c hbgary-01 ActiveDefense: Malware family tracking - Family: Emotet - Variants: 567 - First seen: 2014 - Latest variant: 2026-01-10
+<134>%c hbgary-01 ActiveDefense: Intelligence feed update - Signatures updated: 12345 - Threat feeds: 45 - Coverage: 99.8%

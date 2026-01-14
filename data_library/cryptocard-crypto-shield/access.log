@@ -1,0 +1,8 @@
+<136>%c cryptocard-auth01 CRYPTO-Shield: Authentication request from user john.doe at 192.168.1.50 for service SSH - GRANTED
+<136>%c cryptocard-auth01 CRYPTO-Shield: Failed authentication attempt for user admin from 10.0.0.100 - Invalid OTP token
+<136>%c cryptocard-auth01 CRYPTO-Shield: User session for bob.smith terminated from 172.16.0.25 - Logout
+<136>%c cryptocard-auth01 CRYPTO-Shield: Authentication request from user alice.johnson at 192.168.1.75 for service VPN - DENIED (Token Expired)
+<136>%c cryptocard-auth01 CRYPTO-Shield: Configuration change: OTP validity period updated from 30 to 60 seconds by admin
+<136>%c cryptocard-auth01 CRYPTO-Shield: Authentication request from user charlie.brown at 10.100.100.50 for service Database - GRANTED
+<136>%c cryptocard-auth01 CRYPTO-Shield: Failed authentication attempt for user dave.wilson from 192.168.2.30 - Incorrect PIN
+<136>%c cryptocard-auth01 CRYPTO-Shield: User eve.martinez reported lost token - Account temporarily locked

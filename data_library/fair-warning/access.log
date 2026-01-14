@@ -1,0 +1,8 @@
+<134>%c fw-dlp01 FairWarning: DLP policy violation - Email attachment contains PII from user john.doe to external@recipient.com
+<134>%c fw-dlp01 FairWarning: File access anomaly - User accessing 450 files in 30 minutes - Pattern suggests data exfiltration
+<134>%c fw-dlp01 FairWarning: Shared drive misconfiguration - Public share containing 230 confidential documents detected
+<134>%c fw-dlp01 FairWarning: Shadow IT alert - Unauthorized SaaS usage detected - Dropbox sync from 192.168.1.50
+<134>%c fw-dlp01 FairWarning: Sensitive data exposure - Credit card information found in unencrypted email backup
+<134>%c fw-dlp01 FairWarning: Compliance violation - GDPR data retention policy violated - 45 records older than 3 years
+<134>%c fw-dlp01 FairWarning: Remediation action - Email blocked - Attachment containing source code blocked before delivery
+<134>%c fw-dlp01 FairWarning: Incident reporting - Quarterly data loss incidents: 87 events - Severity distribution: 3 critical, 15 high

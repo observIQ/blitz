@@ -1,0 +1,8 @@
+<134>%c exabeam-01 Exabeam: User risk score updated - john.doe: 85/100 (High Risk) - Multiple anomalies detected
+<134>%c exabeam-01 Exabeam: Behavioral analysis - Unusual access pattern from 192.168.1.50 - Off-hours activity detected
+<134>%c exabeam-01 Exabeam: Insider threat alert - User downloading large volume of files (2.3GB) before termination date
+<134>%c exabeam-01 Exabeam: Lateral movement chain detected - 5 hop sequence from compromised account
+<134>%c exabeam-01 Exabeam: User session correlation - Same user logging from 4 different locations in 15 minutes
+<134>%c exabeam-01 Exabeam: Attack pattern match - T1566.002 (Phishing - Spearphishing Link) detected in email traffic
+<134>%c exabeam-01 Exabeam: Entity baseline alert - admin_service account behavior deviation: 340% increase in API calls
+<134>%c exabeam-01 Exabeam: Investigation initiated - Event correlation ID: EXA-2026-87654 - Recommended action: review account activity

@@ -1,0 +1,8 @@
+<134>%c fidelis-01 Fidelis-XPS: Threat detection - Exploit attempt detected on 192.168.1.50 - CVE-2021-41773 (Apache RCE)
+<134>%c fidelis-01 Fidelis-XPS: SSL/TLS vulnerability identified - Weak cipher TLS_RSA_WITH_AES_128_CBC_SHA on 10.0.0.100
+<134>%c fidelis-01 Fidelis-XPS: Reconnaissance activity - Port scanning detected from 172.16.0.25 - 45 ports probed
+<134>%c fidelis-01 Fidelis-XPS: Malware communication - Suspicious outbound connection to C2 server 203.0.113.50:8080
+<134>%c fidelis-01 Fidelis-XPS: SQL injection attempt - SQL injection pattern detected in HTTP request from 192.168.2.30
+<134>%c fidelis-01 Fidelis-XPS: DDoS attack detection - SYN flood attack from botnet 198.51.100.0/24 - Rate: 50000 pps
+<134>%c fidelis-01 Fidelis-XPS: Protocol anomaly - HTTP with binary payload detected - Possible backdoor communication
+<134>%c fidelis-01 Fidelis-XPS: Packet capture saved - Session ID: PCAP-2026-87654 - File size: 234MB - Retention: 30 days

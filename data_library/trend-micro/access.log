@@ -1,0 +1,8 @@
+<134>%c trend-micro-ep.test Trend: EventType=VirusFound, FileName=malware.exe, ThreatName=Trojan.Generic, FileLocation=C:\Users\admin\Downloads, Action=Quarantine, DetectionTime=%c
+<134>%c trend-micro-ep.test Trend: EventType=SpywareDetected, ThreatName=Spyware.Tracking, FileLocation=HKLM\Software\Spy, Action=Removed, Severity=High
+<134>%c trend-micro-ep.test Trend: EventType=ScanCompleted, ScanType=Full, StartTime=%c, FilesScanned=987654, ThreatsFound=23, Scan Duration=3600s
+<134>%c trend-micro-ep.test Trend: EventType=DefinitionUpdate, UpdateType=Virus_Pattern, Version=20260113, UpdateTime=%c, Status=Success, PatternsAdded=5678
+<134>%c trend-micro-ep.test Trend: EventType=ExploitBlocked, ExploitType=BufferOverflow, TargetProcess=iexplore.exe, ProcessID=1234, Action=Blocked
+<134>%c trend-micro-ep.test Trend: EventType=WebReputationBlock, URL=malicious-site.xyz, Category=Malware, ClientIP=192.168.1.100, Action=Blocked
+<134>%c trend-micro-ep.test Trend: EventType=MailScan, EmailAddress=user@company.com, Subject=Invoice, Attachment=malware.exe, ScanResult=Infected, Action=Quarantine
+<134>%c trend-micro-ep.test Trend: EventType=IntegrityCheck, FileMonitored=C:\Windows\System32\notepad.exe, MD5=a1b2c3d4, Status=Protected, LastCheck=%c

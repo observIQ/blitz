@@ -1,0 +1,1 @@
+LEEF:1.0|CrowdStrike|FalconHost|1.0|Suspicious Activity| devTime=%Y-%m-%d %H:%M:%S src=10.1.1.1 srcPort=49220 dst=10.1.1.2 domain=I cat=NetworkAccesses usrName=test devTimeFormat=yyyy-MM-dd HH:mm:ss connDir=0 dstPort=443 resource=<Resource> proto=TCP url=https://example.com/url

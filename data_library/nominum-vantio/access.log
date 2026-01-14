@@ -1,0 +1,8 @@
+<134>%c nominum-dns.test DNS: Query, Domain=example.com, Client=192.168.1.100, QueryType=A, Response=203.0.113.1, RTT=25ms, Cache=miss
+<134>%c nominum-dns.test DNS: Query, Domain=malicious.info, Client=192.168.1.200, QueryType=A, Response=blocked, Category=Malware, RTT=10ms
+<134>%c nominum-dns.test DNS: Query, Domain=internal.company.local, Client=192.168.1.50, QueryType=MX, Response=mail.internal.company.local, RTT=5ms, Cache=hit
+<134>%c nominum-dns.test DNS: ZoneTransfer, Master=ns1.example.com, Slave=ns2.example.com, Status=Successful, Records=45678, Duration=15000ms
+<134>%c nominum-dns.test DNS: Query, Domain=google.com, Client=10.20.30.40, QueryType=AAAA, Response=2001:4860:4860::8888, RTT=50ms, Cache=miss
+<134>%c nominum-dns.test DNS: Query, Domain=phishing-site.fake, Client=203.0.113.100, QueryType=A, Response=blocked, Category=Phishing, RTT=8ms
+<134>%c nominum-dns.test DNS: DNSSEC_Validation, Domain=secure.bank.example, Status=Valid, Algorithm=RSASHA256, KeyLength=2048
+<134>%c nominum-dns.test DNS: Query, Domain=cdn.example.com, Client=198.51.100.200, QueryType=CNAME, Response=edge1.cdn.example.com, RTT=35ms, Cache=hit

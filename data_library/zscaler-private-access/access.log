@@ -1,0 +1,8 @@
+<134>%c hostname zscaler-paa: event_id=ZPA-001 user=jsmith client_ip=203.0.113.100 app_server=192.168.1.50 app_name=Salesforce protocol=TLS action=allow session_id=sess_12345678 bytes_sent=2097152
+<134>%c hostname zscaler-paa: event_id=ZPA-002 user=analyst client_ip=192.168.2.50 app_server=10.0.0.100 app_name=Finance_Portal protocol=TLS action=allow auth_type=SAML mfa_status=verified session_duration=3600
+<134>%c hostname zscaler-paa: event_id=ZPA-003 user=contractor client_ip=172.16.50.100 app_server=192.168.1.75 app_name=Document_Repo protocol=TLS action=deny reason=user_quarantined
+<134>%c hostname zscaler-paa: event_id=ZPA-004 user=admin client_ip=203.0.113.150 app_server=10.0.0.1 app_name=Admin_Console protocol=TLS action=allow session_id=sess_87654321 device_posture=compliant
+<134>%c hostname zscaler-paa: event_id=ZPA-005 user=developer client_ip=192.168.100.75 app_server=10.20.20.100 app_name=Source_Repository protocol=TLS action=allow risk_score=25 session_id=sess_11223344
+<134>%c hostname zscaler-paa: event_id=ZPA-006 user=guest client_ip=172.17.100.50 app_server=192.168.2.200 app_name=Public_Share protocol=TLS action=allow bandwidth_limit=10Mbps session_id=sess_55667788
+<134>%c hostname zscaler-paa: event_id=ZPA-007 user=analyst client_ip=10.30.30.50 app_server=10.0.0.50 app_name=Reporting_Service protocol=TLS action=allow tunnel_latency_ms=12 session_id=sess_99001122
+<134>%c hostname zscaler-paa: event_id=ZPA-008 user=admin client_ip=203.0.113.200 app_server=192.168.1.100 app_name=SIEM_Platform protocol=TLS action=deny reason=failed_mfa session_id=sess_44556677 attempt_count=3

@@ -1,0 +1,4 @@
+%a %b %d %H:%M:%S %Y dns kernel-notice named[45678]: client @0x7f8b8c012340 192.168.1.100#54321: query: example.com IN A +ED
+%a %b %d %H:%M:%S %Y dns kernel-notice named[45678]: query logging enabled
+%a %b %d %H:%M:%S %Y dns kernel-notice named[45678]: client @0x7f8b8c012340 192.168.1.200#54322: query: api.service.local IN AAAA
+%a %b %d %H:%M:%S %Y dns kernel-notice named[45678]: client @0x7f8b8c012340 192.168.1.100#54321: authenticated

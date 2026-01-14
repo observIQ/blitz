@@ -1,0 +1,8 @@
+<134>%c linux-host01.test kernel: [12345.678901] audit: type=EXECVE msg=audit(1736775330.123:4567): argc=3 a0="/usr/bin/sudo" a1="-u" a2="root"
+<134>%c linux-host01.test sudo[8765]: admin : TTY=pts/0 ; PWD=/home/admin ; USER=root ; COMMAND=/bin/sh
+<134>%c linux-host01.test kernel: [12350.456789] audit: type=LOGIN msg=audit(1736775335.000:4568): pid=1234 uid=0 old-auid=4294967295 auid=1001 tty=pts/0 ses=2 res=1
+<134>%c linux-host01.test sshd[5432]: Failed password for invalid user attacker from 192.168.1.100 port 54321 ssh2
+<134>%c linux-host01.test PAM-unix[5440]: (sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=10.20.30.40 user=baduser
+<134>%c linux-host01.test kernel: [12360.234567] audit: type=USER_AUTH msg=audit(1736775345.500:4569): user pid=2345 uid=0 auid=1002 ses=3 msg='op=PAM:authentication grantors=pam_wheel acct="admin" exe="/usr/bin/sudo" hostname=? addr=192.168.1.50 terminal=pts/0 res=success'
+<134>%c linux-host01.test su[7654]: Successful su for user user by root
+<134>%c linux-host01.test su[7655]: + ??? root-user

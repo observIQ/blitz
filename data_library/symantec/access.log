@@ -1,0 +1,8 @@
+<134>%c symantec-epo.test Symantec: EventType=VirusDetected, VirusName=Trojan.Generic, FileName=malware.exe, ClientName=WORKSTATION01, ClientIP=192.168.1.100, Action=Quarantine
+<134>%c symantec-epo.test Symantec: EventType=ThreatDetected, ThreatType=PUP.Optional, ThreatName=AdwareFeed, FileName=adware.dll, ClientName=LAPTOP01, Action=Removed
+<134>%c symantec-epo.test Symantec: EventType=ScanCompleted, ClientName=SERVER02, ScanType=Full, ScanStartTime=%c, FilesScanned=987654, ThreatsFound=5
+<134>%c symantec-epo.test Symantec: EventType=DefinitionUpdate, ClientName=WORKSTATION02, DefinitionVersion=20260113, UpdateTime=%c, Status=Success
+<134>%c symantec-epo.test Symantec: EventType=FailedProtection, ClientName=ENDPOINT05, IssueType=OutdatedDefinitions, LastUpdateTime=%c, Status=RequiresUpdate
+<134>%c symantec-epo.test Symantec: EventType=ExploitPrevented, ClientName=WORKSTATION03, ExploitType=BufferOverflow, TargetApplication=InternetExplorer, Action=Blocked
+<134>%c symantec-epo.test Symantec: EventType=PolicyUpdate, ClientName=All, PolicyName=AntivirusPolicy, UpdateTime=%c, Status=Applied
+<134>%c symantec-epo.test Symantec: EventType=ClientOffline, ClientName=OLDPC01, LastHeartbeat=%c, Status=Offline, Duration=432000s

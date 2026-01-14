@@ -1,0 +1,8 @@
+<134>%c postfix-mta.test postfix/master[1234]: daemon started -- version 3.4.8, configuration /etc/postfix
+<134>%c postfix-mta.test postfix/pickup[5678]: Scan the queue once, 15 messages in queue
+<134>%c postfix-mta.test postfix/cleanup[9012]: 12A3B45C6D78: message-id=<12a3b45c6d78@company.com>
+<134>%c postfix-mta.test postfix/qmgr[3456]: 12A3B45C6D78: from=<sender@company.com>, size=4096, nrcpt=1 (queue active)
+<134>%c postfix-mta.test postfix/smtp[7890]: 12A3B45C6D78: to=<recipient@example.com>, relay=mail.example.com[203.0.113.50], delay=0.45, delays=0.12/0.01/0.22/0.1, dsn=2.0.0, status=sent (250 OK id=zzz)
+<134>%c postfix-mta.test postfix/smtp[7891]: ABCDEF123456: host mail.external.com[192.0.2.100] refused to talk to me: 550 Service unavailable
+<134>%c postfix-mta.test postfix/local[8901]: GHIJKL789012: to=<admin@localhost>, relay=local, delay=0.15, status=bounced (User unknown in local recipient table)
+<134>%c postfix-mta.test postfix/bounce[2345]: MNOPQR345678: host mx.company.com[192.168.1.50] said: 421 Service temporarily unavailable

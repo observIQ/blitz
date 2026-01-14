@@ -1,0 +1,5 @@
+<86>%c apache.httpserver.test sshd[11148]: pam_vas: Authentication succeeded for Active Directory user: svc_unix account: DOMAINNAME\svc_unix_secscan service: sshd reason:
+%c apache.httpserver.test httpd: 10.100.100.101 172.16.210.237 - - [%d/%b/%Y:%H:%M:%S +0000] "HEAD / HTTP/1.0" 403 123 "-" "-"
+<84>%c apache.httpserver.test httpd: 192.168.1.50 192.168.1.100 user - [%d/%b/%Y:%H:%M:%S +0000] "GET /api/users HTTP/1.1" 200 1024 "-" "Mozilla/5.0"
+<86>%c apache.httpserver.test httpd: 10.0.0.1 10.0.0.2 - - [%d/%b/%Y:%H:%M:%S +0000] "POST /login HTTP/1.1" 401 512 "-" "curl/7.64.1"
+<85>%c apache.httpserver.test httpd: 172.31.0.50 172.31.1.1 admin - [%d/%b/%Y:%H:%M:%S +0000] "DELETE /resource/123 HTTP/1.1" 403 256 "-" "PostmanRuntime/7.26.8"

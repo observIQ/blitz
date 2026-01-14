@@ -1,0 +1,8 @@
+<134>%c sentrigo-hedgehog.test DatabaseSecurity: EventType=SuspiciousQuery, Database=prod_db, User=rogue_user, Query=SELECT * FROM credit_cards, Result=Blocked, ThreatLevel=Critical
+<134>%c sentrigo-hedgehog.test DatabaseSecurity: EventType=UnauthorizedLogin, Database=prod_db, User=attacker, Source=203.0.113.100, Attempts=12, Status=Blocked
+<134>%c sentrigo-hedgehog.test DatabaseSecurity: EventType=DataExfiltration, Database=prod_db, User=insider, Method=BulkExport, DataSize=512MB, Destination=external_ip, Status=Prevented
+<134>%c sentrigo-hedgehog.test DatabaseSecurity: EventType=SQLInjection, Database=prod_db, User=app_user, InjectionPayload=1'OR'1'='1, Result=Blocked, ThreatLevel=High
+<134>%c sentrigo-hedgehog.test DatabaseSecurity: EventType=PolicyViolation, Database=prod_db, User=contractor, ViolatedPolicy=RestrictedTableAccess, ViolatedTable=payroll, Status=Audited
+<134>%c sentrigo-hedgehog.test DatabaseSecurity: EventType=PrivilegeAbuse, Database=prod_db, User=developer, UnauthorizedRole=DBA, Duration=3600s, Status=Detected
+<134>%c sentrigo-hedgehog.test DatabaseSecurity: EventType=ConfigurationChange, Database=prod_db, ChangedParameter=audit_level, OldValue=basic, NewValue=disabled, ChangedBy=unknown
+<134>%c sentrigo-hedgehog.test DatabaseSecurity: EventType=ComplianceAlert, Database=prod_db, Regulation=PCI_DSS, Issue=UnencryptedDataAccess, AffectedRecords=98765

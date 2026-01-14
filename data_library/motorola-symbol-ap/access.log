@@ -1,0 +1,8 @@
+<134>%c motorola-ap.test AP-WLAN-001: AuthEvent, Client=AA:BB:CC:DD:EE:01, SSID=Corporate, AuthMethod=802.1X, Status=Success, IP=192.168.10.50
+<134>%c motorola-ap.test AP-WLAN-001: DeauthEvent, Client=AA:BB:CC:DD:EE:02, SSID=Corporate, Reason=Idle_Timeout, Duration=3600
+<134>%c motorola-ap.test AP-WLAN-002: SecurityAlert, Client=AA:BB:CC:DD:EE:03, EventType=InvalidKey, SSID=Corporate, AttemptCount=3, Status=Blocked
+<134>%c motorola-ap.test AP-WLAN-002: AssociationEvent, Client=AA:BB:CC:DD:EE:04, SSID=Guest, Channel=6, SignalStrength=-65dBm, DataRate=54Mbps
+<134>%c motorola-ap.test AP-WLAN-001: RoamingEvent, Client=AA:BB:CC:DD:EE:05, FromAP=AP-WLAN-001, ToAP=AP-WLAN-003, SSID=Corporate, RoamTime=200ms
+<134>%c motorola-ap.test AP-WLAN-003: ChannelChange, ChannelFrom=11, ChannelTo=6, Reason=Interference, AffectedClients=12
+<134>%c motorola-ap.test AP-WLAN-002: BandwidthAlert, Threshold=80%, CurrentUsage=82%, Channel=11, Duration=1200
+<134>%c motorola-ap.test AP-WLAN-001: ClientDisconnect, Client=AA:BB:CC:DD:EE:06, SSID=Corporate, Reason=RssiThreshold, RSSI=-82dBm

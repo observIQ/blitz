@@ -1,0 +1,3 @@
+<134>%c osx-system kernel: [kern.info] kauth_request_writable: op=4, err=1, attrs=0x0, pid=123 (syslogd)
+<134>%c osx-system kernel: [kern.info] IOBluetoothHCIController::setPowerStateWL: On -> On
+<135>%c osx-system kernel: [kern.info] Execution denied for process 'Flash Player' due to system restrictions

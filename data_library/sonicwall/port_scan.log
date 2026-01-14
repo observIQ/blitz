@@ -1,0 +1,1 @@
+<1>    id=firewall sn=01234567ABCD time="%Y-%m-%d %H:%M:%S" fw=10.0.0.2 pri=1 c=32 m=83 msg="Probable port scan detected" n=2 src=10.0.0.3:443:X1 dst=172.16.194.2:47379:X1 srcMac=00:00:5E:00:53:ff dstMac=00:00:5E:00:53:00 proto=tcp/1 note="TCP scanned port list, 14551, 61968, 53577, 27976, 29050, 25330, 21761, 23903, 7412, 47379" fw_action="NA"

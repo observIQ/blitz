@@ -1,0 +1,8 @@
+<134>%c beacon-01 Beacon: Threat detected - IP address flagged - Source: 192.168.1.50 - Reputation score: 85 - Category: Malware C2
+<134>%c beacon-01 Beacon: Attack pattern recognition - Botnet communication detected - Source: 10.0.0.100 - Protocol: IRC - Channel: #command
+<134>%c beacon-01 Beacon: DDoS amplification source identified - IP: 172.16.0.25 - Attack type: NTP reflection - Packet rate: 50000 pps
+<134>%c beacon-01 Beacon: Exploit kit activity - Drive-by download attempt blocked - URL: malicious-site.com/exploit - Payload: Trojan dropper
+<134>%c beacon-01 Beacon: Ransomware communication - C2 callback detected - Destination: ransom-server.net:4444 - Encryption: RSA-2048
+<134>%c beacon-01 Beacon: Phishing campaign tracking - Campaign ID: PHISH-2026-001 - Target: finance department - Detected samples: 45
+<134>%c beacon-01 Beacon: Intelligence sharing - Threat indicator published - IOC type: Domain - Value: newly-discovered-c2.com - Severity: Critical
+<134>%c beacon-01 Beacon: Threat summary - Daily threats blocked: 23456 - Unique IP sources: 5678 - Top threat: Banking Trojan (45%)

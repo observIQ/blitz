@@ -1,0 +1,8 @@
+<134>%c huawei-router01 Huawei-Network: Interface status - Interface: GigabitEthernet0/0/0 - Status: Up - Speed: 1Gbps - MTU: 1500
+<134>%c huawei-router01 Huawei-Network: BGP route advertisement - AS: 65100 - Route: 10.0.0.0/8 - Next hop: 192.168.1.1 - Metric: 100
+<134>%c huawei-router01 Huawei-Network: ACL rule match - ACL ID: 2000 - Source: 192.168.50.0/24 - Destination: 10.0.0.0/8 - Action: Permit
+<134>%c huawei-router01 Huawei-Network: QoS policy applied - Policy: priority-data - Bandwidth allocated: 500Mbps - Current usage: 320Mbps
+<134>%c huawei-router01 Huawei-Network: VLAN configuration - VLAN ID: 100 - Name: Management - Tagged ports: 1-4 - Untagged port: 48
+<134>%c huawei-router01 Huawei-Network: Routing table update - Routes added: 5 - Routes removed: 2 - Total routes: 450
+<134>%c huawei-router01 Huawei-Network: Configuration change - Device hostname changed - Old: router1 - New: core-router-01 - Admin: network-admin
+<134>%c huawei-router01 Huawei-Network: System status - CPU: 45%, Memory: 67%, Uptime: 234 days, Health: Excellent

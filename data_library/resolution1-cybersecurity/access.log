@@ -1,0 +1,8 @@
+<143>%c resolution1-platform.test Threat: ThreatID=THREAT_20260113_001, Category=Malware, Family=Trojan.Generic, MD5=a1b2c3d4e5f6, SHA256=1234567890abcdef, ThreatLevel=Critical, DetectedTime=%c
+<143>%c resolution1-platform.test Threat: ThreatID=THREAT_20260113_002, Category=APT, Country=CN, C2Server=192.0.2.100:443, Indicators=15, Confidence=98
+<143>%c resolution1-platform.test Threat: ThreatID=THREAT_20260113_003, Category=Exploit, CVE=[CVE-2025-0001], TargetApplication=WebBrowser, CVSS=9.8
+<143>%c resolution1-platform.test Intelligence: FeedUpdate=IP_Reputation, UpdateTime=%c, NewEntriesAdded=5234, RemovedEntries=123, Status=Applied
+<143>%c resolution1-platform.test Intelligence: DataEnrichment=GeoIP, Query=192.0.2.50, Country=RU, ISP=Hacker_Services, Reputation=Malicious
+<143>%c resolution1-platform.test Correlation: EventsCorrelated=12, TimeWindow=3600s, CampaignID=CAMPAIGN_APT28, Severity=High, Status=Detected
+<143>%c resolution1-platform.test Report: GeneratedReport=Monthly_Threat_Summary, Threats=456, Unique_IPs=789, Top_Malware=[Trojan.Generic, Adware.PUP, Backdoor.Agent]
+<143>%c resolution1-platform.test Compliance: AuditLog=30day_retention, Status=Compliant, LogsArchived=87654, CompressionRatio=0.35

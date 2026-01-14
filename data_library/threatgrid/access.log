@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "malware_analysis", "sample_md5": "a1b2c3d4e5f6", "sample_sha256": "1234567890abcdef1234567890abcdef", "threat_name": "Trojan.Generic", "analysis_status": "complete", "verdict": "malicious", "confidence": 99}
+{"timestamp": "%c", "event_type": "sandbox_execution", "sample_id": "TG_12345", "execution_time": 300, "processes_created": 12, "files_modified": 45, "registry_changes": 23, "network_connections": 5}
+{"timestamp": "%c", "event_type": "behavioral_analysis", "sample_id": "TG_12346", "behaviors": ["process_injection", "registry_modification", "command_execution"], "severity": "high", "risk_score": 95}
+{"timestamp": "%c", "event_type": "signature_generation", "sample_id": "TG_12347", "signature_id": "SIG_THREATGRID_001", "signature_status": "approved", "deployment_status": "distributed"}
+{"timestamp": "%c", "event_type": "false_positive_alert", "sample_id": "TG_12348", "reported_by": "security_analyst", "review_status": "false_positive_confirmed"}
+{"timestamp": "%c", "event_type": "threat_correlation", "sample_id": "TG_12349", "related_samples": 45, "campaign_id": "CAMPAIGN_APT28", "first_seen": "%c", "last_seen": "%c"}
+{"timestamp": "%c", "event_type": "report_generated", "report_id": "REPORT_001", "sample_count": 567, "unique_threats": 234, "new_threats": 12, "generated_time": "%c"}
+{"timestamp": "%c", "event_type": "integration_event", "integration": "virustotal", "sample_id": "TG_12350", "vt_detection_ratio": "45/78", "vt_update_status": "synced"}

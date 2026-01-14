@@ -1,0 +1,8 @@
+<134>%c squid-proxy.test squid: %c.123 0 192.168.1.100 TCP_MISS/200 1024 GET http://example.com/page.html - DIRECT/203.0.113.1 text/html
+<134>%c squid-proxy.test squid: %c.456 1234 192.168.1.200 TCP_DENIED/407 1234 GET https://restricted-site.com/ - HIER_DIRECT/- text/html
+<134>%c squid-proxy.test squid: %c.789 5000 10.20.30.40 TCP_HIT/200 2048 GET http://cdn.example.com/image.jpg - HIER_NONE/- image/jpeg
+<134>%c squid-proxy.test squid: %c.012 0 192.168.1.50 TCP_MISS_DENIED/403 512 GET http://malware-site.com/download - HIER_DIRECT/203.0.113.50 text/html
+<134>%c squid-proxy.test squid: %c.345 15000 203.0.113.100 TCP_MISS/502 256 POST https://api.company.com/data - HIER_DIRECT/api.company.com text/plain
+<134>%c squid-proxy.test squid: %c.678 0 192.168.1.100 TCP_TUNNEL/200 45678 CONNECT secure-server.local:443 - HIER_DIRECT/192.168.1.50 -
+<134>%c squid-proxy.test squid: %c.901 3000 10.20.30.50 TCP_REFRESH_MODIFIED/304 1024 GET http://example.com/dynamic.php?id=123 - HIER_DIRECT/203.0.113.1 text/html
+<134>%c squid-proxy.test squid: %c.234 0 198.51.100.100 TCP_DENIED/403 512 GET http://blocked-category.com/ - HIER_NONE/- text/html

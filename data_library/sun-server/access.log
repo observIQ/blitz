@@ -1,0 +1,8 @@
+<134>%c sun-server.test syslog-ng: EventType=SystemStartup, System=Solaris_10, StartupTime=%c, BootStatus=Success, ServiceCount=45
+<134>%c sun-server.test kernel: EventType=ProcessCreation, ProcessID=1234, ProcessName=apache, Parent=init, User=root, CreationTime=%c
+<134>%c sun-server.test ftpd[5678]: EventType=UserLogin, User=ftp_user, ClientIP=192.168.1.100, LoginStatus=Success, LoginTime=%c
+<134>%c sun-server.test sshd[9012]: EventType=AuthenticationFailure, User=attacker, ClientIP=203.0.113.50, Attempts=7, Status=Failed
+<134>%c sun-server.test cron: EventType=JobExecution, JobID=daily_backup, ExecutionTime=%c, Status=Success, Duration=3600s
+<134>%c sun-server.test kernel: EventType=MemoryAlert, FreeMemory=512MB, Threshold=1GB, AlertLevel=Warning, Timestamp=%c
+<134>%c sun-server.test syslogd: EventType=LogRotation, LogFile=/var/log/messages, RotationTime=%c, OldSize=10485760, NewSize=0
+<134>%c sun-server.test shutdown: EventType=SystemShutdown, InitiatedBy=root, ShutdownTime=%c, Reason=Maintenance

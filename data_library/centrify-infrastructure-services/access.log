@@ -1,0 +1,3 @@
+<134>%c centrify-auth kernel: User 'domain\john.doe' successfully authenticated via Active Directory at 192.168.1.50
+<134>%c centrify-auth kernel: Failed authentication attempt for user 'domain\guest' - Invalid credentials at 192.168.1.51
+<135>%c centrify-auth kernel: Administrative privilege granted to 'domain\admin' for service 'sudo' - Command: /bin/bash

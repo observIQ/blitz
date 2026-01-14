@@ -1,0 +1,1 @@
+<173>%b %e %T f5networks.bigipapm.test notice tmm[20338]: 01580002:5: /path/to_file_123:Common:b77e0b8e: allow ACL: /path/to_other_file_123:2 packet: tcp 192.168.194.160:54636 -> 172.16.0.12:4446

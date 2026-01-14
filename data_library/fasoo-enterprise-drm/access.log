@@ -1,0 +1,8 @@
+<134>%c fasoo-drm drm-server: Document encryption applied - Document: confidential_report.pdf - User: john.doe - Encryption: AES-256
+<134>%c fasoo-drm drm-server: Access control policy enforced - File access denied - User insufficient_privs lacks read permission
+<134>%c fasoo-drm drm-server: Watermark application - Watermark added to export_data.xlsx - Owner: admin - Timestamp embedded
+<134>%c fasoo-drm drm-server: Rights revocation - All access rights revoked for document_confidential.doc - Initiated by dba_admin
+<134>%c fasoo-drm drm-server: Digital signature verification - Signature valid on contract_2026.pdf - Signed by: legal_officer
+<134>%c fasoo-drm drm-server: Expiration policy triggered - Document planning_doc.txt access rights expired - User locked out
+<134>%c fasoo-drm drm-server: Offline access enabled - Document enabled for offline use - 30 day expiration set
+<134>%c fasoo-drm drm-server: Audit log generated - Total protected documents: 5234 - Active licenses: 450

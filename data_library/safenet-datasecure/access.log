@@ -1,0 +1,8 @@
+<144>%c safenet-kms.test SafeNet: Event=KeyEncryption, KeyID=K_00123456, DataSize=1048576, EncryptionAlgorithm=AES256, Status=Success, Timestamp=%c
+<144>%c safenet-kms.test SafeNet: Event=KeyRotation, KeyID=K_00123456, OldVersion=1, NewVersion=2, RotationTime=%c, Status=Completed
+<144>%c safenet-kms.test SafeNet: Event=UnauthorizedAccess, User=attacker, KeyID=K_00123456, Action=Denied, Reason=InvalidCredential
+<144>%c safenet-kms.test SafeNet: Event=AuditLogExport, StartDate=2026-01-01, EndDate=2026-01-13, Records=98765, ExportedTo=secure_storage, Status=Success
+<144>%c safenet-kms.test SafeNet: Event=CertificateManagement, Operation=Import, CertificateName=signing_cert, Issuer=Internal_CA, ExpiresIn=730, Status=Installed
+<144>%c safenet-kms.test SafeNet: Event=HSMStatus, Status=Online, Temperature=42C, UtilizationPercent=78%, BackupStatus=Synced
+<144>%c safenet-kms.test SafeNet: Event=TokenDecryption, TokenID=T_98765432, DecryptionStatus=Success, DecryptionTime=125ms
+<144>%c safenet-kms.test SafeNet: Event=PolicyUpdate, PolicyName=KeyAccessControl, ChangeCount=5, UpdatedBy=security_admin, Status=Applied

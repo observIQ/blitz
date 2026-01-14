@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "user.session_start", "user": "admin@company.okta.com", "session_id": "123456789", "ip_address": "192.168.1.100", "user_agent": "Mozilla/5.0", "status": "success"}
+{"timestamp": "%c", "event_type": "user.authentication_success", "user": "user@company.okta.com", "auth_method": "password", "mfa_status": "required", "device_id": "DEVICE001", "status": "success"}
+{"timestamp": "%c", "event_type": "user.authentication_failed", "user": "attacker@unknown.com", "auth_method": "password", "reason": "invalid_credentials", "ip_address": "203.0.113.50", "attempts": 5}
+{"timestamp": "%c", "event_type": "app.access_granted", "user": "contractor@company.okta.com", "app": "SalesforceApp", "access_level": "user", "result": "success"}
+{"timestamp": "%c", "event_type": "app.access_denied", "user": "guest@company.okta.com", "app": "AdminConsole", "reason": "insufficient_privileges", "result": "failure"}
+{"timestamp": "%c", "event_type": "admin.user_activated", "admin": "secadmin@company.okta.com", "user": "newemployee@company.okta.com", "action": "activated", "result": "success"}
+{"timestamp": "%c", "event_type": "policy.rule_evaluated", "policy": "mfa_required", "user": "user@company.okta.com", "app": "Office365", "result": "pass"}
+{"timestamp": "%c", "event_type": "risk.behavior_detected", "user": "user@company.okta.com", "risk_event": "impossible_travel", "from_location": "New York", "to_location": "Tokyo", "time_delta_minutes": 120}

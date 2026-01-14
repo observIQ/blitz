@@ -1,0 +1,1 @@
+<134>1 %s.%N appliance flows src=172.21.84.107 dst=10.52.193.137 mac=5C:E0:C5:22:85:E4 protocol=tcp sport=50395 dport=443 pattern: allow all

@@ -1,0 +1,8 @@
+<134>%c bigfix-server BigFix: Endpoint inventory - Total endpoints: 5000 - Compliant: 4850 - Non-compliant: 150
+<134>%c bigfix-server BigFix: Patch deployment - Patch: Microsoft KB5026372 - Deployed to: 3200 endpoints - Success rate: 98.5%
+<134>%c bigfix-server BigFix: Vulnerability scan - Endpoints scanned: 5000 - Vulnerabilities found: 2345 - Critical: 23, High: 456
+<134>%c bigfix-server BigFix: Software installation - Software: Adobe Reader v23.001 - Installation on 2500 endpoints - Status: Completed
+<134>%c bigfix-server BigFix: Configuration management - Configuration baseline applied - Endpoints: 4500 - Compliant: 4350 (96.7%)
+<134>%c bigfix-server BigFix: License compliance audit - Total licenses: 5000 - Licensed software found: 4950 - Unlicensed: 50
+<134>%c bigfix-server BigFix: Security incident response - Malware detected on 15 endpoints - Automated remediation: Quarantine and remove
+<134>%c bigfix-server BigFix: Reporting summary - Last 30 days - Deployments: 234 - Managed endpoints: 5000 - Uptime: 99.9%

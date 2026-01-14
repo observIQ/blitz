@@ -1,0 +1,3 @@
+<134>1 %F %T ahnlab-server app 12345 - - Policy violation detected: Malware signature S1025 matched on user=admin file=/tmp/test.exe
+<134>1 %F %T ahnlab-server app 12346 - - Policy update applied: 5234 new threat signatures loaded
+<135>1 %F %T ahnlab-server app 12347 - - Admin user john modified access control policy

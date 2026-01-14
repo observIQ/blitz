@@ -1,0 +1,8 @@
+<134>%c ldap-server.test slapd[8901]: conn=123 fd=45 ACCEPT from IP=192.168.1.100:54321 (IP=192.168.1.50:389)
+<134>%c ldap-server.test slapd[8901]: conn=123 op=0 BIND dn="cn=admin,dc=company,dc=com" method=128
+<134>%c ldap-server.test slapd[8901]: conn=123 op=0 RESULT tag=97 err=0 text=
+<134>%c ldap-server.test slapd[8901]: conn=123 op=1 SRCH base="ou=users,dc=company,dc=com" scope=2 deref=0 filter="(uid=testuser)"
+<134>%c ldap-server.test slapd[8901]: conn=123 op=2 ADD dn="uid=newuser,ou=users,dc=company,dc=com"
+<134>%c ldap-server.test slapd[8901]: conn=123 op=2 RESULT tag=105 err=0 text=
+<134>%c ldap-server.test slapd[8901]: conn=124 fd=46 ACCEPT from IP=203.0.113.50:49152 (IP=192.168.1.50:389)
+<134>%c ldap-server.test slapd[8901]: conn=124 op=0 BIND dn="cn=attacker,dc=company,dc=com" method=128 RESULT tag=97 err=49 text=Invalid credentials

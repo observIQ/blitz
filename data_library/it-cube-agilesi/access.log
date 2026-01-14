@@ -1,0 +1,8 @@
+<134>%c itcube-01 agileSI: Governance review initiated - Process: Access Review - Scope: 450 accounts - Status: In Progress
+<134>%c itcube-01 agileSI: Certification task assigned - Task ID: CERT-2026-001 - Assigned to: John Doe - Due date: 2026-01-31 - Type: Manager Review
+<134>%c itcube-01 agileSI: Attestation completed - Attester: Manager - Accounts reviewed: 250 - Approved: 248 - Rejected: 2
+<134>%c itcube-01 agileSI: Compliance violation found - User: test_user - Violation type: Segregation of duties - Required action: Remove role
+<134>%c itcube-01 agileSI: Policy enforcement - Policy: System Admin Access - Applied to: 150 identities - Non-compliant: 5
+<134>%c itcube-01 agileSI: Remediation action - Violation: Duplicate role assignment - Action: Remove redundant role - User: admin_test - Status: Pending approval
+<134>%c itcube-01 agileSI: Audit trail export - Governance events: 5678 - Certification events: 234 - Export destination: compliance-archive@example.com
+<134>%c itcube-01 agileSI: Governance dashboard - Certifications: 95% complete - Violations: 12 open - Risk score: 34/100

@@ -1,0 +1,4 @@
+<189>: %Y %b %d %H:%M:%S %Z: %ETHPORT-5-IF_DOWN_ADMIN_DOWN: Interface Ethernet1/22 is down (Administratively Down)
+<189>: %Y %b %d %H:%M:%S %Z: last message repeated 1 time
+<189>: %Y %b %d %H:%M:%S %Z: %ETHPORT-5-IF_ADMIN_UP: Interface Ethernet1/22 is admin up .
+<189>: %Y %b %d %H:%M:%S %Z: %VSHA_SYSLOG_CONFIG_I: Configured from vty by gbagala on 10.209.33.26@pts/0

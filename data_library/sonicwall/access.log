@@ -1,0 +1,3 @@
+%c CEF:0|SonicWall|NSA|7.0|firewall-access|Allow|Low|src=192.168.1.100 spt=54321 dst=8.8.8.8 dpt=53 proto=UDP act=Allow app=DNS cn1=0 cn2=53 cn3=1 msg=DNS\ Allowed deviceAction=Allow
+%c CEF:0|SonicWall|NSA|7.0|firewall-access|Deny|High|src=192.168.1.150 spt=54322 dst=10.0.0.0 dpt=445 proto=TCP act=Deny app=NETBIOS cn1=1 cn2=445 cn3=0 msg=Blocked\ Port\ Scan deviceAction=Deny
+%c CEF:0|SonicWall|NSA|7.0|firewall-vpn|Connect|Low|src=192.168.1.200 spt=54323 dst=203.0.113.1 dpt=500 proto=UDP act=VPN\ Connect cn1=1200 cn2=500 msg=IPSec\ Connection deviceAction=Allow

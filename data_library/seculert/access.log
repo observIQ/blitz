@@ -1,0 +1,8 @@
+<145>%c seculert-ti.test ThreatIntel: Alert=MalwareDetected, MD5=a1b2c3d4e5f6, Family=Trojan.Generic, DetectionTime=%c, Confidence=98, Sources=12, Severity=Critical
+<145>%c seculert-ti.test ThreatIntel: Alert=C2Communication, DomainName=malicious-c2.xyz, ResolvedIP=192.0.2.100, FirstSeen=%c, LastSeen=%c, KnownBotnetID=APT_28
+<145>%c seculert-ti.test ThreatIntel: Alert=ExploitKitDetected, Name=RIG_Exploit_Kit, CVEs=[CVE-2025-0001,CVE-2025-0002], TargetedApplications=3, DetectedTime=%c
+<145>%c seculert-ti.test ThreatIntel: Alert=PhishingCampaign, TargetOrganization=Company, TargetedUsers=45, EmailsSent=1234, ClickRate=12%, FirstEmail=%c
+<145>%c seculert-ti.test ThreatIntel: Alert=DataLeak, Source=Underground_Forum, DataType=PaymentCards, RecordsLeaked=987654, AffectedOrganizations=23, PublishedTime=%c
+<145>%c seculert-ti.test ThreatIntel: Alert=ZeroDayVulnerability, CVEReserved=CVE-2026-0001, AffectedProduct=PopularBrowser, CVSS=10.0, PublicExploitAvailable=false
+<145>%c seculert-ti.test ThreatIntel: Alert=BotnetGrowth, BotnetID=Mirai_Variant, NewInfectedHosts=5000, TotalInfected=150000, GrowthRate=3.4%
+<145>%c seculert-ti.test ThreatIntel: Alert=ThreatActorActivity, Actor=APT_Group_12, Activity=Reconnaissance, TargetRegion=EMEA, LastActivity=%c, ThreatLevel=High

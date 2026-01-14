@@ -1,0 +1,8 @@
+<134>%c redback-ase.test VPN: EventType=UserConnect, User=vpn_user, ClientIP=192.168.1.100, VPN_Gateway=10.0.0.1, EncryptionMethod=AES256, Status=Connected, Duration=%c
+<134>%c redback-ase.test VPN: EventType=BandwidthAlert, User=heavy_user, CurrentBandwidth=500Mbps, Threshold=200Mbps, Status=Throttled
+<134>%c redback-ase.test VPN: EventType=TunnelFailure, Source=203.0.113.100, Destination=10.0.0.1, Protocol=IPSec, ErrorCode=IKE_HANDSHAKE_FAILED
+<134>%c redback-ase.test VPN: EventType=AuthenticationFailure, User=attacker, ClientIP=192.0.2.100, Method=PSK, Attempts=7, Status=Blocked
+<134>%c redback-ase.test VPN: EventType=CertificateCheck, Certificate=vpn.company.com, Issuer=Internal_CA, ExpiresIn=30, Status=WarnExpiring
+<134>%c redback-ase.test VPN: EventType=RouteUpdate, RouteAdded=10.20.0.0/16, UpdatedBy=netadmin, Status=Applied
+<134>%c redback-ase.test VPN: EventType=DataIntegrityError, Session=vpn_12345, ChecksumMismatch=true, Packets=45, Status=SessionTerminated
+<134>%c redback-ase.test VPN: EventType=ComplianceAlert, Audit=Annual_Review, VPNLogsRetention=90days, CurrentRetention=30days, Status=NonCompliant

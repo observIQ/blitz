@@ -1,0 +1,8 @@
+<134>%c toplayer-ips.test IPS: EventID=1, Name=SQL_Injection, SrcIP=192.0.2.100, DstIP=192.168.1.50, Action=blocked, Severity=critical, DetectionTime=%c
+<134>%c toplayer-ips.test IPS: EventID=2, Name=Buffer_Overflow, SrcIP=203.0.113.100, DstIP=192.168.1.100, Protocol=TCP, DstPort=443, Action=blocked, Severity=high
+<134>%c toplayer-ips.test IPS: EventID=3, Name=Port_Scan, SrcIP=198.51.100.100, DstIP=192.168.1.0/24, Protocol=TCP, Action=alerted, Severity=medium
+<134>%c toplayer-ips.test IPS: EventID=4, Name=Malware_Signature, SrcIP=192.0.2.200, DstIP=192.168.1.100, MalwareName=Trojan.Generic, Action=blocked, Severity=critical
+<134>%c toplayer-ips.test IPS: EventID=5, Name=DoS_Attack, SrcIP=203.0.113.50, DstIP=192.168.1.100, Protocol=UDP, Action=blocked, Duration=600s, Severity=high
+<134>%c toplayer-ips.test IPS: EventID=6, Name=XSS_Attack, SrcIP=192.168.1.100, DstIP=203.0.113.1, Protocol=HTTP, Action=blocked, Severity=high
+<134>%c toplayer-ips.test IPS: EventID=7, Name=XXE_Injection, SrcIP=10.20.30.40, DstIP=192.168.1.50, DstPort=8080, Action=blocked, Severity=high
+<134>%c toplayer-ips.test IPS: EventID=8, Name=Policy_Violation, SrcIP=192.168.1.100, DstIP=203.0.113.1, Action=alerted, Severity=medium, PolicyName=BlockTorrent

@@ -1,0 +1,3 @@
+<134>%c cyberguard-vpn syslog: VPN user 'vpn_user01' from 203.0.113.100 established IPsec tunnel to gateway 10.0.0.1
+<134>%c cyberguard-vpn syslog: VPN authentication succeeded for 'remote_user' using certificate CN=remote.user@company.com
+<135>%c cyberguard-vpn syslog: VPN session for user 'temp_user' terminated - Inactivity timeout after 120 minutes

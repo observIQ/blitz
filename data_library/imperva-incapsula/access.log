@@ -1,0 +1,8 @@
+<134>%c imperva-incap Incapsula: DDoS attack detected - Attack type: UDP flood - Source IPs: 5000+ - Attack traffic: 50Gbps - Status: Mitigated
+<134>%c imperva-incap Incapsula: WAF rule match - Rule ID: 1005 - Attack type: SQL injection - URL: /api/search - Payload: union select - Action: BLOCK
+<134>%c imperva-incap Incapsula: Bot detection - Bot type: Malicious crawler - Source: 203.0.113.50 - Requests: 45678 - Action: Rate limited
+<134>%c imperva-incap Incapsula: SSL/TLS encryption enforced - Request: HTTP -> HTTPS redirect - Domain: app.example.com - Status: Enforced
+<134>%c imperva-incap Incapsula: Geo-blocking applied - Blocked countries: 5 - China: 234 blocks, Russia: 156 blocks, Iran: 89 blocks
+<134>%c imperva-incap Incapsula: Cache hit statistics - Cache hit rate: 78% - Bandwidth saved: 45TB - Response time improvement: 40%
+<134>%c imperva-incap Incapsula: API protection - API endpoint: /api/v1/users - Threats detected: 23 - Blocked requests: 234
+<134>%c imperva-incap Incapsula: Security report - Traffic analyzed: 1.2B requests - Threats blocked: 56M - Security efficiency: 99.9%

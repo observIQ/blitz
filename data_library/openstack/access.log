@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "compute.instance.create.end", "project_id": "prod-project-001", "instance_id": "instance-abc123", "instance_name": "webserver-prod-01", "image": "ubuntu-20.04-lts", "status": "success", "user": "automation@prod.iam.gserviceaccount.com"}
+{"timestamp": "%c", "event_type": "compute.instances.delete.end", "project_id": "test-project-001", "instance_id": "instance-xyz789", "status": "success", "user": "devops@test.iam.gserviceaccount.com"}
+{"timestamp": "%c", "event_type": "storage.objects.create", "project_id": "prod-project-001", "bucket": "backups-prod", "object": "backup-2026-01-13.tar.gz", "content_length": 1073741824, "user": "backup@prod.iam.gserviceaccount.com"}
+{"timestamp": "%c", "event_type": "iam.admin.v1.CreateRole", "project_id": "prod-project-001", "role_id": "custom.viewer", "title": "Custom Viewer", "status": "success", "user": "secadmin@prod.iam.gserviceaccount.com"}
+{"timestamp": "%c", "event_type": "iam.admin.v1.CreateServiceAccount", "project_id": "prod-project-001", "service_account": "new-sa@prod-project-001.iam.gserviceaccount.com", "status": "success"}
+{"timestamp": "%c", "event_type": "iam.admin.v1.SetIamPolicy", "project_id": "prod-project-001", "resource": "projects/prod-project-001", "policy_update": "roles_added=2", "status": "success"}
+{"timestamp": "%c", "event_type": "audit_log_disabled", "project_id": "test-project-001", "service": "compute.googleapis.com", "status": "warning"}
+{"timestamp": "%c", "event_type": "security_key_add.end", "user": "admin@prod.iam.gserviceaccount.com", "key_type": "2-step-verification", "status": "success"}

@@ -1,0 +1,5 @@
+%c nginx.webserver.test nginx: 192.168.1.100 - - [%d/%b/%Y:%H:%M:%S +0000] "GET /static/style.css HTTP/1.1" 200 5124 "http://example.com" "Mozilla/5.0"
+%c nginx.webserver.test nginx: 10.20.30.40 - - [%d/%b/%Y:%H:%M:%S +0000] "POST /api/data HTTP/1.1" 201 256 "-" "curl/7.68.0"
+%c nginx.webserver.test nginx: 172.16.0.50 - - [%d/%b/%Y:%H:%M:%S +0000] "GET /images/logo.png HTTP/1.1" 404 162 "-" "Mozilla/5.0"
+%c nginx.webserver.test nginx: 10.10.10.10 - user [%d/%b/%Y:%H:%M:%S +0000] "PUT /api/resource/456 HTTP/1.1" 403 0 "-" "PostmanRuntime/7.26"
+%c nginx.webserver.test nginx: 203.0.113.45 - - [%d/%b/%Y:%H:%M:%S +0000] "HEAD / HTTP/1.1" 200 0 "-" "-"

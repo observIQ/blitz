@@ -1,0 +1,1 @@
+%b %e %T 192.168.0.7 SFIMS : %FTD-5-430001: Protocol: tcp, SrcIP: 10.1.1.57, DstIP: 10.5.12.209, SrcPort: 2049, DstPort: 746, Priority: 1, GID: 1, SID: 648, Revision: 18, Message: "INDICATOR-SHELLCODE x86 NOOP", Classification: Executable Code was Detected, User: No Authentication Required, ACPolicy: test, NAPPolicy: Balanced Security and Connectivity, InlineResult: Blocked

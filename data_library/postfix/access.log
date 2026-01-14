@@ -1,0 +1,4 @@
+%a %b %d %H:%M:%S %Y mail postfix/smtpd[56789]: connect from unknown[192.168.1.100]
+%a %b %d %H:%M:%S %Y mail postfix/smtpd[56789]: NOQUEUE: reject: RCPT from unknown[192.168.1.100]: 550 5.7.1 <admin@external.com>: Recipient address rejected: User unknown in virtual recipient table; from=<user@internal.local> to=<admin@external.com> proto=SMTP helo=<client.local>
+%a %b %d %H:%M:%S %Y mail postfix/smtpd[56789]: disconnect from unknown[192.168.1.100] ehlo=1 rset=1 rcpt=1 commands=3
+%a %b %d %H:%M:%S %Y mail postfix/qmgr[56790]: B1234ABCD12: from=<user@internal.local>, size=2500, nrcpt=1 (queue active)

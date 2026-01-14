@@ -1,0 +1,3 @@
+<13>%c 3com-switch01 syslogd: %SYSLOG-3-FILEDOWNLOAD: File transfer complete
+<14>%c 3com-switch01 SYSLOG-2-WARNING: Configuration saved successfully
+<11>%c 3com-switch01 SYSLOG-5-CONFIG_I: Configuration changed by admin via SSH

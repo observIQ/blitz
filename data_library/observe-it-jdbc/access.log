@@ -1,0 +1,8 @@
+<140>%c observe-it-jdbc.test Database: EventType=UserLogin, User=admin, Database=prod_db, Status=Success, ClientIP=192.168.1.100, Port=1521, Duration=3600
+<140>%c observe-it-jdbc.test Database: EventType=QueryExecution, User=app_user, Database=prod_db, QueryType=SELECT, TableName=customers, RowsReturned=5423, Duration=245ms
+<140>%c observe-it-jdbc.test Database: EventType=FailedLogin, User=unknown, Database=prod_db, Status=Failed, Reason=InvalidCredential, ClientIP=203.0.113.50, Attempts=5
+<140>%c observe-it-jdbc.test Database: EventType=DatabaseChange, User=dba_admin, Database=prod_db, ChangeType=AddColumn, Table=users, ColumnName=phone, Status=Success
+<140>%c observe-it-jdbc.test Database: EventType=PrivilegeChange, User=admin, Database=prod_db, TargetUser=contractor, OldRole=user, NewRole=dba, Status=Success
+<140>%c observe-it-jdbc.test Database: EventType=DataAccess, User=report_user, Database=prod_db, TableName=payroll, RowsRead=8934, SensitiveData=employee_salaries, RiskLevel=High
+<140>%c observe-it-jdbc.test Database: EventType=QueryPlan, User=analyst, Database=prod_db, Query=ComplexJoin, ExecutionTime=5000ms, Cost=987654
+<140>%c observe-it-jdbc.test Database: EventType=ConnectionPooled, User=app_service, Database=prod_db, PoolSize=50, ActiveConnections=45, WaitingRequests=12

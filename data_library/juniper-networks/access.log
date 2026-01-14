@@ -1,0 +1,8 @@
+<134>%c juniper-fw01 JunOS: Interface status change - Interface: ge-0/0/0 - Status: UP - Speed: 10Gbps - Duplex: full
+<134>%c juniper-fw01 JunOS: Firewall filter applied - Filter: allow-internal-traffic - Policy: accept - Packets matched: 234567
+<134>%c juniper-fw01 JunOS: BGP session established - Neighbor: 203.0.113.1 - AS: 65001 - Status: Established - Prefixes received: 1234
+<134>%c juniper-fw01 JunOS: IPsec tunnel created - Tunnel ID: tunnel-001 - Status: UP - Encryption: AES-256 - Authentication: SHA256
+<134>%c juniper-fw01 JunOS: Intrusion detection alert - IDS signature match - Attack: Port scan - Source: 192.168.1.50 - Action: Drop
+<134>%c juniper-fw01 JunOS: Configuration change - Hostname changed - Old: fw-backup - New: fw-primary - Admin: network-admin
+<134>%c juniper-fw01 JunOS: High availability status - Primary: Active - Secondary: Standby - Sync status: In sync - Last failover: 45 days ago
+<134>%c juniper-fw01 JunOS: System statistics - CPU: 52%, Memory: 68%, Disk: 45% - Throughput: 45Gbps - Active sessions: 234567

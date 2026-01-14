@@ -1,0 +1,8 @@
+<134>%c sherlock-01 SF-Sherlock: Database access alert - User admin accessed sensitive_data table from 192.168.1.50
+<134>%c sherlock-01 SF-Sherlock: Query pattern anomaly detected - Unusual SQL query structure from application_user
+<134>%c sherlock-01 SF-Sherlock: Schema change detected - New table created in production database by dba_user
+<134>%c sherlock-01 SF-Sherlock: Failed authentication attempt - User invalid_user from 10.0.0.100 - Locked after 3 attempts
+<134>%c sherlock-01 SF-Sherlock: Privileged operation executed - ALTER SYSTEM command from admin at 172.16.0.25
+<134>%c sherlock-01 SF-Sherlock: Data export detected - EXPORT operation by reporting_user - 50000 rows extracted
+<134>%c sherlock-01 SF-Sherlock: Encryption policy violation - Unencrypted data transmission attempt blocked
+<134>%c sherlock-01 SF-Sherlock: Audit log rotation completed - Archives: 5 files, Size: 345MB

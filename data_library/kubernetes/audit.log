@@ -1,0 +1,3 @@
+[%Y-%m-%dT%H:%M:%S.%3NZ] AUDIT: {"timestamp":"%Y-%m-%dT%H:%M:%S.%3NZ","user":"admin","action":"create_namespace","resource":"prod-namespace","status":"success","source_ip":"192.168.1.100"}
+[%Y-%m-%dT%H:%M:%S.%3NZ] AUDIT: {"timestamp":"%Y-%m-%dT%H:%M:%S.%3NZ","user":"system","action":"create_pod","resource":"nginx-deployment-xyz123","namespace":"prod-namespace","status":"success","source_ip":"10.0.0.1"}
+[%Y-%m-%dT%H:%M:%S.%3NZ] AUDIT: {"timestamp":"%Y-%m-%dT%H:%M:%S.%3NZ","user":"developer","action":"patch_deployment","resource":"api-service-v2","namespace":"staging","status":"forbidden","source_ip":"192.168.1.50"}

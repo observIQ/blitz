@@ -1,0 +1,8 @@
+<134>%c starent-softgx.test Softgx: EventType=CallSetup, CallerNumber=+1234567890, CalleeNumber=+0987654321, CallID=CALL_12345, Duration=3600, Status=Completed
+<134>%c starent-softgx.test Softgx: EventType=CallTermination, CallID=CALL_12346, Reason=NormalDisconnect, Duration=1800, EndTime=%c
+<134>%c starent-softgx.test Softgx: EventType=AuthenticationFailure, CallerNumber=+1111111111, CalleeNumber=+2222222222, Reason=InvalidCredential, Status=Failed
+<134>%c starent-softgx.test Softgx: EventType=BandwidthAlert, CircuitID=CIRCUIT_001, CurrentUsage=850Mbps, Threshold=800Mbps, AlertLevel=Critical
+<134>%c starent-softgx.test Softgx: EventType=SwitchoverEvent, PrimaryNode=NODE_PRIMARY, BackupNode=NODE_BACKUP, SwitchoverTime=15s, Status=Completed
+<134>%c starent-softgx.test Softgx: EventType=SignalingError, MessageType=INVITE, ErrorCode=500, SourceIP=192.168.1.100, DestinationIP=203.0.113.50
+<134>%c starent-softgx.test Softgx: EventType=ResourceAlarm, ResourceType=CPU, UtilizationPercent=92, Threshold=80, Severity=Warning
+<134>%c starent-softgx.test Softgx: EventType=CapacityPlanning, MetricType=CallConcurrency, Peak=15000, Threshold=20000, Utilization=75%

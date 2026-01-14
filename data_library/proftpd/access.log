@@ -1,0 +1,8 @@
+<134>%c proftpd.test proftpd[1234] admin (192.168.1.100[192.168.1.100]): USER admin: Login successful.
+<134>%c proftpd.test proftpd[1235] app_user (192.168.1.50[192.168.1.50]): RETR /home/app_user/data.csv (5242880 bytes) completed.
+<134>%c proftpd.test proftpd[1236] unknown (203.0.113.50[203.0.113.50]): USER baduser: Login failed - Authentication error (user 'baduser' does not exist)
+<134>%c proftpd.test proftpd[1237] admin (192.168.1.100[192.168.1.100]): STOR /home/admin/upload.dat (1048576 bytes) completed.
+<134>%c proftpd.test proftpd[1238] ftp_user (10.20.30.40[10.20.30.40]): DELE /home/ftp_user/old_file.txt: DELETE command successful.
+<134>%c proftpd.test proftpd[1239] admin (192.168.1.100[192.168.1.100]): SYST: FTP command executed.
+<134>%c proftpd.test proftpd[1240] attacker (198.51.100.100[198.51.100.100]): Connection closed (Timeout - no transfer for 600 seconds).
+<134>%c proftpd.test proftpd[1241] app_user (192.168.1.50[192.168.1.50]): CHMOD 644 /home/app_user/file.txt: CHMOD command successful.

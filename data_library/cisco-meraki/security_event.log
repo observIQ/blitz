@@ -1,0 +1,1 @@
+<134>1 %s.%N cisco.meraki.test security_event ids_alerted signature=1:45148:1priority=1 timestamp=%s.%6N dhost=00:00:5E:00:53:BC direction=ingress protocol=tcp/ip src=10.79.70.235:80 dst=172.21.47.130:61019 message: BROWSER-IE Microsoft Internet Explorer Array out of bounds write attempt

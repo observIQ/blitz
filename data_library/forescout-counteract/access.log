@@ -1,0 +1,8 @@
+<134>%c forescout-01 CounterACT: Unauthorized device detected - Device: iPhone X - MAC: 00:11:22:33:44:55 at 192.168.1.50 - Policy: Isolate
+<134>%c forescout-01 CounterACT: Vulnerability discovered - Device WS-089 missing security patches - Windows Update missing 12 critical patches
+<134>%c forescout-01 CounterACT: Non-compliant endpoint - Device: MacBook - Antivirus: Not running - Firewall: Disabled - Action: Quarantine
+<134>%c forescout-01 CounterACT: Rogue access point detected - SSID: FreeWiFi_Guest at 10.0.0.25 - Signal strength: -65dBm - Suspicious
+<134>%c forescout-01 CounterACT: Lateral movement prevented - Device attempting SSH to server 172.16.1.50 - Policy enforcement: Blocked
+<134>%c forescout-01 CounterACT: Device compliance remediation - Device WS-125 automatically updated - Windows patches installed - Reboot pending
+<134>%c forescout-01 CounterACT: Network segment assignment - Device assigned to VLAN 200 (Guest) due to non-compliance
+<134>%c forescout-01 CounterACT: Inventory report - Total managed devices: 1250 - Compliant: 1180 (94%) - Non-compliant: 70 (5%)

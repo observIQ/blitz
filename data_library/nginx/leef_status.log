@@ -1,0 +1,1 @@
+LEEF:1.0|NGINX|NGINX|1.15.5|404|devTime=%d/%b/%Y:%H:%M:%S %z	src=127.0.0.1	dst=127.0.0.1	dstPort=80	proto=HTTP/1.1	usrName=-	request=GET /nginx_status HTTP/1.1	body_bytes_sent=153	http_referer=-	http_true_client_ip=-	http_user_agent=curl/7.29.0	http_x_header=-	http_x_forwarded_for=-	request_time=0.000	upstream_response_time=-	pipe=.	uri_query=-	uri_path=/nginx_status	cookie=-

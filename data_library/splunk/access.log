@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "index_data_ingested", "index": "main", "source": "/var/log/system.log", "host": "server-01", "sourcetype": "syslog", "bytes_ingested": 102400}
+{"timestamp": "%c", "event_type": "search_executed", "search_id": "search_12345", "user": "analyst@company.com", "search_query": "index=main error", "execution_time_ms": 5432}
+{"timestamp": "%c", "event_type": "alert_triggered", "alert_name": "High_CPU_Alert", "alert_id": "alert_001", "triggered_time": "%c", "severity": "high", "threshold": 80}
+{"timestamp": "%c", "event_type": "user_authentication", "user": "admin@company.com", "auth_method": "password", "ip_address": "192.168.1.100", "status": "success"}
+{"timestamp": "%c", "event_type": "failed_login", "user": "attacker@unknown.com", "ip_address": "203.0.113.50", "reason": "invalid_credentials", "attempts": 5}
+{"timestamp": "%c", "event_type": "license_usage", "component": "splunk_core", "license_pool": "enterprise", "usage_percent": 78, "timestamp": "%c"}
+{"timestamp": "%c", "event_type": "deployment_package_installed", "package": "security_app_v2.0", "deployed_by": "admin@company.com", "install_time": "%c", "status": "success"}
+{"timestamp": "%c", "event_type": "modular_input_error", "input_name": "aws_cloudtrail", "error_message": "Authentication failure", "error_time": "%c", "status": "needs_attention"}

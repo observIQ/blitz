@@ -1,0 +1,8 @@
+<142>%c radware-defense.test DDoS: AlertType=AttackDetection, StartTime=%c, AttackType=HTTP_Flood, SourceASN=AS12345, SourceCountries=[CN,RU], Bps=75000000, Pps=18000000
+<142>%c radware-defense.test DDoS: AlertType=ProtectionActive, Status=Mitigating, AttackDuration=1800s, DefenseProfile=Aggressive, CleanedTraffic=85%
+<142>%c radware-defense.test DDoS: AlertType=SourceBlocked, BlockedIP=192.0.2.100, Duration=604800, Reason=RepeatAttacker, PreviousAttacks=8
+<142>%c radware-defense.test DDoS: AlertType=ScrubbingCenterAlert, Utilization=92%, Capacity=100Gbps, AlertLevel=High
+<142>%c radware-defense.test DDoS: AlertType=FalsePositiveDetection, BlockedService=CDN_Traffic, Duration=300s, Impact=Resolved
+<142>%c radware-defense.test DDoS: AlertType=BlacklistUpdate, ThreatLevel=CRITICAL, NewIPCount=5, Status=Applied
+<142>%c radware-defense.test DDoS: AlertType=SignatureUpdate, Version=2026.001, UpdatedSignatures=234, Status=Installed
+<142>%c radware-defense.test DDoS: AlertType=ReportGenerated, Period=Daily, AttacksDetected=12, AverageAttackDuration=1234s, Status=Complete

@@ -1,0 +1,8 @@
+<134>%c hostname zscaler-nanolog: event_id=ZS-NANO-001 src_ip=192.168.1.100 dst_ip=8.8.8.8 protocol=TCP port=443 category=SSL_VPN user=jsmith threat_detected=no bytes_sent=524288 bytes_received=1048576
+<134>%c hostname zscaler-nanolog: event_id=ZS-NANO-002 src_ip=10.20.30.40 dst_ip=203.0.113.60 protocol=TCP port=22 category=SSH user=contractor threat_detected=yes threat_name=Trojan_Spy_Keygen bandwidth_usage=2147483648
+<134>%c hostname zscaler-nanolog: event_id=ZS-NANO-003 src_ip=192.168.50.100 dst_ip=192.0.2.50 protocol=UDP port=53 category=DNS dns_query=malware-c2.net user=admin threat_detected=yes resolution_blocked=true
+<134>%c hostname zscaler-nanolog: event_id=ZS-NANO-004 src_ip=172.16.0.50 dst_ip=198.51.100.100 protocol=TCP port=80 category=HTTP url=http://phishing-site.com user=analyst threat_detected=yes threat_category=Phishing
+<134>%c hostname zscaler-nanolog: event_id=ZS-NANO-005 src_ip=203.0.113.150 dst_ip=192.0.2.100 protocol=TCP port=445 category=SMB_Transfer user=guest threat_detected=no file_transfer=encrypted_doc.zip
+<134>%c hostname zscaler-nanolog: event_id=ZS-NANO-006 src_ip=192.168.100.50 dst_ip=10.0.0.1 protocol=TCP port=3389 category=RDP_Session user=admin threat_detected=no session_duration=1800 protocol_version=RDP7
+<134>%c hostname zscaler-nanolog: event_id=ZS-NANO-007 src_ip=10.30.40.50 dst_ip=203.0.113.200 protocol=TCP port=443 category=HTTPS url=https://secure-download.net user=developer threat_detected=no ssl_cipher=TLS_ECDHE_RSA
+<134>%c hostname zscaler-nanolog: event_id=ZS-NANO-008 src_ip=172.17.0.100 dst_ip=192.168.1.50 protocol=ICMP category=PING user=test threat_detected=yes threat_level=critical packet_count=512 response_time_ms=45

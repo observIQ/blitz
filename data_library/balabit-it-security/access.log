@@ -1,0 +1,3 @@
+<134>%c balabit-server sshd: User authentication attempt from 192.168.1.100 for account 'admin'
+<134>%c balabit-server sshd: Session opened for user 'admin' from host 192.168.1.100, TTY=/dev/pts/1
+<135>%c balabit-server sshd: Privilege escalation attempt detected - user 'operator' requested root access

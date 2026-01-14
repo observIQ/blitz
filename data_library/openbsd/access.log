@@ -1,0 +1,8 @@
+<134>%c openbsd-fw.test sshd[1234]: Accepted publickey for root from 192.168.1.50 port 54321 ssh2
+<134>%c openbsd-fw.test kernel: [1234567] audit: type=EXECVE msg=audit(1736775330.000:12345): argc=3 a0="/bin/sh" a1="-c" a2="id"
+<134>%c openbsd-fw.test sudo[5678]: root : TTY=pts/0 ; PWD=/root ; USER=nobody ; COMMAND=/bin/netstat
+<134>%c openbsd-fw.test sshd[1235]: Failed password for invalid user testuser from 203.0.113.100 port 49152 ssh2
+<134>%c openbsd-fw.test pf[9999]: BLOCKED: Source=192.0.2.50, Destination=192.168.1.1, Port=22, Protocol=tcp, Interface=em0
+<134>%c openbsd-fw.test ftp-proxy[2345]: Connection from 192.168.1.100 port 54322 to 203.0.113.50 port 21
+<134>%c openbsd-fw.test authentd[3456]: Failed login attempt for user 'admin' from 198.51.100.100
+<134>%c openbsd-fw.test kernel: device em0 entered promiscuous mode

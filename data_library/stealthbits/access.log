@@ -1,0 +1,8 @@
+<134>%c stealthbits-data.test DataGovernance: EventType=UnauthorizedAccess, User=contractor, Resource=Confidential_Folder, AccessType=Attempted, Result=Blocked, RiskScore=92
+<134>%c stealthbits-data.test DataGovernance: EventType=DataMovement, User=insider, Source=C:\ConfidentialData\, Destination=USB_Drive, DataSize=2048MB, Status=Detected
+<134>%c stealthbits-data.test DataGovernance: EventType=PrivilegeEscalation, User=employee, OldRole=User, NewRole=Admin, GrantedBy=unauthorized, RiskScore=88
+<134>%c stealthbits-data.test DataGovernance: EventType=SensitiveFileAccess, User=analyst, File=Credit_Cards_Database.xlsx, AccessTime=%c, RiskLevel=High
+<134>%c stealthbits-data.test DataGovernance: EventType=UnusualActivity, User=developer, Activity=FileDeletion, FilesDeleted=234, TimeOfDay=02:30, RiskScore=85
+<134>%c stealthbits-data.test DataGovernance: EventType=PolicyViolation, User=manager, ViolatedPolicy=DataClassification, Policy=RestrictedDataAccess, ViolationType=UnencryptedTransfer
+<134>%c stealthbits-data.test DataGovernance: EventType=ComplianceAlert, Regulation=HIPAA, Issue=UnauthorizedDataAccess, AffectedRecords=1234, Status=RequiresInvestigation
+<134>%c stealthbits-data.test DataGovernance: EventType=AuditReport, ReportType=QuarterlyCompliance, Period=2025-Q4, Violations=87, GeneratedTime=%c

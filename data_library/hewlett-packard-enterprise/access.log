@@ -1,0 +1,8 @@
+<134>%c hpe-system HPE-Infrastructure: Server health check - Server: ProLiant DL360 Gen10 - Status: Normal - Temperature: 35C
+<134>%c hpe-system HPE-Infrastructure: RAID alert - RAID array 1 - Status: Degraded - Faulty drive: Slot 3 - Replacement recommended
+<134>%c hpe-system HPE-Infrastructure: Firmware update - Component: Smart Storage Administrator - Version: 5.2.0 - Status: Complete
+<134>%c hpe-system HPE-Infrastructure: Power supply event - Power supply 2 - Status: Failed - Redundancy: Active - Alert: Critical
+<134>%c hpe-system HPE-Infrastructure: Memory health - Installed: 768GB - Used: 456GB - ECC errors: 0 - Status: Healthy
+<134>%c hpe-system HPE-Infrastructure: Fan speed alert - Fan 5 - Speed: 95% - Temperature: 45C - Status: Warning
+<134>%c hpe-system HPE-Infrastructure: NIC status - Port 1: 25Gbps - Port 2: 25Gbps - Port 3: 10Gbps - Port 4: 10Gbps
+<134>%c hpe-system HPE-Infrastructure: Capacity planning - CPU utilization: 78% - Memory usage: 62% - Recommended action: Monitor and plan upgrade

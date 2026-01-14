@@ -1,0 +1,8 @@
+<134>%c nortel-switch.test BGP: NeighborDown, Neighbor=192.168.100.1, ASN=65000, Reason=HoldTimerExpired, DownTime=0, Route_Count=1024
+<134>%c nortel-switch.test OSPF: NeighborChange, Neighbor=10.0.0.1, RouterID=1.1.1.1, State=Full, Interface=eth1, Cost=100
+<134>%c nortel-switch.test Spanning_Tree: TopologyChange, BridgeID=8000.00:11:22:33:44:55, DesignatedRoot=8000.00:11:22:33:44:55, RootPort=1
+<134>%c nortel-switch.test Link_Status: Interface=eth2, Status=Down, Speed=1000, FullDuplex=yes, MTU=1500
+<134>%c nortel-switch.test Port_Security: Violation, Port=eth3, ViolationCount=3, Action=Shutdown, LastViolation=%c
+<134>%c nortel-switch.test VLAN_Change: VLAN=100, Operation=Created, Name=Management, Status=Active, Interface_Count=5
+<134>%c nortel-switch.test ARP_Spoofing: Detected, SourceIP=192.168.1.100, SourceMAC=AA:BB:CC:DD:EE:FF, Interface=eth4, Action=Logged
+<134>%c nortel-switch.test CPU_Alert: Threshold=80%, CurrentUsage=85%, Duration=300s, Status=Critical

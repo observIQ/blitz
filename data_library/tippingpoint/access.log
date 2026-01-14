@@ -1,0 +1,8 @@
+<134>%c tippingpoint-ips.test IPS: AlertID=TIP_12345, Signature=SQL_Injection_Attack, SrcIP=192.0.2.100, DstIP=192.168.1.50, DstPort=443, Protocol=TCP, Severity=Critical, Action=block, AlertTime=%c
+<134>%c tippingpoint-ips.test IPS: AlertID=TIP_12346, Signature=Shellcode_Detected, SrcIP=203.0.113.100, DstIP=192.168.1.100, DstPort=80, Protocol=TCP, Severity=Critical, Action=block
+<134>%c tippingpoint-ips.test IPS: AlertID=TIP_12347, Signature=Port_Scan, SrcIP=198.51.100.100, DstIP=192.168.1.0/24, Protocol=TCP, Severity=Medium, Action=alert
+<134>%c tippingpoint-ips.test IPS: AlertID=TIP_12348, Signature=Malware_Command_Control, SrcIP=192.0.2.200, DstIP=192.168.1.100, DstPort=443, Severity=High, Action=block
+<134>%c tippingpoint-ips.test IPS: AlertID=TIP_12349, Signature=Buffer_Overflow, SrcIP=203.0.113.50, DstIP=192.168.1.50, DstPort=8080, Severity=High, Action=block
+<134>%c tippingpoint-ips.test IPS: AlertID=TIP_12350, Signature=Denial_Service, SrcIP=10.20.30.40, DstIP=192.168.1.100, Protocol=UDP, Severity=Critical, Action=block, Duration=300s
+<134>%c tippingpoint-ips.test IPS: AlertID=TIP_12351, Signature=Policy_Violation, SrcIP=192.168.1.100, DstIP=203.0.113.1, DstPort=8080, Severity=Low, Action=alert
+<134>%c tippingpoint-ips.test IPS: AlertID=TIP_12352, Signature=Web_App_Attack, SrcIP=192.0.2.150, DstIP=192.168.1.50, DstPort=80, Severity=High, Action=block, VulnerabilityID=CVE-2025-0001

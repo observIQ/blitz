@@ -1,0 +1,3 @@
+{"threat_id":"thr_78901","threat_name":"Malware.Generic.Trojan","threat_level":"critical","detection_time":"2026-01-13T10:15:30Z","source_ip":"192.0.2.100","target_host":"endpoint-12345","action_taken":"quarantine","file_hash":"d41d8cd98f00b204e9800998ecf8427e"}
+{"incident_id":"inc_78902","incident_type":"suspicious_behavior","severity":"high","detection_time":"2026-01-13T10:16:45Z","behavior":"lateral_movement","source_host":"compromised-001","target_host":"fileserver-02","user":"domain\\compromised_account"}
+{"scan_id":"scan_78903","scan_type":"vulnerability_assessment","completion_time":"2026-01-13T10:17:12Z","vulnerabilities_found":23,"critical_count":5,"patched_count":18}

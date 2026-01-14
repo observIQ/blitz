@@ -1,0 +1,8 @@
+<134>%c vault-01 Vault: Authentication successful - Method: AppRole - AppID: app-prod-001 - Source: 192.168.1.50
+<134>%c vault-01 Vault: Secret access audit - Path: secret/data/database/prod - User: admin - Action: Read
+<134>%c vault-01 Vault: Token renewal - Token ID: s.XXXXXXX (truncated) - TTL: 3600 - Auth method: LDAP
+<134>%c vault-01 Vault: PKI certificate issued - CN: app-service.example.com - TTL: 2160h - Issuer: intermediate-ca
+<134>%c vault-01 Vault: Encryption key rotation - Key ID: key-001 - Rotation scheduled - Completion: 95%
+<134>%c vault-01 Vault: Policy audit - Policy: prod-team-policy - Last modified: 2026-01-12 - Modified by: vault-admin
+<134>%c vault-01 Vault: Database credentials generated - Role: app-user-read-only - TTL: 1h - Password length: 20
+<134>%c vault-01 Vault: Replication status - Primary node: healthy - Secondary nodes: 2/2 active - Replication lag: 0ms

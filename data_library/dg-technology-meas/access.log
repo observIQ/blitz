@@ -1,0 +1,8 @@
+<134>%c dg-meas-01 MEAS: System performance metrics collected - CPU: 45%, Memory: 62%, Disk: 78%
+<134>%c dg-meas-01 MEAS: Network interface statistics - eth0: RX=1234567 TX=7654321 packets
+<134>%c dg-meas-01 MEAS: Process monitoring alert - httpd consuming 85% CPU on 192.168.1.50
+<134>%c dg-meas-01 MEAS: Disk I/O threshold exceeded - /dev/sda1 write operations: 1250 IOPS
+<134>%c dg-meas-01 MEAS: Service health check - Apache: OK, MySQL: OK, SSH: WARNING
+<134>%c dg-meas-01 MEAS: Temperature monitoring - CPU Temp: 72C, Chassis Temp: 35C
+<134>%c dg-meas-01 MEAS: Memory pressure event - Swap usage: 45%, Available RAM: 2.3GB
+<134>%c dg-meas-01 MEAS: Network bandwidth utilization - Inbound: 850Mbps, Outbound: 620Mbps

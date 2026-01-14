@@ -1,0 +1,8 @@
+<134>%c mcafee-epo.test McAfee: HostName=WORKSTATION01, EventID=16, ThreatCategory=Virus, ThreatName=Trojan.Generic, Action=Quarantine, FileName=C:\Users\admin\Downloads\malware.exe
+<134>%c mcafee-epo.test McAfee: HostName=SERVER02, EventID=87, ThreatCategory=Spyware, ThreatName=Adware.DoubleClick, Action=Removed, DetectedPath=C:\Windows\System32\scareware.dll
+<134>%c mcafee-epo.test McAfee: HostName=WORKSTATION03, EventID=1024, ThreatCategory=Scanner, ThreatName=Scan.Complete, ScanType=Full, FilesScanned=587234, ThreatsFound=3, Action=None
+<134>%c mcafee-epo.test McAfee: HostName=FILESERVER, EventID=16, ThreatCategory=Virus, ThreatName=Backdoor.Agent, Action=Quarantine, FileName=\\fileserver\share\archive\infected.zip
+<134>%c mcafee-epo.test McAfee: HostName=WORKSTATION04, EventID=48, ThreatCategory=Adware, ThreatName=PUP.Optional.SearchBar, Action=Removed, DetectedPath=HKLM\Software\SearchBar
+<134>%c mcafee-epo.test McAfee: HostName=LAPTOP01, EventID=20, ThreatCategory=Exploit, ThreatName=Exploit.JS.Generic, Action=Blocked, ProcessName=chrome.exe
+<134>%c mcafee-epo.test McAfee: HostName=SERVER03, EventID=16, ThreatCategory=Virus, ThreatName=Trojan.Ransom, Action=Quarantine, FileName=C:\Program Files\backup\payment.exe
+<134>%c mcafee-epo.test McAfee: HostName=WORKSTATION05, EventID=37, ThreatCategory=Heuristics, ThreatName=Heur.Generic, Action=Blocked, ExecutableName=suspicious.scr

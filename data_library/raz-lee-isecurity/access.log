@@ -1,0 +1,8 @@
+<142>%c raz-lee-isecurity.test iSecurity: EventType=UnauthorizedQuery, Database=prod_db, User=app_user, Query=DROP TABLE customers, Result=Blocked, Severity=Critical
+<142>%c raz-lee-isecurity.test iSecurity: EventType=SensitiveDataAccess, Database=prod_db, User=contractor, Table=credit_cards, RowsAccessed=1234, RiskLevel=High
+<142>%c raz-lee-isecurity.test iSecurity: EventType=FailedLoginAttempt, Database=prod_db, User=attacker, Attempts=10, ResultingSQLCommand=SELECT, Status=Blocked
+<142>%c raz-lee-isecurity.test iSecurity: EventType=DatabaseConfigChange, Database=prod_db, Parameter=audit_trail, OldValue=disabled, NewValue=enabled, ChangedBy=dba_admin
+<142>%c raz-lee-isecurity.test iSecurity: EventType=PrivilegeEscalation, Database=prod_db, User=developer, OldRole=user, NewRole=dba, GrantedBy=unauthorized, Status=Suspicious
+<142>%c raz-lee-isecurity.test iSecurity: EventType=DataExfiltration, Database=prod_db, User=insider, TransferMethod=BulkExport, DataSize=1024MB, Destination=external_server
+<142>%c raz-lee-isecurity.test iSecurity: EventType=MalformedQuery, Database=prod_db, User=attacker, Query=1'OR'1'='1, Result=QueryException, Severity=High
+<142>%c raz-lee-isecurity.test iSecurity: EventType=ComplianceViolation, Database=prod_db, Regulation=GDPR, ViolationType=UnencryptedDataAccess, Status=RequiresRemediation

@@ -1,0 +1,8 @@
+<134>%c genua-fw01 genugate: Authentication successful - User: admin - Source: 192.168.1.50 - Method: PKI certificate
+<134>%c genua-fw01 genugate: Firewall rule violation - Access denied - Source: 10.0.0.100 - Destination: 172.16.0.50 - Protocol: SSH
+<134>%c genua-fw01 genugate: VPN session established - Client: vpn-user - Source: 203.0.113.100 - Session ID: VPN-12345
+<134>%c genua-fw01 genugate: Intrusion detection alert - Possible port scan detected - Source: 192.168.2.30 - Destination ports: 20-25
+<134>%c genua-fw01 genugate: Antivirus detection - Malware: Win32/Trojan - File: downloaded_file.exe - Action: Quarantine
+<134>%c genua-fw01 genugate: Configuration change - Firewall rule modified - Rule ID: 100 - Action: Allow SSH from 192.168.50.0/24
+<134>%c genua-fw01 genugate: Certificate update - SSL certificate renewed - Expires: 2027-01-13 - Subject: genua-fw01.example.com
+<134>%c genua-fw01 genugate: System health - CPU: 45%, Memory: 72%, Disk: 65% - Status: Normal

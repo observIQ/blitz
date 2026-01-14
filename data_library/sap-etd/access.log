@@ -1,0 +1,8 @@
+<134>%c sap-etd.test ETD: AlertType=UnauthorizedTransaction, User=contractor, TransactionCode=F-43, System=FI, Amount=999999, Currency=USD, Status=Blocked, RiskScore=95
+<134>%c sap-etd.test ETD: AlertType=SuspiciousModification, User=developer, Table=USR01, Operation=UPDATE, RecordsModified=5432, Details=DeletedUserRoles, RiskScore=88
+<134>%c sap-etd.test ETD: AlertType=PrivilegeEscalation, User=unknown, OldRole=user, NewRole=SUPER_USER, GrantedBy=unauthorized, Timestamp=%c, Status=Blocked
+<134>%c sap-etd.test ETD: AlertType=DataAccess, User=analyst, Table=KONV, AccessType=SELECT, RowsAccessed=45678, SensitiveData=PricingRules, Severity=High
+<134>%c sap-etd.test ETD: AlertType=ConfigurationChange, User=basis_admin, ChangeType=SystemParameter, Parameter=rfc_authorizations, Status=UnapprovedChange
+<134>%c sap-etd.test ETD: AlertType=ReportExecution, User=finance_mgr, Report=GL_Balance, RecordsExported=98765, ExportFormat=CSV, DestinationIP=203.0.113.50
+<134>%c sap-etd.test ETD: AlertType=BatchJobFailure, JobName=NIGHTLY_SETTLEMENT, ScheduledTime=%c, ErrorCode=ABAP_RUNTIME_ERROR, SystemAlert=true
+<134>%c sap-etd.test ETD: AlertType=ComplianceViolation, Regulation=SOX, ViolationType=UnauditedTransaction, AffectedRecords=12345, Status=RequiresReview

@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "sign-in", "status": "success", "user": "admin@contoso.com", "resource": "Azure Portal", "ip_address": "192.168.1.100", "browser": "Chrome", "device": "Windows 10"}
+{"timestamp": "%c", "event_type": "failed_sign_in", "status": "failure", "user": "attacker@external.com", "resource": "Azure Portal", "reason": "invalid_credential", "ip_address": "203.0.113.50", "attempts": 5}
+{"timestamp": "%c", "event_type": "role_assignment", "status": "success", "admin": "superadmin@contoso.com", "user": "newuser@contoso.com", "role": "Contributor", "scope": "Resource Group: Production"}
+{"timestamp": "%c", "event_type": "resource_created", "status": "success", "user": "devops@contoso.com", "resource_type": "Virtual Machine", "resource_name": "appserver-prod-01", "region": "eastus"}
+{"timestamp": "%c", "event_type": "access_review_created", "status": "success", "owner": "secadmin@contoso.com", "resource": "Security Group: Admins", "scope": "Monthly Review", "reviewers": 5}
+{"timestamp": "%c", "event_type": "policy_violation", "status": "blocked", "user": "contractor@external.com", "action": "export_data", "reason": "External user cannot export", "resource": "Sharepoint"}
+{"timestamp": "%c", "event_type": "mfa_enforcement", "status": "success", "policy": "Conditional Access", "user": "user@contoso.com", "required_factor": "Authenticator App"}
+{"timestamp": "%c", "event_type": "malware_detected", "status": "quarantined", "host": "ENDPOINT-087", "file": "C:\\Users\\admin\\Downloads\\malware.exe", "threat_name": "Trojan.Generic"}

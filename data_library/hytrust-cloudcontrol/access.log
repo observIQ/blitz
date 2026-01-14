@@ -1,0 +1,8 @@
+<134>%c hytrust-01 HyTrust-CloudControl: Compliance check - VM: prod-app-01 - Compliance level: 92% - Issues found: 3 - Critical: 1
+<134>%c hytrust-01 HyTrust-CloudControl: Guest introspection - VM: test-server-02 - Malware detected: NO - Rootkit: NO - Status: Clean
+<134>%c hytrust-01 HyTrust-CloudControl: Access control policy applied - User: john.doe - Action: Launch VM - Resource: prod-database - Approved: YES
+<134>%c hytrust-01 HyTrust-CloudControl: Encrypted VM operation - VM: secure-data-01 - Operation: Snapshot - Encryption: AES-256 - Status: Complete
+<134>%c hytrust-01 HyTrust-CloudControl: Anomaly detection - VM: unusual-activity-test - CPU spike: 95%, Memory: 78%, Network: 450Mbps - Alert level: High
+<134>%c hytrust-01 HyTrust-CloudControl: Privilege escalation attempt blocked - User: limited-user - Requested privilege: Admin - Escalation: DENIED
+<134>%c hytrust-01 HyTrust-CloudControl: Audit trail - Events logged: 5678 - Compliance queries: 234 - Exports completed: 12
+<134>%c hytrust-01 HyTrust-CloudControl: Cloud control summary - VMs protected: 850 - Policies enforced: 450 - Threats prevented: 67

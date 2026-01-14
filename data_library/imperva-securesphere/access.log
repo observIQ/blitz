@@ -1,0 +1,8 @@
+<134>%c imperva-ds SecureSphere: Database access denied - User: guest_user - Database: production - Table: customers - Action: BLOCK
+<134>%c imperva-ds SecureSphere: SQL injection attempt detected - Query: SELECT * FROM users WHERE id=1 OR 1=1 - Source: 192.168.1.50 - Status: PREVENTED
+<134>%c imperva-ds SecureSphere: Database backup completed - Database: finance_db - Size: 234GB - Encryption: AES-256 - Status: Success
+<134>%c imperva-ds SecureSphere: Sensitive data exposure alert - Data type: Credit Card - Count: 45 - Database: sales_db - Risk level: Critical
+<134>%c imperva-ds SecureSphere: Audit trail - Query logged - User: analyst - Command: SELECT sensitive_data FROM table_x - Timestamp: 2026-01-13 10:20:30
+<134>%c imperva-ds SecureSphere: Encryption policy enforced - Database column: SSN - Encryption: TDE - Status: ENCRYPTED
+<134>%c imperva-ds SecureSphere: Compliance scan - PCI-DSS: PASS - HIPAA: PASS - GDPR: PASS - Overall compliance: 98%
+<134>%c imperva-ds SecureSphere: Database threat protection - Threats blocked: 234 - Databases monitored: 45 - Active policies: 120

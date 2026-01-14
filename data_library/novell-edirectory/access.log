@@ -1,0 +1,8 @@
+<134>%c novell-edir.test eDirectory: AuthEvent, User=CN=admin,O=company, EventType=bind, Result=Success, ClientIP=192.168.1.50, ClientType=Console, AuthMethod=Simple
+<134>%c novell-edir.test eDirectory: ModifyEvent, User=CN=admin,O=company, Object=CN=testuser,OU=users,O=company, Changes=3, Result=Success, Attributes=[mail,mobile,description]
+<134>%c novell-edir.test eDirectory: GroupEvent, User=CN=admin,O=company, Group=CN=admins,OU=groups,O=company, Operation=add_member, Member=CN=newadmin,OU=users,O=company, Result=Success
+<134>%c novell-edir.test eDirectory: AuthEvent, User=CN=guest,O=company, EventType=bind, Result=Failed, Reason=InvalidPassword, ClientIP=203.0.113.100, Attempts=3
+<134>%c novell-edir.test eDirectory: ReplEvent, SourceServer=edir-server1, DestinationServer=edir-server2, Status=InSync, LastSync=%c, ReplicaCount=5
+<134>%c novell-edir.test eDirectory: BackupEvent, BackupType=Full, Status=Completed, StartTime=%c, EndTime=%c, ObjectCount=98765, Size=5368709120
+<134>%c novell-edir.test eDirectory: SecurityEvent, User=CN=contractor,O=company, RiskLevel=High, Reason=DisabledAccount_Still_Active, Action=RequiresReview
+<134>%c novell-edir.test eDirectory: SyncEvent, LDAPSync=Active, DirectorySyncStatus=OK, LastSync=%c, ObjectsProcessed=4567, ErrorCount=0

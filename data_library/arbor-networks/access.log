@@ -1,0 +1,3 @@
+<150>%c arbor-ddos arbor: DDoS Attack Detected - Type: DNS Amplification, Source: 192.0.2.0/24, Target: 198.51.100.5, Volume: 150 Gbps
+<150>%c arbor-ddos arbor: Attack Mitigated - Adaptive DDoS Protection activated, Traffic scrubbing: 95%
+<148>%c arbor-ddos arbor: Suspicious Activity: IP 203.0.113.50 scanning multiple ports on target server

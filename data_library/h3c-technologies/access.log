@@ -1,0 +1,8 @@
+<134>%c h3c-switch01 H3C-Network: Interface status change - Interface: Ethernet1/0/1 - Status: UP - Speed: 1000Mbps
+<134>%c h3c-switch01 H3C-Network: VLAN creation - VLAN ID: 500 - Name: Production-Core - Member ports: 1-4
+<134>%c h3c-switch01 H3C-Network: Access control list applied - ACL ID: 3000 - Direction: inbound - Matched packets: 1234
+<134>%c h3c-switch01 H3C-Network: Spanning tree recalculation - Root bridge elected - MAC: 00:30:86:12:34:56 - Priority: 32768
+<134>%c h3c-switch01 H3C-Network: DHCP snooping event - Untrusted DHCP server detected - Source: 192.168.1.100 - Action: Dropped
+<134>%c h3c-switch01 H3C-Network: Port security violation - Unauthorized MAC address - MAC: 00:11:22:33:44:55 - Port: 24 - Action: Disable
+<134>%c h3c-switch01 H3C-Network: Configuration backup - Backup destination: 10.100.1.5 - Size: 2.3MB - Status: Success
+<134>%c h3c-switch01 H3C-Network: System log rotation - Log files archived - Count: 5 - Total size: 567MB - Retention: 30 days

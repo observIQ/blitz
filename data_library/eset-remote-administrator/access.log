@@ -1,0 +1,8 @@
+<134>%c eset-admin era-server: Malware detected - Win32/Eset-test on workstation WS-001 at 192.168.1.50 - Quarantined
+<134>%c eset-admin era-server: Virus database update completed - New signatures: 2450 - Deployed to 250 endpoints
+<134>%c eset-admin era-server: Real-time scan event - Detected: PUA.Win32/SoftPulse on WS-125 - Blocked
+<134>%c eset-admin era-server: Quarantine item restored - File: document.doc - Restored by administrator
+<134>%c eset-admin era-server: Policy enforcement - Windows firewall enabled on 45 non-compliant computers
+<134>%c eset-admin era-server: Endpoint offline detection - WS-089 last seen 72 hours ago - Alert: NO_RECENT_ACTIVITY
+<134>%c eset-admin era-server: PUA (Potentially Unwanted Application) detected - Adware: Gen.Unwanted.App on WS-234
+<134>%c eset-admin era-server: Hardening check completed - Compliance score: 94% - 3 issues remediated

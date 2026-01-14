@@ -1,0 +1,8 @@
+<134>%c hostname websense: log_id=WEB-001 src_ip=192.168.1.100 dst_ip=8.8.4.4 user=jsmith url=http://news.example.com category=General_Interest action=allow
+<134>%c hostname websense: log_id=WEB-002 src_ip=10.20.30.40 dst_ip=203.0.113.60 user=analyst url=http://malware-site.net category=Malware action=block block_reason=virus_detected
+<134>%c hostname websense: log_id=WEB-003 src_ip=192.168.50.100 dst_ip=192.0.2.50 user=contractor url=https://social-media.site category=Social_Media action=allow
+<134>%c hostname websense: log_id=WEB-004 src_ip=172.16.0.50 dst_ip=198.51.100.100 user=admin url=http://gambling-site.com category=Gambling action=block policy=block_gambling
+<134>%c hostname websense: log_id=WEB-005 src_ip=203.0.113.150 dst_ip=192.0.2.100 user=guest url=http://adult-content.net category=Adult action=block policy=restrict_adult
+<134>%c hostname websense: log_id=WEB-006 src_ip=192.168.100.50 dst_ip=10.0.0.1 user=admin url=https://secure.company.com category=Business_Services action=allow ssl_version=TLS1.3
+<134>%c hostname websense: log_id=WEB-007 src_ip=10.30.40.50 dst_ip=203.0.113.200 user=developer url=http://github.com category=Cloud_Services action=block policy=restrict_dev_tools
+<134>%c hostname websense: log_id=WEB-008 src_ip=172.17.0.100 dst_ip=192.168.1.50 user=analyst url=https://c2-infrastructure.net category=Command_Control action=block threat_level=critical

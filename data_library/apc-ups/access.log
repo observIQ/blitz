@@ -1,0 +1,3 @@
+<182>%c apc-ups syslogd: POWERFAIL: UPS02 on Battery Power (OnBattery)
+<183>%c apc-ups syslogd: POWERRETURNED: Main Power Restored to UPS02
+<186>%c apc-ups syslogd: BATTERY_LOW: Battery level 15% - Automatic shutdown in 5 minutes

@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "process_created", "process_name": "apache2", "process_id": 1234, "parent_process_id": 1, "user": "www-data", "container_id": "abc123def456"}
+{"timestamp": "%c", "event_type": "network_flow", "protocol": "TCP", "src_ip": "192.168.1.100", "src_port": 54321, "dest_ip": "203.0.113.50", "dest_port": 443, "bytes_sent": 1048576, "bytes_received": 2097152}
+{"timestamp": "%c", "event_type": "file_access", "file_path": "/var/www/html/index.php", "access_type": "read", "process_id": 5678, "user": "www-data", "mode": 0644}
+{"timestamp": "%c", "event_type": "dns_query", "query": "api.example.com", "response": "203.0.113.1", "process_id": 7890, "src_ip": "10.20.30.40"}
+{"timestamp": "%c", "event_type": "memory_write", "process_id": 1234, "address": "0x7fffffff0000", "size": 4096, "content_hash": "a1b2c3d4"}
+{"timestamp": "%c", "event_type": "system_call", "syscall_name": "execve", "process_id": 9012, "args": "/usr/bin/python3", "return_value": 0}
+{"timestamp": "%c", "event_type": "socket_connection", "protocol": "TCP", "local_address": "192.168.1.50:60000", "remote_address": "192.0.2.100:22", "connection_state": "established"}
+{"timestamp": "%c", "event_type": "container_runtime_event", "event": "container_exited", "container_id": "xyz789", "exit_code": 0, "duration_seconds": 3600}

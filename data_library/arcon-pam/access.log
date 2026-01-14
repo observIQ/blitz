@@ -1,0 +1,3 @@
+<134>1 %F %T arcon-pam audit 54321 - - User admin_user performed SSH login to host: prod-server-01, Status: ALLOWED
+<134>1 %F %T arcon-pam audit 54322 - - Privileged access request from user contractor_dev for role 'database_admin', Status: DENIED
+<135>1 %F %T arcon-pam audit 54323 - - Session recording started for user infrastructure_team on session to firewall-primary

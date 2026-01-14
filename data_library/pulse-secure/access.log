@@ -1,0 +1,8 @@
+<134>%c pulse-vpn.test VPN: Event=SessionStart, User=admin@company.com, ClientIP=192.168.1.100, ServerIP=10.0.0.1, Protocol=TLS1.2, EncryptionAlg=AES256, Status=Connected, Timestamp=%c
+<134>%c pulse-vpn.test VPN: Event=TunnelEstablished, User=remote_user@company.com, ClientIP=203.0.113.100, Tunnel=IPSec, AuthMethod=MobilePass, MFAResult=Success
+<134>%c pulse-vpn.test VPN: Event=SessionTermination, User=contractor@company.com, ClientIP=192.0.2.150, Duration=7200s, DataSent=524288000, DataReceived=1073741824
+<134>%c pulse-vpn.test VPN: Event=AuthenticationFailure, User=attacker@unknown.com, ClientIP=198.51.100.50, Reason=InvalidCredential, Attempts=5, Status=Blocked
+<134>%c pulse-vpn.test VPN: Event=GeoIPAnomaly, User=user@company.com, PreviousLocation=NewYork, CurrentLocation=Tokyo, TimeDelta=180min, RiskScore=87, Action=MFARequired
+<134>%c pulse-vpn.test VPN: Event=BandwidthThrottling, User=heavy_user@company.com, ClientIP=172.16.0.100, CurrentBandwidth=250Mbps, Threshold=200Mbps, Status=Throttled
+<134>%c pulse-vpn.test VPN: Event=CertificateExpiring, CertificateName=vpn.company.com, DaysUntilExpiration=14, RenewalRequired=true, Action=Alert
+<134>%c pulse-vpn.test VPN: Event=FirewallRuleAdded, AdminUser=netadmin@company.com, Rule=AllowRemoteDesktop, SourceNetwork=192.168.0.0/16, Status=Applied

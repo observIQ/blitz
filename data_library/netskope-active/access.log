@@ -1,0 +1,8 @@
+{"timestamp": "%c", "event_type": "access_policy_violation", "severity": "HIGH", "user": "user@company.com", "device": "LAPTOP-001", "app_category": "Social_Media", "app_name": "Facebook", "action": "blocked_by_policy"}
+{"timestamp": "%c", "event_type": "data_exfiltration_attempt", "severity": "CRITICAL", "user": "contractor@external.com", "device": "CONTRACTOR-MAC", "destination": "unknown_cloud_storage", "data_size_mb": 512, "action": "blocked"}
+{"timestamp": "%c", "event_type": "malware_detected", "severity": "CRITICAL", "host": "ENDPOINT-042", "malware_name": "Trojan.Generic", "file_path": "/tmp/malware.bin", "action": "quarantined"}
+{"timestamp": "%c", "event_type": "shadow_it_detected", "severity": "MEDIUM", "user": "admin@company.com", "app": "Dropbox", "reason": "unapproved_saas", "action": "logged"}
+{"timestamp": "%c", "event_type": "ssl_certificate_warning", "severity": "MEDIUM", "domain": "internal.company.local", "certificate_status": "self_signed", "users_affected": 234, "recommendation": "update_certificate"}
+{"timestamp": "%c", "event_type": "anomalous_behavior", "severity": "HIGH", "user": "user@company.com", "behavior": "excessive_bandwidth", "baseline_mbps": 10, "current_mbps": 450, "action": "monitored"}
+{"timestamp": "%c", "event_type": "policy_override", "severity": "MEDIUM", "user": "secadmin@company.com", "policy": "block_cryptocurrency", "override_reason": "authorized_testing", "duration_hours": 2}
+{"timestamp": "%c", "event_type": "threat_intelligence_match", "severity": "HIGH", "source_ip": "192.0.2.50", "threat_type": "known_botnet", "reputation_score": 99, "action": "blocked"}

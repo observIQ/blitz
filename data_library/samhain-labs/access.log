@@ -1,0 +1,8 @@
+<134>%c samhain-fim.test FIM: EventType=FileModified, File=/etc/shadow, Size=2048, MD5Before=abc123def456, MD5After=xyz789uvw012, ModifyTime=%c, Details=PermissionChange
+<134>%c samhain-fim.test FIM: EventType=FileAdded, File=/var/tmp/suspicious.sh, Owner=root, Permissions=755, Size=4096, AddedTime=%c, RiskLevel=High
+<134>%c samhain-fim.test FIM: EventType=FileDeleted, File=/var/log/secure, LastSize=8192, DeletionTime=%c, Details=CriticalLogFile_Deleted
+<134>%c samhain-fim.test FIM: EventType=DirectoryModified, Directory=/etc/ssh, ChangeCount=2, Items=[sshd_config,keys], ModifyTime=%c
+<134>%c samhain-fim.test FIM: EventType=PermissionChange, File=/bin/login, OldPermissions=755, NewPermissions=777, ChangedTime=%c, RiskLevel=Critical
+<134>%c samhain-fim.test FIM: EventType=OwnershipChange, File=/root/.ssh/authorized_keys, OldOwner=root, NewOwner=unknown, ChangedTime=%c
+<134>%c samhain-fim.test FIM: EventType=SizeChange, File=/var/log/messages, OldSize=102400, NewSize=512, ChangeTime=%c, Details=LogRotation_Anomaly
+<134>%c samhain-fim.test FIM: EventType=ReportGenerated, StartTime=%c, EndTime=%c, FilesMonitored=54321, ChangesDetected=234, Report=Complete
