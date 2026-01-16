@@ -27,7 +27,7 @@ security:
 	go tool gosec ./...
 
 build:
-	go build -o blitz ./cmd/blitz/main.go
+	go build -o blitz ./cmd/blitz
 
 tidy:
 	go mod tidy
