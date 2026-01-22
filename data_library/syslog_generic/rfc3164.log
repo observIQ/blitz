@@ -1,3 +1,13 @@
 <34>%b %d %H:%M:%S mymachine su: 'su root' failed for lonvick on /dev/pts/8
 <13>%b %d %H:%M:%S 10.0.0.99 Use the BFG!
 <165>%b %d %H:%M:%S mymachine myproc[10]: %% It's time to make the do-nuts.  %%  Ingredients: Mix=OK, Jelly=OK # Devices: Mixer=OK, Jelly_Injector=OK, Frier=OK # Transport: Conveyer1=OK, Conveyer2=OK # %%
+<134>%b %d %H:%M:%S hostname sshd[1234]: Failed password for invalid user test from 192.168.1.50 port 54321 ssh2
+<134>%b %d %H:%M:%S hostname sshd[1235]: Accepted publickey for user admin from 192.168.1.51 port 54322 ssh2
+<133>%b %d %H:%M:%S hostname sudo: user : TTY=pts/0 ; PWD=/home/user ; USER=root ; COMMAND=/bin/cat /var/log/secure
+<134>%b %d %H:%M:%S hostname ftpd[2345]: USER analyst 192.168.1.100 - Session started
+<134>%b %d %H:%M:%S hostname ftpd[2346]: PASS analyst 192.168.1.100 - Login successful
+<131>%b %d %H:%M:%S hostname kernel: [audit] user_acct pid=5678 uid=0 auid=1000 ses=123 msg='op=PAM:accounting acct="svc_monitor" exe="/usr/lib/systemd/systemd-logind" hostname=? addr=? terminal=? res=success'
+<134>%b %d %H:%M:%S hostname login[3456]: pam_unix(login:session): session opened for user admin by (uid=0)
+<134>%b %d %H:%M:%S hostname auth-system[4567]: Password change for user jsmith completed successfully
+<132>%b %d %H:%M:%S hostname cron[5678]: (root) CMD (run-parts --report /etc/cron.hourly)
+<131>%b %d %H:%M:%S hostname kernel: [audit] execve pid=6789 uid=1000 auid=1000 ses=124 msg='op=execve argc=3 a0="/usr/bin/sudo" a1="-i" a2="bash" exe="/usr/bin/sudo" key="privileged-commands"' res=yes

@@ -1,0 +1,5 @@
+<134>%b %e %T MX67W-HQ CEF:0|Cisco|Meraki MX|1.0|IDS|Suspicious Activity|5|src=192.168.1.100 spt=54321 dst=10.0.0.1 dpt=443 proto=TCP msg=Suspicious outbound connection detected cs1=Q2LD-WXYZ-ABCD
+<134>%b %e %T MX67W-HQ CEF:0|Cisco|Meraki MX|1.0|ContentFilter|Policy Violation|3|src=203.0.113.45 spt=56789 dst=10.0.0.100 dpt=80 proto=TCP msg=Adult content blocked url=http://malicious.example.com cs1=Q2LD-WXYZ-ABCD
+<134>%b %e %T MX67W-HQ CEF:0|Cisco|Meraki MX|1.0|Traffic|Allowed|1|src=192.168.1.200 spt=443 dst=8.8.8.8 dpt=443 proto=TCP msg=Web traffic allowed url=https://google.com cs1=Q2LD-WXYZ-ABCD
+<134>%b %e %T MX67W-HQ CEF:0|Cisco|Meraki MX|1.0|IDS|Attack Detected|8|src=198.51.100.200 spt=12345 dst=10.0.0.50 dpt=22 proto=TCP msg=SQL Injection attempt detected cs1=Q2LD-WXYZ-ABCD
+<134>%b %e %T MX67W-HQ CEF:0|Cisco|Meraki MX|1.0|Traffic|Blocked|7|src=172.16.0.100 spt=0 dst=10.0.0.1 dpt=25 proto=TCP msg=Spam email attempt blocked cs1=Q2LD-WXYZ-ABCD

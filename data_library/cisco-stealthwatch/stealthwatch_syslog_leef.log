@@ -1,0 +1,5 @@
+<134>%b %e %T stealthwatch1 StealthWatch[1234]: LEEF:2.0|Lancope|StealthWatch|7.3|flow|src=192.168.1.100 spt=54321 dst=203.0.113.100 dpt=443 proto=TCP bytes=1024000 packets=2048 threat=true risk=75
+<134>%b %e %T stealthwatch1 StealthWatch[1235]: LEEF:2.0|Lancope|StealthWatch|7.3|anomaly|src=10.0.0.50 dst=198.51.100.200 anomaly_type=data_exfiltration bytes=5242880 risk=92 msg=Unusual_data_transfer
+<134>%b %e %T stealthwatch1 StealthWatch[1236]: LEEF:2.0|Lancope|StealthWatch|7.3|threat|src=172.16.0.100 dst=8.8.8.8 dpt=53 proto=UDP threat_name=Botnet_Communication severity=critical cat=C2
+<134>%b %e %T stealthwatch1 StealthWatch[1237]: LEEF:2.0|Lancope|StealthWatch|7.3|baseline|src_subnet=192.168.0.0/24 baseline_name=Office_Hours deviation=20 metric=Network_Utilization severity=low
+<134>%b %e %T stealthwatch1 StealthWatch[1238]: LEEF:2.0|Lancope|StealthWatch|7.3|policy|src=10.0.0.1 dst=203.0.113.50 policy_name=Restrict_External_Destinations action=blocked severity=high
