@@ -19,21 +19,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// Mode defines the file reading mode
-type Mode string
-
-const (
-	ModeFile      Mode = "file"
-	ModeDirectory Mode = "directory"
-)
-
 // FileLogGenerator generates log data by reading from files
 type FileLogGenerator struct {
 	logger  *zap.Logger
 	workers int
 	rate    time.Duration
-	mode    Mode
-	source  string // file path or directory path or package name
+	source  string // file path or directory path or glob pattern
 	stopCh  chan struct{}
 	wg      sync.WaitGroup
 	meter   metric.Meter
@@ -45,7 +36,7 @@ type FileLogGenerator struct {
 }
 
 // New creates a new File log generator
-func New(logger *zap.Logger, workers int, rate time.Duration, mode Mode, source string) (*FileLogGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, source string) (*FileLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -56,13 +47,6 @@ func New(logger *zap.Logger, workers int, rate time.Duration, mode Mode, source 
 
 	if rate <= 0 {
 		return nil, fmt.Errorf("rate must be positive, got %v", rate)
-	}
-
-	// Validate mode
-	switch mode {
-	case ModeFile, ModeDirectory:
-	default:
-		return nil, fmt.Errorf("invalid mode %q, must be one of: file, directory", mode)
 	}
 
 	if source == "" {
@@ -99,7 +83,6 @@ func New(logger *zap.Logger, workers int, rate time.Duration, mode Mode, source 
 		logger:        logger,
 		workers:       workers,
 		rate:          rate,
-		mode:          mode,
 		source:        source,
 		stopCh:        make(chan struct{}),
 		meter:         meter,
@@ -112,7 +95,6 @@ func New(logger *zap.Logger, workers int, rate time.Duration, mode Mode, source 
 // Start starts the File log generator
 func (g *FileLogGenerator) Start(writer output.Writer) error {
 	g.logger.Info("Starting File log generator",
-		zap.String("mode", string(g.mode)),
 		zap.String("source", g.source),
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate))
@@ -178,15 +160,9 @@ func (g *FileLogGenerator) Stop(ctx context.Context) error {
 	return nil
 }
 
-// getFiles returns a list of files to read based on the mode or auto-detects from source
+// getFiles returns a list of files to read, auto-detecting whether source is a file or directory
 func (g *FileLogGenerator) getFiles() ([]string, error) {
-	switch g.mode {
-	case ModeFile, ModeDirectory:
-		// For file/directory modes, auto-detect the source type
-		return g.getFilesFromAutoDetect()
-	default:
-		return nil, fmt.Errorf("unknown mode: %s", g.mode)
-	}
+	return g.getFilesFromAutoDetect()
 }
 
 // getFilesFromAutoDetect detects whether source is a file or directory and handles accordingly
@@ -194,14 +170,21 @@ func (g *FileLogGenerator) getFilesFromAutoDetect() ([]string, error) {
 	// First, try to expand as a glob pattern
 	globFiles, err := filepath.Glob(g.source)
 	if err == nil && len(globFiles) > 0 {
-		// Filter out directories from glob results
+		// Found glob matches, filter for both files and directories
 		var files []string
 		for _, f := range globFiles {
 			info, err := os.Stat(f)
 			if err != nil {
 				continue
 			}
-			if !info.IsDir() {
+			if info.IsDir() {
+				// For directories in glob results, read all files from the directory
+				dirFiles, err := g.getFilesFromDirectory()
+				if err == nil {
+					files = append(files, dirFiles...)
+				}
+			} else {
+				// For files in glob results, add them directly
 				files = append(files, f)
 			}
 		}

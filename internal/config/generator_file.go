@@ -11,9 +11,7 @@ type FileGeneratorConfig struct {
 	Workers int `yaml:"workers,omitempty" mapstructure:"workers,omitempty"`
 	// Rate is the rate at which logs are written per worker
 	Rate time.Duration `yaml:"rate,omitempty" mapstructure:"rate,omitempty"`
-	// Mode specifies the file reading mode: "file", "directory", or "package"
-	Mode string `yaml:"mode,omitempty" mapstructure:"mode,omitempty"`
-	// Source is the file path, directory path, or package name depending on mode
+	// Source is the file path, directory path, or glob pattern (auto-detected)
 	Source string `yaml:"source,omitempty" mapstructure:"source,omitempty"`
 }
 
@@ -25,12 +23,6 @@ func (c *FileGeneratorConfig) Validate() error {
 
 	if c.Rate <= 0 {
 		return fmt.Errorf("File generator rate must be positive, got %v", c.Rate)
-	}
-
-	switch c.Mode {
-	case "file", "directory", "package":
-	default:
-		return fmt.Errorf("File generator mode must be one of 'file', 'directory', or 'package', got %q", c.Mode)
 	}
 
 	if c.Source == "" {

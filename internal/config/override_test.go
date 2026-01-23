@@ -46,7 +46,6 @@ func getTestOverrideFlagsArgs() []string {
 		"--generator-kubernetes-format", "cri-o",
 		"--generator-filegen-workers", "20",
 		"--generator-filegen-rate", "50ms",
-		"--generator-filegen-mode", "directory",
 		"--generator-filegen-source", "/var/log",
 		"--output-type", "otlp-grpc",
 		"--output-udp-host", "udp.example.com",
@@ -137,7 +136,6 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_GENERATOR_KUBERNETES_FORMAT":        "cri-o",
 		"BLITZ_GENERATOR_FILEGEN_WORKERS":          "21",
 		"BLITZ_GENERATOR_FILEGEN_RATE":             "45ms",
-		"BLITZ_GENERATOR_FILEGEN_MODE":             "package",
 		"BLITZ_GENERATOR_FILEGEN_SOURCE":           "syslog_generic",
 		"BLITZ_OUTPUT_TYPE":                        "file",
 		"BLITZ_OUTPUT_UDP_HOST":                    "udp.env.example",
@@ -267,7 +265,6 @@ func TestOverrideDefaults(t *testing.T) {
 			Filegen: FileGeneratorConfig{
 				Workers: 1,
 				Rate:    1 * time.Second,
-				Mode:    "file",
 				Source:  "",
 			},
 		},
@@ -419,7 +416,6 @@ func TestOverrideFlags(t *testing.T) {
 			Filegen: FileGeneratorConfig{
 				Workers: 20,
 				Rate:    50 * time.Millisecond,
-				Mode:    "directory",
 				Source:  "/var/log",
 			},
 		},
@@ -574,7 +570,6 @@ func TestOverrideEnvs(t *testing.T) {
 			Filegen: FileGeneratorConfig{
 				Workers: 21,
 				Rate:    45 * time.Millisecond,
-				Mode:    "package",
 				Source:  "syslog_generic",
 			},
 		},
