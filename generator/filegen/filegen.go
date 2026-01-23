@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -366,27 +367,44 @@ func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Write
 func (g *FileLogGenerator) processTimestamps(line string) string {
 	now := time.Now()
 
-	// Process longer directives first to avoid partial matches
-	// Each directive is processed and the line is updated
-	directives := []struct {
+	// Process common multi-directive patterns first for performance
+	// These are the most frequently used patterns that should be optimized
+	commonPatterns := []struct {
 		pattern   string
 		formatter func(time.Time) string
 	}{
+		{"%Y-%m-%dT%H:%M:%S.%3NZ", func(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }},
 		{"%Y-%m-%dT%H:%M:%SZ", func(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05Z") }},
 		{"%Y-%m-%dT%H:%M:%S", func(t time.Time) string { return t.Format("2006-01-02T15:04:05") }},
 		{"%Y/%m/%d %H:%M:%S", func(t time.Time) string { return t.Format("2006/01/02 15:04:05") }},
 		{"%b %d %H:%M:%S", func(t time.Time) string { return t.Format("Jan 02 15:04:05") }},
 		{"%b %e %T", func(t time.Time) string { return t.Format("Jan _2 15:04:05") }},
-		{"%Y-%m-%d", func(t time.Time) string { return t.Format("2006-01-02") }},
-		{"%H:%M:%S", func(t time.Time) string { return t.Format("15:04:05") }},
-		{"%c", func(t time.Time) string { return t.Format(time.ANSIC) }},
 	}
 
 	result := line
-	for _, dir := range directives {
-		pattern := regexp.MustCompile(regexp.QuoteMeta(dir.pattern))
-		result = pattern.ReplaceAllString(result, dir.formatter(now))
+
+	// First, process common patterns
+	for _, pattern := range commonPatterns {
+		re := regexp.MustCompile(regexp.QuoteMeta(pattern.pattern))
+		if re.MatchString(result) {
+			result = re.ReplaceAllString(result, pattern.formatter(now))
+		}
 	}
+
+	// Then process all individual ctime directives using the ctime package
+	// This handles all remaining directives according to the ctime standard
+	directivePattern := regexp.MustCompile(`%[YymdoqbhBdeagAHIlpPMSLfsZzwxFTXrRnct%]`)
+	result = directivePattern.ReplaceAllStringFunc(result, func(directive string) string {
+		// For each directive, use the ctime package to format it
+		// We use ctime.Format to handle the directive properly
+		formatted, err := ctime.Format(directive, now)
+		if err != nil {
+			// If formatting fails, return the original directive unchanged
+			g.logger.Debug("Failed to format ctime directive", zap.String("directive", directive), zap.Error(err))
+			return directive
+		}
+		return formatted
+	})
 
 	return result
 }
