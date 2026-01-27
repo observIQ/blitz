@@ -1,0 +1,10 @@
+{"type":"user_change","user_id":"U123456","user_name":"john.smith","action":"user_created","timestamp":"%Y-%m-%dT%H:%M:%SZ","actor_id":"A987654","actor_name":"admin@company.com"}
+{"type":"user_session","user_id":"U234567","user_name":"jane.doe","action":"logged_in","timestamp":"%Y-%m-%dT%H:%M:%SZ","ip_address":"192.168.1.100","session_id":"sess_abcdef123456"}
+{"type":"permission_change","user_id":"U345678","user_name":"bob.johnson","action":"role_added","role":"workspace_admin","timestamp":"%Y-%m-%dT%H:%M:%SZ","actor_id":"A987654","actor_name":"admin@company.com"}
+{"type":"workspace_activity","workspace_id":"W111111","workspace_name":"engineering","action":"member_joined","user_id":"U456789","user_name":"alice.williams","timestamp":"%Y-%m-%dT%H:%M:%SZ","actor_id":"A111111","actor_name":"workspace_admin@company.com"}
+{"type":"file_access","user_id":"U567890","user_name":"carlos.lopez","action":"file_downloaded","file_id":"F99999","file_name":"budget_2026.xlsx","timestamp":"%Y-%m-%dT%H:%M:%SZ","ip_address":"10.0.0.50"}
+{"type":"app_installation","workspace_id":"W222222","app_id":"APP789","app_name":"jira-integration","action":"app_installed","timestamp":"%Y-%m-%dT%H:%M:%SZ","actor_id":"A111111","actor_name":"workspace_admin@company.com"}
+{"type":"user_session","user_id":"U678901","user_name":"diana.martinez","action":"logged_out","timestamp":"%Y-%m-%dT%H:%M:%SZ","session_duration_seconds":3600}
+{"type":"security_event","user_id":"U789012","user_name":"test.user","action":"failed_login","reason":"invalid_password","timestamp":"%Y-%m-%dT%H:%M:%SZ","ip_address":"192.168.1.200","attempts":3}
+{"type":"channel_activity","channel_id":"C555555","channel_name":"general","action":"message_posted","user_id":"U890123","user_name":"eve.anderson","timestamp":"%Y-%m-%dT%H:%M:%SZ"}
+{"type":"api_usage","app_id":"APP111","app_name":"custom_bot","action":"api_call","timestamp":"%Y-%m-%dT%H:%M:%SZ","method":"chat.postMessage","result":"success","response_time_ms":245}

@@ -1,8 +1,7 @@
-{"timestamp": "%c", "event_type": "login", "user_id": "user@company.com", "ip_address": "192.168.1.100", "browser": "Chrome", "status": "success"}
-{"timestamp": "%c", "event_type": "record_access", "user_id": "admin@company.com", "object": "Account", "action": "view", "record_count": 45, "timestamp_accessed": "%c"}
-{"timestamp": "%c", "event_type": "data_export", "user_id": "analyst@company.com", "object_type": "Opportunity", "export_type": "CSV", "record_count": 1234, "status": "success"}
-{"timestamp": "%c", "event_type": "permission_change", "admin_id": "secadmin@company.com", "target_user": "contractor@company.com", "new_role": "Viewer", "previous_role": "Editor"}
-{"timestamp": "%c", "event_type": "failed_login", "user_id": "attacker@unknown.com", "ip_address": "203.0.113.50", "reason": "invalid_credentials", "attempts": 5}
-{"timestamp": "%c", "event_type": "report_generation", "user_id": "manager@company.com", "report_type": "Sales_Pipeline", "filters": 3, "generated_timestamp": "%c"}
-{"timestamp": "%c", "event_type": "api_call", "app_id": "integration_app", "endpoint": "/services/data/v59.0/sobjects", "method": "GET", "status_code": 200}
-{"timestamp": "%c", "event_type": "security_event", "event_type_detail": "suspicious_login_location", "user_id": "user@company.com", "previous_location": "New York", "current_location": "Tokyo"}
+{"timestamp":"%Y-%m-%dT%H:%M:%SZ","event_type":"login","user_id":"admin@company.okta.com","source_ip":"192.168.1.100","browser":"Chrome/90.0","platform":"Windows","status":"success","login_time":"%Y-%m-%dT%H:%M:%SZ"}
+{"timestamp":"%Y-%m-%dT%H:%M:%SZ","event_type":"record_access","user_id":"user@company.okta.com","object":"Account","action":"view","record_count":15,"source_ip":"10.0.0.50","status":"success","access_time":"%Y-%m-%dT%H:%M:%SZ"}
+{"timestamp":"%Y-%m-%dT%H:%M:%SZ","event_type":"login","user_id":"attacker@external.com","source_ip":"203.0.113.45","browser":"Firefox/88.0","platform":"Linux","status":"failure","failure_reason":"invalid_password","login_time":"%Y-%m-%dT%H:%M:%SZ"}
+{"timestamp":"%Y-%m-%dT%H:%M:%SZ","event_type":"data_export","user_id":"analyst@company.okta.com","object":"Contact","export_format":"CSV","record_count":500,"source_ip":"192.168.1.100","status":"success","export_time":"%Y-%m-%dT%H:%M:%SZ"}
+{"timestamp":"%Y-%m-%dT%H:%M:%SZ","event_type":"field_update","user_id":"admin@company.okta.com","object":"Opportunity","field_name":"Amount","old_value":"$100000","new_value":"$150000","source_ip":"10.0.0.50","status":"success","update_time":"%Y-%m-%dT%H:%M:%SZ"}
+{"timestamp":"%Y-%m-%dT%H:%M:%SZ","event_type":"user_provisioning","user_id":"secadmin@company.okta.com","action":"activate_user","target_user":"newemployee@company.okta.com","source_ip":"192.168.1.100","status":"success","provisioning_time":"%Y-%m-%dT%H:%M:%SZ"}
+{"timestamp":"%Y-%m-%dT%H:%M:%SZ","event_type":"permission_change","user_id":"admin@company.okta.com","action":"grant_permission","permission":"Admin","target_user":"junior_admin@company.okta.com","source_ip":"10.0.0.50","status":"success","change_time":"%Y-%m-%dT%H:%M:%SZ"}

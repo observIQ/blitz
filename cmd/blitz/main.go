@@ -380,7 +380,6 @@ func run(cmd *cobra.Command, args []string) error {
 			logger,
 			cfg.Generator.Filegen.Workers,
 			cfg.Generator.Filegen.Rate,
-			filegen.Mode(cfg.Generator.Filegen.Mode),
 			cfg.Generator.Filegen.Source,
 		)
 		if err != nil {

@@ -58,71 +58,81 @@ The File generator automatically processes timestamp directives in log files, re
 | `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Set to `filegen` to use this generator. |
 | `generator.filegen.workers` | `--generator-filegen-workers` | `BLITZ_GENERATOR_FILEGEN_WORKERS` | `1` | Number of worker goroutines (must be ≥ 1) |
 | `generator.filegen.rate` | `--generator-filegen-rate` | `BLITZ_GENERATOR_FILEGEN_RATE` | `1s` | Rate at which logs are written per worker (duration format) |
-| `generator.filegen.mode` | `--generator-filegen-mode` | `BLITZ_GENERATOR_FILEGEN_MODE` | `file` | File reading mode: `file` or `directory`. For `file`/`directory`, auto-detection is performed on startup. |
-| `generator.filegen.source` | `--generator-filegen-source` | `BLITZ_GENERATOR_FILEGEN_SOURCE` | `` | File path, directory path, or package name. Source type is auto-detected for `file`/`directory` modes. |
+| `generator.filegen.source` | `--generator-filegen-source` | `BLITZ_GENERATOR_FILEGEN_SOURCE` | `` | File path, directory path, or glob pattern (auto-detected) |
 
 ## Example Configurations
 
-### File or Directory Mode (Auto-Detected)
+### File Mode (Single File)
 
-The generator automatically detects whether the source is a file or directory:
-
-```yaml
-generator:
-  type: filegen
-  filegen:
-    workers: 2
-    rate: 100ms
-    mode: file
-    source: /var/log/app.log
-```
-
-The source type is automatically detected. You can also specify a directory and the generator will read all files in it:
-
-```yaml
-generator:
-  type: filegen
-  filegen:
-    workers: 2
-    rate: 100ms
-    mode: directory
-    source: /var/log/application
-```
-
-### Package Mode
-
-Read logs from a pre-distributed sample package:
+Read logs from a single file:
 
 ```yaml
 generator:
   type: filegen
   filegen:
     workers: 1
+    rate: 1s
+    source: /var/log/app.log
+```
+
+### Directory Mode (Auto-Detected)
+
+Read logs from all files in a directory:
+
+```yaml
+generator:
+  type: filegen
+  filegen:
+    workers: 2
     rate: 100ms
-    mode: directory
-    source: data_library/syslog_generic
+    source: /var/log/application
+```
+
+### Glob Pattern Mode (Auto-Detected)
+
+Use glob patterns to read from matching files or directories:
+
+```yaml
+generator:
+  type: filegen
+  filegen:
+    workers: 4
+    rate: 50ms
+    source: data_library/syslog_*/*.log
 ```
 
 ## Behavior
 
-### File Discovery
+### Auto-Detection
 
-- **File mode**: Reads the specified file sequentially line by line
-- **Directory mode**: Discovers all files in the directory and distributes them across workers
+The File generator automatically detects the source type:
+- **If source is a file**: Reads the file sequentially line by line
+- **If source is a directory**: Discovers all files in the directory and distributes them across workers
+- **If source is a glob pattern**: Expands the pattern and processes matching files/directories accordingly
+
+No explicit mode configuration is required; the source type is detected automatically at startup.
 
 ### Glob Patterns
 
 The source path supports standard glob patterns with wildcards (`*`, `?`, `[...]`), allowing flexible file selection:
 
+**Important:** To prevent shell expansion, quote the glob pattern when providing it via command line:
+
+```bash
+# Quote the pattern to let the Go program expand it
+blitz --generator-type=filegen --generator-filegen-source='data_library/*'
+```
+
 **File glob examples:**
 - `data_library/syslog_generic/unparsable.*` - Match files with `unparsable.` prefix
-- `/var/log/*rfc5424*.log` - Match RFC 5424 log files in any subdirectory name
+- `/var/log/*rfc5424*.log` - Match RFC 5424 log files in any subdirectory
 - `/data/*.log` - Match all `.log` files in `/data`
 
 **Directory glob examples:**
 - `data_library/syslog_*/*.log` - Match all `.log` files in directories starting with `syslog_`
 - `/var/log/*/access.log` - Match `access.log` files in any subdirectory of `/var/log`
 - `/data/*_logs/*.log` - Match all `.log` files in directories ending with `_logs`
+- `data_library/*` - Match all top-level directories in data_library
 
 ### Worker Distribution
 
@@ -197,8 +207,202 @@ The following data library packages are included in the distribution at `data_li
 
 - **syslog_generic**: Standard RFC 3164 and RFC 5424 syslog formatted logs representing generic syslog events across various device types
 
-To use data library packages, specify the directory path with directory mode:
+To use data library packages, simply specify the directory path:
 
 ```bash
-blitz --generator-type=filegen --generator-filegen-mode=directory --generator-filegen-source=data_library/syslog_generic
+blitz --generator-type=filegen --generator-filegen-source=data_library/syslog_generic
+```
+
+Or use glob patterns to read from multiple data library packages:
+
+```bash
+# Read all files from all data library packages
+blitz --generator-type=filegen --generator-filegen-source='data_library/*'
+
+# Read from packages starting with 'a' (apache, ahnlab, akamai, etc.)
+blitz --generator-type=filegen --generator-filegen-source='data_library/a*'
+
+# Read from all Cisco-related packages
+blitz --generator-type=filegen --generator-filegen-source='data_library/cisco*'
+```
+
+## Usage Examples
+
+### Apache Web Server Logs to Stdout
+
+Read Apache access logs from the data library and output to stdout:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/apache \
+  --output-type=stdout
+```
+
+### Apache Web Server Logs to OTLP
+
+Send Apache logs to an OpenTelemetry collector:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/apache \
+  --output-type=otlp-grpc \
+  --output-otlpgrpc-host=localhost \
+  --output-otlpgrpc-port=4317
+```
+
+### Cisco Network Device Logs to Stdout
+
+Generate logs from Cisco network devices with multiple workers:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/cisco \
+  --generator-filegen-workers=2 \
+  --output-type=stdout
+```
+
+### Cisco Network Device Logs to OTLP
+
+Send Cisco device logs to a remote OTLP collector:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/cisco \
+  --generator-filegen-workers=2 \
+  --output-type=otlp-grpc \
+  --output-otlpgrpc-host=otel-collector.example.com \
+  --output-otlpgrpc-port=4317
+```
+
+### Kubernetes Cluster Logs to Stdout
+
+Generate Kubernetes cluster logs with high throughput:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/kubernetes \
+  --generator-filegen-workers=4 \
+  --generator-filegen-rate=50ms \
+  --output-type=stdout
+```
+
+### Kubernetes Cluster Logs to OTLP
+
+Send Kubernetes logs to an OTLP collector with optimized batching:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/kubernetes \
+  --generator-filegen-workers=4 \
+  --generator-filegen-rate=50ms \
+  --output-type=otlp-grpc \
+  --output-otlpgrpc-host=collector.monitoring.svc \
+  --output-otlpgrpc-port=4317 \
+  --output-otlpgrpc-workers=2 \
+  --output-otlpgrpc-batchtimeout=5s
+```
+
+### Fortinet Firewall Logs to Stdout
+
+Generate logs from Fortinet firewalls with standard rate:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/fortinet \
+  --output-type=stdout
+```
+
+### Fortinet Firewall Logs to OTLP
+
+Send Fortinet firewall logs to an OpenTelemetry collector:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/fortinet \
+  --output-type=otlp-grpc \
+  --output-otlpgrpc-host=localhost \
+  --output-otlpgrpc-port=4317 \
+  --output-otlpgrpc-workers=2
+```
+
+### Multiple Checkpoint and Palo Alto Logs to Stdout (Glob Pattern)
+
+Read from firewall packages using glob pattern and output to stdout:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source='data_library/*firewall*' \
+  --generator-filegen-workers=4 \
+  --output-type=stdout
+```
+
+### Multiple Checkpoint and Palo Alto Logs to OTLP (Glob Pattern)
+
+Send security logs from firewall packages to OTLP collector:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source='data_library/*firewall*' \
+  --generator-filegen-workers=4 \
+  --output-type=otlp-grpc \
+  --output-otlpgrpc-host=security-collector.example.com \
+  --output-otlpgrpc-port=4317 \
+  --output-otlpgrpc-maxexportbatchsize=500 \
+  --output-otlpgrpc-workers=3
+```
+
+### Microsoft Windows Security Events (Syslog Format) to Stdout
+
+Generate Windows security event logs in syslog format to stdout:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/microsoft-windows/security.log \
+  --generator-filegen-workers=2 \
+  --output-type=stdout
+```
+
+### Microsoft Windows Security Events (XML Format) to Stdout
+
+Generate Windows security events in XML format to stdout:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/microsoft-windows/security_events.xml \
+  --generator-filegen-workers=2 \
+  --output-type=stdout
+```
+
+### Microsoft Windows Security Events (Syslog Format) to OTLP
+
+Send Windows security events in syslog format to OTLP with TLS:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/microsoft-windows/security.log \
+  --generator-filegen-workers=2 \
+  --output-type=otlp-grpc \
+  --output-otlpgrpc-host=secure-collector.example.com \
+  --output-otlpgrpc-port=4317 \
+  --output-otlpgrpc-enable-tls=true \
+  --otlp-grpc-tls-insecure=false \
+  --otlp-grpc-tls-cert=/path/to/client.crt \
+  --otlp-grpc-tls-key=/path/to/client.key
+```
+
+### Microsoft Windows Security Events (XML Format) to OTLP
+
+Send Windows security events in XML format to OTLP with TLS:
+
+```bash
+blitz --generator-type=filegen \
+  --generator-filegen-source=data_library/microsoft-windows/security_events.xml \
+  --generator-filegen-workers=2 \
+  --output-type=otlp-grpc \
+  --output-otlpgrpc-host=secure-collector.example.com \
+  --output-otlpgrpc-port=4317 \
+  --output-otlpgrpc-enable-tls=true \
+  --otlp-grpc-tls-insecure=false \
+  --otlp-grpc-tls-cert=/path/to/client.crt \
+  --otlp-grpc-tls-key=/path/to/client.key
 ```
