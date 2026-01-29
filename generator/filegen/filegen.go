@@ -349,6 +349,7 @@ func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Write
 	}
 
 	// Select a random line
+	// #nosec G404 - using weak random is acceptable for log generation, not cryptographic purposes
 	randomIdx := rand.Intn(len(lines))
 	selectedLine := lines[randomIdx]
 
