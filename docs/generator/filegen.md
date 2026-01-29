@@ -1,6 +1,6 @@
 # File Generator (filegen)
 
-The File generator reads log entries from files on disk and automatically processes timestamp directives. It supports reading from a single file, reading from all files in a directory, or reading from a pre-distributed package of sample logs. Timestamp directives in log entries (like `%c`, `%Y-%m-%dT%H:%M:%SZ`, etc.) are replaced with actual formatted timestamps on each log generation.
+The File generator reads log entries from files on disk and selects a random line from each file on each run. It automatically processes timestamp directives on the selected line. It supports reading from a single file, reading from all files in a directory, or reading from a pre-distributed package of sample logs. Timestamp directives in log entries (like `%c`, `%Y-%m-%dT%H:%M:%SZ`, etc.) are replaced with actual formatted timestamps when the line is selected.
 
 ## Features
 
@@ -136,15 +136,24 @@ blitz --generator-type=filegen --generator-filegen-source='data_library/*'
 
 ### Worker Distribution
 
-Workers read files sequentially and cycle back to the beginning when all files are exhausted. Each worker processes files in order, with rate limiting applied between each log line write.
+Workers are assigned files in round-robin fashion. On each rate cycle, each worker:
+1. Reads all lines from its assigned file
+2. Selects one line at random from the file (skipping empty lines)
+3. Writes the selected line to the output
+4. Waits for the configured rate period before processing the next file
+
+Workers cycle back to the beginning of the file list when all files are exhausted.
 
 ### Log Line Processing
 
-Each line in a file is treated atomically:
-1. The line is read from the file
-2. Empty lines are skipped
-3. The line is written to the output with the configured rate limit applied
-4. If a write fails, an error is recorded and the next line is processed
+On each work cycle:
+1. A file is selected from the worker's assigned files
+2. The entire file is read into memory
+3. All non-empty lines are collected
+4. A random line is selected from the collected lines
+5. Timestamp directives in the selected line are processed
+6. The line is written to the output with the configured rate limit applied
+7. If a write fails, an error is recorded and the next file cycle begins
 
 ### Rate Limiting
 

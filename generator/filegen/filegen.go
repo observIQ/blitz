@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -301,7 +302,7 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 	}
 }
 
-// readAndWriteFile reads a file line by line and writes each line to the writer
+// readAndWriteFile reads a file, selects a random non-empty line, and writes it to the writer
 func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Writer) error {
 	// #nosec G304 - filename is controlled by the application, either from explicit config or from walking data library directory
 	file, err := os.Open(filename)
@@ -310,55 +311,60 @@ func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Write
 	}
 	defer file.Close()
 
+	// Read all non-empty lines from the file
+	var lines []string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		select {
-		case <-g.stopCh:
-			return nil
-		default:
-		}
-
 		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
+		if len(line) > 0 {
+			lines = append(lines, string(line))
 		}
+	}
 
-		// Process timestamp directives in the line
-		processedLine := g.processTimestamps(string(line))
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("scanner error: %w", err)
+	}
 
-		// Write with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		err := writer.Write(ctx, output.LogRecord{
-			Message: processedLine,
-			Metadata: output.LogRecordMetadata{
-				Timestamp: time.Now(),
-			},
-		})
-		cancel()
+	// If no non-empty lines found, return without error
+	if len(lines) == 0 {
+		return nil
+	}
 
-		if err != nil {
-			g.writeErrors.Add(context.Background(), 1,
-				metric.WithAttributeSet(
-					attribute.NewSet(
-						attribute.String("component", "generator_file"),
-					),
-				),
-			)
-			return fmt.Errorf("write: %w", err)
-		}
+	// Select a random line
+	randomIdx := rand.Intn(len(lines))
+	selectedLine := lines[randomIdx]
 
-		g.logsGenerated.Add(context.Background(), 1,
+	// Process timestamp directives in the line
+	processedLine := g.processTimestamps(selectedLine)
+
+	// Write with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	err = writer.Write(ctx, output.LogRecord{
+		Message: processedLine,
+		Metadata: output.LogRecordMetadata{
+			Timestamp: time.Now(),
+		},
+	})
+	cancel()
+
+	if err != nil {
+		g.writeErrors.Add(context.Background(), 1,
 			metric.WithAttributeSet(
 				attribute.NewSet(
 					attribute.String("component", "generator_file"),
 				),
 			),
 		)
+		return fmt.Errorf("write: %w", err)
 	}
 
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("scanner error: %w", err)
-	}
+	g.logsGenerated.Add(context.Background(), 1,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "generator_file"),
+			),
+		),
+	)
 
 	return nil
 }
