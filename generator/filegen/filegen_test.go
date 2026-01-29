@@ -514,18 +514,15 @@ func TestCacheGetSet(t *testing.T) {
 	cache, err := NewCache(true, 0, 10)
 	require.NoError(t, err)
 
-	entry := &CacheEntry{
-		lines:    []string{"line1", "line2", "line3"},
-		cachedAt: time.Now(),
-	}
+	lines := []string{"line1", "line2", "line3"}
 
 	// Test Set
-	cache.Set("key1", entry)
+	cache.Set("key1", lines)
 
 	// Test Get - should find the entry
-	retrievedEntry, found := cache.Get("key1")
+	retrievedLines, found := cache.Get("key1")
 	require.True(t, found, "entry should be found in cache")
-	require.Equal(t, entry.lines, retrievedEntry.lines)
+	require.Equal(t, lines, retrievedLines)
 
 	// Test Get - non-existent key
 	_, found = cache.Get("nonexistent")
@@ -537,13 +534,10 @@ func TestCacheDisabled(t *testing.T) {
 	cache, err := NewCache(false, 0, 10)
 	require.NoError(t, err)
 
-	entry := &CacheEntry{
-		lines:    []string{"line1", "line2"},
-		cachedAt: time.Now(),
-	}
+	lines := []string{"line1", "line2"}
 
 	// Set should be a no-op
-	cache.Set("key1", entry)
+	cache.Set("key1", lines)
 
 	// Get should always return false
 	_, found := cache.Get("key1")
@@ -556,12 +550,9 @@ func TestCacheTTLExpiration(t *testing.T) {
 	cache, err := NewCache(true, 10*time.Millisecond, 10)
 	require.NoError(t, err)
 
-	entry := &CacheEntry{
-		lines:    []string{"line1", "line2"},
-		cachedAt: time.Now(),
-	}
+	lines := []string{"line1", "line2"}
 
-	cache.Set("key1", entry)
+	cache.Set("key1", lines)
 
 	// Should be found immediately
 	_, found := cache.Get("key1")
@@ -581,13 +572,13 @@ func TestCacheLRUEviction(t *testing.T) {
 	cache, err := NewCache(true, 0, 2)
 	require.NoError(t, err)
 
-	entry1 := &CacheEntry{lines: []string{"1"}, cachedAt: time.Now()}
-	entry2 := &CacheEntry{lines: []string{"2"}, cachedAt: time.Now()}
-	entry3 := &CacheEntry{lines: []string{"3"}, cachedAt: time.Now()}
+	lines1 := []string{"1"}
+	lines2 := []string{"2"}
+	lines3 := []string{"3"}
 
-	cache.Set("key1", entry1)
-	cache.Set("key2", entry2)
-	cache.Set("key3", entry3) // This should evict key1 (LRU)
+	cache.Set("key1", lines1)
+	cache.Set("key2", lines2)
+	cache.Set("key3", lines3) // This should evict key1 (LRU)
 
 	// key1 should be evicted
 	_, found := cache.Get("key1")

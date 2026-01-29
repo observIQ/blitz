@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
@@ -22,65 +22,51 @@ import (
 	"go.uber.org/zap"
 )
 
-// CacheEntry holds the cached lines of a file and when it was cached
-type CacheEntry struct {
-	lines    []string
-	cachedAt time.Time
-}
-
 // Cache provides thread-safe access to file line caches with optional TTL
 type Cache struct {
-	lruCache *lru.Cache[string, *CacheEntry]
-	ttl      time.Duration // 0 means never expire
+	lruCache *expirable.LRU[string, []string]
 	enabled  bool
 }
 
 // NewCache creates a new Cache with the given size limit and TTL
+// ttl of 0 means entries never expire
 func NewCache(enabled bool, ttl time.Duration, maxSize int) (*Cache, error) {
 	if !enabled {
 		return &Cache{enabled: false}, nil
 	}
 
-	lruCache, err := lru.New[string, *CacheEntry](maxSize)
-	if err != nil {
-		return nil, fmt.Errorf("create LRU cache: %w", err)
+	// For 0 TTL (never expire), use a very large duration
+	// expirable.LRU requires a TTL, so we use a large value for "never expire"
+	effectiveTTL := ttl
+	if ttl == 0 {
+		effectiveTTL = 24 * 365 * time.Hour // ~1 year (effectively never)
 	}
+
+	lruCache := expirable.NewLRU[string, []string](maxSize, nil, effectiveTTL)
 
 	return &Cache{
 		lruCache: lruCache,
-		ttl:      ttl,
 		enabled:  true,
 	}, nil
 }
 
 // Get retrieves a cache entry if it exists and hasn't expired
-func (c *Cache) Get(key string) (*CacheEntry, bool) {
+func (c *Cache) Get(key string) ([]string, bool) {
 	if !c.enabled {
 		return nil, false
 	}
 
-	entry, found := c.lruCache.Get(key)
-	if !found {
-		return nil, false
-	}
-
-	// Check TTL (0 means never expire)
-	if c.ttl > 0 && time.Since(entry.cachedAt) > c.ttl {
-		// Entry has expired, remove it
-		c.lruCache.Remove(key)
-		return nil, false
-	}
-
-	return entry, true
+	lines, found := c.lruCache.Get(key)
+	return lines, found
 }
 
 // Set stores a cache entry
-func (c *Cache) Set(key string, entry *CacheEntry) {
+func (c *Cache) Set(key string, lines []string) {
 	if !c.enabled {
 		return
 	}
 
-	c.lruCache.Add(key, entry)
+	c.lruCache.Add(key, lines)
 }
 
 // FileLogGenerator generates log data by reading from files
@@ -377,9 +363,8 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Writer) error {
 	// Check cache first
 	var lines []string
-	cacheEntry, found := g.cache.Get(filename)
-	if found {
-		lines = cacheEntry.lines
+	if cachedLines, found := g.cache.Get(filename); found {
+		lines = cachedLines
 	} else {
 		// Cache miss, read from disk
 		var err error
@@ -389,10 +374,7 @@ func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Write
 		}
 
 		// Update cache
-		g.cache.Set(filename, &CacheEntry{
-			lines:    lines,
-			cachedAt: time.Now(),
-		})
+		g.cache.Set(filename, lines)
 	}
 
 	// If no non-empty lines found, return without error
