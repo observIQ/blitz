@@ -21,8 +21,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// cacheEntry holds the cached lines of a file and when it was cached
-type cacheEntry struct {
+// CacheEntry holds the cached lines of a file and when it was cached
+type CacheEntry struct {
 	lines    []string
 	cachedAt time.Time
 }
@@ -44,7 +44,7 @@ type FileLogGenerator struct {
 
 	// File cache (refreshed every minute)
 	cacheMu   sync.RWMutex
-	fileCache map[string]*cacheEntry
+	fileCache  map[string]*CacheEntry
 	cacheAge  time.Duration // time after which cache expires (1 minute)
 }
 
@@ -102,7 +102,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string) (*F
 		logsGenerated: logsGenerated,
 		activeWorkers: activeWorkers,
 		writeErrors:   writeErrors,
-		fileCache:     make(map[string]*cacheEntry),
+		fileCache:     make(map[string]*CacheEntry),
 		cacheAge:      1 * time.Minute,
 	}, nil
 }
@@ -336,7 +336,7 @@ func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Write
 
 		// Update cache
 		g.cacheMu.Lock()
-		g.fileCache[filename] = &cacheEntry{
+		g.fileCache[filename] = &CacheEntry{
 			lines:    lines,
 			cachedAt: time.Now(),
 		}
