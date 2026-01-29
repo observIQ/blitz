@@ -187,6 +187,18 @@ Thu Jan 13 15:30:45 2026              # %c format
 2026-01-13 15:30:45                   # %Y-%m-%d %H:%M:%S format
 Jan 13 15:30:45                       # %b %d %H:%M:%S format
 ```
+## Caching
+
+The File generator caches file contents in memory to avoid reading files from disk on every log generation cycle. This significantly improves performance, especially when working with large numbers of files or files with many lines.
+
+**Cache Behavior:**
+- Files are cached in memory when first read
+- Each cache entry is refreshed automatically after 1 minute of inactivity
+- If a file's cache has expired, it is automatically re-read on the next access
+- Cache is thread-safe and allows concurrent access from multiple worker goroutines
+- Each file maintains its own cache entry independently
+
+This caching strategy balances performance optimization with the ability to pick up file changes within a reasonable time window.
 
 ## Metrics
 

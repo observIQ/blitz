@@ -21,6 +21,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// cacheEntry holds the cached lines of a file and when it was cached
+type cacheEntry struct {
+	lines    []string
+	cachedAt time.Time
+}
+
 // FileLogGenerator generates log data by reading from files
 type FileLogGenerator struct {
 	logger  *zap.Logger
@@ -35,6 +41,11 @@ type FileLogGenerator struct {
 	logsGenerated metric.Int64Counter
 	activeWorkers metric.Int64Gauge
 	writeErrors   metric.Int64Counter
+
+	// File cache (refreshed every minute)
+	cacheMu   sync.RWMutex
+	fileCache map[string]*cacheEntry
+	cacheAge  time.Duration // time after which cache expires (1 minute)
 }
 
 // New creates a new File log generator
@@ -91,6 +102,8 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string) (*F
 		logsGenerated: logsGenerated,
 		activeWorkers: activeWorkers,
 		writeErrors:   writeErrors,
+		fileCache:     make(map[string]*cacheEntry),
+		cacheAge:      1 * time.Minute,
 	}, nil
 }
 
@@ -304,25 +317,30 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 
 // readAndWriteFile reads a file, selects a random non-empty line, and writes it to the writer
 func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Writer) error {
-	// #nosec G304 - filename is controlled by the application, either from explicit config or from walking data library directory
-	file, err := os.Open(filename)
-	if err != nil {
-		return fmt.Errorf("open file: %w", err)
-	}
-	defer file.Close()
-
-	// Read all non-empty lines from the file
+	// Check cache first
 	var lines []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) > 0 {
-			lines = append(lines, string(line))
-		}
-	}
+	g.cacheMu.RLock()
+	cacheEntry, found := g.fileCache[filename]
+	g.cacheMu.RUnlock()
 
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("scanner error: %w", err)
+	if found && time.Since(cacheEntry.cachedAt) < g.cacheAge {
+		// Cache hit and still fresh
+		lines = cacheEntry.lines
+	} else {
+		// Cache miss or stale, read from disk
+		var err error
+		lines, err = g.readFileLines(filename)
+		if err != nil {
+			return err
+		}
+
+		// Update cache
+		g.cacheMu.Lock()
+		g.fileCache[filename] = &cacheEntry{
+			lines:    lines,
+			cachedAt: time.Now(),
+		}
+		g.cacheMu.Unlock()
 	}
 
 	// If no non-empty lines found, return without error
@@ -339,7 +357,7 @@ func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Write
 
 	// Write with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	err = writer.Write(ctx, output.LogRecord{
+	err := writer.Write(ctx, output.LogRecord{
 		Message: processedLine,
 		Metadata: output.LogRecordMetadata{
 			Timestamp: time.Now(),
@@ -367,6 +385,32 @@ func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Write
 	)
 
 	return nil
+}
+
+// readFileLines reads all non-empty lines from a file
+func (g *FileLogGenerator) readFileLines(filename string) ([]string, error) {
+	// #nosec G304 - filename is controlled by the application, either from explicit config or from walking data library directory
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("open file: %w", err)
+	}
+	defer file.Close()
+
+	// Read all non-empty lines from the file
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) > 0 {
+			lines = append(lines, string(line))
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scanner error: %w", err)
+	}
+
+	return lines, nil
 }
 
 // processTimestamps replaces timestamp directives in the line with actual formatted timestamps
