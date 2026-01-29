@@ -1,6 +1,6 @@
 # File Generator (filegen)
 
-The File generator reads log entries from files on disk and automatically processes timestamp directives. It supports reading from a single file, reading from all files in a directory, or reading from a pre-distributed package of sample logs. Timestamp directives in log entries (like `%c`, `%Y-%m-%dT%H:%M:%SZ`, etc.) are replaced with actual formatted timestamps on each log generation.
+The File generator reads log entries from files on disk and selects a random line from each file on each run. It automatically processes timestamp directives on the selected line. It supports reading from a single file, reading from all files in a directory, or reading from a pre-distributed package of sample logs. Timestamp directives in log entries (like `%c`, `%Y-%m-%dT%H:%M:%SZ`, etc.) are replaced with actual formatted timestamps when the line is selected.
 
 ## Features
 
@@ -59,6 +59,8 @@ The File generator automatically processes timestamp directives in log files, re
 | `generator.filegen.workers` | `--generator-filegen-workers` | `BLITZ_GENERATOR_FILEGEN_WORKERS` | `1` | Number of worker goroutines (must be ≥ 1) |
 | `generator.filegen.rate` | `--generator-filegen-rate` | `BLITZ_GENERATOR_FILEGEN_RATE` | `1s` | Rate at which logs are written per worker (duration format) |
 | `generator.filegen.source` | `--generator-filegen-source` | `BLITZ_GENERATOR_FILEGEN_SOURCE` | `` | File path, directory path, or glob pattern (auto-detected) |
+| `generator.filegen.cache-enabled` | `--generator-filegen-cache-enabled` | `BLITZ_GENERATOR_FILEGEN_CACHE_ENABLED` | `true` | Enable in-memory file caching (true/false) |
+| `generator.filegen.cache-ttl` | `--generator-filegen-cache-ttl` | `BLITZ_GENERATOR_FILEGEN_CACHE_TTL` | `0` | Cache entry time-to-live in duration format (0 = never expire) |
 
 ## Example Configurations
 
@@ -136,15 +138,24 @@ blitz --generator-type=filegen --generator-filegen-source='data_library/*'
 
 ### Worker Distribution
 
-Workers read files sequentially and cycle back to the beginning when all files are exhausted. Each worker processes files in order, with rate limiting applied between each log line write.
+Workers are assigned files in round-robin fashion. On each rate cycle, each worker:
+1. Reads all lines from its assigned file
+2. Selects one line at random from the file (skipping empty lines)
+3. Writes the selected line to the output
+4. Waits for the configured rate period before processing the next file
+
+Workers cycle back to the beginning of the file list when all files are exhausted.
 
 ### Log Line Processing
 
-Each line in a file is treated atomically:
-1. The line is read from the file
-2. Empty lines are skipped
-3. The line is written to the output with the configured rate limit applied
-4. If a write fails, an error is recorded and the next line is processed
+On each work cycle:
+1. A file is selected from the worker's assigned files
+2. The entire file is read into memory
+3. All non-empty lines are collected
+4. A random line is selected from the collected lines
+5. Timestamp directives in the selected line are processed
+6. The line is written to the output with the configured rate limit applied
+7. If a write fails, an error is recorded and the next file cycle begins
 
 ### Rate Limiting
 
@@ -177,6 +188,46 @@ Example log lines with various timestamp formats:
 Thu Jan 13 15:30:45 2026              # %c format
 2026-01-13 15:30:45                   # %Y-%m-%d %H:%M:%S format
 Jan 13 15:30:45                       # %b %d %H:%M:%S format
+```
+## Caching
+
+The File generator implements an in-memory cache to avoid reading files from disk on every log generation cycle. This significantly improves performance when working with large numbers of files or files with many lines.
+
+**Cache Behavior:**
+- Caching is **enabled by default** (`cache_enabled: true`)
+- Each file's lines are cached in memory after the first read
+- Cache entries can have an optional time-to-live (TTL) for automatic invalidation
+  - **Default TTL is 0** (cache entries never expire)
+  - Setting `cache_ttl` to a value (e.g., `1m`) will invalidate entries older than that duration
+- Cache is **thread-safe** and allows concurrent access from multiple worker goroutines
+- Cache uses LRU (Least Recently Used) eviction with a 1000-file limit
+- Each file maintains its own cache entry independently
+
+**Disabling Cache:**
+- Set `cache_enabled: false` to disable caching entirely
+- Useful when dealing with very large files or when file contents change frequently
+
+**Example with Cache TTL (1 minute):**
+```yaml
+generator:
+  type: filegen
+  filegen:
+    workers: 4
+    rate: 100ms
+    source: /var/log/app.log
+    cache_enabled: true
+    cache_ttl: 1m
+```
+
+**Example with Caching Disabled:**
+```yaml
+generator:
+  type: filegen
+  filegen:
+    workers: 2
+    rate: 500ms
+    source: /large/files/directory
+    cache_enabled: false
 ```
 
 ## Metrics
