@@ -271,6 +271,8 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.filegen.workers", "number of File generator workers", 1),
 		NewOverride("generator.filegen.rate", "rate at which File logs are generated per worker", 1*time.Second),
 		NewOverride("generator.filegen.source", "file path, directory path, or glob pattern (auto-detected)", ""),
+		NewOverride("generator.filegen.cache-enabled", "enable in-memory file caching", true),
+		NewOverride("generator.filegen.cache-ttl", "file cache time-to-live (0 = never expire)", time.Duration(0)),
 		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file", OutputTypeNop),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),

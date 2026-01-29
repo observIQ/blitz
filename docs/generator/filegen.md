@@ -59,6 +59,8 @@ The File generator automatically processes timestamp directives in log files, re
 | `generator.filegen.workers` | `--generator-filegen-workers` | `BLITZ_GENERATOR_FILEGEN_WORKERS` | `1` | Number of worker goroutines (must be ≥ 1) |
 | `generator.filegen.rate` | `--generator-filegen-rate` | `BLITZ_GENERATOR_FILEGEN_RATE` | `1s` | Rate at which logs are written per worker (duration format) |
 | `generator.filegen.source` | `--generator-filegen-source` | `BLITZ_GENERATOR_FILEGEN_SOURCE` | `` | File path, directory path, or glob pattern (auto-detected) |
+| `generator.filegen.cache-enabled` | `--generator-filegen-cache-enabled` | `BLITZ_GENERATOR_FILEGEN_CACHE_ENABLED` | `true` | Enable in-memory file caching (true/false) |
+| `generator.filegen.cache-ttl` | `--generator-filegen-cache-ttl` | `BLITZ_GENERATOR_FILEGEN_CACHE_TTL` | `0` | Cache entry time-to-live in duration format (0 = never expire) |
 
 ## Example Configurations
 
@@ -189,16 +191,44 @@ Jan 13 15:30:45                       # %b %d %H:%M:%S format
 ```
 ## Caching
 
-The File generator caches file contents in memory to avoid reading files from disk on every log generation cycle. This significantly improves performance, especially when working with large numbers of files or files with many lines.
+The File generator implements an in-memory cache to avoid reading files from disk on every log generation cycle. This significantly improves performance when working with large numbers of files or files with many lines.
 
 **Cache Behavior:**
-- Files are cached in memory when first read
-- Each cache entry is refreshed automatically after 1 minute of inactivity
-- If a file's cache has expired, it is automatically re-read on the next access
-- Cache is thread-safe and allows concurrent access from multiple worker goroutines
+- Caching is **enabled by default** (`cache_enabled: true`)
+- Each file's lines are cached in memory after the first read
+- Cache entries can have an optional time-to-live (TTL) for automatic invalidation
+  - **Default TTL is 0** (cache entries never expire)
+  - Setting `cache_ttl` to a value (e.g., `1m`) will invalidate entries older than that duration
+- Cache is **thread-safe** and allows concurrent access from multiple worker goroutines
+- Cache uses LRU (Least Recently Used) eviction with a 1000-file limit
 - Each file maintains its own cache entry independently
 
-This caching strategy balances performance optimization with the ability to pick up file changes within a reasonable time window.
+**Disabling Cache:**
+- Set `cache_enabled: false` to disable caching entirely
+- Useful when dealing with very large files or when file contents change frequently
+
+**Example with Cache TTL (1 minute):**
+```yaml
+generator:
+  type: filegen
+  filegen:
+    workers: 4
+    rate: 100ms
+    source: /var/log/app.log
+    cache_enabled: true
+    cache_ttl: 1m
+```
+
+**Example with Caching Disabled:**
+```yaml
+generator:
+  type: filegen
+  filegen:
+    workers: 2
+    rate: 500ms
+    source: /large/files/directory
+    cache_enabled: false
+```
 
 ## Metrics
 

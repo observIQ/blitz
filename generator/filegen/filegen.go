@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
@@ -25,6 +26,61 @@ import (
 type CacheEntry struct {
 	lines    []string
 	cachedAt time.Time
+}
+
+// Cache provides thread-safe access to file line caches with optional TTL
+type Cache struct {
+	lruCache *lru.Cache[string, *CacheEntry]
+	ttl      time.Duration // 0 means never expire
+	enabled  bool
+}
+
+// NewCache creates a new Cache with the given size limit and TTL
+func NewCache(enabled bool, ttl time.Duration, maxSize int) (*Cache, error) {
+	if !enabled {
+		return &Cache{enabled: false}, nil
+	}
+
+	lruCache, err := lru.New[string, *CacheEntry](maxSize)
+	if err != nil {
+		return nil, fmt.Errorf("create LRU cache: %w", err)
+	}
+
+	return &Cache{
+		lruCache: lruCache,
+		ttl:      ttl,
+		enabled:  true,
+	}, nil
+}
+
+// Get retrieves a cache entry if it exists and hasn't expired
+func (c *Cache) Get(key string) (*CacheEntry, bool) {
+	if !c.enabled {
+		return nil, false
+	}
+
+	entry, found := c.lruCache.Get(key)
+	if !found {
+		return nil, false
+	}
+
+	// Check TTL (0 means never expire)
+	if c.ttl > 0 && time.Since(entry.cachedAt) > c.ttl {
+		// Entry has expired, remove it
+		c.lruCache.Remove(key)
+		return nil, false
+	}
+
+	return entry, true
+}
+
+// Set stores a cache entry
+func (c *Cache) Set(key string, entry *CacheEntry) {
+	if !c.enabled {
+		return
+	}
+
+	c.lruCache.Add(key, entry)
 }
 
 // FileLogGenerator generates log data by reading from files
@@ -42,14 +98,12 @@ type FileLogGenerator struct {
 	activeWorkers metric.Int64Gauge
 	writeErrors   metric.Int64Counter
 
-	// File cache (refreshed every minute)
-	cacheMu   sync.RWMutex
-	fileCache  map[string]*CacheEntry
-	cacheAge  time.Duration // time after which cache expires (1 minute)
+	// File cache
+	cache *Cache
 }
 
 // New creates a new File log generator
-func New(logger *zap.Logger, workers int, rate time.Duration, source string) (*FileLogGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, source string, cacheEnabled bool, cacheTTL time.Duration) (*FileLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -92,6 +146,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string) (*F
 		return nil, fmt.Errorf("create write errors counter: %w", err)
 	}
 
+	cache, err := NewCache(cacheEnabled, cacheTTL, 1000) // 1000 is max size for LRU
+	if err != nil {
+		return nil, fmt.Errorf("create cache: %w", err)
+	}
+
 	return &FileLogGenerator{
 		logger:        logger,
 		workers:       workers,
@@ -102,8 +161,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string) (*F
 		logsGenerated: logsGenerated,
 		activeWorkers: activeWorkers,
 		writeErrors:   writeErrors,
-		fileCache:     make(map[string]*CacheEntry),
-		cacheAge:      1 * time.Minute,
+		cache:         cache,
 	}, nil
 }
 
@@ -319,15 +377,11 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Writer) error {
 	// Check cache first
 	var lines []string
-	g.cacheMu.RLock()
-	cacheEntry, found := g.fileCache[filename]
-	g.cacheMu.RUnlock()
-
-	if found && time.Since(cacheEntry.cachedAt) < g.cacheAge {
-		// Cache hit and still fresh
+	cacheEntry, found := g.cache.Get(filename)
+	if found {
 		lines = cacheEntry.lines
 	} else {
-		// Cache miss or stale, read from disk
+		// Cache miss, read from disk
 		var err error
 		lines, err = g.readFileLines(filename)
 		if err != nil {
@@ -335,12 +389,10 @@ func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Write
 		}
 
 		// Update cache
-		g.cacheMu.Lock()
-		g.fileCache[filename] = &CacheEntry{
+		g.cache.Set(filename, &CacheEntry{
 			lines:    lines,
 			cachedAt: time.Now(),
-		}
-		g.cacheMu.Unlock()
+		})
 	}
 
 	// If no non-empty lines found, return without error

@@ -104,7 +104,7 @@ func TestNewFileLogGenerator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gen, err := New(logger, tt.workers, tt.rate, tt.source)
+			gen, err := New(logger, tt.workers, tt.rate, tt.source, true, 0)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, gen)
@@ -136,7 +136,7 @@ func TestFileLogGeneratorFileMode(t *testing.T) {
 	}
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name())
+	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name(), true, 0)
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -181,7 +181,7 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 	}
 
 	// Test with directory mode (auto-detected)
-	gen, err := New(logger, 1, 10*time.Millisecond, tmpdir)
+	gen, err := New(logger, 1, 10*time.Millisecond, tmpdir, true, 0)
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -204,7 +204,7 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 func TestFileLogGeneratorNonexistentFile(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	gen, err := New(logger, 1, 100*time.Millisecond, "/nonexistent/path/file.log")
+	gen, err := New(logger, 1, 100*time.Millisecond, "/nonexistent/path/file.log", true, 0)
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -225,7 +225,7 @@ func TestFileLogGeneratorStop(t *testing.T) {
 	require.NoError(t, err)
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 100*time.Millisecond, tmpfile.Name())
+	gen, err := New(logger, 1, 100*time.Millisecond, tmpfile.Name(), true, 0)
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -251,7 +251,7 @@ func TestFileLogGeneratorWriteError(t *testing.T) {
 	require.NoError(t, err)
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name())
+	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name(), true, 0)
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -281,7 +281,7 @@ func TestFileLogGeneratorMultipleWorkers(t *testing.T) {
 	}
 	tmpfile.Close()
 
-	gen, err := New(logger, 3, 10*time.Millisecond, tmpfile.Name())
+	gen, err := New(logger, 3, 10*time.Millisecond, tmpfile.Name(), true, 0)
 	require.NoError(t, err)
 
 	writer := newMockWriter()
@@ -308,7 +308,7 @@ func TestTimestampProcessing(t *testing.T) {
 	require.NoError(t, err)
 	tmpFile.Close()
 
-	gen, err := New(logger, 1, 100*time.Millisecond, tmpFile.Name())
+	gen, err := New(logger, 1, 100*time.Millisecond, tmpFile.Name(), true, 0)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -413,7 +413,7 @@ func TestFileLogGeneratorGlobPatterns(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern)
+			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern, true, 0)
 			require.NoError(t, err)
 
 			writer := newMockWriter()
@@ -485,7 +485,7 @@ func TestFileLogGeneratorGlobDirectories(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern)
+			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern, true, 0)
 			require.NoError(t, err)
 
 			writer := newMockWriter()
@@ -506,4 +506,97 @@ func TestFileLogGeneratorGlobDirectories(t *testing.T) {
 			require.Greater(t, len(writes), 0, "should have written at least one line")
 		})
 	}
+}
+
+// TestCacheGetSet tests the Cache Get/Set methods
+func TestCacheGetSet(t *testing.T) {
+	// Test with cache enabled and no TTL
+	cache, err := NewCache(true, 0, 10)
+	require.NoError(t, err)
+
+	entry := &CacheEntry{
+		lines:    []string{"line1", "line2", "line3"},
+		cachedAt: time.Now(),
+	}
+
+	// Test Set
+	cache.Set("key1", entry)
+
+	// Test Get - should find the entry
+	retrievedEntry, found := cache.Get("key1")
+	require.True(t, found, "entry should be found in cache")
+	require.Equal(t, entry.lines, retrievedEntry.lines)
+
+	// Test Get - non-existent key
+	_, found = cache.Get("nonexistent")
+	require.False(t, found, "non-existent key should not be found")
+}
+
+// TestCacheDisabled tests that cache operations are no-ops when disabled
+func TestCacheDisabled(t *testing.T) {
+	cache, err := NewCache(false, 0, 10)
+	require.NoError(t, err)
+
+	entry := &CacheEntry{
+		lines:    []string{"line1", "line2"},
+		cachedAt: time.Now(),
+	}
+
+	// Set should be a no-op
+	cache.Set("key1", entry)
+
+	// Get should always return false
+	_, found := cache.Get("key1")
+	require.False(t, found, "Get should return false when cache is disabled")
+}
+
+// TestCacheTTLExpiration tests that entries expire after the TTL
+func TestCacheTTLExpiration(t *testing.T) {
+	// Create cache with 10ms TTL
+	cache, err := NewCache(true, 10*time.Millisecond, 10)
+	require.NoError(t, err)
+
+	entry := &CacheEntry{
+		lines:    []string{"line1", "line2"},
+		cachedAt: time.Now(),
+	}
+
+	cache.Set("key1", entry)
+
+	// Should be found immediately
+	_, found := cache.Get("key1")
+	require.True(t, found, "entry should be found before TTL expires")
+
+	// Wait for TTL to expire
+	time.Sleep(15 * time.Millisecond)
+
+	// Should not be found after TTL
+	_, found = cache.Get("key1")
+	require.False(t, found, "entry should not be found after TTL expires")
+}
+
+// TestCacheLRUEviction tests that cache respects max size limit
+func TestCacheLRUEviction(t *testing.T) {
+	// Create cache with max size of 2
+	cache, err := NewCache(true, 0, 2)
+	require.NoError(t, err)
+
+	entry1 := &CacheEntry{lines: []string{"1"}, cachedAt: time.Now()}
+	entry2 := &CacheEntry{lines: []string{"2"}, cachedAt: time.Now()}
+	entry3 := &CacheEntry{lines: []string{"3"}, cachedAt: time.Now()}
+
+	cache.Set("key1", entry1)
+	cache.Set("key2", entry2)
+	cache.Set("key3", entry3) // This should evict key1 (LRU)
+
+	// key1 should be evicted
+	_, found := cache.Get("key1")
+	require.False(t, found, "key1 should be evicted due to LRU")
+
+	// key2 and key3 should still be present
+	_, found = cache.Get("key2")
+	require.True(t, found, "key2 should still be in cache")
+
+	_, found = cache.Get("key3")
+	require.True(t, found, "key3 should still be in cache")
 }
