@@ -56,8 +56,7 @@ func (c *Cache) Get(key string) ([]string, bool) {
 		return nil, false
 	}
 
-	lines, found := c.lruCache.Get(key)
-	return lines, found
+	return c.lruCache.Get(key)
 }
 
 // Set stores a cache entry
