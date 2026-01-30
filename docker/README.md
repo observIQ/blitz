@@ -8,6 +8,8 @@ A Docker Compose setup that runs all Blitz log generators simultaneously and sen
 ┌─────────────────┐
 │   blitz-json    │──┐
 ├─────────────────┤  │
+│   blitz-pii     │──┤  (10x workers - 37 PII types)
+├─────────────────┤  │
 │  blitz-winevt   │──┤
 ├─────────────────┤  │
 │ blitz-palo-alto │──┤
@@ -52,6 +54,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up
 |----------|---------|-------------|
 | `BLITZ_RATE` | `1s` | Log generation rate per generator |
 | `BLITZ_WORKERS` | `1` | Number of workers per generator |
+| `BLITZ_PII_WORKERS` | `10` | Number of workers for PII generator (10x default for comprehensive testing) |
 
 ### Examples
 
@@ -83,7 +86,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 | Generator | Log Type | Description |
 |-----------|----------|-------------|
 | `blitz-json` | JSON | Structured JSON logs |
-| `blitz-pii` | PII | JSON logs with PII data (SSN, IBAN, phone, user IDs) |
+| `blitz-pii` | PII | JSON logs with 37 PII types (SSN, credit card, email, passport, API keys, JWT, etc.) - runs at 10x rate |
 | `blitz-winevt` | Windows Event | Windows Event logs in XML format |
 | `blitz-palo-alto` | Palo Alto | Firewall syslog entries |
 | `blitz-apache-common` | Apache Common | Apache Common Log Format (CLF) |
