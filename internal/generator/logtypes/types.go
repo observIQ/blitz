@@ -56,7 +56,8 @@ type PIILogData struct {
 	TypeVal      string
 	ActionVal    string
 	StatusVal    string
-	// PII Fields - matching BindPlane redact processor types
+
+	// Core PII Fields
 	UserIDVal      string // UUID/GUID
 	SSNVal         string // Social Security Number
 	IBANVal        string // International Bank Account Number
@@ -71,6 +72,45 @@ type PIILogData struct {
 	StreetAddrVal  string // US Street Address
 	CityStateVal   string // US City, State
 	ZipCodeVal     string // US Zip Code
+
+	// Government IDs
+	PassportVal       string // Passport Number
+	DriversLicenseVal string // Driver's License Number
+	NationalIDVal     string // National ID (non-US)
+
+	// Financial
+	BankAccountVal   string // Bank Account Number
+	RoutingNumberVal string // ABA Routing Number
+	CryptoWalletVal  string // Cryptocurrency Wallet Address
+
+	// Healthcare
+	MedicalRecordVal  string // Medical Record Number (MRN)
+	HealthInsuranceVal string // Health Insurance ID
+
+	// Vehicle
+	VINVal           string // Vehicle Identification Number
+	LicensePlateVal  string // License Plate Number
+
+	// Employment/Education
+	EmployeeIDVal string // Employee ID
+	StudentIDVal  string // Student ID
+
+	// Authentication/Secrets
+	UsernameVal    string // Username
+	PasswordHashVal string // Password Hash
+	APIKeyVal      string // API Key/Token
+	AWSAccessKeyVal string // AWS Access Key ID
+	PrivateKeyVal  string // Private Key (partial)
+	JWTTokenVal    string // JWT Token
+
+	// Location
+	GPSCoordsVal string // GPS Coordinates (lat,long)
+	GeohashVal   string // Geohash
+
+	// Personal
+	FullNameVal        string // Full Name
+	MothersMaidenVal   string // Mother's Maiden Name
+	SecurityAnswerVal  string // Security Question Answer
 }
 
 // Timestamp implements LogData interface
