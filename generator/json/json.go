@@ -266,9 +266,61 @@ func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
 			"timestamp": d.TimestampVal,
 			"level":     d.LevelVal,
 			"message":   d.MessageVal,
-			"user_id":   d.UserIDVal,
-			"iban":      d.IBANVal,
-			"phone":     d.PhoneVal,
+
+			// Core PII
+			"user_id":     d.UserIDVal,
+			"ssn":         d.SSNVal,
+			"iban":        d.IBANVal,
+			"phone":       d.PhoneVal,
+			"intl_phone":  d.IntlPhoneVal,
+			"email":       d.EmailVal,
+			"credit_card": d.CreditCardVal,
+			"dob":         d.DOBVal,
+			"ipv4":        d.IPv4Val,
+			"ipv6":        d.IPv6Val,
+			"mac_address": d.MACAddressVal,
+			"street_addr": d.StreetAddrVal,
+			"city_state":  d.CityStateVal,
+			"zip_code":    d.ZipCodeVal,
+
+			// Government IDs
+			"passport":        d.PassportVal,
+			"drivers_license": d.DriversLicenseVal,
+			"national_id":     d.NationalIDVal,
+
+			// Financial
+			"bank_account":   d.BankAccountVal,
+			"routing_number": d.RoutingNumberVal,
+			"crypto_wallet":  d.CryptoWalletVal,
+
+			// Healthcare
+			"medical_record":   d.MedicalRecordVal,
+			"health_insurance": d.HealthInsuranceVal,
+
+			// Vehicle
+			"vin":           d.VINVal,
+			"license_plate": d.LicensePlateVal,
+
+			// Employment/Education
+			"employee_id": d.EmployeeIDVal,
+			"student_id":  d.StudentIDVal,
+
+			// Authentication/Secrets
+			"username":       d.UsernameVal,
+			"password_hash":  d.PasswordHashVal,
+			"api_key":        d.APIKeyVal,
+			"aws_access_key": d.AWSAccessKeyVal,
+			"private_key":    d.PrivateKeyVal,
+			"jwt_token":      d.JWTTokenVal,
+
+			// Location
+			"gps_coords": d.GPSCoordsVal,
+			"geohash":    d.GeohashVal,
+
+			// Personal
+			"full_name":        d.FullNameVal,
+			"mothers_maiden":   d.MothersMaidenVal,
+			"security_answer":  d.SecurityAnswerVal,
 		}
 		timestamp = d.TimestampVal
 		severity = d.LevelVal
@@ -288,9 +340,6 @@ func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
 		}
 		if d.StatusVal != "" {
 			jsonData.(map[string]any)["status"] = d.StatusVal
-		}
-		if d.SSNVal != "" {
-			jsonData.(map[string]any)["ssn"] = d.SSNVal
 		}
 	default:
 		return output.LogRecord{}, fmt.Errorf("unsupported log data type: %T", data)
