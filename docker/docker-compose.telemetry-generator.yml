@@ -1,7 +1,7 @@
 # Telemetry Generator - Docker Compose Configuration
 #
 # Runs all blitz generators and sends telemetry to a BDOT collector,
-# which connects to BindPlane via OpAMP.
+# which connects to Bindplane via OpAMP.
 #
 # Usage (from blitz repo root):
 #   OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
@@ -9,8 +9,8 @@
 #   docker compose -f docker/docker-compose.telemetry-generator.yml up
 #
 # Required environment variables:
-#   - OPAMP_ENDPOINT: BindPlane OpAMP endpoint (e.g., wss://yellow.stage.bindplane.com/v1/opamp)
-#   - OPAMP_SECRET_KEY: BindPlane secret key for authentication
+#   - OPAMP_ENDPOINT: Bindplane OpAMP endpoint (e.g., wss://yellow.stage.bindplane.com/v1/opamp)
+#   - OPAMP_SECRET_KEY: Bindplane secret key for authentication
 #
 # Optional environment variables:
 #   - BLITZ_RATE: Log generation rate (default: 1s)
@@ -30,7 +30,7 @@ x-blitz-common: &blitz-common
     - telemetry-net
 
 services:
-  # BDOT Collector - receives OTLP from blitz instances, connects to BindPlane via OpAMP
+  # BDOT Collector - receives OTLP from blitz instances, connects to Bindplane via OpAMP
   bdot-collector:
     image: observiq/bindplane-agent:latest
     restart: unless-stopped

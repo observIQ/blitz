@@ -1,6 +1,6 @@
 # Telemetry Generator
 
-A Docker Compose setup that runs all Blitz log generators simultaneously and sends telemetry to BindPlane via a BindPlane Agent.
+A Docker Compose setup that runs all Blitz log generators simultaneously and sends telemetry to Bindplane via a Bindplane Agent.
 
 ## Architecture
 
@@ -14,7 +14,7 @@ A Docker Compose setup that runs all Blitz log generators simultaneously and sen
 ├─────────────────┤  │
 │ blitz-palo-alto │──┤
 ├─────────────────┤  │    ┌──────────────────┐    ┌─────────────────┐
-│ blitz-apache-*  │──┼───►│  BDOT Collector  │───►│    BindPlane    │
+│ blitz-apache-*  │──┼───►│  BDOT Collector  │───►│    Bindplane    │
 ├─────────────────┤  │    │  (OTLP receiver) │    │     (OpAMP)     │
 │   blitz-nginx   │──┤    └──────────────────┘    └─────────────────┘
 ├─────────────────┤  │
@@ -27,8 +27,8 @@ A Docker Compose setup that runs all Blitz log generators simultaneously and sen
 ## Prerequisites
 
 - Docker and Docker Compose
-- BindPlane instance with OpAMP enabled
-- BindPlane secret key
+- Bindplane instance with OpAMP enabled
+- Bindplane secret key
 
 ## Quick Start
 
@@ -45,8 +45,8 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `OPAMP_ENDPOINT` | BindPlane OpAMP WebSocket endpoint | `wss://app.bindplane.com/v1/opamp` |
-| `OPAMP_SECRET_KEY` | BindPlane secret key for authentication | `your-secret-key` |
+| `OPAMP_ENDPOINT` | Bindplane OpAMP WebSocket endpoint | `wss://app.bindplane.com/v1/opamp` |
+| `OPAMP_SECRET_KEY` | Bindplane secret key for authentication | `your-secret-key` |
 
 ### Optional Environment Variables
 
@@ -117,7 +117,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml down
 | File | Description |
 |------|-------------|
 | `docker-compose.telemetry-generator.yml` | Docker Compose configuration |
-| `collector-config.yaml` | BindPlane Agent OTLP receiver configuration |
+| `collector-config.yaml` | Bindplane Agent OTLP receiver configuration |
 
 ## Kubernetes Deployment
 

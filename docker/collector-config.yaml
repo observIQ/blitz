@@ -1,10 +1,10 @@
 # BDOT Collector Configuration for Telemetry Generator
 #
 # This is a minimal configuration that enables the OTLP receiver.
-# The actual export configuration will be managed by BindPlane via OpAMP.
+# The actual export configuration will be managed by Bindplane via OpAMP.
 #
-# When connected to BindPlane via OpAMP, the configuration will be replaced
-# with the configuration pushed from BindPlane.
+# When connected to Bindplane via OpAMP, the configuration will be replaced
+# with the configuration pushed from Bindplane.
 
 receivers:
   otlp:
@@ -20,7 +20,7 @@ processors:
     send_batch_size: 1000
 
 exporters:
-  # Debug exporter for initial testing - BindPlane will configure actual exporters via OpAMP
+  # Debug exporter for initial testing - Bindplane will configure actual exporters via OpAMP
   debug:
     verbosity: basic
     sampling_initial: 5
