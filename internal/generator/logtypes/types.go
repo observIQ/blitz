@@ -46,6 +46,7 @@ func (d *DefaultLogData) Message() string {
 }
 
 // PIILogData represents the PII log type with banking/PII fields
+// Includes all common sensitive data types for comprehensive PII testing
 type PIILogData struct {
 	TimestampVal time.Time
 	LevelVal     string
@@ -55,10 +56,21 @@ type PIILogData struct {
 	TypeVal      string
 	ActionVal    string
 	StatusVal    string
-	UserIDVal    string
-	SSNVal       string
-	IBANVal      string
-	PhoneVal     string
+	// PII Fields - matching BindPlane redact processor types
+	UserIDVal      string // UUID/GUID
+	SSNVal         string // Social Security Number
+	IBANVal        string // International Bank Account Number
+	PhoneVal       string // US Phone Number
+	IntlPhoneVal   string // International Phone Number
+	EmailVal       string // Email Address
+	CreditCardVal  string // Credit Card Number
+	DOBVal         string // Date of Birth
+	IPv4Val        string // IPv4 Address
+	IPv6Val        string // IPv6 Address
+	MACAddressVal  string // MAC Address
+	StreetAddrVal  string // US Street Address
+	CityStateVal   string // US City, State
+	ZipCodeVal     string // US Zip Code
 }
 
 // Timestamp implements LogData interface

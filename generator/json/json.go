@@ -263,12 +263,23 @@ func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
 		severity = d.LevelVal
 	case *logtypes.PIILogData:
 		jsonData = map[string]any{
-			"timestamp": d.TimestampVal,
-			"level":     d.LevelVal,
-			"message":   d.MessageVal,
-			"user_id":   d.UserIDVal,
-			"iban":      d.IBANVal,
-			"phone":     d.PhoneVal,
+			"timestamp":    d.TimestampVal,
+			"level":        d.LevelVal,
+			"message":      d.MessageVal,
+			"user_id":      d.UserIDVal,
+			"ssn":          d.SSNVal,
+			"iban":         d.IBANVal,
+			"phone":        d.PhoneVal,
+			"intl_phone":   d.IntlPhoneVal,
+			"email":        d.EmailVal,
+			"credit_card":  d.CreditCardVal,
+			"dob":          d.DOBVal,
+			"ipv4":         d.IPv4Val,
+			"ipv6":         d.IPv6Val,
+			"mac_address":  d.MACAddressVal,
+			"street_addr":  d.StreetAddrVal,
+			"city_state":   d.CityStateVal,
+			"zip_code":     d.ZipCodeVal,
 		}
 		timestamp = d.TimestampVal
 		severity = d.LevelVal
@@ -288,9 +299,6 @@ func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
 		}
 		if d.StatusVal != "" {
 			jsonData.(map[string]any)["status"] = d.StatusVal
-		}
-		if d.SSNVal != "" {
-			jsonData.(map[string]any)["ssn"] = d.SSNVal
 		}
 	default:
 		return output.LogRecord{}, fmt.Errorf("unsupported log data type: %T", data)
