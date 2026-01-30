@@ -83,6 +83,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 | Generator | Log Type | Description |
 |-----------|----------|-------------|
 | `blitz-json` | JSON | Structured JSON logs |
+| `blitz-pii` | PII | JSON logs with PII data (SSN, IBAN, phone, user IDs) |
 | `blitz-winevt` | Windows Event | Windows Event logs in XML format |
 | `blitz-palo-alto` | Palo Alto | Firewall syslog entries |
 | `blitz-apache-common` | Apache Common | Apache Common Log Format (CLF) |

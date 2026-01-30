@@ -57,6 +57,18 @@ services:
       BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
       BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
 
+  # PII Log Generator (JSON with PII data: SSN, IBAN, phone, user IDs)
+  blitz-pii:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: json
+      BLITZ_GENERATOR_JSON_TYPE: pii
+      BLITZ_GENERATOR_JSON_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_JSON_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
   # Windows Event Log Generator
   blitz-winevt:
     <<: *blitz-common
