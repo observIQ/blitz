@@ -1,0 +1,151 @@
+# Telemetry Generator - Docker Compose Configuration
+#
+# Runs all blitz generators and sends telemetry to a BDOT collector,
+# which connects to BindPlane via OpAMP.
+#
+# Usage (from blitz repo root):
+#   OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
+#   OPAMP_SECRET_KEY=your-secret-key \
+#   docker compose -f docker/docker-compose.telemetry-generator.yml up
+#
+# Required environment variables:
+#   - OPAMP_ENDPOINT: BindPlane OpAMP endpoint (e.g., wss://yellow.stage.bindplane.com/v1/opamp)
+#   - OPAMP_SECRET_KEY: BindPlane secret key for authentication
+#
+# Optional environment variables:
+#   - BLITZ_RATE: Log generation rate (default: 1s)
+#   - BLITZ_WORKERS: Workers per generator (default: 1)
+
+x-blitz-common: &blitz-common
+  image: ghcr.io/observiq/blitz:latest
+  restart: unless-stopped
+  environment:
+    BLITZ_OUTPUT_TYPE: otlp-grpc
+    BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+    BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+    BLITZ_LOGGING_LEVEL: info
+  depends_on:
+    - bdot-collector
+  networks:
+    - telemetry-net
+
+services:
+  # BDOT Collector - receives OTLP from blitz instances, connects to BindPlane via OpAMP
+  bdot-collector:
+    image: observiq/bindplane-agent:latest
+    restart: unless-stopped
+    user: "0"  # Run as root to allow writing to /etc/otel
+    environment:
+      OPAMP_ENDPOINT: ${OPAMP_ENDPOINT:?OPAMP_ENDPOINT is required}
+      OPAMP_SECRET_KEY: ${OPAMP_SECRET_KEY:?OPAMP_SECRET_KEY is required}
+      OPAMP_AGENT_NAME: telemetry-generator-collector
+      OPAMP_LABELS: "env=docker,component=telemetry-generator"
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    networks:
+      - telemetry-net
+
+  # JSON Log Generator
+  blitz-json:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: json
+      BLITZ_GENERATOR_JSON_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_JSON_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # Windows Event Log Generator
+  blitz-winevt:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: winevt
+      BLITZ_GENERATOR_WINEVT_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_WINEVT_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # Palo Alto Firewall Log Generator
+  blitz-palo-alto:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: palo-alto
+      BLITZ_GENERATOR_PALOALTO_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_PALOALTO_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # Apache Common Log Generator
+  blitz-apache-common:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: apache-common
+      BLITZ_GENERATOR_APACHECOMMON_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_APACHECOMMON_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # Apache Combined Log Generator
+  blitz-apache-combined:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: apache-combined
+      BLITZ_GENERATOR_APACHECOMBINED_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_APACHECOMBINED_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # Apache Error Log Generator
+  blitz-apache-error:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: apache-error
+      BLITZ_GENERATOR_APACHEERROR_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_APACHEERROR_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # NGINX Log Generator
+  blitz-nginx:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: nginx
+      BLITZ_GENERATOR_NGINX_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_NGINX_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # PostgreSQL Log Generator
+  blitz-postgres:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: postgres
+      BLITZ_GENERATOR_POSTGRES_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_POSTGRES_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # Kubernetes Log Generator
+  blitz-kubernetes:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: kubernetes
+      BLITZ_GENERATOR_KUBERNETES_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_KUBERNETES_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+networks:
+  telemetry-net:
+    driver: bridge
+
