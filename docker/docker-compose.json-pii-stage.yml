@@ -32,8 +32,11 @@ services:
       OPAMP_SECRET_KEY: ${OPAMP_SECRET_KEY_STAGE:?OPAMP_SECRET_KEY_STAGE is required}
       OPAMP_AGENT_NAME: blitz-json-pii-collector-stage
       OPAMP_LABELS: "env=stage,pipeline=json-pii"
+      OPAMP_CONFIG: ${OPAMP_CONFIG_JSON_PII_STAGE:-blitz-json-pii}
     ports:
       - "5170:5170"
+    volumes:
+      - collector-json-pii-stage-data:/etc/otel
     networks:
       - json-pii-stage-net
 
@@ -63,3 +66,6 @@ services:
 networks:
   json-pii-stage-net:
     driver: bridge
+
+volumes:
+  collector-json-pii-stage-data:

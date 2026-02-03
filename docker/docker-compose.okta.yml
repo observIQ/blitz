@@ -19,8 +19,11 @@ services:
       OPAMP_SECRET_KEY: ${OPAMP_SECRET_KEY:?OPAMP_SECRET_KEY is required}
       OPAMP_AGENT_NAME: blitz-okta-collector
       OPAMP_LABELS: "env=production,pipeline=okta"
+      OPAMP_CONFIG: ${OPAMP_CONFIG_OKTA:-blitz-okta}
     ports:
       - "5180:5180"
+    volumes:
+      - collector-okta-data:/etc/otel
     networks:
       - okta-net
 
@@ -44,3 +47,6 @@ services:
 networks:
   okta-net:
     driver: bridge
+
+volumes:
+  collector-okta-data:

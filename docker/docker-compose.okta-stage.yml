@@ -19,8 +19,11 @@ services:
       OPAMP_SECRET_KEY: ${OPAMP_SECRET_KEY_STAGE:?OPAMP_SECRET_KEY_STAGE is required}
       OPAMP_AGENT_NAME: blitz-okta-collector-stage
       OPAMP_LABELS: "env=stage,pipeline=okta"
+      OPAMP_CONFIG: ${OPAMP_CONFIG_OKTA_STAGE:-blitz-okta}
     ports:
       - "5190:5190"
+    volumes:
+      - collector-okta-stage-data:/etc/otel
     networks:
       - okta-stage-net
 
@@ -44,3 +47,6 @@ services:
 networks:
   okta-stage-net:
     driver: bridge
+
+volumes:
+  collector-okta-stage-data:

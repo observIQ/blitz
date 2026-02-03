@@ -32,8 +32,11 @@ services:
       OPAMP_SECRET_KEY: ${OPAMP_SECRET_KEY_STAGE:?OPAMP_SECRET_KEY_STAGE is required}
       OPAMP_AGENT_NAME: blitz-web-db-collector-stage
       OPAMP_LABELS: "env=stage,pipeline=web-db"
+      OPAMP_CONFIG: ${OPAMP_CONFIG_WEB_DB_STAGE:-blitz-web-db}
     ports:
       - "5150:5150"
+    volumes:
+      - collector-web-db-stage-data:/etc/otel
     networks:
       - web-db-stage-net
 
@@ -73,3 +76,6 @@ services:
 networks:
   web-db-stage-net:
     driver: bridge
+
+volumes:
+  collector-web-db-stage-data:

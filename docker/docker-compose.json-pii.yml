@@ -32,8 +32,11 @@ services:
       OPAMP_SECRET_KEY: ${OPAMP_SECRET_KEY:?OPAMP_SECRET_KEY is required}
       OPAMP_AGENT_NAME: blitz-json-pii-collector
       OPAMP_LABELS: "env=production,pipeline=json-pii"
+      OPAMP_CONFIG: ${OPAMP_CONFIG_JSON_PII:-blitz-json-pii}
     ports:
       - "5160:5160"
+    volumes:
+      - collector-json-pii-data:/etc/otel
     networks:
       - json-pii-net
 
@@ -63,3 +66,6 @@ services:
 networks:
   json-pii-net:
     driver: bridge
+
+volumes:
+  collector-json-pii-data:
