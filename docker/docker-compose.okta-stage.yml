@@ -1,0 +1,46 @@
+# Okta Logs - Docker Compose Configuration (Stage)
+#
+# Generates Okta System Log events via TCP.
+#
+# Usage:
+#   OPAMP_ENDPOINT_STAGE=wss://stage.bindplane.com/v1/opamp \
+#   OPAMP_SECRET_KEY_STAGE=your-secret-key \
+#   docker compose -f docker/docker-compose.okta-stage.yml -p okta-stage up
+#
+# TCP Port: 5190
+
+services:
+  collector-okta-stage:
+    image: observiq/bindplane-agent:latest
+    restart: unless-stopped
+    user: "0"
+    environment:
+      OPAMP_ENDPOINT: ${OPAMP_ENDPOINT_STAGE:?OPAMP_ENDPOINT_STAGE is required}
+      OPAMP_SECRET_KEY: ${OPAMP_SECRET_KEY_STAGE:?OPAMP_SECRET_KEY_STAGE is required}
+      OPAMP_AGENT_NAME: blitz-okta-collector-stage
+      OPAMP_LABELS: "env=stage,pipeline=okta"
+    ports:
+      - "5190:5190"
+    networks:
+      - okta-stage-net
+
+  # Okta Log Generator
+  blitz-okta-stage:
+    image: blitz:local
+    restart: unless-stopped
+    environment:
+      BLITZ_GENERATOR_TYPE: okta
+      BLITZ_GENERATOR_OKTA_WORKERS: ${BLITZ_OKTA_WORKERS:-1}
+      BLITZ_GENERATOR_OKTA_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: tcp
+      BLITZ_OUTPUT_TCP_HOST: collector-okta-stage
+      BLITZ_OUTPUT_TCP_PORT: "5190"
+      BLITZ_LOGGING_LEVEL: info
+    depends_on:
+      - collector-okta-stage
+    networks:
+      - okta-stage-net
+
+networks:
+  okta-stage-net:
+    driver: bridge

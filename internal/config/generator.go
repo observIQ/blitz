@@ -30,6 +30,8 @@ const (
 	GeneratorTypeKubernetes GeneratorType = "kubernetes"
 	// GeneratorTypeFile represents File generator
 	GeneratorTypeFile GeneratorType = "filegen"
+	// GeneratorTypeOkta represents Okta System Log generator
+	GeneratorTypeOkta GeneratorType = "okta"
 )
 
 // Generator contains configuration for log generators
@@ -56,6 +58,8 @@ type Generator struct {
 	Kubernetes KubernetesGeneratorConfig `yaml:"kubernetes,omitempty" mapstructure:"kubernetes,omitempty"`
 	// Filegen contains File generator configuration
 	Filegen FileGeneratorConfig `yaml:"filegen,omitempty" mapstructure:"filegen,omitempty"`
+	// Okta contains Okta System Log generator configuration
+	Okta OktaGeneratorConfig `yaml:"okta,omitempty" mapstructure:"okta,omitempty"`
 }
 
 // Validate validates the generator configuration
@@ -108,8 +112,12 @@ func (g *Generator) Validate() error {
 		if err := g.Filegen.Validate(); err != nil {
 			return fmt.Errorf("filegen generator validation failed: %w", err)
 		}
+	case GeneratorTypeOkta:
+		if err := g.Okta.Validate(); err != nil {
+			return fmt.Errorf("okta generator validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen", g.Type)
+		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen, okta", g.Type)
 	}
 
 	return nil

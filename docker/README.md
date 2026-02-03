@@ -1,124 +1,145 @@
-# Telemetry Generator
+# Blitz Docker Compose
 
-A Docker Compose setup that runs all Blitz log generators simultaneously and sends telemetry to Bindplane via a Bindplane Agent.
+Docker Compose configurations for running Blitz log generators with Bindplane collectors.
 
-## Architecture
+## Pipelines
 
-```
-┌─────────────────┐
-│   blitz-json    │──┐
-├─────────────────┤  │
-│   blitz-pii     │──┤  (10x workers - 37 PII types)
-├─────────────────┤  │
-│  blitz-winevt   │──┤
-├─────────────────┤  │
-│ blitz-palo-alto │──┤
-├─────────────────┤  │    ┌──────────────────┐    ┌─────────────────┐
-│ blitz-apache-*  │──┼───►│  BDOT Collector  │───►│    Bindplane    │
-├─────────────────┤  │    │  (OTLP receiver) │    │     (OpAMP)     │
-│   blitz-nginx   │──┤    └──────────────────┘    └─────────────────┘
-├─────────────────┤  │
-│ blitz-postgres  │──┤
-├─────────────────┤  │
-│ blitz-kubernetes│──┘
-└─────────────────┘
-```
+Three separate pipelines are available, each with production and stage variants:
 
-## Prerequisites
-
-- Docker and Docker Compose
-- Bindplane instance with OpAMP enabled
-- Bindplane secret key
+| Pipeline | Generators | Workers | Prod Port | Stage Port |
+|----------|-----------|---------|-----------|------------|
+| **web-db** | Apache, PostgreSQL, Kubernetes | Apache: 10x, Others: 1x | 5140 | 5150 |
+| **json-pii** | JSON, PII | JSON: 1x, PII: 15x | 5160 | 5170 |
+| **okta** | Okta | 1x | 5180 | 5190 |
 
 ## Quick Start
 
+### Production
+
 ```bash
-# From the blitz repo root directory
-OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
+# Web & DB logs (Apache 10x, PostgreSQL, Kubernetes)
+OPAMP_ENDPOINT=wss://app.bindplane.com/v1/opamp \
 OPAMP_SECRET_KEY=your-secret-key \
-docker compose -f docker/docker-compose.telemetry-generator.yml up
+docker compose -f docker/docker-compose.web-db.yml -p web-db up -d
+
+# JSON & PII logs (PII 15x)
+OPAMP_ENDPOINT=wss://app.bindplane.com/v1/opamp \
+OPAMP_SECRET_KEY=your-secret-key \
+docker compose -f docker/docker-compose.json-pii.yml -p json-pii up -d
+
+# Okta logs
+OPAMP_ENDPOINT=wss://app.bindplane.com/v1/opamp \
+OPAMP_SECRET_KEY=your-secret-key \
+docker compose -f docker/docker-compose.okta.yml -p okta up -d
 ```
 
-## Configuration
+### Stage
 
-### Required Environment Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `OPAMP_ENDPOINT` | Bindplane OpAMP WebSocket endpoint | `wss://app.bindplane.com/v1/opamp` |
-| `OPAMP_SECRET_KEY` | Bindplane secret key for authentication | `your-secret-key` |
-
-### Optional Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BLITZ_RATE` | `1s` | Log generation rate per generator |
-| `BLITZ_WORKERS` | `1` | Number of workers per generator |
-| `BLITZ_PII_WORKERS` | `10` | Number of workers for PII generator (10x default for comprehensive testing) |
-
-### Examples
-
-**Increase log generation rate:**
 ```bash
-OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
-OPAMP_SECRET_KEY=your-secret-key \
-BLITZ_RATE=100ms \
-docker compose -f docker/docker-compose.telemetry-generator.yml up
+# Web & DB logs
+OPAMP_ENDPOINT_STAGE=wss://stage.bindplane.com/v1/opamp \
+OPAMP_SECRET_KEY_STAGE=your-secret-key \
+docker compose -f docker/docker-compose.web-db-stage.yml -p web-db-stage up -d
+
+# JSON & PII logs
+OPAMP_ENDPOINT_STAGE=wss://stage.bindplane.com/v1/opamp \
+OPAMP_SECRET_KEY_STAGE=your-secret-key \
+docker compose -f docker/docker-compose.json-pii-stage.yml -p json-pii-stage up -d
+
+# Okta logs
+OPAMP_ENDPOINT_STAGE=wss://stage.bindplane.com/v1/opamp \
+OPAMP_SECRET_KEY_STAGE=your-secret-key \
+docker compose -f docker/docker-compose.okta-stage.yml -p okta-stage up -d
 ```
 
-**Run with more workers:**
-```bash
-OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
-OPAMP_SECRET_KEY=your-secret-key \
-BLITZ_WORKERS=3 \
-docker compose -f docker/docker-compose.telemetry-generator.yml up
-```
-
-**Run in background:**
-```bash
-OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
-OPAMP_SECRET_KEY=your-secret-key \
-docker compose -f docker/docker-compose.telemetry-generator.yml up -d
-```
-
-## Included Generators
-
-| Generator | Log Type | Description |
-|-----------|----------|-------------|
-| `blitz-json` | JSON | Structured JSON logs |
-| `blitz-pii` | PII | JSON logs with 37 PII types (SSN, credit card, email, passport, API keys, JWT, etc.) - runs at 10x rate |
-| `blitz-winevt` | Windows Event | Windows Event logs in XML format |
-| `blitz-palo-alto` | Palo Alto | Firewall syslog entries |
-| `blitz-apache-common` | Apache Common | Apache Common Log Format (CLF) |
-| `blitz-apache-combined` | Apache Combined | Apache Combined Log Format with referer/user-agent |
-| `blitz-apache-error` | Apache Error | Apache error log format |
-| `blitz-nginx` | NGINX | NGINX Combined Log Format |
-| `blitz-postgres` | PostgreSQL | PostgreSQL database logs |
-| `blitz-kubernetes` | Kubernetes | Container logs in CRI-O format |
-
-## Running Individual Generators
-
-To run only specific generators:
+### Run All Pipelines
 
 ```bash
-OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
-OPAMP_SECRET_KEY=your-secret-key \
-docker compose -f docker/docker-compose.telemetry-generator.yml up bdot-collector blitz-json blitz-nginx
+# Production - all three pipelines
+export OPAMP_ENDPOINT=wss://app.bindplane.com/v1/opamp
+export OPAMP_SECRET_KEY=your-secret-key
+
+docker compose -f docker/docker-compose.web-db.yml -p web-db up -d
+docker compose -f docker/docker-compose.json-pii.yml -p json-pii up -d
+docker compose -f docker/docker-compose.okta.yml -p okta up -d
+
+# Stage - all three pipelines
+export OPAMP_ENDPOINT_STAGE=wss://stage.bindplane.com/v1/opamp
+export OPAMP_SECRET_KEY_STAGE=your-secret-key
+
+docker compose -f docker/docker-compose.web-db-stage.yml -p web-db-stage up -d
+docker compose -f docker/docker-compose.json-pii-stage.yml -p json-pii-stage up -d
+docker compose -f docker/docker-compose.okta-stage.yml -p okta-stage up -d
 ```
 
 ## Stopping
 
 ```bash
-docker compose -f docker/docker-compose.telemetry-generator.yml down
+# Production
+docker compose -f docker/docker-compose.web-db.yml -p web-db down
+docker compose -f docker/docker-compose.json-pii.yml -p json-pii down
+docker compose -f docker/docker-compose.okta.yml -p okta down
+
+# Stage
+docker compose -f docker/docker-compose.web-db-stage.yml -p web-db-stage down
+docker compose -f docker/docker-compose.json-pii-stage.yml -p json-pii-stage down
+docker compose -f docker/docker-compose.okta-stage.yml -p okta-stage down
 ```
+
+## Environment Variables
+
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `OPAMP_ENDPOINT` | Production Bindplane OpAMP endpoint |
+| `OPAMP_SECRET_KEY` | Production Bindplane secret key |
+| `OPAMP_ENDPOINT_STAGE` | Stage Bindplane OpAMP endpoint |
+| `OPAMP_SECRET_KEY_STAGE` | Stage Bindplane secret key |
+
+### Optional
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BLITZ_RATE` | `1s` | Log generation rate |
+| `BLITZ_WORKERS` | `1` | Default workers for most generators |
+| `BLITZ_APACHE_WORKERS` | `10` | Apache generator workers |
+| `BLITZ_PII_WORKERS` | `15` | PII generator workers |
+| `BLITZ_OKTA_WORKERS` | `1` | Okta generator workers |
+
+## TCP Ports
+
+| Port | Pipeline | Environment |
+|------|----------|-------------|
+| 5140 | web-db | Production |
+| 5150 | web-db | Stage |
+| 5160 | json-pii | Production |
+| 5170 | json-pii | Stage |
+| 5180 | okta | Production |
+| 5190 | okta | Stage |
 
 ## Files
 
 | File | Description |
 |------|-------------|
-| `docker-compose.telemetry-generator.yml` | Docker Compose configuration |
-| `collector-config.yaml` | Bindplane Agent OTLP receiver configuration |
+| `docker-compose.web-db.yml` | Apache/PostgreSQL/Kubernetes (prod) |
+| `docker-compose.web-db-stage.yml` | Apache/PostgreSQL/Kubernetes (stage) |
+| `docker-compose.json-pii.yml` | JSON/PII logs (prod) |
+| `docker-compose.json-pii-stage.yml` | JSON/PII logs (stage) |
+| `docker-compose.okta.yml` | Okta logs (prod) |
+| `docker-compose.okta-stage.yml` | Okta logs (stage) |
 
-## Kubernetes Deployment
+## Building Local Image
 
-For Kubernetes deployment, see the `app/telemetry-generator/` directory in the [iris-cluster-config](https://github.com/observIQ/iris-cluster-config) repository.
+To build and use a local image instead of `ghcr.io/observiq/blitz:latest`:
+
+```bash
+# Build the binary
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o package/blitz ./cmd/blitz
+
+# Build the Docker image
+docker build -t blitz:local -f package/Dockerfile package/
+
+# Update compose files to use local image
+sed -i 's|ghcr.io/observiq/blitz:latest|blitz:local|g' docker/docker-compose.*.yml
+```

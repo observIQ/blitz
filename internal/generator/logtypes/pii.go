@@ -346,7 +346,7 @@ func generatePasswordHash(r *rand.Rand) string {
 
 // generateAPIKey generates a random API key
 func generateAPIKey(r *rand.Rand) string {
-	prefixes := []string{"api_key_", "secret_", "token_", "key_", "apikey_"}
+	prefixes := []string{"apikey_", "token_", "key_", "api_", "access_key_"}
 	prefix := prefixes[r.Intn(len(prefixes))]
 	chars := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 	key := prefix
