@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
@@ -19,6 +21,52 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
+
+// Cache provides thread-safe access to file line caches with optional TTL
+type Cache struct {
+	lruCache *expirable.LRU[string, []string]
+	enabled  bool
+}
+
+// NewCache creates a new Cache with the given size limit and TTL
+// ttl of 0 means entries never expire
+func NewCache(enabled bool, ttl time.Duration, maxSize int) (*Cache, error) {
+	if !enabled {
+		return &Cache{enabled: false}, nil
+	}
+
+	// For 0 TTL (never expire), use a very large duration
+	// expirable.LRU requires a TTL, so we use a large value for "never expire"
+	effectiveTTL := ttl
+	if ttl == 0 {
+		effectiveTTL = 24 * 365 * time.Hour // ~1 year (effectively never)
+	}
+
+	lruCache := expirable.NewLRU[string, []string](maxSize, nil, effectiveTTL)
+
+	return &Cache{
+		lruCache: lruCache,
+		enabled:  true,
+	}, nil
+}
+
+// Get retrieves a cache entry if it exists and hasn't expired
+func (c *Cache) Get(key string) ([]string, bool) {
+	if !c.enabled {
+		return nil, false
+	}
+
+	return c.lruCache.Get(key)
+}
+
+// Set stores a cache entry
+func (c *Cache) Set(key string, lines []string) {
+	if !c.enabled {
+		return
+	}
+
+	c.lruCache.Add(key, lines)
+}
 
 // FileLogGenerator generates log data by reading from files
 type FileLogGenerator struct {
@@ -34,10 +82,13 @@ type FileLogGenerator struct {
 	logsGenerated metric.Int64Counter
 	activeWorkers metric.Int64Gauge
 	writeErrors   metric.Int64Counter
+
+	// File cache
+	cache *Cache
 }
 
 // New creates a new File log generator
-func New(logger *zap.Logger, workers int, rate time.Duration, source string) (*FileLogGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, source string, cacheEnabled bool, cacheTTL time.Duration) (*FileLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -80,6 +131,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string) (*F
 		return nil, fmt.Errorf("create write errors counter: %w", err)
 	}
 
+	cache, err := NewCache(cacheEnabled, cacheTTL, 1000) // 1000 is max size for LRU
+	if err != nil {
+		return nil, fmt.Errorf("create cache: %w", err)
+	}
+
 	return &FileLogGenerator{
 		logger:        logger,
 		workers:       workers,
@@ -90,6 +146,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string) (*F
 		logsGenerated: logsGenerated,
 		activeWorkers: activeWorkers,
 		writeErrors:   writeErrors,
+		cache:         cache,
 	}, nil
 }
 
@@ -258,109 +315,136 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 
 	// Distribute files among workers
 	fileIdx := id
-	backoff := backoff.NewExponentialBackOff()
-	backoff.InitialInterval = g.rate
+
+	// Use exponential backoff with configured rate as initial interval
+	backoffConfig := backoff.NewExponentialBackOff()
+	backoffConfig.InitialInterval = g.rate
+	backoffConfig.MaxInterval = 5 * time.Second
+	backoffConfig.MaxElapsedTime = 0 // Never stop retrying
+
+	backoffTicker := backoff.NewTicker(backoffConfig)
+	defer backoffTicker.Stop()
 
 	for {
 		select {
 		case <-g.stopCh:
 			g.logger.Debug("Worker received stop signal", zap.Int("id", id))
 			return
-		default:
-		}
+		case <-backoffTicker.C:
+			if fileIdx >= len(files) {
+				// Cycle back to the beginning
+				fileIdx = 0
+			}
 
-		if fileIdx >= len(files) {
-			// Cycle back to the beginning
-			fileIdx = 0
-		}
-
-		file := files[fileIdx]
-		err := g.readAndWriteFile(file, writer)
-		if err != nil {
-			g.logger.Error("Error reading file", zap.String("file", file), zap.Error(err))
-			g.writeErrors.Add(context.Background(), 1,
-				metric.WithAttributeSet(
-					attribute.NewSet(
-						attribute.String("component", "generator_file"),
+			file := files[fileIdx]
+			err := g.readAndWriteFile(file, writer)
+			if err != nil {
+				g.logger.Error("Error reading file", zap.String("file", file), zap.Error(err))
+				g.writeErrors.Add(context.Background(), 1,
+					metric.WithAttributeSet(
+						attribute.NewSet(
+							attribute.String("component", "generator_file"),
+						),
 					),
-				),
-			)
-		}
+				)
+				// On error, backoff will automatically handle retry timing
+				continue
+			}
 
-		fileIdx += g.workers
-
-		// Apply backoff for rate limiting
-		ticker := time.NewTicker(backoff.NextBackOff())
-		select {
-		case <-g.stopCh:
-			ticker.Stop()
-			return
-		case <-ticker.C:
-			ticker.Stop()
+			// On success, reset backoff to configured rate
+			backoffConfig.Reset()
+			fileIdx += g.workers
 		}
 	}
 }
 
-// readAndWriteFile reads a file line by line and writes each line to the writer
+// readAndWriteFile reads a file, selects a random non-empty line, and writes it to the writer
 func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Writer) error {
-	// #nosec G304 - filename is controlled by the application, either from explicit config or from walking data library directory
-	file, err := os.Open(filename)
-	if err != nil {
-		return fmt.Errorf("open file: %w", err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		select {
-		case <-g.stopCh:
-			return nil
-		default:
-		}
-
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-
-		// Process timestamp directives in the line
-		processedLine := g.processTimestamps(string(line))
-
-		// Write with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		err := writer.Write(ctx, output.LogRecord{
-			Message: processedLine,
-			Metadata: output.LogRecordMetadata{
-				Timestamp: time.Now(),
-			},
-		})
-		cancel()
-
+	// Check cache first
+	var lines []string
+	if cachedLines, found := g.cache.Get(filename); found {
+		lines = cachedLines
+	} else {
+		// Cache miss, read from disk
+		var err error
+		lines, err = g.readFileLines(filename)
 		if err != nil {
-			g.writeErrors.Add(context.Background(), 1,
-				metric.WithAttributeSet(
-					attribute.NewSet(
-						attribute.String("component", "generator_file"),
-					),
-				),
-			)
-			return fmt.Errorf("write: %w", err)
+			return err
 		}
 
-		g.logsGenerated.Add(context.Background(), 1,
+		// Update cache
+		g.cache.Set(filename, lines)
+	}
+
+	// If no non-empty lines found, return without error
+	if len(lines) == 0 {
+		return nil
+	}
+
+	// Select a random line
+	// #nosec G404 - using weak random is acceptable for log generation, not cryptographic purposes
+	randomIdx := rand.Intn(len(lines))
+	selectedLine := lines[randomIdx]
+
+	// Process timestamp directives in the line
+	processedLine := g.processTimestamps(selectedLine)
+
+	// Write with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	err := writer.Write(ctx, output.LogRecord{
+		Message: processedLine,
+		Metadata: output.LogRecordMetadata{
+			Timestamp: time.Now(),
+		},
+	})
+	cancel()
+
+	if err != nil {
+		g.writeErrors.Add(context.Background(), 1,
 			metric.WithAttributeSet(
 				attribute.NewSet(
 					attribute.String("component", "generator_file"),
 				),
 			),
 		)
+		return fmt.Errorf("write: %w", err)
+	}
+
+	g.logsGenerated.Add(context.Background(), 1,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "generator_file"),
+			),
+		),
+	)
+
+	return nil
+}
+
+// readFileLines reads all non-empty lines from a file
+func (g *FileLogGenerator) readFileLines(filename string) ([]string, error) {
+	// #nosec G304 - filename is controlled by the application, either from explicit config or from walking data library directory
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("open file: %w", err)
+	}
+	defer file.Close()
+
+	// Read all non-empty lines from the file
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) > 0 {
+			lines = append(lines, string(line))
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("scanner error: %w", err)
+		return nil, fmt.Errorf("scanner error: %w", err)
 	}
 
-	return nil
+	return lines, nil
 }
 
 // processTimestamps replaces timestamp directives in the line with actual formatted timestamps

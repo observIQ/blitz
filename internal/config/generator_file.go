@@ -13,6 +13,10 @@ type FileGeneratorConfig struct {
 	Rate time.Duration `yaml:"rate,omitempty" mapstructure:"rate,omitempty"`
 	// Source is the file path, directory path, or glob pattern (auto-detected)
 	Source string `yaml:"source,omitempty" mapstructure:"source,omitempty"`
+	// CacheEnabled enables in-memory file caching (default true)
+	CacheEnabled bool `yaml:"cache-enabled,omitempty" mapstructure:"cache-enabled,omitempty"`
+	// CacheTTL is the time-to-live for cached file entries (0 = never expire, default = 0)
+	CacheTTL time.Duration `yaml:"cache-ttl,omitempty" mapstructure:"cache-ttl,omitempty"`
 }
 
 // Validate validates the File generator configuration
