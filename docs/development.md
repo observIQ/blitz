@@ -29,10 +29,10 @@ mkdir -p data_library/my-dataset
 # Add your log files to data_library/my-dataset/
 ```
 
-The `filegen` generator automatically discovers and reads files from data library directories. Use it with:
+Use it with:
 
 ```bash
 ./blitz --generator-type=filegen --generator-filegen-source=data_library/my-dataset --output-type=stdout
 ```
 
-The generator reads files line-by-line and supports timestamp directives (e.g., `%Y-%m-%dT%H:%M:%SZ`) for dynamic timestamp generation.
+The generator supports timestamp directives (e.g., `%Y-%m-%dT%H:%M:%SZ`) for dynamic timestamp generation.
