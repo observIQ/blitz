@@ -308,7 +308,11 @@ func (g *JSONLogGenerator) recordWriteError(errorType string, err error) {
 // formatPIILogData formats PII log data with a random selection of 1-5 PII fields
 func formatPIILogData(d *logtypes.PIILogData) map[string]any {
 	r := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
+	return formatPIILogDataWithRand(r, d)
+}
 
+// formatPIILogDataWithRand formats PII log data using the provided rand source
+func formatPIILogDataWithRand(r *rand.Rand, d *logtypes.PIILogData) map[string]any {
 	// All available PII fields
 	piiFields := []struct {
 		key   string

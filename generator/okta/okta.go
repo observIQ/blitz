@@ -277,6 +277,8 @@ func (g *Generator) Stop(ctx context.Context) error {
 func (g *Generator) worker(workerID int, writer output.Writer) {
 	defer g.wg.Done()
 
+	r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID))) // #nosec G404
+
 	g.oktaActiveWorkers.Record(context.Background(), 1,
 		metric.WithAttributeSet(
 			attribute.NewSet(
@@ -308,7 +310,7 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 			g.logger.Debug("Worker stopping", zap.Int("worker_id", workerID))
 			return
 		case <-backoffTicker.C:
-			err := g.generateAndWriteLog(writer, workerID)
+			err := g.generateAndWriteLog(r, writer, workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
@@ -320,8 +322,8 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 	}
 }
 
-func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) error {
-	logRecord, err := g.generateOktaLog()
+func (g *Generator) generateAndWriteLog(r *rand.Rand, writer output.Writer, workerID int) error {
+	logRecord, err := g.generateOktaLog(r)
 	if err != nil {
 		g.recordWriteError(errorTypeUnknown, err)
 		return fmt.Errorf("generate Okta log: %w", err)
@@ -350,9 +352,7 @@ func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) erro
 	return nil
 }
 
-func (g *Generator) generateOktaLog() (output.LogRecord, error) {
-	r := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
-
+func (g *Generator) generateOktaLog(r *rand.Rand) (output.LogRecord, error) {
 	now := time.Now().UTC()
 	event := eventTypes[r.Intn(len(eventTypes))]           // #nosec G404
 	actor := actors[r.Intn(len(actors))]                   // #nosec G404
@@ -373,9 +373,7 @@ func (g *Generator) generateOktaLog() (output.LogRecord, error) {
 		"eventType": event.eventType,
 		"version":   "0",
 		"severity":  event.severity,
-		"displayMessage": map[string]any{
-			"message": event.displayMsg,
-		},
+		"displayMessage": event.displayMsg,
 		"actor": map[string]any{
 			"id":          actorID,
 			"type":        actor.userType,
