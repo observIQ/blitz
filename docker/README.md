@@ -1,6 +1,6 @@
 # Telemetry Generator
 
-A Docker Compose setup that runs all Blitz log generators simultaneously and sends telemetry to an OpAMP-managed collector via OTLP.
+A Docker Compose setup that runs all Blitz log generators simultaneously and sends telemetry to Bindplane via a Bindplane Agent.
 
 ## Architecture
 
@@ -14,8 +14,8 @@ A Docker Compose setup that runs all Blitz log generators simultaneously and sen
 ├─────────────────┤  │
 │ blitz-palo-alto │──┤
 ├─────────────────┤  │    ┌──────────────────┐    ┌─────────────────┐
-│ blitz-apache-*  │──┼───►│  BDOT Collector  │───►│  OpAMP Server   │
-├─────────────────┤  │    │  (OTLP receiver) │    │                 │
+│ blitz-apache-*  │──┼───►│  BDOT Collector  │───►│    Bindplane    │
+├─────────────────┤  │    │  (OTLP receiver) │    │     (OpAMP)     │
 │   blitz-nginx   │──┤    └──────────────────┘    └─────────────────┘
 ├─────────────────┤  │
 │ blitz-postgres  │──┤
@@ -29,14 +29,14 @@ A Docker Compose setup that runs all Blitz log generators simultaneously and sen
 ## Prerequisites
 
 - Docker and Docker Compose
-- An OpAMP-compatible management platform (e.g., Bindplane)
-- OpAMP endpoint and secret key
+- Bindplane instance with OpAMP enabled
+- Bindplane secret key
 
 ## Quick Start
 
 ```bash
 # From the blitz repo root directory
-OPAMP_ENDPOINT=wss://your-opamp-server.com/v1/opamp \
+OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
 OPAMP_SECRET_KEY=your-secret-key \
 docker compose -f docker/docker-compose.telemetry-generator.yml up
 ```
@@ -47,8 +47,8 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `OPAMP_ENDPOINT` | OpAMP WebSocket endpoint | `wss://your-opamp-server.com/v1/opamp` |
-| `OPAMP_SECRET_KEY` | OpAMP secret key for authentication | `your-secret-key` |
+| `OPAMP_ENDPOINT` | Bindplane OpAMP WebSocket endpoint | `wss://app.bindplane.com/v1/opamp` |
+| `OPAMP_SECRET_KEY` | Bindplane secret key for authentication | `your-secret-key` |
 
 ### Optional Environment Variables
 
@@ -62,7 +62,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up
 
 **Increase log generation rate:**
 ```bash
-OPAMP_ENDPOINT=wss://your-opamp-server.com/v1/opamp \
+OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
 OPAMP_SECRET_KEY=your-secret-key \
 BLITZ_RATE=100ms \
 docker compose -f docker/docker-compose.telemetry-generator.yml up
@@ -70,7 +70,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up
 
 **Run with more workers:**
 ```bash
-OPAMP_ENDPOINT=wss://your-opamp-server.com/v1/opamp \
+OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
 OPAMP_SECRET_KEY=your-secret-key \
 BLITZ_WORKERS=3 \
 docker compose -f docker/docker-compose.telemetry-generator.yml up
@@ -78,7 +78,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up
 
 **Run in background:**
 ```bash
-OPAMP_ENDPOINT=wss://your-opamp-server.com/v1/opamp \
+OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
 OPAMP_SECRET_KEY=your-secret-key \
 docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 ```
@@ -104,7 +104,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 To run only specific generators:
 
 ```bash
-OPAMP_ENDPOINT=wss://your-opamp-server.com/v1/opamp \
+OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
 OPAMP_SECRET_KEY=your-secret-key \
 docker compose -f docker/docker-compose.telemetry-generator.yml up bdot-collector blitz-json blitz-nginx
 ```
