@@ -19,3 +19,20 @@ make build
 ```bash
 make test
 ```
+
+## Adding a Data Library
+
+To add a new data library, create a directory under `data_library/` with your log files:
+
+```bash
+mkdir -p data_library/my-dataset
+# Add your log files to data_library/my-dataset/
+```
+
+Use it with:
+
+```bash
+./blitz --generator-type=filegen --generator-filegen-source=data_library/my-dataset --output-type=stdout
+```
+
+The generator supports timestamp directives (e.g., `%Y-%m-%dT%H:%M:%SZ`) for dynamic timestamp generation.
