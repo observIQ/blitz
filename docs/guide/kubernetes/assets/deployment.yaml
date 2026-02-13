@@ -1,0 +1,322 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blitz
+spec:
+  # Scale this up for higher total throughput.
+  # Total Blitz containers = replicas * 8
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blitz
+  template:
+    metadata:
+      labels:
+        app: blitz
+    spec:
+      containers:
+        - name: blitz-1
+          image: ghcr.io/observiq/blitz:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --generator-type=nginx
+            - --generator-nginx-workers=1
+            - --generator-nginx-rate=250ms
+            - --output-type=otlp-grpc
+            - --output-otlpgrpc-host=127.0.0.1
+            - --output-otlpgrpc-port=4317
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+        - name: otel-collector-1
+          image: observiq/bindplane-agent:1.72.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: otel-config-1
+              mountPath: /etc/otel/config.yaml
+              subPath: config.yaml
+          ports:
+            - containerPort: 4317
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+
+        - name: blitz-2
+          image: ghcr.io/observiq/blitz:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --generator-type=nginx
+            - --generator-nginx-workers=1
+            - --generator-nginx-rate=250ms
+            - --output-type=otlp-grpc
+            - --output-otlpgrpc-host=127.0.0.1
+            - --output-otlpgrpc-port=4318
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+        - name: otel-collector-2
+          image: observiq/bindplane-agent:1.72.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: otel-config-2
+              mountPath: /etc/otel/config.yaml
+              subPath: config.yaml
+          ports:
+            - containerPort: 4318
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+
+        - name: blitz-3
+          image: ghcr.io/observiq/blitz:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --generator-type=nginx
+            - --generator-nginx-workers=1
+            - --generator-nginx-rate=250ms
+            - --output-type=otlp-grpc
+            - --output-otlpgrpc-host=127.0.0.1
+            - --output-otlpgrpc-port=4319
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+        - name: otel-collector-3
+          image: observiq/bindplane-agent:1.72.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: otel-config-3
+              mountPath: /etc/otel/config.yaml
+              subPath: config.yaml
+          ports:
+            - containerPort: 4319
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+
+        - name: blitz-4
+          image: ghcr.io/observiq/blitz:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --generator-type=nginx
+            - --generator-nginx-workers=1
+            - --generator-nginx-rate=250ms
+            - --output-type=otlp-grpc
+            - --output-otlpgrpc-host=127.0.0.1
+            - --output-otlpgrpc-port=4320
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+        - name: otel-collector-4
+          image: observiq/bindplane-agent:1.72.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: otel-config-4
+              mountPath: /etc/otel/config.yaml
+              subPath: config.yaml
+          ports:
+            - containerPort: 4320
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+
+        - name: blitz-5
+          image: ghcr.io/observiq/blitz:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --generator-type=nginx
+            - --generator-nginx-workers=1
+            - --generator-nginx-rate=250ms
+            - --output-type=otlp-grpc
+            - --output-otlpgrpc-host=127.0.0.1
+            - --output-otlpgrpc-port=4321
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+        - name: otel-collector-5
+          image: observiq/bindplane-agent:1.72.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: otel-config-5
+              mountPath: /etc/otel/config.yaml
+              subPath: config.yaml
+          ports:
+            - containerPort: 4321
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+
+        - name: blitz-6
+          image: ghcr.io/observiq/blitz:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --generator-type=nginx
+            - --generator-nginx-workers=1
+            - --generator-nginx-rate=250ms
+            - --output-type=otlp-grpc
+            - --output-otlpgrpc-host=127.0.0.1
+            - --output-otlpgrpc-port=4322
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+        - name: otel-collector-6
+          image: observiq/bindplane-agent:1.72.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: otel-config-6
+              mountPath: /etc/otel/config.yaml
+              subPath: config.yaml
+          ports:
+            - containerPort: 4322
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+
+        - name: blitz-7
+          image: ghcr.io/observiq/blitz:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --generator-type=nginx
+            - --generator-nginx-workers=1
+            - --generator-nginx-rate=250ms
+            - --output-type=otlp-grpc
+            - --output-otlpgrpc-host=127.0.0.1
+            - --output-otlpgrpc-port=4323
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+        - name: otel-collector-7
+          image: observiq/bindplane-agent:1.72.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: otel-config-7
+              mountPath: /etc/otel/config.yaml
+              subPath: config.yaml
+          ports:
+            - containerPort: 4323
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+
+        - name: blitz-8
+          image: ghcr.io/observiq/blitz:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --generator-type=nginx
+            - --generator-nginx-workers=1
+            - --generator-nginx-rate=250ms
+            - --output-type=otlp-grpc
+            - --output-otlpgrpc-host=127.0.0.1
+            - --output-otlpgrpc-port=4324
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+        - name: otel-collector-8
+          image: observiq/bindplane-agent:1.72.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: otel-config-8
+              mountPath: /etc/otel/config.yaml
+              subPath: config.yaml
+          ports:
+            - containerPort: 4324
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              memory: 100Mi
+
+      volumes:
+        - name: otel-config-1
+          configMap:
+            name: blitz-collector-config-1
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: otel-config-2
+          configMap:
+            name: blitz-collector-config-2
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: otel-config-3
+          configMap:
+            name: blitz-collector-config-3
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: otel-config-4
+          configMap:
+            name: blitz-collector-config-4
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: otel-config-5
+          configMap:
+            name: blitz-collector-config-5
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: otel-config-6
+          configMap:
+            name: blitz-collector-config-6
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: otel-config-7
+          configMap:
+            name: blitz-collector-config-7
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: otel-config-8
+          configMap:
+            name: blitz-collector-config-8
+            items:
+              - key: config.yaml
+                path: config.yaml
