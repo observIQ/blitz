@@ -3,6 +3,7 @@ package json
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -262,85 +263,9 @@ func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
 		timestamp = d.TimestampVal
 		severity = d.LevelVal
 	case *logtypes.PIILogData:
-		jsonData = map[string]any{
-			"timestamp": d.TimestampVal,
-			"level":     d.LevelVal,
-			"message":   d.MessageVal,
-
-			// Core PII
-			"user_id":     d.UserIDVal,
-			"ssn":         d.SSNVal,
-			"iban":        d.IBANVal,
-			"phone":       d.PhoneVal,
-			"intl_phone":  d.IntlPhoneVal,
-			"email":       d.EmailVal,
-			"credit_card": d.CreditCardVal,
-			"dob":         d.DOBVal,
-			"ipv4":        d.IPv4Val,
-			"ipv6":        d.IPv6Val,
-			"mac_address": d.MACAddressVal,
-			"street_addr": d.StreetAddrVal,
-			"city_state":  d.CityStateVal,
-			"zip_code":    d.ZipCodeVal,
-
-			// Government IDs
-			"passport":        d.PassportVal,
-			"drivers_license": d.DriversLicenseVal,
-			"national_id":     d.NationalIDVal,
-
-			// Financial
-			"bank_account":   d.BankAccountVal,
-			"routing_number": d.RoutingNumberVal,
-			"crypto_wallet":  d.CryptoWalletVal,
-
-			// Healthcare
-			"medical_record":   d.MedicalRecordVal,
-			"health_insurance": d.HealthInsuranceVal,
-
-			// Vehicle
-			"vin":           d.VINVal,
-			"license_plate": d.LicensePlateVal,
-
-			// Employment/Education
-			"employee_id": d.EmployeeIDVal,
-			"student_id":  d.StudentIDVal,
-
-			// Authentication/Secrets
-			"username":       d.UsernameVal,
-			"password_hash":  d.PasswordHashVal,
-			"api_key":        d.APIKeyVal,
-			"aws_access_key": d.AWSAccessKeyVal,
-			"private_key":    d.PrivateKeyVal,
-			"jwt_token":      d.JWTTokenVal,
-
-			// Location
-			"gps_coords": d.GPSCoordsVal,
-			"geohash":    d.GeohashVal,
-
-			// Personal
-			"full_name":        d.FullNameVal,
-			"mothers_maiden":   d.MothersMaidenVal,
-			"security_answer":  d.SecurityAnswerVal,
-		}
+		jsonData = formatPIILogData(d)
 		timestamp = d.TimestampVal
 		severity = d.LevelVal
-
-		// Add optional fields if they are not empty
-		if d.EventVal != "" {
-			jsonData.(map[string]any)["event"] = d.EventVal
-		}
-		if d.DetailVal != "" {
-			jsonData.(map[string]any)["detail"] = d.DetailVal
-		}
-		if d.TypeVal != "" {
-			jsonData.(map[string]any)["type"] = d.TypeVal
-		}
-		if d.ActionVal != "" {
-			jsonData.(map[string]any)["action"] = d.ActionVal
-		}
-		if d.StatusVal != "" {
-			jsonData.(map[string]any)["status"] = d.StatusVal
-		}
 	default:
 		return output.LogRecord{}, fmt.Errorf("unsupported log data type: %T", data)
 	}
@@ -378,4 +303,111 @@ func (g *JSONLogGenerator) recordWriteError(errorType string, err error) {
 			),
 		),
 	)
+}
+
+// formatPIILogData formats PII log data with a random selection of 1-5 PII fields
+func formatPIILogData(d *logtypes.PIILogData) map[string]any {
+	r := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
+	return formatPIILogDataWithRand(r, d)
+}
+
+// formatPIILogDataWithRand formats PII log data using the provided rand source
+func formatPIILogDataWithRand(r *rand.Rand, d *logtypes.PIILogData) map[string]any {
+	// All available PII fields
+	piiFields := []struct {
+		key   string
+		value any
+	}{
+		// Core PII
+		{"user_id", d.UserIDVal},
+		{"ssn", d.SSNVal},
+		{"iban", d.IBANVal},
+		{"phone", d.PhoneVal},
+		{"intl_phone", d.IntlPhoneVal},
+		{"email", d.EmailVal},
+		{"credit_card", d.CreditCardVal},
+		{"dob", d.DOBVal},
+		{"ipv4", d.IPv4Val},
+		{"ipv6", d.IPv6Val},
+		{"mac_address", d.MACAddressVal},
+		{"street_addr", d.StreetAddrVal},
+		{"city_state", d.CityStateVal},
+		{"zip_code", d.ZipCodeVal},
+
+		// Government IDs
+		{"passport", d.PassportVal},
+		{"drivers_license", d.DriversLicenseVal},
+		{"national_id", d.NationalIDVal},
+
+		// Financial
+		{"bank_account", d.BankAccountVal},
+		{"routing_number", d.RoutingNumberVal},
+		{"crypto_wallet", d.CryptoWalletVal},
+
+		// Healthcare
+		{"medical_record", d.MedicalRecordVal},
+		{"health_insurance", d.HealthInsuranceVal},
+
+		// Vehicle
+		{"vin", d.VINVal},
+		{"license_plate", d.LicensePlateVal},
+
+		// Employment/Education
+		{"employee_id", d.EmployeeIDVal},
+		{"student_id", d.StudentIDVal},
+
+		// Authentication/Secrets
+		{"username", d.UsernameVal},
+		{"password_hash", d.PasswordHashVal},
+		{"api_key", d.APIKeyVal},
+		{"aws_access_key", d.AWSAccessKeyVal},
+		{"private_key", d.PrivateKeyVal},
+		{"jwt_token", d.JWTTokenVal},
+
+		// Location
+		{"gps_coords", d.GPSCoordsVal},
+		{"geohash", d.GeohashVal},
+
+		// Personal
+		{"full_name", d.FullNameVal},
+		{"mothers_maiden", d.MothersMaidenVal},
+		{"security_answer", d.SecurityAnswerVal},
+	}
+
+	// Start with base fields
+	jsonData := map[string]any{
+		"timestamp": d.TimestampVal,
+		"level":     d.LevelVal,
+		"message":   d.MessageVal,
+	}
+
+	// Add optional context fields if present
+	if d.EventVal != "" {
+		jsonData["event"] = d.EventVal
+	}
+	if d.DetailVal != "" {
+		jsonData["detail"] = d.DetailVal
+	}
+	if d.TypeVal != "" {
+		jsonData["type"] = d.TypeVal
+	}
+	if d.ActionVal != "" {
+		jsonData["action"] = d.ActionVal
+	}
+	if d.StatusVal != "" {
+		jsonData["status"] = d.StatusVal
+	}
+
+	// Shuffle the PII fields
+	r.Shuffle(len(piiFields), func(i, j int) {
+		piiFields[i], piiFields[j] = piiFields[j], piiFields[i]
+	})
+
+	// Select 1-5 random PII fields
+	numFields := r.Intn(5) + 1 // #nosec G404
+	for i := 0; i < numFields && i < len(piiFields); i++ {
+		jsonData[piiFields[i].key] = piiFields[i].value
+	}
+
+	return jsonData
 }

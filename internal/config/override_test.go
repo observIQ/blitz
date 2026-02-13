@@ -49,6 +49,8 @@ func getTestOverrideFlagsArgs() []string {
 		"--generator-filegen-source", "/var/log",
 		"--generator-filegen-cache-enabled=false",
 		"--generator-filegen-cache-ttl", "0",
+		"--generator-okta-workers", "22",
+		"--generator-okta-rate", "40ms",
 		"--output-type", "otlp-grpc",
 		"--output-udp-host", "udp.example.com",
 		"--output-udp-port", "1514",
@@ -141,6 +143,8 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_GENERATOR_FILEGEN_SOURCE":           "syslog_generic",
 		"BLITZ_GENERATOR_FILEGEN_CACHE_ENABLED":    "false",
 		"BLITZ_GENERATOR_FILEGEN_CACHE_TTL":        "0",
+		"BLITZ_GENERATOR_OKTA_WORKERS":             "23",
+		"BLITZ_GENERATOR_OKTA_RATE":                "35ms",
 		"BLITZ_OUTPUT_TYPE":                        "file",
 		"BLITZ_OUTPUT_UDP_HOST":                    "udp.env.example",
 		"BLITZ_OUTPUT_UDP_PORT":                    "5514",
@@ -272,6 +276,10 @@ func TestOverrideDefaults(t *testing.T) {
 				Source:       "",
 				CacheEnabled: true,
 				CacheTTL:     0,
+			},
+			Okta: OktaGeneratorConfig{
+				Workers: 1,
+				Rate:    1 * time.Second,
 			},
 		},
 		Output: Output{
@@ -425,6 +433,10 @@ func TestOverrideFlags(t *testing.T) {
 				Source:       "/var/log",
 				CacheEnabled: false,
 				CacheTTL:     0,
+			},
+			Okta: OktaGeneratorConfig{
+				Workers: 22,
+				Rate:    40 * time.Millisecond,
 			},
 		},
 		Output: Output{
@@ -581,6 +593,10 @@ func TestOverrideEnvs(t *testing.T) {
 				Source:       "syslog_generic",
 				CacheEnabled: false,
 				CacheTTL:     0,
+			},
+			Okta: OktaGeneratorConfig{
+				Workers: 23,
+				Rate:    35 * time.Millisecond,
 			},
 		},
 		Output: Output{

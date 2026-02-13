@@ -24,6 +24,7 @@ import (
 	"github.com/observiq/blitz/generator/kubernetes"
 	"github.com/observiq/blitz/generator/nginx"
 	gennop "github.com/observiq/blitz/generator/nop"
+	"github.com/observiq/blitz/generator/okta"
 	"github.com/observiq/blitz/generator/paloalto"
 	"github.com/observiq/blitz/generator/postgres"
 	"github.com/observiq/blitz/generator/winevt"
@@ -386,6 +387,16 @@ func run(cmd *cobra.Command, args []string) error {
 		)
 		if err != nil {
 			logger.Error("Failed to create File generator", zap.Error(err))
+			return err
+		}
+	case config.GeneratorTypeOkta:
+		generatorInstance, err = okta.New(
+			logger,
+			cfg.Generator.Okta.Workers,
+			cfg.Generator.Okta.Rate,
+		)
+		if err != nil {
+			logger.Error("Failed to create Okta generator", zap.Error(err))
 			return err
 		}
 	default:

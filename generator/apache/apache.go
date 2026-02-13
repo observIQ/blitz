@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/internal/generator/security"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -266,7 +267,8 @@ func generateRequest(r *rand.Rand) string {
 	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
 	method := methods[r.Intn(len(methods))] // #nosec G404
 
-	paths := []string{
+	// Normal paths
+	normalPaths := []string{
 		"/api/v1/users",
 		"/api/v1/orders",
 		"/health",
@@ -285,7 +287,13 @@ func generateRequest(r *rand.Rand) string {
 		"/api/v1/verification",
 	}
 
-	path := paths[r.Intn(len(paths))] // #nosec G404
+	// 20% chance of generating a security-focused path
+	var path string
+	if r.Float64() < 0.20 { // #nosec G404
+		path = security.RandomAttackPath(r)
+	} else {
+		path = normalPaths[r.Intn(len(normalPaths))] // #nosec G404
+	}
 
 	protocols := []string{"HTTP/1.0", "HTTP/1.1", "HTTP/2.0"}
 	protocol := protocols[r.Intn(len(protocols))] // #nosec G404

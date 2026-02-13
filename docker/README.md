@@ -8,7 +8,7 @@ A Docker Compose setup that runs all Blitz log generators simultaneously and sen
 ┌─────────────────┐
 │   blitz-json    │──┐
 ├─────────────────┤  │
-│   blitz-pii     │──┤  (10x workers - 37 PII types)
+│   blitz-pii     │──┤  (37 PII types)
 ├─────────────────┤  │
 │  blitz-winevt   │──┤
 ├─────────────────┤  │
@@ -20,7 +20,9 @@ A Docker Compose setup that runs all Blitz log generators simultaneously and sen
 ├─────────────────┤  │
 │ blitz-postgres  │──┤
 ├─────────────────┤  │
-│ blitz-kubernetes│──┘
+│ blitz-kubernetes│──┤
+├─────────────────┤  │
+│   blitz-okta    │──┘
 └─────────────────┘
 ```
 
@@ -54,7 +56,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up
 |----------|---------|-------------|
 | `BLITZ_RATE` | `1s` | Log generation rate per generator |
 | `BLITZ_WORKERS` | `1` | Number of workers per generator |
-| `BLITZ_PII_WORKERS` | `10` | Number of workers for PII generator (10x default for comprehensive testing) |
+| `BLITZ_PII_WORKERS` | `1` | Number of workers for PII generator |
 
 ### Examples
 
@@ -86,15 +88,16 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 | Generator | Log Type | Description |
 |-----------|----------|-------------|
 | `blitz-json` | JSON | Structured JSON logs |
-| `blitz-pii` | PII | JSON logs with 37 PII types (SSN, credit card, email, passport, API keys, JWT, etc.) - runs at 10x rate |
+| `blitz-pii` | PII | JSON logs with 37 PII types (SSN, credit card, email, passport, API keys, JWT, etc.) |
 | `blitz-winevt` | Windows Event | Windows Event logs in XML format |
 | `blitz-palo-alto` | Palo Alto | Firewall syslog entries |
-| `blitz-apache-common` | Apache Common | Apache Common Log Format (CLF) |
+| `blitz-apache-common` | Apache Common | Apache Common Log Format (CLF) with security attack patterns |
 | `blitz-apache-combined` | Apache Combined | Apache Combined Log Format with referer/user-agent |
 | `blitz-apache-error` | Apache Error | Apache error log format |
-| `blitz-nginx` | NGINX | NGINX Combined Log Format |
-| `blitz-postgres` | PostgreSQL | PostgreSQL database logs |
-| `blitz-kubernetes` | Kubernetes | Container logs in CRI-O format |
+| `blitz-nginx` | NGINX | NGINX Combined Log Format with security attack patterns |
+| `blitz-postgres` | PostgreSQL | PostgreSQL database logs with security events |
+| `blitz-kubernetes` | Kubernetes | Container logs in CRI-O format with security events |
+| `blitz-okta` | Okta | Okta System Log events (authentication, security, lifecycle) |
 
 ## Running Individual Generators
 
@@ -117,7 +120,21 @@ docker compose -f docker/docker-compose.telemetry-generator.yml down
 | File | Description |
 |------|-------------|
 | `docker-compose.telemetry-generator.yml` | Docker Compose configuration |
-| `collector-config.yaml` | Bindplane Agent OTLP receiver configuration |
+
+## Building Local Image
+
+To build and use a local image instead of `ghcr.io/observiq/blitz:latest`:
+
+```bash
+# Build the binary
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o package/blitz ./cmd/blitz
+
+# Build the Docker image
+docker build -t blitz:local -f package/Dockerfile package/
+
+# Update compose file to use local image
+sed -i 's|ghcr.io/observiq/blitz:latest|blitz:local|g' docker/docker-compose.telemetry-generator.yml
+```
 
 ## Kubernetes Deployment
 
