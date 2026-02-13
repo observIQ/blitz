@@ -1,0 +1,279 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blitz-collector-config-1
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+
+    processors:
+      batch:
+
+    exporters:
+      debug:
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: localhost
+                    port: 8888
+          level: normal
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blitz-collector-config-2
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch:
+
+    exporters:
+      debug:
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: localhost
+                    port: 8889
+          level: normal
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blitz-collector-config-3
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4319
+
+    processors:
+      batch:
+
+    exporters:
+      debug:
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: localhost
+                    port: 8890
+          level: normal
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blitz-collector-config-4
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4320
+
+    processors:
+      batch:
+
+    exporters:
+      debug:
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: localhost
+                    port: 8891
+          level: normal
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blitz-collector-config-5
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4321
+
+    processors:
+      batch:
+
+    exporters:
+      debug:
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: localhost
+                    port: 8892
+          level: normal
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blitz-collector-config-6
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4322
+
+    processors:
+      batch:
+
+    exporters:
+      debug:
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: localhost
+                    port: 8893
+          level: normal
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blitz-collector-config-7
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4323
+
+    processors:
+      batch:
+
+    exporters:
+      debug:
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: localhost
+                    port: 8894
+          level: normal
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blitz-collector-config-8
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4324
+
+    processors:
+      batch:
+
+    exporters:
+      debug:
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: localhost
+                    port: 8895
+          level: normal
