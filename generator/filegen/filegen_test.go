@@ -275,7 +275,7 @@ func TestFileLogGeneratorMultipleWorkers(t *testing.T) {
 	require.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		_, err := tmpfile.WriteString("Thu Jan 13 15:30:45 2026 test line " + string(rune(i)) + "\n")
 		require.NoError(t, err)
 	}

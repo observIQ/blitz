@@ -456,8 +456,8 @@ func formatAsPostgres(data *postgresLogData) (output.LogRecord, error) {
 			}
 
 			// Parse user=...,db=...,app=...,client=... from prefix
-			prefixFields := strings.Split(prefixPart, ",")
-			for _, field := range prefixFields {
+			prefixFields := strings.SplitSeq(prefixPart, ",")
+			for field := range prefixFields {
 				if strings.Contains(field, "user=") {
 					parsed["user"] = strings.TrimPrefix(field[strings.Index(field, "user="):], "user=")
 				}

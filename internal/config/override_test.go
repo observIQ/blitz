@@ -689,9 +689,9 @@ func TestOverrideCoverage(t *testing.T) {
 
 	// Build sets of tested flags and env vars for quick lookup
 	testedFlagSet := make(map[string]bool)
-	for i := 0; i < len(testedFlags); i++ {
-		if strings.HasPrefix(testedFlags[i], "--") {
-			flagName := strings.TrimPrefix(testedFlags[i], "--")
+	for i := range testedFlags {
+		if after, ok := strings.CutPrefix(testedFlags[i], "--"); ok {
+			flagName := after
 			// Handle both --flag value and --flag=value formats
 			if idx := strings.Index(flagName, "="); idx != -1 {
 				flagName = flagName[:idx]

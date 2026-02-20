@@ -3,6 +3,7 @@ package logtypes
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -139,7 +140,7 @@ func generateCreditCard(r *rand.Rand) string {
 	remaining := 16 - len(prefix) - 1 // -1 for check digit
 
 	number := prefix
-	for i := 0; i < remaining; i++ {
+	for range remaining {
 		number += fmt.Sprintf("%d", r.Intn(10))
 	}
 	// Add a random check digit (not Luhn-valid, but looks realistic)
@@ -239,8 +240,8 @@ func generateDriversLicense(r *rand.Rand) string {
 func generateNationalID(r *rand.Rand) string {
 	// Various formats: UK NI, Canadian SIN, etc.
 	formats := []string{
-		fmt.Sprintf("AB%06dC", r.Intn(1000000)),                    // UK National Insurance
-		fmt.Sprintf("%03d-%03d-%03d", r.Intn(1000), r.Intn(1000), r.Intn(1000)), // Canadian SIN
+		fmt.Sprintf("AB%06dC", r.Intn(1000000)),                                               // UK National Insurance
+		fmt.Sprintf("%03d-%03d-%03d", r.Intn(1000), r.Intn(1000), r.Intn(1000)),               // Canadian SIN
 		fmt.Sprintf("%02d%02d%02d-%05d", r.Intn(100), r.Intn(13), r.Intn(32), r.Intn(100000)), // Various EU
 	}
 	return formats[r.Intn(len(formats))]
@@ -250,11 +251,11 @@ func generateNationalID(r *rand.Rand) string {
 func generateBankAccount(r *rand.Rand) string {
 	// 8-17 digits typical
 	length := 8 + r.Intn(10)
-	account := ""
-	for i := 0; i < length; i++ {
-		account += fmt.Sprintf("%d", r.Intn(10))
+	var account strings.Builder
+	for range length {
+		account.WriteString(fmt.Sprintf("%d", r.Intn(10)))
 	}
-	return account
+	return account.String()
 }
 
 // generateRoutingNumber generates a random ABA routing number
@@ -270,12 +271,13 @@ func generateCryptoWallet(r *rand.Rand) string {
 		prefixes := []string{"1", "3", "bc1q"}
 		prefix := prefixes[r.Intn(len(prefixes))]
 		chars := "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-		addr := prefix
+		var addr strings.Builder
+		addr.WriteString(prefix)
 		length := 26 + r.Intn(10)
-		for i := 0; i < length; i++ {
-			addr += string(chars[r.Intn(len(chars))])
+		for range length {
+			addr.WriteString(string(chars[r.Intn(len(chars))]))
 		}
-		return addr
+		return addr.String()
 	}
 	// Ethereum (starts with 0x, 40 hex chars)
 	return fmt.Sprintf("0x%040x", r.Uint64())
@@ -299,11 +301,11 @@ func generateHealthInsurance(r *rand.Rand) string {
 func generateVIN(r *rand.Rand) string {
 	// VIN is 17 characters, excludes I, O, Q
 	chars := "ABCDEFGHJKLMNPRSTUVWXYZ0123456789"
-	vin := ""
-	for i := 0; i < 17; i++ {
-		vin += string(chars[r.Intn(len(chars))])
+	var vin strings.Builder
+	for range 17 {
+		vin.WriteString(string(chars[r.Intn(len(chars))]))
 	}
-	return vin
+	return vin.String()
 }
 
 // generateLicensePlate generates a random license plate
@@ -337,11 +339,12 @@ func generateUsername(r *rand.Rand) string {
 func generatePasswordHash(r *rand.Rand) string {
 	// Looks like bcrypt hash
 	chars := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./"
-	hash := "$2a$10$"
-	for i := 0; i < 53; i++ {
-		hash += string(chars[r.Intn(len(chars))])
+	var hash strings.Builder
+	hash.WriteString("$2a$10$")
+	for range 53 {
+		hash.WriteString(string(chars[r.Intn(len(chars))]))
 	}
-	return hash
+	return hash.String()
 }
 
 // generateAPIKey generates a random API key
@@ -349,11 +352,12 @@ func generateAPIKey(r *rand.Rand) string {
 	prefixes := []string{"apikey_", "secret_", "token_", "key_", "access_key_"}
 	prefix := prefixes[r.Intn(len(prefixes))]
 	chars := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-	key := prefix
-	for i := 0; i < 32; i++ {
-		key += string(chars[r.Intn(len(chars))])
+	var key strings.Builder
+	key.WriteString(prefix)
+	for range 32 {
+		key.WriteString(string(chars[r.Intn(len(chars))]))
 	}
-	return key
+	return key.String()
 }
 
 // generateAWSAccessKey generates a random AWS Access Key ID
@@ -361,11 +365,12 @@ func generateAWSAccessKey(r *rand.Rand) string {
 	// AWS Access Key IDs start with AKIA, ABIA, ACCA, or ASIA
 	prefixes := []string{"AKIA", "ABIA", "ACCA", "ASIA"}
 	chars := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	key := prefixes[r.Intn(len(prefixes))]
-	for i := 0; i < 16; i++ {
-		key += string(chars[r.Intn(len(chars))])
+	var key strings.Builder
+	key.WriteString(prefixes[r.Intn(len(prefixes))])
+	for range 16 {
+		key.WriteString(string(chars[r.Intn(len(chars))]))
 	}
-	return key
+	return key.String()
 }
 
 // generatePrivateKey generates a partial private key representation
@@ -379,15 +384,15 @@ func generateJWTToken(r *rand.Rand) string {
 	// Generate fake but realistic-looking JWT
 	chars := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 	header := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-	payload := ""
-	for i := 0; i < 36; i++ {
-		payload += string(chars[r.Intn(len(chars))])
+	var payload strings.Builder
+	for range 36 {
+		payload.WriteString(string(chars[r.Intn(len(chars))]))
 	}
-	signature := ""
-	for i := 0; i < 43; i++ {
-		signature += string(chars[r.Intn(len(chars))])
+	var signature strings.Builder
+	for range 43 {
+		signature.WriteString(string(chars[r.Intn(len(chars))]))
 	}
-	return fmt.Sprintf("%s.%s.%s", header, payload, signature)
+	return fmt.Sprintf("%s.%s.%s", header, payload.String(), signature.String())
 }
 
 // generateGPSCoords generates random GPS coordinates
@@ -400,12 +405,12 @@ func generateGPSCoords(r *rand.Rand) string {
 // generateGeohash generates a random geohash
 func generateGeohash(r *rand.Rand) string {
 	chars := "0123456789bcdefghjkmnpqrstuvwxyz"
-	hash := ""
+	var hash strings.Builder
 	length := 6 + r.Intn(6) // 6-12 characters
-	for i := 0; i < length; i++ {
-		hash += string(chars[r.Intn(len(chars))])
+	for range length {
+		hash.WriteString(string(chars[r.Intn(len(chars))]))
 	}
-	return hash
+	return hash.String()
 }
 
 // generateFullName generates a random full name

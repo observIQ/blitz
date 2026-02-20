@@ -8,7 +8,7 @@ import (
 // TestRandomUserAgentReturnsValidString verifies that RandomUserAgent returns a non-empty string
 func TestRandomUserAgentReturnsValidString(t *testing.T) {
 	r := rand.New(rand.NewSource(42))
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		ua := RandomUserAgent(r)
 		if ua == "" {
 			t.Fatal("RandomUserAgent returned empty string")
@@ -25,7 +25,7 @@ func TestRandomUserAgentReturnsKnownAgents(t *testing.T) {
 	}
 
 	// Test 1000 random selections
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		ua := RandomUserAgent(r)
 		if !validAgents[ua] {
 			t.Fatalf("RandomUserAgent returned unknown user agent: %s", ua)
@@ -41,7 +41,7 @@ func TestWeightDistribution(t *testing.T) {
 
 	// Generate 10000 random selections
 	numSamples := 10000
-	for i := 0; i < numSamples; i++ {
+	for range numSamples {
 		ua := RandomUserAgent(r)
 		counts[ua]++
 	}

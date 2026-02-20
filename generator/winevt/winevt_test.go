@@ -95,7 +95,7 @@ func TestRenderTemplate_RandomSelection(t *testing.T) {
 	successfulLogonCount := 0
 
 	// Generate 150 templates with random selection
-	for i := 0; i < 150; i++ {
+	for range 150 {
 		result, err := templates.RenderTemplate(templates.RenderOptions{})
 		require.NoError(t, err)
 
