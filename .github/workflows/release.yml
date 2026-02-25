@@ -69,7 +69,7 @@ jobs:
           echo "BUILD_HOST_ARCH=$(go env GOHOSTARCH)" >> $GITHUB_ENV
 
       - name: Run GoReleaser (split)
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser-pro
           version: "v2.12.5"
@@ -132,7 +132,7 @@ jobs:
           path: dist/
 
       - name: Run GoReleaser (merge)
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser-pro
           version: "v2.12.5"
