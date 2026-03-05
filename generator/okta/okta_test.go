@@ -257,7 +257,7 @@ func TestOktaGenerator_FailureOutcomeHasReason(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate enough logs to get some failures
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		logRecord, err := generator.generateOktaLog(r)
 		require.NoError(t, err)
 
@@ -282,7 +282,7 @@ func TestOktaGenerator_MultipleStartStop(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		generator, err := New(logger, 2, 20*time.Millisecond)
 		require.NoError(t, err)
 

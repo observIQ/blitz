@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -120,7 +119,7 @@ func TestFileLogGeneratorFileMode(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Create a temporary file with test data
-	tmpfile, err := ioutil.TempFile("", "test*.log")
+	tmpfile, err := os.CreateTemp("", "test*.log")
 	require.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
@@ -160,7 +159,7 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Create a temporary directory with test files
-	tmpdir, err := ioutil.TempDir("", "testdir")
+	tmpdir, err := os.MkdirTemp("", "testdir")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -176,7 +175,7 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 
 	for _, f := range files {
 		path := filepath.Join(tmpdir, f.name)
-		err := ioutil.WriteFile(path, []byte(f.data), 0644)
+		err := os.WriteFile(path, []byte(f.data), 0644)
 		require.NoError(t, err)
 	}
 
@@ -216,7 +215,7 @@ func TestFileLogGeneratorNonexistentFile(t *testing.T) {
 func TestFileLogGeneratorStop(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	tmpfile, err := ioutil.TempFile("", "test*.log")
+	tmpfile, err := os.CreateTemp("", "test*.log")
 	require.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
@@ -243,7 +242,7 @@ func TestFileLogGeneratorStop(t *testing.T) {
 func TestFileLogGeneratorWriteError(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	tmpfile, err := ioutil.TempFile("", "test*.log")
+	tmpfile, err := os.CreateTemp("", "test*.log")
 	require.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
@@ -271,11 +270,11 @@ func TestFileLogGeneratorWriteError(t *testing.T) {
 func TestFileLogGeneratorMultipleWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	tmpfile, err := ioutil.TempFile("", "test*.log")
+	tmpfile, err := os.CreateTemp("", "test*.log")
 	require.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		_, err := tmpfile.WriteString("Thu Jan 13 15:30:45 2026 test line " + string(rune(i)) + "\n")
 		require.NoError(t, err)
 	}
@@ -304,7 +303,7 @@ func TestFileLogGeneratorMultipleWorkers(t *testing.T) {
 func TestTimestampProcessing(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	// Create a temporary file for the generator to use
-	tmpFile, err := ioutil.TempFile(t.TempDir(), "test*.log")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "test*.log")
 	require.NoError(t, err)
 	tmpFile.Close()
 

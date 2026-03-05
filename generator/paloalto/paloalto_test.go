@@ -219,7 +219,7 @@ func TestGenerator_ConcurrentWorkers(t *testing.T) {
 func TestGeneratePaloAltoLog_Format(t *testing.T) {
 	// Generate multiple logs to test variety
 	logs := make([]string, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		logs[i] = generatePaloAltoLog()
 	}
 
@@ -248,7 +248,7 @@ func TestGeneratePaloAltoLog_Format(t *testing.T) {
 
 func TestGenerateRandomIP(t *testing.T) {
 	ips := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		ip := generateRandomIP()
 		// Verify IP format
 		parts := strings.Split(ip, ".")
@@ -261,7 +261,7 @@ func TestGenerateRandomIP(t *testing.T) {
 
 func TestGenerateRandomPort(t *testing.T) {
 	ports := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		port := generateRandomPort()
 		// Port should be a valid string representation of a number
 		assert.NotEmpty(t, port, "Port should not be empty")
@@ -273,7 +273,7 @@ func TestGenerateRandomPort(t *testing.T) {
 
 func TestGenerateRandomSessionID(t *testing.T) {
 	sessionIDs := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		sessionID := generateRandomSessionID()
 		// Session ID should be 12 characters (6 bytes hex encoded)
 		assert.Equal(t, 12, len(sessionID), "Session ID should be 12 characters")
@@ -293,7 +293,7 @@ func TestGenerator_MultipleStartStop(t *testing.T) {
 	writer := newMockWriter()
 
 	// Start and stop multiple times with new generator instances
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		generator, err := New(logger, 2, 20*time.Millisecond)
 		require.NoError(t, err)
 

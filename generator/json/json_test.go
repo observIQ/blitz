@@ -330,7 +330,7 @@ func TestJSONGenerator_MultipleStartStop(t *testing.T) {
 	writer := newMockWriter()
 
 	// Start and stop multiple times with new generator instances
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		generator, err := New(logger, 2, 20*time.Millisecond, "default")
 		require.NoError(t, err)
 

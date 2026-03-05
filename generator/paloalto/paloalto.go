@@ -345,18 +345,18 @@ func generateNumericSessionID() string {
 	// Generate a numeric session ID like "01606001116" or "1606001116"
 	// Length varies between 9-11 digits
 	length := randInt(9, 11)
-	sessionID := ""
-	for i := 0; i < length; i++ {
+	var sessionID strings.Builder
+	for i := range length {
 		// First digit can be 0 for IDs with length > 9, otherwise 1-9
 		if i == 0 && length > 9 {
 			digit := randInt(0, 9)
-			sessionID += strconv.Itoa(digit)
+			sessionID.WriteString(strconv.Itoa(digit))
 		} else {
 			digit := randInt(0, 9)
-			sessionID += strconv.Itoa(digit)
+			sessionID.WriteString(strconv.Itoa(digit))
 		}
 	}
-	return sessionID
+	return sessionID.String()
 }
 
 func randInt(min, max int) int {

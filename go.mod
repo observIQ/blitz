@@ -1,6 +1,6 @@
 module github.com/observiq/blitz
 
-go 1.25.1
+go 1.26.0
 
 tool github.com/mgechev/revive
 
