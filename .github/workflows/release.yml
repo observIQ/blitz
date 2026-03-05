@@ -125,7 +125,7 @@ jobs:
           echo "BUILD_HOST_ARCH=$(go env GOHOSTARCH)" >> $GITHUB_ENV
 
       - name: Download dist artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: dist-*
           merge-multiple: true
