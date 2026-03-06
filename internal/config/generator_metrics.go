@@ -29,9 +29,9 @@ func (m *MetricDefinition) Validate() error {
 		return fmt.Errorf("metric name is required")
 	}
 	switch m.Type {
-	case "gauge", "sum":
+	case "gauge", "sum", "counter", "histogram":
 	default:
-		return fmt.Errorf("metric %q: type must be \"gauge\" or \"sum\", got %q", m.Name, m.Type)
+		return fmt.Errorf("metric %q: type must be \"gauge\", \"sum\", \"counter\", or \"histogram\", got %q", m.Name, m.Type)
 	}
 	if m.ValueMax < m.ValueMin {
 		return fmt.Errorf("metric %q: valueMax (%g) must be >= valueMin (%g)", m.Name, m.ValueMax, m.ValueMin)

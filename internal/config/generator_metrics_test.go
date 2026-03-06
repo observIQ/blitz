@@ -37,10 +37,28 @@ func TestMetricDefinition_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "valid counter",
+			def: MetricDefinition{
+				Name:     "http.requests",
+				Type:     "counter",
+				ValueMin: 1,
+				ValueMax: 50,
+			},
+		},
+		{
+			name: "valid histogram",
+			def: MetricDefinition{
+				Name:     "http.duration",
+				Type:     "histogram",
+				ValueMin: 0,
+				ValueMax: 5,
+			},
+		},
+		{
 			name: "invalid type",
 			def: MetricDefinition{
 				Name: "m",
-				Type: "histogram",
+				Type: "exponential_histogram",
 			},
 			wantErr: true,
 		},

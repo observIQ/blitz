@@ -199,17 +199,22 @@ func (g *Generator) generateAndWrite(writer output.Writer) error {
 	for _, resAttrs := range g.resourceCombos {
 		for i := range g.metrics {
 			def := &g.metrics[i]
-			value := def.ValueMin + g.rng.Float64()*(def.ValueMax-def.ValueMin)
 
 			record := output.MetricRecord{
 				Name:               def.Name,
 				Description:        def.Description,
 				Unit:               def.Unit,
 				Type:               def.Type,
-				DoubleValue:        &value,
 				Attributes:         def.Attributes,
 				ResourceAttributes: resAttrs,
 				Timestamp:          now,
+			}
+
+			if def.Type == output.MetricTypeHistogram {
+				g.populateHistogram(&record, def)
+			} else {
+				value := def.ValueMin + g.rng.Float64()*(def.ValueMax-def.ValueMin)
+				record.DoubleValue = &value
 			}
 
 			if err := writer.WriteMetric(ctx, record); err != nil {
@@ -237,6 +242,59 @@ func (g *Generator) recordWriteError(errorType string) {
 			attribute.String("error_type", errorType),
 		)),
 	)
+}
+
+// populateHistogram fills a MetricRecord with synthetic histogram data.
+// It generates bucket boundaries evenly spaced between ValueMin and ValueMax,
+// random counts per bucket, and computes sum/min/max from the distribution.
+func (g *Generator) populateHistogram(record *output.MetricRecord, def *MetricDefinition) {
+	const numBuckets = 5
+	span := def.ValueMax - def.ValueMin
+	step := span / float64(numBuckets)
+
+	bounds := make([]float64, numBuckets)
+	for i := range bounds {
+		bounds[i] = def.ValueMin + step*float64(i+1)
+	}
+
+	// Generate random counts for each bucket (numBuckets + 1 including overflow).
+	bucketCounts := make([]uint64, numBuckets+1)
+	var totalCount uint64
+	var sum float64
+	minVal := def.ValueMax
+	maxVal := def.ValueMin
+
+	for i := range bucketCounts {
+		c := uint64(g.rng.Intn(20) + 1)
+		bucketCounts[i] = c
+		totalCount += c
+
+		// Estimate a representative value for this bucket to compute sum/min/max.
+		var representative float64
+		switch {
+		case i == 0:
+			representative = def.ValueMin + step*0.5
+		case i == numBuckets:
+			representative = bounds[numBuckets-1] + step*0.5
+		default:
+			representative = bounds[i-1] + step*0.5
+		}
+
+		sum += representative * float64(c)
+		if representative < minVal {
+			minVal = representative
+		}
+		if representative > maxVal {
+			maxVal = representative
+		}
+	}
+
+	record.HistogramBucketBounds = bounds
+	record.HistogramBucketCounts = bucketCounts
+	record.HistogramCount = &totalCount
+	record.HistogramSum = &sum
+	record.HistogramMin = &minVal
+	record.HistogramMax = &maxVal
 }
 
 // cartesianProduct computes the cartesian product of a map of keys to

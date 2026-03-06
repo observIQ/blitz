@@ -501,7 +501,56 @@ func (o *OTLPGrpc) buildOTLPMetric(data output.MetricRecord) *metricspb.Metric {
 		})
 	}
 
-	// Build the data point value
+	m := &metricspb.Metric{
+		Name:        data.Name,
+		Description: data.Description,
+		Unit:        data.Unit,
+	}
+
+	switch data.Type {
+	case output.MetricTypeHistogram:
+		hdp := &metricspb.HistogramDataPoint{
+			TimeUnixNano:   timeNano,
+			Attributes:     attrs,
+			ExplicitBounds: data.HistogramBucketBounds,
+			BucketCounts:   data.HistogramBucketCounts,
+		}
+		if data.HistogramCount != nil {
+			hdp.Count = *data.HistogramCount
+		}
+		hdp.Sum = data.HistogramSum
+		hdp.Min = data.HistogramMin
+		hdp.Max = data.HistogramMax
+		m.Data = &metricspb.Metric_Histogram{
+			Histogram: &metricspb.Histogram{
+				AggregationTemporality: metricspb.AggregationTemporality_AGGREGATION_TEMPORALITY_CUMULATIVE,
+				DataPoints:             []*metricspb.HistogramDataPoint{hdp},
+			},
+		}
+	case output.MetricTypeSum, output.MetricTypeCounter:
+		dp := o.buildNumberDataPoint(timeNano, attrs, data)
+		m.Data = &metricspb.Metric_Sum{
+			Sum: &metricspb.Sum{
+				AggregationTemporality: metricspb.AggregationTemporality_AGGREGATION_TEMPORALITY_CUMULATIVE,
+				IsMonotonic:            true,
+				DataPoints:             []*metricspb.NumberDataPoint{dp},
+			},
+		}
+	default:
+		// Default to gauge
+		dp := o.buildNumberDataPoint(timeNano, attrs, data)
+		m.Data = &metricspb.Metric_Gauge{
+			Gauge: &metricspb.Gauge{
+				DataPoints: []*metricspb.NumberDataPoint{dp},
+			},
+		}
+	}
+
+	return m
+}
+
+// buildNumberDataPoint creates a NumberDataPoint from a MetricRecord.
+func (o *OTLPGrpc) buildNumberDataPoint(timeNano uint64, attrs []*commonpb.KeyValue, data output.MetricRecord) *metricspb.NumberDataPoint {
 	dp := &metricspb.NumberDataPoint{
 		TimeUnixNano: timeNano,
 		Attributes:   attrs,
@@ -511,32 +560,7 @@ func (o *OTLPGrpc) buildOTLPMetric(data output.MetricRecord) *metricspb.Metric {
 	} else if data.IntValue != nil {
 		dp.Value = &metricspb.NumberDataPoint_AsInt{AsInt: *data.IntValue}
 	}
-
-	m := &metricspb.Metric{
-		Name:        data.Name,
-		Description: data.Description,
-		Unit:        data.Unit,
-	}
-
-	switch data.Type {
-	case output.MetricTypeSum:
-		m.Data = &metricspb.Metric_Sum{
-			Sum: &metricspb.Sum{
-				AggregationTemporality: metricspb.AggregationTemporality_AGGREGATION_TEMPORALITY_CUMULATIVE,
-				IsMonotonic:           true,
-				DataPoints:            []*metricspb.NumberDataPoint{dp},
-			},
-		}
-	default:
-		// Default to gauge
-		m.Data = &metricspb.Metric_Gauge{
-			Gauge: &metricspb.Gauge{
-				DataPoints: []*metricspb.NumberDataPoint{dp},
-			},
-		}
-	}
-
-	return m
+	return dp
 }
 
 // SupportedTelemetry returns the telemetry types this output supports.

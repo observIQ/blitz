@@ -38,6 +38,10 @@ const (
 	MetricTypeGauge MetricType = "gauge"
 	// MetricTypeSum represents a sum (counter) metric.
 	MetricTypeSum MetricType = "sum"
+	// MetricTypeCounter represents a monotonic counter metric (OTLP Sum with IsMonotonic=true).
+	MetricTypeCounter MetricType = "counter"
+	// MetricTypeHistogram represents a histogram metric.
+	MetricTypeHistogram MetricType = "histogram"
 )
 
 // MetricRecord represents a single metric data point.
@@ -70,6 +74,22 @@ type MetricRecord struct {
 
 	// Timestamp is when the measurement was taken.
 	Timestamp time.Time
+
+	// Histogram fields (only used when Type is MetricTypeHistogram).
+
+	// HistogramCount is the total number of observations.
+	HistogramCount *uint64
+	// HistogramSum is the sum of all observed values.
+	HistogramSum *float64
+	// HistogramMin is the minimum observed value.
+	HistogramMin *float64
+	// HistogramMax is the maximum observed value.
+	HistogramMax *float64
+	// HistogramBucketBounds are the explicit bucket boundaries.
+	HistogramBucketBounds []float64
+	// HistogramBucketCounts are the counts for each bucket
+	// (length = len(HistogramBucketBounds) + 1).
+	HistogramBucketCounts []uint64
 }
 
 // Writer can consume log and metric records.
