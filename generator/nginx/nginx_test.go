@@ -53,6 +53,10 @@ func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
 	return nil
 }
 
+func (m *mockWriter) WriteMetric(_ context.Context, _ output.MetricRecord) error {
+	return output.ErrUnsupportedTelemetryType
+}
+
 func (m *mockWriter) getWrites() [][]byte {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -267,6 +271,10 @@ type discardWriter struct{}
 
 func (d *discardWriter) Write(ctx context.Context, data output.LogRecord) error {
 	return nil
+}
+
+func (d *discardWriter) WriteMetric(_ context.Context, _ output.MetricRecord) error {
+	return output.ErrUnsupportedTelemetryType
 }
 
 func BenchmarkNginxGenerator(b *testing.B) {

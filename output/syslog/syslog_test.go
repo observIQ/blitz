@@ -22,6 +22,10 @@ func (s *stubOutput) Write(ctx context.Context, data output.LogRecord) error {
 	return nil
 }
 
+func (s *stubOutput) WriteMetric(_ context.Context, _ output.MetricRecord) error {
+	return output.ErrUnsupportedTelemetryType
+}
+
 func (s *stubOutput) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Logs}
 }

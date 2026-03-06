@@ -214,6 +214,11 @@ func (t *TCP) Write(ctx context.Context, data output.LogRecord) error {
 // Stop shall not be called more than once.
 // If the provided context is done, Stop will return immediately
 // even if workers are still shutting down.
+// WriteMetric is not supported by the TCP output.
+func (t *TCP) WriteMetric(_ context.Context, _ output.MetricRecord) error {
+	return output.ErrUnsupportedTelemetryType
+}
+
 // SupportedTelemetry returns the telemetry types this output supports.
 func (t *TCP) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Logs}

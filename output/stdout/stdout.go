@@ -37,6 +37,11 @@ func (o *StdoutOutput) Write(ctx context.Context, data output.LogRecord) error {
 	return err
 }
 
+// WriteMetric is not supported by the stdout output.
+func (o *StdoutOutput) WriteMetric(_ context.Context, _ output.MetricRecord) error {
+	return output.ErrUnsupportedTelemetryType
+}
+
 // Stop performs cleanup
 func (o *StdoutOutput) Stop(ctx context.Context) error {
 	o.logger.Info("Stopping stdout output")

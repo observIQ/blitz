@@ -15,8 +15,10 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	collectormetrics "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
+	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -133,25 +135,33 @@ func WithTLSConfig(tlsConfig *tls.Config) OTLPGrpcOption {
 
 // OTLPGrpc implements the Output interface for OTLP gRPC connections
 type OTLPGrpc struct {
-	logger        *zap.Logger
-	host          string
-	port          string
-	workers       int
-	insecure      bool
-	tlsConfig     *tls.Config
-	dataChan      chan *logspb.LogRecord
-	ctx           context.Context
-	cancel        context.CancelFunc
-	workerManager *workermanager.WorkerManager
-	meter         metric.Meter
+	logger    *zap.Logger
+	host      string
+	port      string
+	workers   int
+	insecure  bool
+	tlsConfig *tls.Config
+	ctx       context.Context
+	cancel    context.CancelFunc
+	meter     metric.Meter
 
-	// Metrics
-	otlpLogsReceived     metric.Int64Counter
-	otlpActiveWorkers    metric.Int64Gauge
-	otlpLogRate          metric.Float64Counter
-	otlpRequestSizeBytes metric.Int64Histogram
-	otlpRequestLatency   metric.Float64Histogram
-	otlpSendErrors       metric.Int64Counter
+	// Log pipeline
+	logDataChan      chan *logspb.LogRecord
+	logWorkerManager *workermanager.WorkerManager
+
+	// Metric pipeline
+	metricDataChan      chan *metricspb.Metric
+	metricWorkerManager *workermanager.WorkerManager
+
+	// Observability metrics
+	otlpLogsReceived      metric.Int64Counter
+	otlpMetricsReceived   metric.Int64Counter
+	otlpActiveWorkers     metric.Int64Gauge
+	otlpLogRate           metric.Float64Counter
+	otlpMetricRate        metric.Float64Counter
+	otlpRequestSizeBytes  metric.Int64Histogram
+	otlpRequestLatency    metric.Float64Histogram
+	otlpSendErrors        metric.Int64Counter
 
 	// Configuration
 	batchTimeout       time.Duration
@@ -211,13 +221,21 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 
 	meter := otel.Meter("blitz-otlp-grpc-output")
 
-	// Initialize metrics
+	// Initialize observability metrics
 	otlpLogsReceived, err := meter.Int64Counter(
 		"blitz.otlp_grpc.logs.received",
 		metric.WithDescription("Number of logs received from the write channel"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create logs received counter: %w", err)
+	}
+
+	otlpMetricsReceived, err := meter.Int64Counter(
+		"blitz.otlp_grpc.metrics.received",
+		metric.WithDescription("Number of metrics received from the write channel"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create metrics received counter: %w", err)
 	}
 
 	otlpActiveWorkers, err := meter.Int64Gauge(
@@ -234,6 +252,14 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create log rate counter: %w", err)
+	}
+
+	otlpMetricRate, err := meter.Float64Counter(
+		"blitz.otlp_grpc.metric.rate",
+		metric.WithDescription("Rate at which metrics are successfully sent to the configured host"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create metric rate counter: %w", err)
 	}
 
 	otlpRequestSizeBytes, err := meter.Int64Histogram(
@@ -261,19 +287,22 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 	}
 
 	otlp := &OTLPGrpc{
-		logger:               logger.Named("output-otlp-grpc"),
-		host:                 cfg.host,
-		port:                 cfg.port,
-		workers:              cfg.workers,
-		insecure:             cfg.insecure,
-		tlsConfig:            cfg.tlsConfig,
-		dataChan:             make(chan *logspb.LogRecord, DefaultOTLPGrpcChannelSize),
-		ctx:                  ctx,
-		cancel:               cancel,
-		meter:                meter,
-		otlpLogsReceived:     otlpLogsReceived,
-		otlpActiveWorkers:    otlpActiveWorkers,
-		otlpLogRate:          otlpLogRate,
+		logger:              logger.Named("output-otlp-grpc"),
+		host:                cfg.host,
+		port:                cfg.port,
+		workers:             cfg.workers,
+		insecure:            cfg.insecure,
+		tlsConfig:           cfg.tlsConfig,
+		logDataChan:         make(chan *logspb.LogRecord, DefaultOTLPGrpcChannelSize),
+		metricDataChan:      make(chan *metricspb.Metric, DefaultOTLPGrpcChannelSize),
+		ctx:                 ctx,
+		cancel:              cancel,
+		meter:               meter,
+		otlpLogsReceived:    otlpLogsReceived,
+		otlpMetricsReceived: otlpMetricsReceived,
+		otlpActiveWorkers:   otlpActiveWorkers,
+		otlpLogRate:         otlpLogRate,
+		otlpMetricRate:      otlpMetricRate,
 		otlpRequestSizeBytes: otlpRequestSizeBytes,
 		otlpRequestLatency:   otlpRequestLatency,
 		otlpSendErrors:       otlpSendErrors,
@@ -294,24 +323,37 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 		zap.Bool("tls_enabled", cfg.tlsConfig != nil),
 	)
 
-	// Create channel size gauge
+	// Create channel size gauges
 	_, err = meter.Int64ObservableGauge(
-		"blitz.otlp_grpc.channel.size",
-		metric.WithDescription("Current size of the data channel"),
+		"blitz.otlp_grpc.log_channel.size",
+		metric.WithDescription("Current size of the log data channel"),
 		metric.WithInt64Callback(func(_ context.Context, io metric.Int64Observer) error {
-			io.Observe(int64(len(otlp.dataChan)))
+			io.Observe(int64(len(otlp.logDataChan)))
 			return nil
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create channel size gauge: %w", err)
+		return nil, fmt.Errorf("create log channel size gauge: %w", err)
 	}
 
-	// Create worker manager
-	otlp.workerManager = workermanager.NewWorkerManager(otlp.logger, cfg.workers, otlp.otlpWorker)
+	_, err = meter.Int64ObservableGauge(
+		"blitz.otlp_grpc.metric_channel.size",
+		metric.WithDescription("Current size of the metric data channel"),
+		metric.WithInt64Callback(func(_ context.Context, io metric.Int64Observer) error {
+			io.Observe(int64(len(otlp.metricDataChan)))
+			return nil
+		}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create metric channel size gauge: %w", err)
+	}
 
-	// Record initial active workers count
-	otlp.otlpActiveWorkers.Record(context.Background(), int64(cfg.workers),
+	// Create worker managers for logs and metrics
+	otlp.logWorkerManager = workermanager.NewWorkerManager(otlp.logger, cfg.workers, otlp.logWorker)
+	otlp.metricWorkerManager = workermanager.NewWorkerManager(otlp.logger, cfg.workers, otlp.metricWorker)
+
+	// Record initial active workers count (logs + metrics workers)
+	otlp.otlpActiveWorkers.Record(context.Background(), int64(cfg.workers*2),
 		metric.WithAttributeSet(
 			attribute.NewSet(
 				attribute.String("component", "output_otlp_grpc"),
@@ -320,7 +362,8 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 	)
 
 	// Start the workers
-	otlp.workerManager.Start()
+	otlp.logWorkerManager.Start()
+	otlp.metricWorkerManager.Start()
 
 	return otlp, nil
 }
@@ -386,7 +429,7 @@ func (o *OTLPGrpc) Write(ctx context.Context, data output.LogRecord) error {
 	}
 
 	select {
-	case o.dataChan <- record:
+	case o.logDataChan <- record:
 		// Record logs received
 		o.otlpLogsReceived.Add(ctx, 1,
 			metric.WithAttributeSet(
@@ -403,14 +446,92 @@ func (o *OTLPGrpc) Write(ctx context.Context, data output.LogRecord) error {
 	}
 }
 
+// WriteMetric sends metric data to the OTLP gRPC output channel for processing by metric workers.
+// WriteMetric shall not be called after Stop is called.
+func (o *OTLPGrpc) WriteMetric(ctx context.Context, data output.MetricRecord) error {
+	m := o.buildOTLPMetric(data)
+
+	select {
+	case o.metricDataChan <- m:
+		o.otlpMetricsReceived.Add(ctx, 1,
+			metric.WithAttributeSet(
+				attribute.NewSet(
+					attribute.String("component", "output_otlp_grpc"),
+				),
+			),
+		)
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("context cancelled while waiting to write metric: %w", ctx.Err())
+	case <-o.ctx.Done():
+		return fmt.Errorf("OTLP gRPC output is shutting down")
+	}
+}
+
+// buildOTLPMetric converts an output.MetricRecord to an OTLP Metric protobuf.
+func (o *OTLPGrpc) buildOTLPMetric(data output.MetricRecord) *metricspb.Metric {
+	timestamp := data.Timestamp
+	if timestamp.IsZero() {
+		timestamp = time.Now()
+	}
+	timeNano := output.TimeToUnixNanoUint64(timestamp)
+
+	// Build attributes
+	attrs := make([]*commonpb.KeyValue, 0, len(data.Attributes))
+	for k, v := range data.Attributes {
+		attrs = append(attrs, &commonpb.KeyValue{
+			Key:   k,
+			Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: v}},
+		})
+	}
+
+	// Build the data point value
+	dp := &metricspb.NumberDataPoint{
+		TimeUnixNano: timeNano,
+		Attributes:   attrs,
+	}
+	if data.DoubleValue != nil {
+		dp.Value = &metricspb.NumberDataPoint_AsDouble{AsDouble: *data.DoubleValue}
+	} else if data.IntValue != nil {
+		dp.Value = &metricspb.NumberDataPoint_AsInt{AsInt: *data.IntValue}
+	}
+
+	m := &metricspb.Metric{
+		Name:        data.Name,
+		Description: data.Description,
+		Unit:        data.Unit,
+	}
+
+	switch data.Type {
+	case output.MetricTypeSum:
+		m.Data = &metricspb.Metric_Sum{
+			Sum: &metricspb.Sum{
+				AggregationTemporality: metricspb.AggregationTemporality_AGGREGATION_TEMPORALITY_CUMULATIVE,
+				IsMonotonic:           true,
+				DataPoints:            []*metricspb.NumberDataPoint{dp},
+			},
+		}
+	default:
+		// Default to gauge
+		m.Data = &metricspb.Metric_Gauge{
+			Gauge: &metricspb.Gauge{
+				DataPoints: []*metricspb.NumberDataPoint{dp},
+			},
+		}
+	}
+
+	return m
+}
+
+// SupportedTelemetry returns the telemetry types this output supports.
+func (o *OTLPGrpc) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs, telemetry.Metrics}
+}
+
 // Stop gracefully shuts down all workers and closes OTLP gRPC connections
 // Stop shall not be called more than once.
 // If the provided context is done, Stop will return immediately
 // even if workers are still shutting down.
-// SupportedTelemetry returns the telemetry types this output supports.
-func (o *OTLPGrpc) SupportedTelemetry() []telemetry.Type {
-	return []telemetry.Type{telemetry.Logs}
-}
 
 func (o *OTLPGrpc) Stop(ctx context.Context) error {
 	o.logger.Info("Stopping OTLP gRPC output")
@@ -424,27 +545,29 @@ func (o *OTLPGrpc) Stop(ctx context.Context) error {
 		),
 	)
 
-	// Close the channel to ensure workers do not
+	// Close the channels to ensure workers do not
 	// process new data.
-	close(o.dataChan)
+	close(o.logDataChan)
+	close(o.metricDataChan)
 
 	// Signal the workers to stop.
 	o.cancel()
 
-	// Stop the worker manager
-	o.workerManager.Stop()
+	// Stop the worker managers
+	o.logWorkerManager.Stop()
+	o.metricWorkerManager.Stop()
 
 	o.logger.Info("OTLP gRPC output stopped successfully")
 	return nil
 }
 
-// otlpWorker processes OTLP gRPC data from the channel and sends it to the configured host and port.
+// logWorker processes OTLP gRPC log data from the channel and sends it to the configured host and port.
 // This function is designed to work with the worker manager, which handles automatic restart
 // with exponential backoff when the worker exits due to connection failures or errors.
 // The worker should return immediately on any failure - the worker manager will handle
 // reconnection attempts with appropriate backoff delays.
-func (o *OTLPGrpc) otlpWorker(id int) {
-	o.logger.Info("Starting OTLP gRPC worker", zap.Int("worker_id", id))
+func (o *OTLPGrpc) logWorker(id int) {
+	o.logger.Info("Starting OTLP gRPC log worker", zap.Int("worker_id", id))
 
 	conn, err := o.connect()
 	if err != nil {
@@ -461,7 +584,7 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 
 	for {
 		select {
-		case rec, ok := <-o.dataChan:
+		case rec, ok := <-o.logDataChan:
 			if !ok {
 				o.logger.Info("OTLP gRPC worker exiting - channel closed", zap.Int("worker_id", id))
 				// Flush remaining logs
@@ -509,6 +632,73 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 			// Flush remaining logs
 			if err := o.flushBatch(client, batch); err != nil {
 				o.logger.Error("Failed to flush final batch", zap.Int("worker_id", id), zap.Error(err))
+			}
+			return
+		}
+	}
+}
+
+// metricWorker processes OTLP gRPC metric data from the channel and sends it to the configured host and port.
+func (o *OTLPGrpc) metricWorker(id int) {
+	o.logger.Info("Starting OTLP gRPC metric worker", zap.Int("worker_id", id))
+
+	conn, err := o.connect()
+	if err != nil {
+		o.logger.Error("Failed to establish initial OTLP gRPC connection for metrics",
+			zap.Int("worker_id", id),
+			zap.Error(err))
+		return
+	}
+	defer conn.Close()
+
+	client := collectormetrics.NewMetricsServiceClient(conn)
+
+	batch := newMetricBatch(o.maxExportBatchSize, o.batchTimeout)
+
+	for {
+		select {
+		case rec, ok := <-o.metricDataChan:
+			if !ok {
+				o.logger.Info("OTLP gRPC metric worker exiting - channel closed", zap.Int("worker_id", id))
+				if err := o.flushMetricBatch(client, batch); err != nil {
+					o.logger.Error("Failed to flush final metric batch", zap.Int("worker_id", id), zap.Error(err))
+				}
+				return
+			}
+
+			batch.add(rec)
+
+			if batch.isFull() {
+				if !batch.timer.Stop() {
+					select {
+					case <-batch.timer.C:
+					default:
+					}
+				}
+				if err := o.sendMetricBatch(client, batch); err != nil {
+					o.logger.Error("Failed to send OTLP gRPC metric batch",
+						zap.Int("worker_id", id),
+						zap.Error(err))
+					return
+				}
+				batch = newMetricBatch(o.maxExportBatchSize, o.batchTimeout)
+			}
+
+		case <-batch.timer.C:
+			if !batch.isEmpty() {
+				if err := o.sendMetricBatch(client, batch); err != nil {
+					o.logger.Error("Failed to send OTLP gRPC metric batch",
+						zap.Int("worker_id", id),
+						zap.Error(err))
+					return
+				}
+			}
+			batch = newMetricBatch(o.maxExportBatchSize, o.batchTimeout)
+
+		case <-o.ctx.Done():
+			o.logger.Info("OTLP gRPC metric worker exiting - context cancelled", zap.Int("worker_id", id))
+			if err := o.flushMetricBatch(client, batch); err != nil {
+				o.logger.Error("Failed to flush final metric batch", zap.Int("worker_id", id), zap.Error(err))
 			}
 			return
 		}
@@ -651,6 +841,147 @@ func (o *OTLPGrpc) flushBatch(client collectorlogs.LogsServiceClient, batch *log
 		return nil
 	}
 	return o.sendBatch(client, batch)
+}
+
+// metricBatch holds a batch of metrics to be sent
+type metricBatch struct {
+	metrics []*metricspb.Metric
+	maxSize int
+	timer   *time.Timer
+	mu      sync.Mutex
+}
+
+// newMetricBatch creates a new metric batch
+func newMetricBatch(maxSize int, timeout time.Duration) *metricBatch {
+	return &metricBatch{
+		metrics: make([]*metricspb.Metric, 0, maxSize),
+		maxSize: maxSize,
+		timer:   time.NewTimer(timeout),
+	}
+}
+
+func (b *metricBatch) add(data *metricspb.Metric) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.metrics = append(b.metrics, data)
+}
+
+func (b *metricBatch) isFull() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.metrics) >= b.maxSize
+}
+
+func (b *metricBatch) isEmpty() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.metrics) == 0
+}
+
+func (b *metricBatch) getAndClear() []*metricspb.Metric {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	metrics := b.metrics
+	b.metrics = make([]*metricspb.Metric, 0, b.maxSize)
+	return metrics
+}
+
+// sendMetricBatch sends a batch of metrics via OTLP gRPC
+func (o *OTLPGrpc) sendMetricBatch(client collectormetrics.MetricsServiceClient, batch *metricBatch) error {
+	startTime := time.Now()
+
+	metrics := batch.getAndClear()
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	request := o.buildOTLPMetricsRequest(metrics)
+
+	ctx, cancel := context.WithTimeout(context.Background(), o.batchTimeout)
+	defer cancel()
+
+	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{}))
+
+	_, err := client.Export(ctx, request)
+	if err != nil {
+		o.recordSendError("metrics_export_error", err)
+		return fmt.Errorf("failed to export metrics: %w", err)
+	}
+
+	latency := time.Since(startTime).Seconds()
+	requestSize := int64(proto.Size(request))
+	o.otlpMetricRate.Add(context.Background(), float64(len(metrics)),
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_otlp_grpc"),
+			),
+		),
+	)
+	o.otlpRequestSizeBytes.Record(context.Background(), requestSize,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_otlp_grpc"),
+				attribute.String("signal", "metrics"),
+			),
+		),
+	)
+	o.otlpRequestLatency.Record(context.Background(), latency,
+		metric.WithAttributeSet(
+			attribute.NewSet(
+				attribute.String("component", "output_otlp_grpc"),
+				attribute.String("signal", "metrics"),
+			),
+		),
+	)
+
+	return nil
+}
+
+// flushMetricBatch flushes any remaining metrics in the batch
+func (o *OTLPGrpc) flushMetricBatch(client collectormetrics.MetricsServiceClient, batch *metricBatch) error {
+	if !batch.timer.Stop() {
+		select {
+		case <-batch.timer.C:
+		default:
+		}
+	}
+	if batch.isEmpty() {
+		return nil
+	}
+	return o.sendMetricBatch(client, batch)
+}
+
+// buildOTLPMetricsRequest builds an OTLP ExportMetricsServiceRequest
+func (o *OTLPGrpc) buildOTLPMetricsRequest(metrics []*metricspb.Metric) *collectormetrics.ExportMetricsServiceRequest {
+	scopeMetrics := &metricspb.ScopeMetrics{
+		Metrics: make([]*metricspb.Metric, 0, len(metrics)),
+	}
+	for _, m := range metrics {
+		if m == nil {
+			continue
+		}
+		scopeMetrics.Metrics = append(scopeMetrics.Metrics, m)
+	}
+
+	return &collectormetrics.ExportMetricsServiceRequest{
+		ResourceMetrics: []*metricspb.ResourceMetrics{
+			{
+				Resource: &resourcepb.Resource{
+					Attributes: []*commonpb.KeyValue{
+						{
+							Key: "service.name",
+							Value: &commonpb.AnyValue{
+								Value: &commonpb.AnyValue_StringValue{
+									StringValue: "blitz",
+								},
+							},
+						},
+					},
+				},
+				ScopeMetrics: []*metricspb.ScopeMetrics{scopeMetrics},
+			},
+		},
+	}
 }
 
 // buildOTLPRequest builds an OTLP ExportLogsServiceRequest from prepared LogRecord entries

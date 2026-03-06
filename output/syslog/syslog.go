@@ -159,6 +159,11 @@ func (s *Syslog) Write(ctx context.Context, rec output.LogRecord) error {
 	return s.transport.Write(ctx, output.LogRecord{Message: formatted})
 }
 
+// WriteMetric is not supported by the syslog output.
+func (s *Syslog) WriteMetric(_ context.Context, _ output.MetricRecord) error {
+	return output.ErrUnsupportedTelemetryType
+}
+
 // SupportedTelemetry returns the telemetry types this output supports.
 func (s *Syslog) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Logs}

@@ -49,6 +49,10 @@ func (m *mockWriter) Write(ctx context.Context, record output.LogRecord) error {
 	return nil
 }
 
+func (m *mockWriter) WriteMetric(_ context.Context, _ output.MetricRecord) error {
+	return output.ErrUnsupportedTelemetryType
+}
+
 func (m *mockWriter) Close(ctx context.Context) error {
 	return nil
 }

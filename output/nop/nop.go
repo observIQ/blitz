@@ -36,6 +36,11 @@ func (o *NopOutput) Write(ctx context.Context, data output.LogRecord) error {
 	return nil
 }
 
+// WriteMetric is not supported by the nop output.
+func (o *NopOutput) WriteMetric(_ context.Context, _ output.MetricRecord) error {
+	return output.ErrUnsupportedTelemetryType
+}
+
 // Stop performs no work
 func (o *NopOutput) Stop(ctx context.Context) error {
 	o.logger.Info("Stopping NOP output")

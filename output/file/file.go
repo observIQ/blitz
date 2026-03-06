@@ -200,7 +200,11 @@ func (f *File) Write(ctx context.Context, data output.LogRecord) error {
 	}
 }
 
-// Stop gracefully stops workers and closes the writer
+// WriteMetric is not supported by the file output.
+func (f *File) WriteMetric(_ context.Context, _ output.MetricRecord) error {
+	return output.ErrUnsupportedTelemetryType
+}
+
 // SupportedTelemetry returns the telemetry types this output supports.
 func (f *File) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Logs}
