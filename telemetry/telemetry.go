@@ -32,20 +32,29 @@ func Supports(supported []Type, t Type) bool {
 	return slices.Contains(supported, t)
 }
 
-// Compatible returns the set of telemetry types that are supported by both
-// the generator and the output. If there are no common types, an error is returned.
-func Compatible(generatorTypes, outputTypes []Type) ([]Type, error) {
+// Compatible returns the single telemetry type that is supported by both
+// the generator and the output. An error is returned if there are no common
+// types or if more than one type overlaps, since each pipeline must operate
+// on exactly one telemetry type.
+func Compatible(generatorTypes, outputTypes []Type) (Type, error) {
 	var common []Type
 	for _, gt := range generatorTypes {
 		if Supports(outputTypes, gt) {
 			common = append(common, gt)
 		}
 	}
-	if len(common) == 0 {
-		return nil, fmt.Errorf(
+	switch len(common) {
+	case 0:
+		return "", fmt.Errorf(
 			"generator and output have no compatible telemetry types: generator supports %v, output supports %v",
 			generatorTypes, outputTypes,
 		)
+	case 1:
+		return common[0], nil
+	default:
+		return "", fmt.Errorf(
+			"generator and output have multiple compatible telemetry types %v: a single type must be configured",
+			common,
+		)
 	}
-	return common, nil
 }

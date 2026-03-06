@@ -28,11 +28,11 @@ func New(logger *zap.Logger, generator generator.Generator, output output.Output
 		return nil, fmt.Errorf("output cannot be nil")
 	}
 
-	compatible, err := telemetry.Compatible(generator.SupportedTelemetry(), output.SupportedTelemetry())
+	telemetryType, err := telemetry.Compatible(generator.SupportedTelemetry(), output.SupportedTelemetry())
 	if err != nil {
 		return nil, fmt.Errorf("incompatible generator and output: %w", err)
 	}
-	logger.Info("telemetry types", zap.Any("types", compatible))
+	logger.Info("telemetry type", zap.String("type", string(telemetryType)))
 
 	return &Service{
 		Logger:    logger,
