@@ -64,6 +64,10 @@ type MetricRecord struct {
 	// Attributes are key-value pairs associated with this data point.
 	Attributes map[string]string
 
+	// ResourceAttributes are key-value pairs associated with the resource
+	// that produced this metric (e.g. "service.name", "host.name").
+	ResourceAttributes map[string]string
+
 	// Timestamp is when the measurement was taken.
 	Timestamp time.Time
 }

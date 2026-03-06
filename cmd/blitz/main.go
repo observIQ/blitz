@@ -9,12 +9,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"reflect"
 	"os/signal"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/observiq/blitz/generator"
 	apachegen "github.com/observiq/blitz/generator/apache"
 	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
@@ -22,6 +24,7 @@ import (
 	"github.com/observiq/blitz/generator/filegen"
 	jsongen "github.com/observiq/blitz/generator/json"
 	"github.com/observiq/blitz/generator/kubernetes"
+	metricsgen "github.com/observiq/blitz/generator/metrics"
 	"github.com/observiq/blitz/generator/nginx"
 	gennop "github.com/observiq/blitz/generator/nop"
 	"github.com/observiq/blitz/generator/okta"
@@ -110,7 +113,13 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := config.NewConfig()
-	if err := viper.Unmarshal(cfg); err != nil {
+	if err := viper.Unmarshal(cfg, viper.DecodeHook(
+		mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+			mapstructure.StringToSliceHookFunc(","),
+			flattenNestedMapHook(),
+		),
+	)); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
@@ -399,6 +408,31 @@ func run(cmd *cobra.Command, args []string) error {
 			logger.Error("Failed to create Okta generator", zap.Error(err))
 			return err
 		}
+	case config.GeneratorTypeMetrics:
+		metricDefs := make([]metricsgen.MetricDefinition, 0, len(cfg.Generator.Metrics.Metrics))
+		for _, m := range cfg.Generator.Metrics.Metrics {
+			metricDefs = append(metricDefs, metricsgen.MetricDefinition{
+				Name:        m.Name,
+				Type:        output.MetricType(m.Type),
+				Description: m.Description,
+				Unit:        m.Unit,
+				Attributes:  m.Attributes,
+				ValueMin:    m.ValueMin,
+				ValueMax:    m.ValueMax,
+			})
+		}
+		generatorInstance, err = metricsgen.New(
+			logger,
+			cfg.Generator.Metrics.Workers,
+			cfg.Generator.Metrics.Rate,
+			cfg.Generator.Metrics.ResourceAttributes,
+			metricDefs,
+		)
+
+		if err != nil {
+			logger.Error("Failed to create metrics generator", zap.Error(err))
+			return err
+		}
 	default:
 		logger.Error("Invalid generator type", zap.String("type", string(cfg.Generator.Type)))
 		return fmt.Errorf("invalid generator type: %s", cfg.Generator.Type)
@@ -465,4 +499,69 @@ func httpServer(port int, logger *zap.Logger) error {
 
 	logger.Info("starting metrics HTTP server", zap.String("addr", addr))
 	return s.ListenAndServe()
+}
+
+// flattenNestedMapHook returns a mapstructure DecodeHookFunc that flattens
+// nested map[string]interface{} values into dotted-key maps. This is needed
+// because Viper splits YAML keys containing "." into nested maps
+// (e.g. "service.name: foo" becomes {"service": {"name": "foo"}}).
+// Supports both map[string]string and map[string][]string target types.
+func flattenNestedMapHook() mapstructure.DecodeHookFunc {
+	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
+		src, ok := data.(map[string]interface{})
+		if !ok {
+			return data, nil
+		}
+
+		switch {
+		case to == reflect.TypeOf(map[string]string{}):
+			result := make(map[string]string)
+			flattenMapString("", src, result)
+			return result, nil
+
+		case to == reflect.TypeOf(map[string][]string{}):
+			result := make(map[string][]string)
+			flattenMapSlice("", src, result)
+			return result, nil
+
+		default:
+			return data, nil
+		}
+	}
+}
+
+func flattenMapString(prefix string, m map[string]interface{}, out map[string]string) {
+	for k, v := range m {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		switch val := v.(type) {
+		case map[string]interface{}:
+			flattenMapString(key, val, out)
+		default:
+			out[key] = fmt.Sprintf("%v", val)
+		}
+	}
+}
+
+func flattenMapSlice(prefix string, m map[string]interface{}, out map[string][]string) {
+	for k, v := range m {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		switch val := v.(type) {
+		case map[string]interface{}:
+			flattenMapSlice(key, val, out)
+		case []interface{}:
+			strs := make([]string, 0, len(val))
+			for _, elem := range val {
+				strs = append(strs, fmt.Sprintf("%v", elem))
+			}
+			out[key] = strs
+		default:
+			out[key] = []string{fmt.Sprintf("%v", val)}
+		}
+	}
 }

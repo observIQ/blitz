@@ -163,6 +163,9 @@ type OTLPGrpc struct {
 	otlpRequestLatency    metric.Float64Histogram
 	otlpSendErrors        metric.Int64Counter
 
+	// Resource attributes from metric records, cached on first WriteMetric call.
+	cachedResourceAttrs []*commonpb.KeyValue
+
 	// Configuration
 	batchTimeout       time.Duration
 	maxQueueSize       int
@@ -449,6 +452,19 @@ func (o *OTLPGrpc) Write(ctx context.Context, data output.LogRecord) error {
 // WriteMetric sends metric data to the OTLP gRPC output channel for processing by metric workers.
 // WriteMetric shall not be called after Stop is called.
 func (o *OTLPGrpc) WriteMetric(ctx context.Context, data output.MetricRecord) error {
+	// Cache resource attributes from the first record that carries them.
+	// All records in a pipeline share the same resource, so this is safe.
+	if o.cachedResourceAttrs == nil && len(data.ResourceAttributes) > 0 {
+		attrs := make([]*commonpb.KeyValue, 0, len(data.ResourceAttributes))
+		for k, v := range data.ResourceAttributes {
+			attrs = append(attrs, &commonpb.KeyValue{
+				Key:   k,
+				Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: v}},
+			})
+		}
+		o.cachedResourceAttrs = attrs
+	}
+
 	m := o.buildOTLPMetric(data)
 
 	select {
@@ -951,7 +967,9 @@ func (o *OTLPGrpc) flushMetricBatch(client collectormetrics.MetricsServiceClient
 	return o.sendMetricBatch(client, batch)
 }
 
-// buildOTLPMetricsRequest builds an OTLP ExportMetricsServiceRequest
+// buildOTLPMetricsRequest builds an OTLP ExportMetricsServiceRequest.
+// Resource attributes are taken from the batch. If no metrics carry resource
+// attributes, a default service.name=blitz is used.
 func (o *OTLPGrpc) buildOTLPMetricsRequest(metrics []*metricspb.Metric) *collectormetrics.ExportMetricsServiceRequest {
 	scopeMetrics := &metricspb.ScopeMetrics{
 		Metrics: make([]*metricspb.Metric, 0, len(metrics)),
@@ -963,20 +981,26 @@ func (o *OTLPGrpc) buildOTLPMetricsRequest(metrics []*metricspb.Metric) *collect
 		scopeMetrics.Metrics = append(scopeMetrics.Metrics, m)
 	}
 
+	// Use cached resource attributes if available, otherwise default.
+	resourceAttrs := o.cachedResourceAttrs
+	if len(resourceAttrs) == 0 {
+		resourceAttrs = []*commonpb.KeyValue{
+			{
+				Key: "service.name",
+				Value: &commonpb.AnyValue{
+					Value: &commonpb.AnyValue_StringValue{
+						StringValue: "blitz",
+					},
+				},
+			},
+		}
+	}
+
 	return &collectormetrics.ExportMetricsServiceRequest{
 		ResourceMetrics: []*metricspb.ResourceMetrics{
 			{
 				Resource: &resourcepb.Resource{
-					Attributes: []*commonpb.KeyValue{
-						{
-							Key: "service.name",
-							Value: &commonpb.AnyValue{
-								Value: &commonpb.AnyValue_StringValue{
-									StringValue: "blitz",
-								},
-							},
-						},
-					},
+					Attributes: resourceAttrs,
 				},
 				ScopeMetrics: []*metricspb.ScopeMetrics{scopeMetrics},
 			},
