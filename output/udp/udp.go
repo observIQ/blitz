@@ -8,6 +8,7 @@ import (
 
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -196,6 +197,11 @@ func (u *UDP) Write(ctx context.Context, data output.LogRecord) error {
 // Stop shall not be called more than once.
 // If the provided context is done, Stop will return immediately
 // even if workers are still shutting down.
+// SupportedTelemetry returns the telemetry types this output supports.
+func (u *UDP) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
+}
+
 func (u *UDP) Stop(ctx context.Context) error {
 	u.logger.Info("Stopping UDP output")
 

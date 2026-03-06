@@ -9,6 +9,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/internal/generators/winevt/templates"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -29,6 +30,11 @@ type WinevtGenerator struct {
 	winevtLogsGenerated metric.Int64Counter
 	winevtActiveWorkers metric.Int64Gauge
 	winevtWriteErrors   metric.Int64Counter
+}
+
+// SupportedTelemetry returns the telemetry types this generator supports.
+func (g *WinevtGenerator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 // New creates a new Windows Event generator.

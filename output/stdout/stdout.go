@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -23,6 +24,11 @@ func New(logger *zap.Logger) (*StdoutOutput, error) {
 	return &StdoutOutput{
 		logger: logger.Named("output-stdout"),
 	}, nil
+}
+
+// SupportedTelemetry returns the telemetry types this output supports.
+func (o *StdoutOutput) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 // Write writes the log record to stdout

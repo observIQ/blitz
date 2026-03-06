@@ -7,6 +7,7 @@ import (
 
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -200,6 +201,11 @@ func (f *File) Write(ctx context.Context, data output.LogRecord) error {
 }
 
 // Stop gracefully stops workers and closes the writer
+// SupportedTelemetry returns the telemetry types this output supports.
+func (f *File) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
+}
+
 func (f *File) Stop(ctx context.Context) error {
 	f.logger.Info("Stopping File output")
 

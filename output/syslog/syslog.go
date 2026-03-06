@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"github.com/observiq/blitz/output/syslog/ident"
 	"github.com/observiq/blitz/output/tcp"
 	"github.com/observiq/blitz/output/udp"
@@ -156,6 +157,11 @@ func (s *Syslog) Write(ctx context.Context, rec output.LogRecord) error {
 	}
 
 	return s.transport.Write(ctx, output.LogRecord{Message: formatted})
+}
+
+// SupportedTelemetry returns the telemetry types this output supports.
+func (s *Syslog) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 // Stop delegates to the underlying transport.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -22,6 +23,11 @@ func New(logger *zap.Logger) (*NopGenerator, error) {
 	return &NopGenerator{
 		logger: logger.Named("generator-nop"),
 	}, nil
+}
+
+// SupportedTelemetry returns the telemetry types this generator supports.
+func (g *NopGenerator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 // Start starts the nop generator (performs no work)

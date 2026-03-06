@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -151,6 +152,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string, cac
 }
 
 // Start starts the File log generator
+// SupportedTelemetry returns the telemetry types this generator supports.
+func (g *FileLogGenerator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
+}
+
 func (g *FileLogGenerator) Start(writer output.Writer) error {
 	g.logger.Info("Starting File log generator",
 		zap.String("source", g.source),

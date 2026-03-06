@@ -13,6 +13,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -33,6 +34,11 @@ type Generator struct {
 	logsGenerated metric.Int64Counter
 	activeWorkers metric.Int64Gauge
 	writeErrors   metric.Int64Counter
+}
+
+// SupportedTelemetry returns the telemetry types this generator supports.
+func (g *Generator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 // New creates a new Palo Alto generator.

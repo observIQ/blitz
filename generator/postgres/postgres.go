@@ -10,6 +10,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -257,6 +258,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error
 
 // Start starts the PostgreSQL log generator and writes data using the
 // provided generator writer.
+// SupportedTelemetry returns the telemetry types this generator supports.
+func (g *Generator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
+}
+
 func (g *Generator) Start(writer output.Writer) error {
 	g.logger.Info("Starting PostgreSQL log generator",
 		zap.Int("workers", g.workers),

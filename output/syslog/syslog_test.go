@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
@@ -19,6 +20,10 @@ type stubOutput struct {
 func (s *stubOutput) Write(ctx context.Context, data output.LogRecord) error {
 	s.lastWrite = data.Message
 	return nil
+}
+
+func (s *stubOutput) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 func (s *stubOutput) Stop(ctx context.Context) error {

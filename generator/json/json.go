@@ -11,6 +11,7 @@ import (
 	jsonlib "github.com/goccy/go-json"
 	"github.com/observiq/blitz/internal/generator/logtypes"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -38,6 +39,11 @@ type JSONLogGenerator struct {
 	jsonLogsGenerated metric.Int64Counter
 	jsonActiveWorkers metric.Int64Gauge
 	jsonWriteErrors   metric.Int64Counter
+}
+
+// SupportedTelemetry returns the telemetry types this generator supports.
+func (g *JSONLogGenerator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 // New creates a new JSON log generator

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -22,6 +23,11 @@ func New(logger *zap.Logger) (*NopOutput, error) {
 	return &NopOutput{
 		logger: logger.Named("output-nop"),
 	}, nil
+}
+
+// SupportedTelemetry returns the telemetry types this output supports.
+func (o *NopOutput) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 // Write performs no work (data is discarded)

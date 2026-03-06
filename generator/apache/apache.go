@@ -12,6 +12,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/internal/generator/security"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -96,6 +97,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*ApacheLogGenerat
 
 // Start starts the Apache log generator and writes data using the
 // provided generator writer.
+// SupportedTelemetry returns the telemetry types this generator supports.
+func (g *ApacheLogGenerator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
+}
+
 func (g *ApacheLogGenerator) Start(writer output.Writer) error {
 	g.logger.Info("Starting Apache log generator",
 		zap.Int("workers", g.workers),
