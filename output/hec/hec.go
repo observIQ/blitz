@@ -68,6 +68,12 @@ type worker struct {
 	dataChan   chan output.LogRecord
 	ctx        context.Context
 	done       chan struct{}
+
+	// ACK support
+	tracker    *ackTracker
+	poller     *ackPoller
+	pollerStop chan struct{}
+	resendCh   chan resendItem
 }
 
 // New creates a new HEC output instance
@@ -230,12 +236,37 @@ func newWorker(id int, logger *zap.Logger, cfg Config, hostname string, dataChan
 		done:     make(chan struct{}),
 	}
 
+	// Set up ACK tracking if enabled
+	if cfg.enableACK {
+		w.tracker = newACKTracker()
+		w.pollerStop = make(chan struct{})
+		w.resendCh = make(chan resendItem, 100)
+		w.poller = newACKPoller(
+			w.logger,
+			w.tracker,
+			w.httpClient,
+			baseURL,
+			cfg.token,
+			channelID,
+			cfg.ackPollInterval,
+			cfg.ackTimeout,
+			cfg.maxRetries,
+			w.resendCh,
+		)
+	}
+
 	return w, nil
 }
 
 func (w *worker) run() {
 	defer close(w.done)
 	w.logger.Info("Starting HEC worker")
+
+	// Start ACK poller if enabled
+	if w.poller != nil {
+		go w.poller.run(w.pollerStop)
+		go w.processResends()
+	}
 
 	batch := make([]output.LogRecord, 0, w.cfg.batchSize)
 	timer := time.NewTimer(w.cfg.batchTimeout)
@@ -249,6 +280,7 @@ func (w *worker) run() {
 				if len(batch) > 0 {
 					w.sendBatch(batch)
 				}
+				w.stopACKPoller()
 				w.logger.Info("HEC worker exiting - channel closed")
 				return
 			}
@@ -290,6 +322,11 @@ func (w *worker) sendBatch(batch []output.LogRecord) {
 			zap.Int("batch_size", len(batch)),
 		)
 		return
+	}
+
+	// Track the ackId for ACK confirmation
+	if w.tracker != nil && resp.AckID != nil {
+		w.tracker.track(*resp.AckID, payload)
 	}
 
 	w.logger.Debug("HEC batch sent successfully",
@@ -399,4 +436,36 @@ func (w *worker) postEvents(payload []byte) (*hecResponse, error) {
 	}
 
 	return &hecResp, nil
+}
+
+// processResends handles resend payloads from the ACK poller.
+func (w *worker) processResends() {
+	for item := range w.resendCh {
+		resp, err := w.postEvents(item.payload)
+		if err != nil {
+			w.logger.Error("Failed to resend batch", zap.Error(err))
+			continue
+		}
+		if resp.Code != 0 {
+			w.logger.Error("HEC returned error on resend",
+				zap.Int("code", resp.Code),
+				zap.String("text", resp.Text),
+			)
+			continue
+		}
+		// Track the new ackId from the resend, preserving the accumulated retry count
+		if w.tracker != nil && resp.AckID != nil {
+			w.tracker.trackWithRetries(*resp.AckID, item.payload, item.retryCount)
+		}
+	}
+}
+
+// stopACKPoller stops the ACK poller and waits for it to finish, then closes the resend channel.
+func (w *worker) stopACKPoller() {
+	if w.pollerStop == nil {
+		return
+	}
+	close(w.pollerStop)
+	<-w.poller.done
+	close(w.resendCh)
 }
