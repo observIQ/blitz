@@ -12,6 +12,7 @@ tool (
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/goccy/go-json v0.10.6
+	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
@@ -51,7 +52,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
 	github.com/gookit/color v1.6.0 // indirect
