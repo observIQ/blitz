@@ -22,6 +22,8 @@ const (
 	OutputTypeOTLPGrpc OutputType = "otlp-grpc"
 	// OutputTypeFile represents File output
 	OutputTypeFile OutputType = "file"
+	// OutputTypeHEC represents Splunk HEC output
+	OutputTypeHEC OutputType = "hec"
 )
 
 // Output contains configuration for output destinations
@@ -38,6 +40,8 @@ type Output struct {
 	OTLPGrpc OTLPGrpcOutputConfig `yaml:"otlpGrpc,omitempty" mapstructure:"otlpGrpc,omitempty"`
 	// File contains File output configuration
 	File FileOutputConfig `yaml:"file,omitempty" mapstructure:"file,omitempty"`
+	// HEC contains Splunk HEC output configuration
+	HEC HECOutputConfig `yaml:"hec,omitempty" mapstructure:"hec,omitempty"`
 }
 
 // Validate validates the output configuration
@@ -72,8 +76,12 @@ func (o *Output) Validate() error {
 		if err := o.File.Validate(); err != nil {
 			return fmt.Errorf("File output validation failed: %w", err)
 		}
+	case OutputTypeHEC:
+		if err := o.HEC.Validate(); err != nil {
+			return fmt.Errorf("HEC output validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file", o.Type)
+		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file, hec", o.Type)
 	}
 
 	return nil
