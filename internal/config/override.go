@@ -275,7 +275,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.filegen.cache-ttl", "file cache time-to-live (0 = never expire)", time.Duration(0)),
 		NewOverride("generator.okta.workers", "number of Okta generator workers", 1),
 		NewOverride("generator.okta.rate", "rate at which Okta logs are generated per worker", 1*time.Second),
-		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file", OutputTypeNop),
+		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file|hec", OutputTypeNop),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),
 		NewOverride("output.udp.workers", "number of UDP output workers", 1),
@@ -306,12 +306,75 @@ func DefaultOverrides() []*Override {
 		NewOverride("output.otlpGrpc.batchTimeout", "OTLP gRPC output batch timeout", DefaultOTLPGrpcBatchTimeout),
 		NewOverride("output.otlpGrpc.maxQueueSize", "OTLP gRPC output maximum queue size", DefaultOTLPGrpcMaxQueueSize),
 		NewOverride("output.otlpGrpc.maxExportBatchSize", "OTLP gRPC output maximum export batch size", DefaultOTLPGrpcMaxExportBatchSize),
+		NewOverride("output.hec.host", "HEC output target host", ""),
+		NewOverride("output.hec.port", "HEC output target port", DefaultHECPort),
+		NewOverride("output.hec.token", "HEC output authentication token", ""),
+		NewOverride("output.hec.workers", "number of HEC output workers", DefaultHECWorkers),
+		NewOverride("output.hec.batchSize", "HEC output maximum events per batch", DefaultHECBatchSize),
+		NewOverride("output.hec.batchTimeout", "HEC output batch flush timeout", DefaultHECBatchTimeout),
+		NewOverride("output.hec.eventFormat", "HEC output event format. One of: raw|parsed", DefaultHECEventFormat),
+		NewOverride("output.hec.enableAck", "enable Splunk indexer acknowledgement", DefaultHECEnableACK),
+		NewOverride("output.hec.ackPollInterval", "HEC ACK poll interval", DefaultHECACKPollInterval),
+		NewOverride("output.hec.ackTimeout", "HEC ACK timeout before resend", DefaultHECACKTimeout),
+		NewOverride("output.hec.maxRetries", "HEC maximum resend attempts per batch", DefaultHECMaxRetries),
+		NewOverride("output.hec.source", "HEC event source metadata", DefaultHECSource),
+		NewOverride("output.hec.sourceType", "HEC event sourcetype metadata", DefaultHECSourceType),
+		NewOverride("output.hec.index", "HEC target index (empty = token default)", ""),
 	}
 
 	overrides = append(overrides, tcpTLSOverrides()...)
 	overrides = append(overrides, syslogTLSOverrides()...)
 	overrides = append(overrides, otlpGrpcTLSOverrides()...)
+	overrides = append(overrides, hecTLSOverrides()...)
 	return overrides
+}
+
+// hecTLSOverrides creates HEC TLS overrides
+func hecTLSOverrides() []*Override {
+	return []*Override{
+		{
+			Field:   "output.hec.enableTLS",
+			Flag:    "output-hec-enable-tls",
+			Env:     "BLITZ_OUTPUT_HEC_ENABLE_TLS",
+			Usage:   "enable TLS for HEC connections",
+			Default: DefaultHECEnableTLS,
+		},
+		{
+			Field:   "output.hec.tls.cert",
+			Flag:    "output-hec-tls-cert",
+			Env:     "BLITZ_OUTPUT_HEC_TLS_CERT",
+			Usage:   "the path to the TLS certificate for HEC connections",
+			Default: "",
+		},
+		{
+			Field:   "output.hec.tls.key",
+			Flag:    "output-hec-tls-key",
+			Env:     "BLITZ_OUTPUT_HEC_TLS_KEY",
+			Usage:   "the path to the TLS private key for HEC connections",
+			Default: "",
+		},
+		{
+			Field:   "output.hec.tls.ca",
+			Flag:    "output-hec-tls-ca",
+			Env:     "BLITZ_OUTPUT_HEC_TLS_CA",
+			Usage:   "the path to the TLS CA files for HEC connections",
+			Default: []string{},
+		},
+		{
+			Field:   "output.hec.tls.skipVerify",
+			Flag:    "output-hec-tls-skip-verify",
+			Env:     "BLITZ_OUTPUT_HEC_TLS_SKIP_VERIFY",
+			Usage:   "whether to skip TLS verification for HEC connections",
+			Default: false,
+		},
+		{
+			Field:   "output.hec.tls.minVersion",
+			Flag:    "output-hec-tls-min-version",
+			Env:     "BLITZ_OUTPUT_HEC_TLS_MIN_VERSION",
+			Usage:   "the minimum TLS version to use for HEC connections. One of: 1.2|1.3",
+			Default: "1.2",
+		},
+	}
 }
 
 // syslogTLSOverrides creates Syslog TLS overrides
