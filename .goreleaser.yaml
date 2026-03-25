@@ -86,9 +86,9 @@ nfpms:
         dst: /etc/blitz/blitz.env
         type: config
         file_info:
-          mode: 0640
-          owner: blitz
-          group: blitz
+          mode: 0600
+          owner: root
+          group: root
       - src: package/blitz.service
         dst: /usr/lib/systemd/system/blitz.service
         file_info:
