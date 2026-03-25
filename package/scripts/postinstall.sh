@@ -3,11 +3,6 @@ set -eu
 
 # Detect action
 # Note: Currently both install and remove perform the same operations
-# (config dir setup, systemd reload)
-
-# Ensure config dir ownership remains correct
-mkdir -p /etc/blitz
-chown -R blitz:blitz /etc/blitz || true
 
 # Reload systemd only; do not start/enable/restart service
 if command -v systemctl >/dev/null 2>&1; then
