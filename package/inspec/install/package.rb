@@ -17,9 +17,9 @@ describe file('/etc/blitz/config.yaml') do
 end
  
 describe file('/etc/blitz/blitz.env') do
-    its('mode') { should cmp '0640' }
-    its('owner') { should eq 'blitz' }
-    its('group') { should eq 'blitz' }
+    its('mode') { should cmp '0600' }
+    its('owner') { should eq 'root' }
+    its('group') { should eq 'root' }
     its('type') { should cmp 'file' }
 end
 
