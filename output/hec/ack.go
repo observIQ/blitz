@@ -104,12 +104,6 @@ func (a *ackTracker) size() int {
 	return len(a.pending)
 }
 
-// resendItem carries a payload and its accumulated retry count back to the worker for resend.
-type resendItem struct {
-	payload    []byte
-	retryCount int
-}
-
 // ackRequest is the request body for the ACK endpoint
 type ackRequest struct {
 	Acks []int64 `json:"acks"`
@@ -118,6 +112,12 @@ type ackRequest struct {
 // ackResponse is the response from the ACK endpoint
 type ackResponse struct {
 	Acks map[string]bool `json:"acks"`
+}
+
+// resendItem carries a payload and its accumulated retry count back to the worker for resend.
+type resendItem struct {
+	payload    []byte
+	retryCount int
 }
 
 // ackPoller polls the HEC ACK endpoint for a single worker/channel.
@@ -131,7 +131,8 @@ type ackPoller struct {
 	interval   time.Duration
 	ackTimeout time.Duration
 	maxRetries int
-	resendCh   chan resendItem
+	resendCh   chan resendItem // channel to send payloads back for resend
+	metrics    *hecMetrics
 	done       chan struct{}
 }
 
@@ -146,6 +147,7 @@ func newACKPoller(
 	ackTimeout time.Duration,
 	maxRetries int,
 	resendCh chan resendItem,
+	metrics *hecMetrics,
 ) *ackPoller {
 	return &ackPoller{
 		logger:     logger,
@@ -158,6 +160,7 @@ func newACKPoller(
 		ackTimeout: ackTimeout,
 		maxRetries: maxRetries,
 		resendCh:   resendCh,
+		metrics:    metrics,
 		done:       make(chan struct{}),
 	}
 }
@@ -188,10 +191,16 @@ func (p *ackPoller) poll() {
 		return
 	}
 
+	p.metrics.recordACKPending(ctx, int64(len(ids)))
+
 	// Query ACK status
+	startTime := time.Now()
 	confirmed, err := p.queryACK(ids)
+	p.metrics.recordACKPollLatency(ctx, time.Since(startTime).Seconds())
+
 	if err != nil {
 		p.logger.Error("Failed to query ACK status", zap.Error(err))
+		// Don't remove anything on query failure — will retry next cycle
 		return
 	}
 
@@ -199,16 +208,22 @@ func (p *ackPoller) poll() {
 	if len(confirmed) > 0 {
 		count := p.tracker.confirm(confirmed)
 		p.logger.Debug("ACKs confirmed", zap.Int("count", count))
+		p.metrics.recordACKConfirmed(ctx, int64(count))
 	}
 
 	// Check for expired batches and resend
 	expired := p.tracker.expired(p.ackTimeout)
+	if len(expired) > 0 {
+		p.metrics.recordACKExpired(ctx, int64(len(expired)))
+	}
+
 	for _, batch := range expired {
 		if batch.retryCount >= p.maxRetries {
 			p.logger.Warn("Dropping batch after max retries exceeded",
 				zap.Int("retry_count", batch.retryCount),
 				zap.Int("max_retries", p.maxRetries),
 			)
+			p.metrics.recordACKDropped(ctx, 1)
 			continue
 		}
 
@@ -218,6 +233,9 @@ func (p *ackPoller) poll() {
 			zap.Int("max_retries", p.maxRetries),
 		)
 
+		p.metrics.recordACKRetried(ctx, 1)
+
+		// Resend the payload with the accumulated retry count
 		select {
 		case p.resendCh <- resendItem{payload: batch.payload, retryCount: newRetryCount}:
 		default:
@@ -225,7 +243,7 @@ func (p *ackPoller) poll() {
 		}
 	}
 
-	_ = ctx
+	p.metrics.recordACKPending(ctx, int64(p.tracker.size()))
 }
 
 func (p *ackPoller) queryACK(ids []int64) ([]int64, error) {
