@@ -10,7 +10,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/goccy/go-json"
 	"github.com/observiq/blitz/internal/config"
 	"github.com/observiq/blitz/output"
@@ -54,6 +53,7 @@ type HEC struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	workers  []*worker
+	metrics  *hecMetrics
 }
 
 // worker represents a single HEC worker with its own channel UUID and HTTP client
@@ -68,6 +68,9 @@ type worker struct {
 	dataChan   chan output.LogRecord
 	ctx        context.Context
 	done       chan struct{}
+
+	// Metrics
+	metrics *hecMetrics
 
 	// ACK support
 	tracker    *ackTracker
@@ -120,6 +123,11 @@ func New(logger *zap.Logger, opts ...Option) (*HEC, error) {
 		hostname = "unknown"
 	}
 
+	m, err := newHECMetrics()
+	if err != nil {
+		return nil, fmt.Errorf("create metrics: %w", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	h := &HEC{
@@ -129,6 +137,7 @@ func New(logger *zap.Logger, opts ...Option) (*HEC, error) {
 		dataChan: make(chan output.LogRecord, DefaultChannelSize),
 		ctx:      ctx,
 		cancel:   cancel,
+		metrics:  m,
 	}
 
 	h.logger.Info("Starting HEC output",
@@ -144,7 +153,7 @@ func New(logger *zap.Logger, opts ...Option) (*HEC, error) {
 
 	// Create workers
 	for i := range cfg.workers {
-		w, err := newWorker(i, h.logger, cfg, hostname, h.dataChan, ctx)
+		w, err := newWorker(i, h.logger, cfg, hostname, h.dataChan, ctx, m)
 		if err != nil {
 			cancel()
 			return nil, fmt.Errorf("create worker %d: %w", i, err)
@@ -157,6 +166,8 @@ func New(logger *zap.Logger, opts ...Option) (*HEC, error) {
 		go w.run()
 	}
 
+	m.recordActiveWorkers(context.Background(), int64(cfg.workers))
+
 	return h, nil
 }
 
@@ -164,6 +175,7 @@ func New(logger *zap.Logger, opts ...Option) (*HEC, error) {
 func (h *HEC) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case h.dataChan <- data:
+		h.metrics.recordLogsReceived(ctx, 1)
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -175,6 +187,7 @@ func (h *HEC) Write(ctx context.Context, data output.LogRecord) error {
 // Stop gracefully shuts down all workers
 func (h *HEC) Stop(ctx context.Context) error {
 	h.logger.Info("Stopping HEC output")
+	h.metrics.recordActiveWorkers(ctx, 0)
 
 	// Close the channel to signal workers to drain remaining items and stop.
 	// Do NOT cancel the context yet — workers need it for in-flight HTTP requests
@@ -197,7 +210,7 @@ func (h *HEC) Stop(ctx context.Context) error {
 	return nil
 }
 
-func newWorker(id int, logger *zap.Logger, cfg Config, hostname string, dataChan chan output.LogRecord, ctx context.Context) (*worker, error) {
+func newWorker(id int, logger *zap.Logger, cfg Config, hostname string, dataChan chan output.LogRecord, ctx context.Context, m *hecMetrics) (*worker, error) {
 	scheme := "https"
 	if !cfg.enableTLS {
 		scheme = "http"
@@ -234,6 +247,7 @@ func newWorker(id int, logger *zap.Logger, cfg Config, hostname string, dataChan
 		dataChan: dataChan,
 		ctx:      ctx,
 		done:     make(chan struct{}),
+		metrics:  m,
 	}
 
 	// Set up ACK tracking if enabled
@@ -252,6 +266,7 @@ func newWorker(id int, logger *zap.Logger, cfg Config, hostname string, dataChan
 			cfg.ackTimeout,
 			cfg.maxRetries,
 			w.resendCh,
+			m,
 		)
 	}
 
@@ -302,18 +317,63 @@ func (w *worker) run() {
 	}
 }
 
+// processResends handles resend payloads from the ACK poller.
+// These are pre-serialized batch payloads that need to be re-POSTed to HEC.
+func (w *worker) processResends() {
+	for item := range w.resendCh {
+		resp, err := w.postEvents(item.payload)
+		if err != nil {
+			w.logger.Error("Failed to resend batch", zap.Error(err))
+			continue
+		}
+		if resp.Code != 0 {
+			w.logger.Error("HEC returned error on resend",
+				zap.Int("code", resp.Code),
+				zap.String("text", resp.Text),
+			)
+			continue
+		}
+		// Track the new ackId from the resend, preserving the accumulated retry count
+		if w.tracker != nil && resp.AckID != nil {
+			w.tracker.trackWithRetries(*resp.AckID, item.payload, item.retryCount)
+		}
+	}
+}
+
+// stopACKPoller stops the ACK poller and waits for it to finish, then closes the resend channel.
+func (w *worker) stopACKPoller() {
+	if w.pollerStop == nil {
+		return
+	}
+	close(w.pollerStop)
+	<-w.poller.done
+	close(w.resendCh)
+}
+
 func (w *worker) sendBatch(batch []output.LogRecord) {
+	ctx := context.Background()
+	batchLen := int64(len(batch))
+	w.metrics.recordBatchSize(ctx, batchLen)
+
 	payload, err := w.buildPayload(batch)
 	if err != nil {
 		w.logger.Error("Failed to build HEC payload", zap.Error(err))
+		w.metrics.recordSendError(ctx, "encode")
 		return
 	}
 
+	startTime := time.Now()
 	resp, err := w.postEvents(payload)
+	latency := time.Since(startTime).Seconds()
+
 	if err != nil {
 		w.logger.Error("Failed to send HEC events", zap.Error(err), zap.Int("batch_size", len(batch)))
+		w.metrics.recordSendError(ctx, "transport")
 		return
 	}
+
+	w.metrics.recordRequestLatency(ctx, latency)
+	w.metrics.recordRequestSize(ctx, int64(len(payload)))
 
 	if resp.Code != 0 {
 		w.logger.Error("HEC returned error",
@@ -321,8 +381,11 @@ func (w *worker) sendBatch(batch []output.LogRecord) {
 			zap.String("text", resp.Text),
 			zap.Int("batch_size", len(batch)),
 		)
+		w.metrics.recordSendError(ctx, "hec_error")
 		return
 	}
+
+	w.metrics.recordLogRate(ctx, float64(batchLen))
 
 	// Track the ackId for ACK confirmation
 	if w.tracker != nil && resp.AckID != nil {
@@ -382,90 +445,27 @@ func (w *worker) formatEvent(record output.LogRecord) hecEvent {
 func (w *worker) postEvents(payload []byte) (*hecResponse, error) {
 	url := w.baseURL + eventEndpoint
 
-	var hecResp hecResponse
-
-	b := backoff.NewExponentialBackOff(
-		backoff.WithInitialInterval(100*time.Millisecond),
-		backoff.WithMaxInterval(30*time.Second),
-		backoff.WithMaxElapsedTime(2*time.Minute),
-		backoff.WithMultiplier(2),
-		backoff.WithRandomizationFactor(0.1),
-	)
-
-	operation := func() error {
-		req, err := http.NewRequestWithContext(w.ctx, http.MethodPost, url, bytes.NewReader(payload))
-		if err != nil {
-			return backoff.Permanent(fmt.Errorf("create request: %w", err))
-		}
-
-		req.Header.Set("Authorization", "Splunk "+w.cfg.token)
-		req.Header.Set("Content-Type", "application/json")
-		if w.cfg.enableACK {
-			req.Header.Set("X-Splunk-Request-Channel", w.channelID)
-		}
-
-		resp, err := w.httpClient.Do(req)
-		if err != nil {
-			return backoff.Permanent(fmt.Errorf("send request: %w", err))
-		}
-
-		err = json.NewDecoder(resp.Body).Decode(&hecResp)
-		_ = resp.Body.Close() // #nosec G104 - error on close is not actionable
-		if err != nil {
-			return backoff.Permanent(fmt.Errorf("decode response (status %d): %w", resp.StatusCode, err))
-		}
-
-		switch {
-		case resp.StatusCode == http.StatusOK:
-			return nil
-		case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-			return backoff.Permanent(fmt.Errorf("auth error (HTTP %d): %s", resp.StatusCode, hecResp.Text))
-		case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable:
-			w.logger.Warn("HEC server busy, retrying",
-				zap.Int("status", resp.StatusCode),
-				zap.String("text", hecResp.Text),
-			)
-			return fmt.Errorf("server busy (HTTP %d)", resp.StatusCode)
-		default:
-			return backoff.Permanent(fmt.Errorf("unexpected HTTP status %d: %s", resp.StatusCode, hecResp.Text))
-		}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	if err := backoff.Retry(operation, backoff.WithContext(b, w.ctx)); err != nil {
-		return nil, err
+	req.Header.Set("Authorization", "Splunk "+w.cfg.token)
+	req.Header.Set("Content-Type", "application/json")
+	if w.cfg.enableACK {
+		req.Header.Set("X-Splunk-Request-Channel", w.channelID)
+	}
+
+	resp, err := w.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var hecResp hecResponse
+	if err := json.NewDecoder(resp.Body).Decode(&hecResp); err != nil {
+		return nil, fmt.Errorf("decode response (status %d): %w", resp.StatusCode, err)
 	}
 
 	return &hecResp, nil
-}
-
-// processResends handles resend payloads from the ACK poller.
-func (w *worker) processResends() {
-	for item := range w.resendCh {
-		resp, err := w.postEvents(item.payload)
-		if err != nil {
-			w.logger.Error("Failed to resend batch", zap.Error(err))
-			continue
-		}
-		if resp.Code != 0 {
-			w.logger.Error("HEC returned error on resend",
-				zap.Int("code", resp.Code),
-				zap.String("text", resp.Text),
-			)
-			continue
-		}
-		// Track the new ackId from the resend, preserving the accumulated retry count
-		if w.tracker != nil && resp.AckID != nil {
-			w.tracker.trackWithRetries(*resp.AckID, item.payload, item.retryCount)
-		}
-	}
-}
-
-// stopACKPoller stops the ACK poller and waits for it to finish, then closes the resend channel.
-func (w *worker) stopACKPoller() {
-	if w.pollerStop == nil {
-		return
-	}
-	close(w.pollerStop)
-	<-w.poller.done
-	close(w.resendCh)
 }
