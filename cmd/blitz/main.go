@@ -39,6 +39,7 @@ import (
 	otlpgrpc "github.com/observiq/blitz/output/otlp_grpc"
 	stdoutout "github.com/observiq/blitz/output/stdout"
 	syslogout "github.com/observiq/blitz/output/syslog"
+	hecout "github.com/observiq/blitz/output/hec"
 	"github.com/observiq/blitz/output/tcp"
 	"github.com/observiq/blitz/output/udp"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -268,6 +269,38 @@ func run(cmd *cobra.Command, args []string) error {
 		)
 		if err != nil {
 			logger.Error("Failed to create File output", zap.Error(err))
+			return err
+		}
+	case config.OutputTypeHEC:
+		hecOpts := []hecout.Option{
+			hecout.WithHost(cfg.Output.HEC.Host),
+			hecout.WithPort(strconv.Itoa(cfg.Output.HEC.Port)),
+			hecout.WithToken(cfg.Output.HEC.Token),
+			hecout.WithWorkers(cfg.Output.HEC.Workers),
+			hecout.WithBatchSize(cfg.Output.HEC.BatchSize),
+			hecout.WithBatchTimeout(cfg.Output.HEC.BatchTimeout),
+			hecout.WithEventFormat(cfg.Output.HEC.EventFormat),
+			hecout.WithEnableACK(cfg.Output.HEC.EnableACK),
+			hecout.WithACKPollInterval(cfg.Output.HEC.ACKPollInterval),
+			hecout.WithACKTimeout(cfg.Output.HEC.ACKTimeout),
+			hecout.WithMaxRetries(cfg.Output.HEC.MaxRetries),
+			hecout.WithSource(cfg.Output.HEC.Source),
+			hecout.WithSourceType(cfg.Output.HEC.SourceType),
+			hecout.WithIndex(cfg.Output.HEC.Index),
+			hecout.WithEnableTLS(cfg.Output.HEC.EnableTLS),
+		}
+		if cfg.Output.HEC.EnableTLS {
+			var tlsConfig *tls.Config
+			tlsConfig, err = cfg.Output.HEC.TLS.Convert()
+			if err != nil {
+				logger.Error("Failed to convert TLS config for HEC output", zap.Error(err))
+				return err
+			}
+			hecOpts = append(hecOpts, hecout.WithTLSConfig(tlsConfig))
+		}
+		outputInstance, err = hecout.New(logger, hecOpts...)
+		if err != nil {
+			logger.Error("Failed to create HEC output", zap.Error(err))
 			return err
 		}
 	default:
