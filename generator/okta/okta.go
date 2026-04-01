@@ -9,6 +9,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	jsonlib "github.com/goccy/go-json"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -35,6 +36,7 @@ type Generator struct {
 	rate    time.Duration
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
+	tracker *count.Tracker
 	meter   metric.Meter
 
 	oktaLogsGenerated metric.Int64Counter
@@ -45,11 +47,11 @@ type Generator struct {
 // Predefined data for realistic Okta log generation
 var (
 	eventTypes = []struct {
-		eventType   string
-		displayMsg  string
-		severity    string
-		outcome     string
-		category    string
+		eventType  string
+		displayMsg string
+		severity   string
+		outcome    string
+		category   string
 	}{
 		// Authentication events
 		{"user.session.start", "User login to Okta", "INFO", "SUCCESS", "authentication"},
@@ -274,6 +276,11 @@ func (g *Generator) Stop(ctx context.Context) error {
 	}
 }
 
+// SetCountTracker sets the finite generation count tracker.
+func (g *Generator) SetCountTracker(t *count.Tracker) {
+	g.tracker = t
+}
+
 func (g *Generator) worker(workerID int, writer output.Writer) {
 	defer g.wg.Done()
 
@@ -310,6 +317,14 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 			g.logger.Debug("Worker stopping", zap.Int("worker_id", workerID))
 			return
 		case <-backoffTicker.C:
+			if g.tracker != nil && !g.tracker.Acquire() {
+				select {
+				case <-g.stopCh:
+					return
+				case <-g.tracker.ResumeC():
+					continue
+				}
+			}
 			err := g.generateAndWriteLog(r, writer, workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
@@ -354,11 +369,11 @@ func (g *Generator) generateAndWriteLog(r *rand.Rand, writer output.Writer, work
 
 func (g *Generator) generateOktaLog(r *rand.Rand) (output.LogRecord, error) {
 	now := time.Now().UTC()
-	event := eventTypes[r.Intn(len(eventTypes))]           // #nosec G404
-	actor := actors[r.Intn(len(actors))]                   // #nosec G404
-	app := applications[r.Intn(len(applications))]         // #nosec G404
-	location := cities[r.Intn(len(cities))]                // #nosec G404
-	userAgent := userAgents[r.Intn(len(userAgents))]       // #nosec G404
+	event := eventTypes[r.Intn(len(eventTypes))]     // #nosec G404
+	actor := actors[r.Intn(len(actors))]             // #nosec G404
+	app := applications[r.Intn(len(applications))]   // #nosec G404
+	location := cities[r.Intn(len(cities))]          // #nosec G404
+	userAgent := userAgents[r.Intn(len(userAgents))] // #nosec G404
 
 	// Generate UUIDs
 	uuid := generateUUID(r)
@@ -368,11 +383,11 @@ func (g *Generator) generateOktaLog(r *rand.Rand) (output.LogRecord, error) {
 
 	// Build the Okta System Log event
 	logData := map[string]any{
-		"uuid":      uuid,
-		"published": now.Format(time.RFC3339Nano),
-		"eventType": event.eventType,
-		"version":   "0",
-		"severity":  event.severity,
+		"uuid":           uuid,
+		"published":      now.Format(time.RFC3339Nano),
+		"eventType":      event.eventType,
+		"version":        "0",
+		"severity":       event.severity,
 		"displayMessage": event.displayMsg,
 		"actor": map[string]any{
 			"id":          actorID,
@@ -386,9 +401,9 @@ func (g *Generator) generateOktaLog(r *rand.Rand) (output.LogRecord, error) {
 				"os":           "Unknown",
 				"browser":      "UNKNOWN",
 			},
-			"zone":              "null",
-			"device":            "Unknown",
-			"ipAddress":         generateRandomIP(r),
+			"zone":      "null",
+			"device":    "Unknown",
+			"ipAddress": generateRandomIP(r),
 			"geographicalContext": map[string]any{
 				"city":       location.city,
 				"state":      location.state,
@@ -432,11 +447,11 @@ func (g *Generator) generateOktaLog(r *rand.Rand) (output.LogRecord, error) {
 			"interface":              "Okta End-User Dashboard",
 		},
 		"securityContext": map[string]any{
-			"asNumber":  r.Intn(65535),                          // #nosec G404
-			"asOrg":     "example-isp",
-			"isp":       "Example ISP",
-			"domain":    "example.com",
-			"isProxy":   r.Float64() < 0.1,                      // #nosec G404
+			"asNumber": r.Intn(65535), // #nosec G404
+			"asOrg":    "example-isp",
+			"isp":      "Example ISP",
+			"domain":   "example.com",
+			"isProxy":  r.Float64() < 0.1, // #nosec G404
 		},
 		"legacyEventType": event.eventType,
 	}
@@ -469,10 +484,10 @@ func (g *Generator) generateOktaLog(r *rand.Rand) (output.LogRecord, error) {
 
 func generateUUID(r *rand.Rand) string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		r.Uint32(),           // #nosec G404
-		r.Uint32()&0xFFFF,    // #nosec G404
-		r.Uint32()&0xFFFF,    // #nosec G404
-		r.Uint32()&0xFFFF,    // #nosec G404
+		r.Uint32(),                // #nosec G404
+		r.Uint32()&0xFFFF,         // #nosec G404
+		r.Uint32()&0xFFFF,         // #nosec G404
+		r.Uint32()&0xFFFF,         // #nosec G404
 		r.Uint64()&0xFFFFFFFFFFFF) // #nosec G404
 }
 
