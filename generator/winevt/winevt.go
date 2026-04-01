@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generators/winevt/templates"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
@@ -21,9 +22,10 @@ type WinevtGenerator struct {
 	workers int
 	rate    time.Duration
 
-	wg     sync.WaitGroup
-	stopCh chan struct{}
-	meter  metric.Meter
+	wg      sync.WaitGroup
+	stopCh  chan struct{}
+	tracker *count.Tracker
+	meter   metric.Meter
 
 	// Metrics
 	winevtLogsGenerated metric.Int64Counter
@@ -121,6 +123,11 @@ func (g *WinevtGenerator) Stop(ctx context.Context) error {
 	}
 }
 
+// SetCountTracker sets the finite generation count tracker.
+func (g *WinevtGenerator) SetCountTracker(t *count.Tracker) {
+	g.tracker = t
+}
+
 func (g *WinevtGenerator) worker(workerID int, writer output.Writer) {
 	defer g.wg.Done()
 	g.logger.Debug("Starting worker", zap.Int("worker_id", workerID))
@@ -139,6 +146,14 @@ func (g *WinevtGenerator) worker(workerID int, writer output.Writer) {
 			g.logger.Debug("Worker stopping", zap.Int("worker_id", workerID))
 			return
 		case <-backoffTicker.C:
+			if g.tracker != nil && !g.tracker.Acquire() {
+				select {
+				case <-g.stopCh:
+					return
+				case <-g.tracker.ResumeC():
+					continue
+				}
+			}
 			if err := g.generateAndWrite(writer, workerID); err != nil {
 				g.logger.Error("Failed to write log", zap.Int("worker_id", workerID), zap.Error(err))
 				continue
