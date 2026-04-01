@@ -14,6 +14,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
@@ -75,6 +76,7 @@ type FileLogGenerator struct {
 	rate    time.Duration
 	source  string // file path or directory path or glob pattern
 	stopCh  chan struct{}
+	tracker *count.Tracker
 	wg      sync.WaitGroup
 	meter   metric.Meter
 
@@ -308,6 +310,11 @@ func (g *FileLogGenerator) getFilesFromPackage() ([]string, error) {
 }
 
 // worker reads lines from files and writes them to the output writer
+// SetCountTracker sets the finite generation count tracker.
+func (g *FileLogGenerator) SetCountTracker(t *count.Tracker) {
+	g.tracker = t
+}
+
 func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) {
 	defer g.wg.Done()
 
@@ -331,6 +338,14 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 			g.logger.Debug("Worker received stop signal", zap.Int("id", id))
 			return
 		case <-backoffTicker.C:
+			if g.tracker != nil && !g.tracker.Acquire() {
+				select {
+				case <-g.stopCh:
+					return
+				case <-g.tracker.ResumeC():
+					continue
+				}
+			}
 			if fileIdx >= len(files) {
 				// Cycle back to the beginning
 				fileIdx = 0
