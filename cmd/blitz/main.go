@@ -19,6 +19,7 @@ import (
 	apachegen "github.com/observiq/blitz/generator/apache"
 	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
 	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/filegen"
 	jsongen "github.com/observiq/blitz/generator/json"
 	"github.com/observiq/blitz/generator/kubernetes"
@@ -35,11 +36,11 @@ import (
 	"github.com/observiq/blitz/internal/telemetry/metrics"
 	"github.com/observiq/blitz/output"
 	fileout "github.com/observiq/blitz/output/file"
+	hecout "github.com/observiq/blitz/output/hec"
 	"github.com/observiq/blitz/output/nop"
 	otlpgrpc "github.com/observiq/blitz/output/otlp_grpc"
 	stdoutout "github.com/observiq/blitz/output/stdout"
 	syslogout "github.com/observiq/blitz/output/syslog"
-	hecout "github.com/observiq/blitz/output/hec"
 	"github.com/observiq/blitz/output/tcp"
 	"github.com/observiq/blitz/output/udp"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -437,6 +438,21 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid generator type: %s", cfg.Generator.Type)
 	}
 
+	// Set up finite generation count tracker
+	var tracker *count.Tracker
+	if cfg.Generator.Count > 0 {
+		tracker = count.NewTracker(int64(cfg.Generator.Count))
+		if s, ok := generatorInstance.(interface{ SetCountTracker(*count.Tracker) }); ok {
+			s.SetCountTracker(tracker)
+		}
+		logger.Info("Finite generation enabled",
+			zap.Int("count", cfg.Generator.Count),
+			zap.String("onFinish", cfg.OnFinish))
+	}
+
+	// Set up SIGUSR1 restart signal handler
+	setupRestartSignal(logger, tracker)
+
 	svc, err := service.New(logger, generatorInstance, outputInstance)
 	if err != nil {
 		logger.Error("Failed to create service", zap.Error(err))
@@ -448,11 +464,41 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	<-ctx.Done()
+	if tracker == nil {
+		<-ctx.Done()
+	} else if cfg.OnFinish == "idle" {
+		for {
+			select {
+			case <-ctx.Done():
+				goto shutdown
+			case <-tracker.Done():
+				logger.Info("Generation count reached, idling (SIGUSR1 to restart)")
+			}
+			select {
+			case <-ctx.Done():
+				goto shutdown
+			case <-tracker.ResumeC():
+				logger.Info("Generation restarted")
+			}
+		}
+	} else {
+		select {
+		case <-ctx.Done():
+		case <-tracker.Done():
+			logger.Info("Generation count reached, exiting")
+		}
+	}
+shutdown:
 
 	if err := svc.Stop(); err != nil {
 		logger.Error("Failed to stop service", zap.Error(err))
 		return err
+	}
+
+	if tracker != nil {
+		logger.Info("Telemetry generation completed",
+			zap.String("generator", string(cfg.Generator.Type)),
+			zap.Int64("records_emitted", tracker.Emitted()))
 	}
 
 	logger.Info("blitz shutdown complete")
