@@ -247,6 +247,8 @@ func DefaultOverrides() []*Override {
 		NewOverride("logging.file.rotation.compress", "logging file rotation: compress rotated files", true),
 		NewOverride("logging.file.rotation.localTime", "logging file rotation: use local time for backup timestamps", false),
 		NewOverride("metrics.port", "HTTP port for the metrics endpoint", DefaultMetricsPort),
+		NewOverride("generator.count", "total number of logs to generate (0 = unlimited)", 0),
+		NewOverride("onFinish", "behavior when finite generation completes. One of: exit|idle", "exit"),
 		NewOverride("generator.type", "generator type. One of: nop|json|winevt|palo-alto|apache-common|apache-combined|apache-error|nginx|postgres|kubernetes|filegen|okta", GeneratorTypeNop),
 		NewOverride("generator.json.workers", "number of JSON generator workers", 1),
 		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),

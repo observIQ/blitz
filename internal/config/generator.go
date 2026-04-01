@@ -38,6 +38,8 @@ const (
 type Generator struct {
 	// Type specifies the generator type (json)
 	Type GeneratorType `yaml:"type,omitempty" mapstructure:"type,omitempty"`
+	// Count is the total number of logs to generate (0 = unlimited)
+	Count int `yaml:"count,omitempty" mapstructure:"count,omitempty"`
 	// JSON contains JSON generator configuration
 	JSON JSONGeneratorConfig `yaml:"json,omitempty" mapstructure:"json,omitempty"`
 	// Winevt contains Windows Event generator configuration
@@ -64,6 +66,10 @@ type Generator struct {
 
 // Validate validates the generator configuration
 func (g *Generator) Validate() error {
+	if g.Count < 0 {
+		return fmt.Errorf("generator count must be 0 or greater, got %d", g.Count)
+	}
+
 	// Allow empty type - defaults will be applied by override system
 	if g.Type == "" {
 		return nil
