@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -333,4 +334,46 @@ func TestGenerator_VeryFastRate(t *testing.T) {
 	// Should have generated many logs
 	writes := writer.getWrites()
 	assert.Greater(t, len(writes), 5, "Expected many logs with fast rate")
+}
+
+func TestGenerator_SetCountTracker(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	gen, err := New(logger, 1, 50*time.Millisecond)
+	require.NoError(t, err)
+
+	assert.Nil(t, gen.tracker, "tracker should be nil initially")
+
+	tracker := count.NewTracker(10)
+	gen.SetCountTracker(tracker)
+	assert.Equal(t, tracker, gen.tracker)
+}
+
+func TestGenerator_CountLimited(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	writer := newMockWriter()
+
+	gen, err := New(logger, 2, 10*time.Millisecond)
+	require.NoError(t, err)
+
+	tracker := count.NewTracker(5)
+	gen.SetCountTracker(tracker)
+
+	err = gen.Start(writer)
+	require.NoError(t, err)
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("tracker should have been exhausted")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = gen.Stop(ctx)
+	require.NoError(t, err)
+
+	writes := writer.getWrites()
+	assert.Equal(t, 5, len(writes), "Expected exactly 5 logs with count tracker")
 }
