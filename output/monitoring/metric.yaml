@@ -1,0 +1,125 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/open-telemetry/weaver/refs/heads/main/schemas/semconv.schema.json
+groups:
+- id: output.entries_received
+  type: metric
+  metric_name: "blitz.output.entries_received"
+  stability: stable
+  brief: "total number of log entries received by the output"
+  instrument: counter
+  unit: "{entry}"
+  annotations:
+    exported: true
+  attributes:
+    - id: output_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of output"
+      examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+
+- id: output.active_workers
+  type: metric
+  metric_name: "blitz.output.active_workers"
+  stability: stable
+  brief: "number of active output worker goroutines"
+  instrument: gauge
+  unit: "{worker}"
+  annotations:
+    exported: true
+  attributes:
+    - id: output_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of output"
+      examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+
+- id: output.entry_rate
+  type: metric
+  metric_name: "blitz.output.entry_rate"
+  stability: stable
+  brief: "rate of log entries processed per second"
+  instrument: counter
+  unit: "{entry}/s"
+  annotations:
+    exported: true
+    histogram:
+      type: Float64Counter
+  attributes:
+    - id: output_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of output"
+      examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+
+- id: output.request_size
+  type: metric
+  metric_name: "blitz.output.request_size"
+  stability: stable
+  brief: "size of output requests in bytes"
+  instrument: histogram
+  unit: "By"
+  annotations:
+    exported: true
+  attributes:
+    - id: output_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of output"
+      examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+
+- id: output.request_latency
+  type: metric
+  metric_name: "blitz.output.request_latency"
+  stability: stable
+  brief: "latency of output requests"
+  instrument: histogram
+  unit: "s"
+  annotations:
+    exported: true
+    histogram:
+      type: Float64Histogram
+  attributes:
+    - id: output_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of output"
+      examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+
+- id: output.send_errors
+  type: metric
+  metric_name: "blitz.output.send_errors"
+  stability: stable
+  brief: "total number of send errors"
+  instrument: counter
+  unit: "{error}"
+  annotations:
+    exported: true
+  attributes:
+    - id: output_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of output"
+      examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+
+- id: output.queue_size
+  type: metric
+  metric_name: "blitz.output.queue_size"
+  stability: stable
+  brief: "current number of entries in the output queue"
+  instrument: gauge
+  unit: "{entry}"
+  annotations:
+    exported: true
+    observable: true
+  attributes:
+    - id: output_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of output"
+      examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
