@@ -15,9 +15,25 @@ permissions:
   contents: read
 
 jobs:
+  # Graphite CI optimization: skip redundant CI runs for stacked PRs.
+  # See https://graphite.com/docs/stacking-and-ci
+  optimize_ci:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    outputs:
+      skip: ${{ steps.check_skip.outputs.skip }}
+    steps:
+      - name: Optimize CI
+        id: check_skip
+        uses: withgraphite/graphite-ci-action@26bc0dcdeaba101794931d67a464ecbb21a76a8b # v0.0.9 tag (no formal releases)
+        with:
+          graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
+
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest
+    needs: optimize_ci
+    if: ${{ needs.optimize_ci.outputs.skip != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -32,6 +48,8 @@ jobs:
   setup:
     name: Setup environment
     runs-on: ubuntu-latest
+    needs: optimize_ci
+    if: ${{ needs.optimize_ci.outputs.skip != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -54,7 +72,8 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    needs: setup
+    needs: [optimize_ci, setup]
+    if: ${{ needs.optimize_ci.outputs.skip != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -72,7 +91,8 @@ jobs:
   gosec:
     name: Gosec
     runs-on: ubuntu-latest
-    needs: setup
+    needs: [optimize_ci, setup]
+    if: ${{ needs.optimize_ci.outputs.skip != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -90,7 +110,8 @@ jobs:
   revive:
     name: Revive
     runs-on: ubuntu-latest
-    needs: setup
+    needs: [optimize_ci, setup]
+    if: ${{ needs.optimize_ci.outputs.skip != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -108,8 +129,8 @@ jobs:
   build:
     name: Build - ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
-    needs: setup
-    if: github.event_name != 'merge_group'
+    needs: [optimize_ci, setup]
+    if: ${{ needs.optimize_ci.outputs.skip != 'true' && github.event_name != 'merge_group' }}
     strategy:
       fail-fast: false
       matrix:
@@ -175,8 +196,8 @@ jobs:
   merge-build:
     name: Merge Build
     runs-on: ubuntu-latest
-    needs: [setup, build]
-    if: github.event_name != 'merge_group'
+    needs: [optimize_ci, setup, build]
+    if: ${{ needs.optimize_ci.outputs.skip != 'true' && github.event_name != 'merge_group' }}
     env:
       cinc_package: https://packages.cinc.sh/files/stable/cinc-auditor/4.56.58/ubuntu/22.04/cinc-auditor_4.56.58-1_amd64.deb
     steps:
@@ -267,7 +288,8 @@ jobs:
   man-check:
     name: Man pages
     runs-on: ubuntu-latest
-    needs: setup
+    needs: [optimize_ci, setup]
+    if: ${{ needs.optimize_ci.outputs.skip != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -285,7 +307,8 @@ jobs:
   completion-check:
     name: Shell completion (bash, zsh)
     runs-on: ubuntu-latest
-    needs: setup
+    needs: [optimize_ci, setup]
+    if: ${{ needs.optimize_ci.outputs.skip != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
