@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/open-telemetry/weaver/refs/heads/main/schemas/semconv.schema.json
+groups:
+- id: hec.batch_size
+  type: metric
+  metric_name: "blitz.output.hec.batch_size"
+  stability: stable
+  brief: "number of entries per HEC batch"
+  instrument: histogram
+  unit: "{entry}"
+
+- id: hec.ack_pending
+  type: metric
+  metric_name: "blitz.output.hec.ack_pending"
+  stability: stable
+  brief: "number of ACKs currently pending confirmation"
+  instrument: gauge
+  unit: "{ack}"
+
+- id: hec.ack_confirmed
+  type: metric
+  metric_name: "blitz.output.hec.ack_confirmed"
+  stability: stable
+  brief: "total number of ACKs confirmed by the server"
+  instrument: counter
+  unit: "{ack}"
+
+- id: hec.ack_expired
+  type: metric
+  metric_name: "blitz.output.hec.ack_expired"
+  stability: stable
+  brief: "total number of ACKs that expired without confirmation"
+  instrument: counter
+  unit: "{ack}"
+
+- id: hec.ack_retried
+  type: metric
+  metric_name: "blitz.output.hec.ack_retried"
+  stability: stable
+  brief: "total number of batches retried due to ACK failure"
+  instrument: counter
+  unit: "{ack}"
+
+- id: hec.ack_dropped
+  type: metric
+  metric_name: "blitz.output.hec.ack_dropped"
+  stability: stable
+  brief: "total number of batches dropped after max retries"
+  instrument: counter
+  unit: "{ack}"
+
+- id: hec.ack_poll_latency
+  type: metric
+  metric_name: "blitz.output.hec.ack_poll_latency"
+  stability: stable
+  brief: "latency of ACK polling requests"
+  instrument: histogram
+  unit: "s"
+  annotations:
+    histogram:
+      type: Float64Histogram
