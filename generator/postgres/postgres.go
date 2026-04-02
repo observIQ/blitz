@@ -9,25 +9,16 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
 
 const (
-	// componentName is the component identifier for metrics
-	componentName = "generator_postgres"
-
-	// meterName is the OpenTelemetry meter name
-	meterName = "blitz-generator"
-
-	// metric names
-	metricLogsGenerated = "blitz.generator.logs.generated"
-	metricWorkersActive = "blitz.generator.workers.active"
-	metricWriteErrors   = "blitz.generator.write.errors"
+	componentName = "postgres"
 
 	// error types
 	errorTypeUnknown = "unknown"
@@ -64,12 +55,6 @@ type Generator struct {
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
 	tracker *count.Tracker
-	meter   metric.Meter
-
-	// Metrics
-	postgresLogsGenerated metric.Int64Counter
-	postgresActiveWorkers metric.Int64Gauge
-	postgresWriteErrors   metric.Int64Counter
 }
 
 // Predefined lists for fast random generation
@@ -219,41 +204,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
-	meter := otel.Meter(meterName)
-
-	postgresLogsGenerated, err := meter.Int64Counter(
-		metricLogsGenerated,
-		metric.WithDescription("Total number of logs generated"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs generated counter: %w", err)
-	}
-
-	postgresActiveWorkers, err := meter.Int64Gauge(
-		metricWorkersActive,
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	postgresWriteErrors, err := meter.Int64Counter(
-		metricWriteErrors,
-		metric.WithDescription("Total number of write errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create write errors counter: %w", err)
-	}
-
 	return &Generator{
-		logger:                logger,
-		workers:               workers,
-		rate:                  rate,
-		stopCh:                make(chan struct{}),
-		meter:                 meter,
-		postgresLogsGenerated: postgresLogsGenerated,
-		postgresActiveWorkers: postgresActiveWorkers,
-		postgresWriteErrors:   postgresWriteErrors,
+		logger:  logger,
+		workers: workers,
+		rate:    rate,
+		stopCh:  make(chan struct{}),
 	}, nil
 }
 
@@ -303,22 +258,8 @@ func (g *Generator) SetCountTracker(t *count.Tracker) {
 func (g *Generator) worker(workerID int, writer output.Writer) {
 	defer g.wg.Done()
 
-	g.postgresActiveWorkers.Record(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", componentName),
-				attribute.Int("worker_id", workerID),
-			),
-		),
-	)
-	defer g.postgresActiveWorkers.Record(context.Background(), 0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", componentName),
-				attribute.Int("worker_id", workerID),
-			),
-		),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
+	defer generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 0, componentName)
 
 	backoffConfig := backoff.NewExponentialBackOff()
 	backoffConfig.InitialInterval = g.rate
@@ -368,13 +309,7 @@ func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) erro
 		return fmt.Errorf("format log as PostgreSQL: %w", err)
 	}
 
-	g.postgresLogsGenerated.Add(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", componentName),
-			),
-		),
-	)
+	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -507,13 +442,8 @@ func formatAsPostgres(data *postgresLogData) (output.LogRecord, error) {
 
 // recordWriteError records a write error metric
 func (g *Generator) recordWriteError(errorType string, err error) {
-	g.postgresWriteErrors.Add(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", componentName),
-				attribute.String("error_type", errorType),
-			),
-		),
+	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 	g.logger.Debug("Recorded write error",
 		zap.String("error_type", errorType),

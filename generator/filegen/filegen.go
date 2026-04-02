@@ -14,14 +14,14 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
+
+const componentName = "file"
 
 // Cache provides thread-safe access to file line caches with optional TTL
 type Cache struct {
@@ -78,12 +78,6 @@ type FileLogGenerator struct {
 	stopCh  chan struct{}
 	tracker *count.Tracker
 	wg      sync.WaitGroup
-	meter   metric.Meter
-
-	// Metrics
-	logsGenerated metric.Int64Counter
-	activeWorkers metric.Int64Gauge
-	writeErrors   metric.Int64Counter
 
 	// File cache
 	cache *Cache
@@ -107,48 +101,18 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string, cac
 		return nil, fmt.Errorf("source cannot be empty")
 	}
 
-	meter := otel.Meter("blitz-generator")
-
-	logsGenerated, err := meter.Int64Counter(
-		"blitz.generator.logs.generated",
-		metric.WithDescription("Total number of logs generated"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs generated counter: %w", err)
-	}
-
-	activeWorkers, err := meter.Int64Gauge(
-		"blitz.generator.workers.active",
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	writeErrors, err := meter.Int64Counter(
-		"blitz.generator.write.errors",
-		metric.WithDescription("Total number of write errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create write errors counter: %w", err)
-	}
-
 	cache, err := NewCache(cacheEnabled, cacheTTL, 1000) // 1000 is max size for LRU
 	if err != nil {
 		return nil, fmt.Errorf("create cache: %w", err)
 	}
 
 	return &FileLogGenerator{
-		logger:        logger,
-		workers:       workers,
-		rate:          rate,
-		source:        source,
-		stopCh:        make(chan struct{}),
-		meter:         meter,
-		logsGenerated: logsGenerated,
-		activeWorkers: activeWorkers,
-		writeErrors:   writeErrors,
-		cache:         cache,
+		logger:  logger,
+		workers: workers,
+		rate:    rate,
+		source:  source,
+		stopCh:  make(chan struct{}),
+		cache:   cache,
 	}, nil
 }
 
@@ -160,13 +124,7 @@ func (g *FileLogGenerator) Start(writer output.Writer) error {
 		zap.Duration("rate", g.rate))
 
 	// Record initial active workers count
-	g.activeWorkers.Record(context.Background(), int64(g.workers),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_file"),
-			),
-		),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 
 	// Get list of files to read
 	files, err := g.getFiles()
@@ -193,13 +151,7 @@ func (g *FileLogGenerator) Start(writer output.Writer) error {
 func (g *FileLogGenerator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping File log generator")
 
-	g.activeWorkers.Record(ctx, 0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_file"),
-			),
-		),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
 
 	close(g.stopCh)
 
@@ -355,13 +307,7 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 			err := g.readAndWriteFile(file, writer)
 			if err != nil {
 				g.logger.Error("Error reading file", zap.String("file", file), zap.Error(err))
-				g.writeErrors.Add(context.Background(), 1,
-					metric.WithAttributeSet(
-						attribute.NewSet(
-							attribute.String("component", "generator_file"),
-						),
-					),
-				)
+				generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
 				// On error, backoff will automatically handle retry timing
 				continue
 			}
@@ -415,23 +361,11 @@ func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Write
 	cancel()
 
 	if err != nil {
-		g.writeErrors.Add(context.Background(), 1,
-			metric.WithAttributeSet(
-				attribute.NewSet(
-					attribute.String("component", "generator_file"),
-				),
-			),
-		)
+		generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
 		return fmt.Errorf("write: %w", err)
 	}
 
-	g.logsGenerated.Add(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_file"),
-			),
-		),
-	)
+	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	return nil
 }

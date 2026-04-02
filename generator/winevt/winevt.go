@@ -7,14 +7,16 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generators/winevt/templates"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
+
+const componentName = "winevt"
 
 // WinevtGenerator generates Windows Event XML logs using templates.
 type WinevtGenerator struct {
@@ -25,12 +27,6 @@ type WinevtGenerator struct {
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
 	tracker *count.Tracker
-	meter   metric.Meter
-
-	// Metrics
-	winevtLogsGenerated metric.Int64Counter
-	winevtActiveWorkers metric.Int64Gauge
-	winevtWriteErrors   metric.Int64Counter
 }
 
 // New creates a new Windows Event generator.
@@ -42,41 +38,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*WinevtGenerator,
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
-	meter := otel.Meter("blitz-generator")
-
-	winevtLogsGenerated, err := meter.Int64Counter(
-		"blitz.generator.logs.generated",
-		metric.WithDescription("Total number of logs generated"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs generated counter: %w", err)
-	}
-
-	winevtActiveWorkers, err := meter.Int64Gauge(
-		"blitz.generator.workers.active",
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	winevtWriteErrors, err := meter.Int64Counter(
-		"blitz.generator.write.errors",
-		metric.WithDescription("Total number of write errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create write errors counter: %w", err)
-	}
-
 	return &WinevtGenerator{
-		logger:              logger,
-		workers:             workers,
-		rate:                rate,
-		stopCh:              make(chan struct{}),
-		meter:               meter,
-		winevtLogsGenerated: winevtLogsGenerated,
-		winevtActiveWorkers: winevtActiveWorkers,
-		winevtWriteErrors:   winevtWriteErrors,
+		logger:  logger,
+		workers: workers,
+		rate:    rate,
+		stopCh:  make(chan struct{}),
 	}, nil
 }
 
@@ -87,9 +53,7 @@ func (g *WinevtGenerator) Start(writer output.Writer) error {
 		zap.Duration("rate", g.rate),
 	)
 
-	g.winevtActiveWorkers.Record(context.Background(), int64(g.workers),
-		metric.WithAttributeSet(attribute.NewSet(attribute.String("component", "generator_winevt"))),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
@@ -102,9 +66,7 @@ func (g *WinevtGenerator) Start(writer output.Writer) error {
 func (g *WinevtGenerator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping Windows Event generator")
 
-	g.winevtActiveWorkers.Record(ctx, 0,
-		metric.WithAttributeSet(attribute.NewSet(attribute.String("component", "generator_winevt"))),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
 
 	close(g.stopCh)
 
@@ -170,9 +132,7 @@ func (g *WinevtGenerator) generateAndWrite(writer output.Writer, workerID int) e
 		return fmt.Errorf("render template: %w", err)
 	}
 
-	g.winevtLogsGenerated.Add(context.Background(), 1,
-		metric.WithAttributeSet(attribute.NewSet(attribute.String("component", "generator_winevt"))),
-	)
+	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -195,12 +155,8 @@ func (g *WinevtGenerator) generateAndWrite(writer output.Writer, workerID int) e
 	return nil
 }
 
-func (g *WinevtGenerator) recordWriteError(errorType string, err error) {
-	ctx := context.Background()
-	g.winevtWriteErrors.Add(ctx, 1,
-		metric.WithAttributeSet(attribute.NewSet(
-			attribute.String("component", "generator_winevt"),
-			attribute.String("error_type", errorType),
-		)),
+func (g *WinevtGenerator) recordWriteError(errorType string, _ error) {
+	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 }
