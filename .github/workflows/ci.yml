@@ -323,4 +323,21 @@ jobs:
         run: |
           make completion-check
 
+  generate-o11y-check:
+    name: Generated metrics
+    runs-on: ubuntu-latest
+    needs: [optimize_ci, setup]
+    if: ${{ needs.optimize_ci.outputs.skip != 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Generate and verify metric code
+        run: |
+          make generate-o11y-check

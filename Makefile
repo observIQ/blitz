@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: tools test lint security all man man-check release release-test generate-o11y
+.PHONY: tools test lint security all man man-check release release-test generate-o11y generate-o11y-check
 
 WEAVER_IMAGE ?= otel/weaver:v0.19.0
 
@@ -56,6 +56,10 @@ completion:
 completion-check: completion
 	@echo "Verifying generated completion scripts are up to date..."
 	@git diff --quiet || (echo "Completion scripts are out of date. Run 'make completion' and commit the changes." && git --no-pager status --porcelain && exit 1)
+
+generate-o11y-check: generate-o11y
+	@echo "Verifying generated metric code is up to date..."
+	@git diff --quiet || (echo "Generated metric code is out of date. Run 'make generate-o11y' and commit the changes." && git --no-pager status --porcelain && exit 1)
 
 generate-o11y:
 	@echo "Discovering metric registries..."
