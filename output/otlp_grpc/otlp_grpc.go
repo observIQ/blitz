@@ -10,8 +10,6 @@ import (
 
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
@@ -130,6 +128,9 @@ func WithTLSConfig(tlsConfig *tls.Config) OTLPGrpcOption {
 	}
 }
 
+// outputType is the output_type attribute value for OTLP gRPC metrics.
+const outputType = "otlp-grpc"
+
 // OTLPGrpc implements the Output interface for OTLP gRPC connections
 type OTLPGrpc struct {
 	logger        *zap.Logger
@@ -142,15 +143,6 @@ type OTLPGrpc struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
-	meter         metric.Meter
-
-	// Metrics
-	otlpLogsReceived     metric.Int64Counter
-	otlpActiveWorkers    metric.Int64Gauge
-	otlpLogRate          metric.Float64Counter
-	otlpRequestSizeBytes metric.Int64Histogram
-	otlpRequestLatency   metric.Float64Histogram
-	otlpSendErrors       metric.Int64Counter
 
 	// Configuration
 	batchTimeout       time.Duration
@@ -160,8 +152,6 @@ type OTLPGrpc struct {
 
 // New creates a new OTLP gRPC output instance using functional options
 func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
-	var err error
-
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -202,83 +192,20 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		if err != nil {
-			cancel()
-		}
-	}()
-
-	meter := otel.Meter("blitz-otlp-grpc-output")
-
-	// Initialize metrics
-	otlpLogsReceived, err := meter.Int64Counter(
-		"blitz.otlp_grpc.logs.received",
-		metric.WithDescription("Number of logs received from the write channel"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs received counter: %w", err)
-	}
-
-	otlpActiveWorkers, err := meter.Int64Gauge(
-		"blitz.otlp_grpc.workers.active",
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	otlpLogRate, err := meter.Float64Counter(
-		"blitz.otlp_grpc.log.rate",
-		metric.WithDescription("Rate at which logs are successfully sent to the configured host"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create log rate counter: %w", err)
-	}
-
-	otlpRequestSizeBytes, err := meter.Int64Histogram(
-		"blitz.otlp_grpc.request.size.bytes",
-		metric.WithDescription("Size of requests in bytes"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create request size histogram: %w", err)
-	}
-
-	otlpRequestLatency, err := meter.Float64Histogram(
-		"blitz.otlp_grpc.request.latency",
-		metric.WithDescription("Request latency in seconds"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create request latency histogram: %w", err)
-	}
-
-	otlpSendErrors, err := meter.Int64Counter(
-		"blitz.otlp_grpc.send.errors",
-		metric.WithDescription("Total number of send errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create send errors counter: %w", err)
-	}
 
 	otlp := &OTLPGrpc{
-		logger:               logger.Named("output-otlp-grpc"),
-		host:                 cfg.host,
-		port:                 cfg.port,
-		workers:              cfg.workers,
-		insecure:             cfg.insecure,
-		tlsConfig:            cfg.tlsConfig,
-		dataChan:             make(chan *logspb.LogRecord, DefaultOTLPGrpcChannelSize),
-		ctx:                  ctx,
-		cancel:               cancel,
-		meter:                meter,
-		otlpLogsReceived:     otlpLogsReceived,
-		otlpActiveWorkers:    otlpActiveWorkers,
-		otlpLogRate:          otlpLogRate,
-		otlpRequestSizeBytes: otlpRequestSizeBytes,
-		otlpRequestLatency:   otlpRequestLatency,
-		otlpSendErrors:       otlpSendErrors,
-		batchTimeout:         cfg.batchTimeout,
-		maxQueueSize:         cfg.maxQueueSize,
-		maxExportBatchSize:   cfg.maxExportBatchSize,
+		logger:             logger.Named("output-otlp-grpc"),
+		host:               cfg.host,
+		port:               cfg.port,
+		workers:            cfg.workers,
+		insecure:           cfg.insecure,
+		tlsConfig:          cfg.tlsConfig,
+		dataChan:           make(chan *logspb.LogRecord, DefaultOTLPGrpcChannelSize),
+		ctx:                ctx,
+		cancel:             cancel,
+		batchTimeout:       cfg.batchTimeout,
+		maxQueueSize:       cfg.maxQueueSize,
+		maxExportBatchSize: cfg.maxExportBatchSize,
 	}
 
 	otlp.logger.Info("Starting OTLP gRPC output",
@@ -293,35 +220,25 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 		zap.Bool("tls_enabled", cfg.tlsConfig != nil),
 	)
 
-	// Create channel size gauge
-	_, err = meter.Int64ObservableGauge(
-		"blitz.otlp_grpc.channel.size",
-		metric.WithDescription("Current size of the data channel"),
-		metric.WithInt64Callback(func(_ context.Context, io metric.Int64Observer) error {
-			io.Observe(int64(len(otlp.dataChan)))
-			return nil
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create channel size gauge: %w", err)
-	}
+	// Register observable metrics (queue_size)
+	output.InitObservableMetrics(otlp)
 
 	// Create worker manager
 	otlp.workerManager = workermanager.NewWorkerManager(otlp.logger, cfg.workers, otlp.otlpWorker)
 
 	// Record initial active workers count
-	otlp.otlpActiveWorkers.Record(context.Background(), int64(cfg.workers),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_otlp_grpc"),
-			),
-		),
-	)
+	output.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(cfg.workers), outputType)
 
 	// Start the workers
 	otlp.workerManager.Start()
 
 	return otlp, nil
+}
+
+// ObserveBlitzOutputQueueSize implements the output.ObservableCallbacks interface
+func (o *OTLPGrpc) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int64Observer) error {
+	observer.Observe(int64(len(o.dataChan)))
+	return nil
 }
 
 // Write sends data to the OTLP gRPC output channel for processing by workers.
@@ -386,14 +303,7 @@ func (o *OTLPGrpc) Write(ctx context.Context, data output.LogRecord) error {
 
 	select {
 	case o.dataChan <- record:
-		// Record logs received
-		o.otlpLogsReceived.Add(ctx, 1,
-			metric.WithAttributeSet(
-				attribute.NewSet(
-					attribute.String("component", "output_otlp_grpc"),
-				),
-			),
-		)
+		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType)
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -410,13 +320,7 @@ func (o *OTLPGrpc) Stop(ctx context.Context) error {
 	o.logger.Info("Stopping OTLP gRPC output")
 
 	// Record zero active workers
-	o.otlpActiveWorkers.Record(ctx, 0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_otlp_grpc"),
-			),
-		),
-	)
+	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
 	// Close the channel to ensure workers do not
 	// process new data.
@@ -608,27 +512,9 @@ func (o *OTLPGrpc) sendBatch(client collectorlogs.LogsServiceClient, batch *logB
 	// Record successful send metrics
 	latency := time.Since(startTime).Seconds()
 	requestSize := int64(proto.Size(request))
-	o.otlpLogRate.Add(context.Background(), float64(len(logs)),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_otlp_grpc"),
-			),
-		),
-	)
-	o.otlpRequestSizeBytes.Record(context.Background(), requestSize,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_otlp_grpc"),
-			),
-		),
-	)
-	o.otlpRequestLatency.Record(context.Background(), latency,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_otlp_grpc"),
-			),
-		),
-	)
+	output.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(logs)), outputType)
+	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType)
+	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType)
 
 	return nil
 }
@@ -756,17 +642,8 @@ func (o *OTLPGrpc) toAnyValue(v any) *commonpb.AnyValue {
 }
 
 // recordSendError records metrics for send errors
-func (o *OTLPGrpc) recordSendError(errorType string, err error) {
-	ctx := context.Background()
-
-	o.otlpSendErrors.Add(ctx, 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_otlp_grpc"),
-				attribute.String("error_type", errorType),
-			),
-		),
-	)
+func (o *OTLPGrpc) recordSendError(_ string, _ error) {
+	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType)
 }
 
 // mapSeverityNumber maps string log levels to OTLP severity numbers

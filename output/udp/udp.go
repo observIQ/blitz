@@ -8,8 +8,6 @@ import (
 
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
@@ -28,6 +26,9 @@ const (
 	DefaultUDPStopTimeout = 30 * time.Second
 )
 
+// outputType is the output_type attribute value for UDP metrics.
+const outputType = "udp"
+
 // UDP implements the Output interface for UDP connections
 type UDP struct {
 	logger        *zap.Logger
@@ -38,20 +39,10 @@ type UDP struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
-	meter         metric.Meter
-
-	// Metrics
-	udpLogsReceived     metric.Int64Counter
-	udpActiveWorkers    metric.Int64Gauge
-	udpLogRate          metric.Float64Counter
-	udpRequestSizeBytes metric.Int64Histogram
-	udpSendErrors       metric.Int64Counter
 }
 
 // New creates a new UDP output instance
 func New(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
-	var err error
-
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -66,69 +57,15 @@ func New(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		if err != nil {
-			cancel()
-		}
-	}()
-
-	meter := otel.Meter("blitz-udp-output")
-
-	// Initialize metrics
-	udpLogsReceived, err := meter.Int64Counter(
-		"blitz.udp.logs.received",
-		metric.WithDescription("Number of logs received from the write channel"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs received counter: %w", err)
-	}
-
-	udpActiveWorkers, err := meter.Int64Gauge(
-		"blitz.udp.workers.active",
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	udpLogRate, err := meter.Float64Counter(
-		"blitz.udp.log.rate",
-		metric.WithDescription("Rate at which logs are successfully sent to the configured host"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create log rate counter: %w", err)
-	}
-
-	udpRequestSizeBytes, err := meter.Int64Histogram(
-		"blitz.udp.request.size.bytes",
-		metric.WithDescription("Size of requests in bytes"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create request size histogram: %w", err)
-	}
-
-	udpSendErrors, err := meter.Int64Counter(
-		"blitz.udp.send.errors",
-		metric.WithDescription("Total number of send errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create send errors counter: %w", err)
-	}
 
 	udp := &UDP{
-		logger:              logger.Named("output-udp"),
-		host:                host,
-		port:                port,
-		workers:             workers,
-		dataChan:            make(chan string, DefaultUDPChannelSize),
-		ctx:                 ctx,
-		cancel:              cancel,
-		meter:               meter,
-		udpLogsReceived:     udpLogsReceived,
-		udpActiveWorkers:    udpActiveWorkers,
-		udpLogRate:          udpLogRate,
-		udpRequestSizeBytes: udpRequestSizeBytes,
-		udpSendErrors:       udpSendErrors,
+		logger:   logger.Named("output-udp"),
+		host:     host,
+		port:     port,
+		workers:  workers,
+		dataChan: make(chan string, DefaultUDPChannelSize),
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 
 	udp.logger.Info("Starting UDP output",
@@ -138,35 +75,25 @@ func New(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 		zap.Int("channel_size", DefaultUDPChannelSize),
 	)
 
-	// Create channel size gauge
-	_, err = meter.Int64ObservableGauge(
-		"blitz.udp.channel.size",
-		metric.WithDescription("Current size of the data channel"),
-		metric.WithInt64Callback(func(_ context.Context, io metric.Int64Observer) error {
-			io.Observe(int64(len(udp.dataChan)))
-			return nil
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create channel size gauge: %w", err)
-	}
+	// Register observable metrics (queue_size)
+	output.InitObservableMetrics(udp)
 
 	// Create worker manager
 	udp.workerManager = workermanager.NewWorkerManager(udp.logger, workers, udp.udpWorker)
 
 	// Record initial active workers count
-	udp.udpActiveWorkers.Record(context.Background(), int64(workers),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_udp"),
-			),
-		),
-	)
+	output.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(workers), outputType)
 
 	// Start the workers
 	udp.workerManager.Start()
 
 	return udp, nil
+}
+
+// ObserveBlitzOutputQueueSize implements the output.ObservableCallbacks interface
+func (u *UDP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int64Observer) error {
+	observer.Observe(int64(len(u.dataChan)))
+	return nil
 }
 
 // Write sends data to the UDP output channel for processing by workers.
@@ -176,14 +103,7 @@ func New(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 func (u *UDP) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case u.dataChan <- data.Message:
-		// Record logs received
-		u.udpLogsReceived.Add(ctx, 1,
-			metric.WithAttributeSet(
-				attribute.NewSet(
-					attribute.String("component", "output_udp"),
-				),
-			),
-		)
+		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType)
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -200,13 +120,7 @@ func (u *UDP) Stop(ctx context.Context) error {
 	u.logger.Info("Stopping UDP output")
 
 	// Record zero active workers
-	u.udpActiveWorkers.Record(ctx, 0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_udp"),
-			),
-		),
-	)
+	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
 	// Close the channel to ensure workers do not
 	// process new data.
@@ -294,34 +208,13 @@ func (u *UDP) sendData(conn net.Conn, data string) error {
 	}
 
 	// Record successful send metrics
-	u.udpLogRate.Add(context.Background(), 1.0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_udp"),
-			),
-		),
-	)
-	u.udpRequestSizeBytes.Record(context.Background(), int64(bytesWritten),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_udp"),
-			),
-		),
-	)
+	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType)
+	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType)
 
 	return nil
 }
 
 // recordSendError records metrics for send errors
-func (u *UDP) recordSendError(errorType string, err error) {
-	ctx := context.Background()
-
-	u.udpSendErrors.Add(ctx, 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_udp"),
-				attribute.String("error_type", errorType),
-			),
-		),
-	)
+func (u *UDP) recordSendError(_ string, _ error) {
+	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType)
 }
