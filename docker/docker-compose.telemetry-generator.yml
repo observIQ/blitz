@@ -171,6 +171,41 @@ services:
       BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
       BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
 
+  # Host Metrics Generator (Linux)
+  blitz-hostmetrics-linux:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: hostmetrics
+      BLITZ_GENERATOR_HOSTMETRICS_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_HOSTMETRICS_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_HOSTMETRICS_OS: linux
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # Host Metrics Generator (Windows)
+  blitz-hostmetrics-windows:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: hostmetrics
+      BLITZ_GENERATOR_HOSTMETRICS_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_HOSTMETRICS_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_HOSTMETRICS_OS: windows
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # Traces Generator
+  blitz-traces:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: traces
+      BLITZ_GENERATOR_TRACES_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_TRACES_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
 networks:
   telemetry-net:
     driver: bridge

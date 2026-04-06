@@ -1,6 +1,6 @@
 # Telemetry Generator
 
-A Docker Compose setup that runs all Blitz log generators simultaneously and sends telemetry to Bindplane via a Bindplane Agent.
+A Docker Compose setup that runs all Blitz generators (logs, metrics, and traces) simultaneously and sends telemetry to Bindplane via a Bindplane Agent.
 
 ## Architecture
 
@@ -22,7 +22,11 @@ A Docker Compose setup that runs all Blitz log generators simultaneously and sen
 ├─────────────────┤  │
 │ blitz-kubernetes│──┤
 ├─────────────────┤  │
-│   blitz-okta    │──┘
+│   blitz-okta    │──┤
+├─────────────────┤  │
+│blitz-hostmetrics│──┤  (linux + windows)
+├─────────────────┤  │
+│  blitz-traces   │──┘
 └─────────────────┘
 ```
 
@@ -98,6 +102,9 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 | `blitz-postgres` | PostgreSQL | PostgreSQL database logs with security events |
 | `blitz-kubernetes` | Kubernetes | Container logs in CRI-O format with security events |
 | `blitz-okta` | Okta | Okta System Log events (authentication, security, lifecycle) |
+| `blitz-hostmetrics-linux` | Host Metrics | Synthetic host metrics (CPU, memory, disk, etc.) for Linux |
+| `blitz-hostmetrics-windows` | Host Metrics | Synthetic host metrics (CPU, memory, disk, etc.) for Windows |
+| `blitz-traces` | Traces | Synthetic distributed traces (HTTP + DB spans) |
 
 ## Running Individual Generators
 
