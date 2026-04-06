@@ -34,6 +34,8 @@ const (
 	GeneratorTypeOkta GeneratorType = "okta"
 	// GeneratorTypeHostMetrics represents Host Metrics generator
 	GeneratorTypeHostMetrics GeneratorType = "hostmetrics"
+	// GeneratorTypeTraces represents Traces generator
+	GeneratorTypeTraces GeneratorType = "traces"
 )
 
 // Generator contains configuration for log generators
@@ -66,6 +68,8 @@ type Generator struct {
 	Okta OktaGeneratorConfig `yaml:"okta,omitempty" mapstructure:"okta,omitempty"`
 	// HostMetrics contains Host Metrics generator configuration
 	HostMetrics HostMetricsGeneratorConfig `yaml:"hostmetrics,omitempty" mapstructure:"hostmetrics,omitempty"`
+	// Traces contains Traces generator configuration
+	Traces TracesGeneratorConfig `yaml:"traces,omitempty" mapstructure:"traces,omitempty"`
 }
 
 // Validate validates the generator configuration
@@ -130,8 +134,12 @@ func (g *Generator) Validate() error {
 		if err := g.HostMetrics.Validate(); err != nil {
 			return fmt.Errorf("hostmetrics generator validation failed: %w", err)
 		}
+	case GeneratorTypeTraces:
+		if err := g.Traces.Validate(); err != nil {
+			return fmt.Errorf("traces generator validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen, okta, hostmetrics", g.Type)
+		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen, okta, hostmetrics, traces", g.Type)
 	}
 
 	return nil
