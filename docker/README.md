@@ -12,6 +12,8 @@ A Docker Compose setup that runs all Blitz generators (logs, metrics, and traces
 ├─────────────────┤  │
 │  blitz-winevt   │──┤
 ├─────────────────┤  │
+│   blitz-wel     │──┤  (multi-channel)
+├─────────────────┤  │
 │ blitz-palo-alto │──┤
 ├─────────────────┤  │    ┌──────────────────┐    ┌─────────────────┐
 │ blitz-apache-*  │──┼───►│  BDOT Collector  │───►│    Bindplane    │
@@ -93,7 +95,8 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 |-----------|----------|-------------|
 | `blitz-json` | JSON | Structured JSON logs |
 | `blitz-pii` | PII | JSON logs with 37 PII types (SSN, credit card, email, passport, API keys, JWT, etc.) |
-| `blitz-winevt` | Windows Event | Windows Event logs in XML format |
+| `blitz-winevt` | Windows Event | Windows Event logs in XML format (legacy single-template) |
+| `blitz-wel` | Windows Event Log | Multi-channel WEL events with role-aware (workstation/member/dc) selection |
 | `blitz-palo-alto` | Palo Alto | Firewall syslog entries |
 | `blitz-apache-common` | Apache Common | Apache Common Log Format (CLF) with security attack patterns |
 | `blitz-apache-combined` | Apache Combined | Apache Combined Log Format with referer/user-agent |

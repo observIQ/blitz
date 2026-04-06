@@ -72,13 +72,25 @@ services:
       BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
       BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
 
-  # Windows Event Log Generator
+  # Windows Event Log Generator (XML mode, legacy single-template variant)
   blitz-winevt:
     <<: *blitz-common
     environment:
       BLITZ_GENERATOR_TYPE: winevt
       BLITZ_GENERATOR_WINEVT_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_WINEVT_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
+  # Windows Event Log Generator (multi-channel, role-aware)
+  blitz-wel:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: wel
+      BLITZ_GENERATOR_WEL_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_WEL_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_WEL_ROLE: ${BLITZ_WEL_ROLE:-member}
       BLITZ_OUTPUT_TYPE: otlp-grpc
       BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
       BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"

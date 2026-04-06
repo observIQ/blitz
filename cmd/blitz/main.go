@@ -29,6 +29,8 @@ import (
 	"github.com/observiq/blitz/generator/paloalto"
 	"github.com/observiq/blitz/generator/postgres"
 	tracesgen "github.com/observiq/blitz/generator/traces"
+	"github.com/observiq/blitz/generator/wel"
+	"github.com/observiq/blitz/generator/wel/catalog"
 	"github.com/observiq/blitz/generator/winevt"
 	"github.com/observiq/blitz/internal/build"
 	"github.com/observiq/blitz/internal/config"
@@ -432,6 +434,21 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 		return hostmetrics.New(logger, genCfg.HostMetrics.Workers, genCfg.HostMetrics.Rate, genCfg.HostMetrics.OS, genCfg.HostMetrics.Hostname, genCfg.HostMetrics.Scrapers)
 	case config.GeneratorTypeTraces:
 		return tracesgen.New(logger, genCfg.Traces.Workers, genCfg.Traces.Rate)
+	case config.GeneratorTypeWel:
+		role := catalog.MachineRole(genCfg.Wel.Role)
+		if role == "" {
+			role = catalog.RoleMember
+		}
+		return wel.New(wel.Config{
+			Logger:   logger,
+			Workers:  genCfg.Wel.Workers,
+			Rate:     genCfg.Wel.Rate,
+			Computer: genCfg.Wel.Computer,
+			Domain:   genCfg.Wel.Domain,
+			Role:     role,
+			Channels: genCfg.Wel.Channels,
+			Consumer: output.WriterAsLogConsumer(out),
+		})
 	default:
 		return nil, fmt.Errorf("invalid generator type: %s", genCfg.Type)
 	}
