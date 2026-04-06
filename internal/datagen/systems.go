@@ -1,0 +1,255 @@
+package datagen
+
+import (
+	"fmt"
+	"math/rand"
+	"strings"
+	"time"
+)
+
+// OSType represents an operating system type.
+type OSType string
+
+const (
+	OSLinux   OSType = "linux"
+	OSWindows OSType = "windows"
+	OSMacOS   OSType = "macos"
+)
+
+// Arch represents a CPU architecture.
+type Arch string
+
+const (
+	ArchAMD64 Arch = "amd64"
+	ArchARM64 Arch = "arm64"
+	ArchX86   Arch = "x86"
+)
+
+// SystemRole represents a machine's role in the environment.
+type SystemRole string
+
+const (
+	RoleServer      SystemRole = "server"
+	RoleWorkstation SystemRole = "workstation"
+	RoleDC          SystemRole = "dc"
+	RoleRouter      SystemRole = "router"
+)
+
+// OS version pools.
+var (
+	LinuxVersions = NewPool(
+		"5.15.0-91-generic", // Ubuntu 22.04
+		"6.1.0-18-amd64",    // Debian 12
+		"5.14.0-362.el9",    // RHEL 9
+		"6.6.9-200.fc39",    // Fedora 39
+		"5.10.0-27-amd64",   // Debian 11
+	)
+
+	WindowsVersions = NewPool(
+		"10.0.20348", // Server 2022
+		"10.0.17763", // Server 2019
+		"10.0.14393", // Server 2016
+		"10.0.22631", // Windows 11 23H2
+		"10.0.19045", // Windows 10 22H2
+	)
+
+	MacOSVersions = NewPool(
+		"14.2.1", // Sonoma
+		"13.6.3", // Ventura
+		"12.7.2", // Monterey
+	)
+)
+
+// SystemIdentity represents a machine in the simulated environment.
+type SystemIdentity struct {
+	Hostname  string
+	FQDN      string // hostname + domain
+	OS        OSType
+	OSVersion string
+	Arch      Arch
+	Role      SystemRole
+	Domain    string // back-reference to DomainIdentity.Name
+	OUPath    string // "OU=Servers,DC=contoso,DC=com"
+
+	// Hardware
+	CPUCores int
+	MemoryMB int
+	DiskGB   int
+
+	// Network interfaces (populated by environment generation)
+	Interfaces []NetworkInterface
+
+	// TLS cert issued by the domain CA
+	Cert *CertInfo
+
+	// Sub-identities (populated by environment generation)
+	Services     []*ServiceIdentity
+	Applications []*ApplicationIdentity
+}
+
+// NetworkInterface represents a NIC bound to a network subnet.
+type NetworkInterface struct {
+	Name       string // "eth0", "Ethernet0"
+	IPv4       string
+	IPv6       string
+	MACAddress string
+	SubnetID   string // references NetworkIdentity.ID
+	VLAN       int
+}
+
+// CertInfo represents a TLS certificate issued by the domain CA.
+type CertInfo struct {
+	SubjectCN    string // = FQDN
+	Issuer       string // = DomainIdentity.CA.CommonName
+	SerialNumber string // hex serial
+	Thumbprint   string // SHA1 hex (40 chars)
+	ValidFrom    time.Time
+	ValidTo      time.Time
+	SANs         []string // [FQDN, hostname, IPv4]
+}
+
+// GenerateSystemIdentity creates a system with the given OS, role, and domain context.
+//
+// domain must be non-nil and have a populated CA — those fields are used
+// unconditionally to construct the system's FQDN, OU path, and TLS cert.
+// Passing a nil domain or a domain with a nil CA panics with a clear
+// message; this is a developer-error class of failure (the same input
+// would have been caught at the first test run). PIPE-1003 tracks
+// converting these panics to error returns ahead of the embed seam split.
+func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *DomainIdentity, names *Pool[string]) *SystemIdentity {
+	if domain == nil {
+		panic("datagen: GenerateSystemIdentity: domain must not be nil")
+	}
+	if domain.CA == nil {
+		panic("datagen: GenerateSystemIdentity: domain.CA must not be nil")
+	}
+
+	// Pick hostname style based on OS
+	var style HostnameStyle
+	switch {
+	case role == RoleDC:
+		style = StyleDC
+	case os == OSWindows:
+		style = StyleWindows
+	default:
+		style = StyleLinux
+	}
+
+	hostname := GenerateHostname(r, style, names)
+	fqdn := hostname + "." + domain.Name
+	if os == OSWindows || role == RoleDC {
+		fqdn = strings.ToLower(hostname) + "." + domain.Name
+	}
+
+	// Pick OS version
+	var osVersion string
+	switch os {
+	case OSLinux:
+		osVersion = LinuxVersions.Random(r)
+	case OSWindows:
+		osVersion = WindowsVersions.Random(r)
+	case OSMacOS:
+		osVersion = MacOSVersions.Random(r)
+	}
+
+	// Pick arch
+	arch := ArchAMD64
+	if r.Float64() < 0.1 { // #nosec G404
+		arch = ArchARM64
+	}
+
+	// Generate resource specs based on role
+	cpu, mem, disk := generateResourceSpecs(r, role)
+
+	// Generate OU path
+	ouPath := generateOUPath(role, domain.Name)
+
+	// Generate TLS cert
+	cert := generateCertInfo(r, fqdn, hostname, domain.CA)
+
+	return &SystemIdentity{
+		Hostname:  hostname,
+		FQDN:      fqdn,
+		OS:        os,
+		OSVersion: osVersion,
+		Arch:      arch,
+		Role:      role,
+		Domain:    domain.Name,
+		OUPath:    ouPath,
+		CPUCores:  cpu,
+		MemoryMB:  mem,
+		DiskGB:    disk,
+		Cert:      cert,
+	}
+}
+
+// generateResourceSpecs returns CPU, memory, disk based on role.
+func generateResourceSpecs(r *rand.Rand, role SystemRole) (cpu, mem, disk int) {
+	switch role {
+	case RoleWorkstation:
+		cpu = randRange(r, 4, 16)
+		mem = randRange(r, 8192, 32768)
+		disk = randRange(r, 256, 1024)
+	case RoleServer:
+		cpu = randRange(r, 4, 64)
+		mem = randRange(r, 16384, 131072)
+		disk = randRange(r, 500, 4096)
+	case RoleDC:
+		cpu = randRange(r, 4, 16)
+		mem = randRange(r, 16384, 65536)
+		disk = randRange(r, 500, 2048)
+	case RoleRouter:
+		cpu = randRange(r, 2, 4)
+		mem = randRange(r, 2048, 8192)
+		disk = randRange(r, 64, 256)
+	default:
+		cpu = randRange(r, 4, 16)
+		mem = randRange(r, 8192, 32768)
+		disk = randRange(r, 256, 1024)
+	}
+	return
+}
+
+// randRange returns a random int in [min, max] inclusive.
+func randRange(r *rand.Rand, min, max int) int {
+	return min + r.Intn(max-min+1) // #nosec G404
+}
+
+// generateOUPath creates an AD OU path based on role.
+func generateOUPath(role SystemRole, domainName string) string {
+	parts := strings.Split(domainName, ".")
+	dcParts := make([]string, len(parts))
+	for i, p := range parts {
+		dcParts[i] = "DC=" + p
+	}
+	dcSuffix := strings.Join(dcParts, ",")
+
+	var ou string
+	switch role {
+	case RoleDC:
+		ou = "OU=Domain Controllers"
+	case RoleServer:
+		ou = "OU=Servers"
+	case RoleWorkstation:
+		ou = "OU=Workstations"
+	case RoleRouter:
+		ou = "OU=Network Devices"
+	default:
+		ou = "OU=Computers"
+	}
+	return fmt.Sprintf("%s,%s", ou, dcSuffix)
+}
+
+// generateCertInfo creates a TLS cert for a system.
+func generateCertInfo(r *rand.Rand, fqdn, hostname string, ca *CertAuthority) *CertInfo {
+	now := time.Now()
+	return &CertInfo{
+		SubjectCN:    fqdn,
+		Issuer:       ca.CommonName,
+		SerialNumber: randomHex(r, 8),
+		Thumbprint:   randomHex(r, 20),
+		ValidFrom:    now.AddDate(-1, 0, 0),
+		ValidTo:      now.AddDate(1, 0, 0),
+		SANs:         []string{fqdn, hostname},
+	}
+}
