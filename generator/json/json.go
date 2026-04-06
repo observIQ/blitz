@@ -13,6 +13,7 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/logtypes"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
@@ -428,4 +429,9 @@ func formatPIILogDataWithRand(r *rand.Rand, d *logtypes.PIILogData) map[string]a
 	}
 
 	return jsonData
+}
+
+// SupportedTelemetry returns the telemetry types this generator produces.
+func (g *JSONLogGenerator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }

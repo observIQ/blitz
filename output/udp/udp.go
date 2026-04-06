@@ -8,6 +8,7 @@ import (
 
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
@@ -217,4 +218,9 @@ func (u *UDP) sendData(conn net.Conn, data string) error {
 // recordSendError records metrics for send errors
 func (u *UDP) recordSendError(_ string, _ error) {
 	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
+}
+
+// SupportedTelemetry returns the telemetry types this output can consume.
+func (u *UDP) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/observiq/blitz/internal/config"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -468,4 +469,9 @@ func (w *worker) postEvents(payload []byte) (*hecResponse, error) {
 	}
 
 	return &hecResp, nil
+}
+
+// SupportedTelemetry returns the telemetry types this output can consume.
+func (h *HEC) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }

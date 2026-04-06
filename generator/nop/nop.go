@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -34,4 +35,9 @@ func (g *NopGenerator) Start(writer output.Writer) error {
 func (g *NopGenerator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping NOP generator")
 	return nil
+}
+
+// SupportedTelemetry returns the telemetry types this generator produces.
+func (g *NopGenerator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }

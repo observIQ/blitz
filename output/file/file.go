@@ -7,6 +7,7 @@ import (
 
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -186,4 +187,9 @@ func (f *File) writeData(data string) error {
 
 func (f *File) recordWriteError(_ string, _ error) {
 	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
+}
+
+// SupportedTelemetry returns the telemetry types this output can consume.
+func (f *File) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }

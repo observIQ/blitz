@@ -18,6 +18,7 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -440,4 +441,9 @@ func (g *FileLogGenerator) processTimestamps(line string) string {
 	})
 
 	return result
+}
+
+// SupportedTelemetry returns the telemetry types this generator produces.
+func (g *FileLogGenerator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }

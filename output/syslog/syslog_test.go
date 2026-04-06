@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
@@ -24,6 +25,10 @@ func (s *stubOutput) Write(ctx context.Context, data output.LogRecord) error {
 func (s *stubOutput) Stop(ctx context.Context) error {
 	s.stopped = true
 	return nil
+}
+
+func (s *stubOutput) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 func TestFormatRFC5424(t *testing.T) {

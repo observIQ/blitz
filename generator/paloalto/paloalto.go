@@ -16,6 +16,7 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
@@ -335,4 +336,9 @@ func randInt(min, max int) int {
 	delta := max - min + 1
 	n, _ := rand.Int(rand.Reader, big.NewInt(int64(delta)))
 	return min + int(n.Int64())
+}
+
+// SupportedTelemetry returns the telemetry types this generator produces.
+func (g *Generator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }

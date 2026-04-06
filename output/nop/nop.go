@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -34,4 +35,9 @@ func (o *NopOutput) Write(ctx context.Context, data output.LogRecord) error {
 func (o *NopOutput) Stop(ctx context.Context) error {
 	o.logger.Info("Stopping NOP output")
 	return nil
+}
+
+// SupportedTelemetry returns the telemetry types this output can consume.
+func (o *NopOutput) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }

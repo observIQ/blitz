@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -98,4 +99,9 @@ func (o *StdoutOutput) flushLoop() {
 			return
 		}
 	}
+}
+
+// SupportedTelemetry returns the telemetry types this output can consume.
+func (o *StdoutOutput) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
