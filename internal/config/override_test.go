@@ -23,6 +23,8 @@ func getTestOverrideFlagsArgs() []string {
 		"--logging-file-rotation-maxagedays", "10",
 		"--logging-file-rotation-compress=false",
 		"--logging-file-rotation-localtime=true",
+		"--generator-count", "500",
+		"--onfinish", "idle",
 		"--generator-type", "json",
 		"--generator-json-workers", "5",
 		"--generator-json-rate", "500ms",
@@ -137,6 +139,8 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_LOGGING_FILE_ROTATION_MAXAGEDAYS":   "20",
 		"BLITZ_LOGGING_FILE_ROTATION_COMPRESS":     "false",
 		"BLITZ_LOGGING_FILE_ROTATION_LOCALTIME":    "true",
+		"BLITZ_GENERATOR_COUNT":                    "1000",
+		"BLITZ_ONFINISH":                           "idle",
 		"BLITZ_GENERATOR_TYPE":                     "winevt",
 		"BLITZ_GENERATOR_JSON_WORKERS":             "3",
 		"BLITZ_GENERATOR_JSON_RATE":                "250ms",
@@ -271,7 +275,8 @@ func TestOverrideDefaults(t *testing.T) {
 			},
 		},
 		Generator: Generator{
-			Type: GeneratorTypeNop,
+			Type:  GeneratorTypeNop,
+			Count: 0,
 			JSON: JSONGeneratorConfig{
 				Workers: 1,
 				Rate:    1 * time.Second,
@@ -322,6 +327,7 @@ func TestOverrideDefaults(t *testing.T) {
 				Rate:    1 * time.Second,
 			},
 		},
+		OnFinish: "exit",
 		Output: Output{
 			Type: OutputTypeNop,
 			UDP:  UDPOutputConfig{Host: "", Port: 0, Workers: 1},
@@ -446,7 +452,8 @@ func TestOverrideFlags(t *testing.T) {
 			},
 		},
 		Generator: Generator{
-			Type: GeneratorTypeJSON,
+			Type:  GeneratorTypeJSON,
+			Count: 500,
 			JSON: JSONGeneratorConfig{
 				Workers: 5,
 				Rate:    500 * time.Millisecond,
@@ -497,6 +504,7 @@ func TestOverrideFlags(t *testing.T) {
 				Rate:    40 * time.Millisecond,
 			},
 		},
+		OnFinish: "idle",
 		Output: Output{
 			Type: OutputTypeOTLPGrpc,
 			UDP:  UDPOutputConfig{Host: "udp.example.com", Port: 1514, Workers: 2},
@@ -630,7 +638,8 @@ func TestOverrideEnvs(t *testing.T) {
 			},
 		},
 		Generator: Generator{
-			Type: GeneratorTypeWinevt,
+			Type:  GeneratorTypeWinevt,
+			Count: 1000,
 			JSON: JSONGeneratorConfig{
 				Workers: 3,
 				Rate:    250 * time.Millisecond,
@@ -681,6 +690,7 @@ func TestOverrideEnvs(t *testing.T) {
 				Rate:    35 * time.Millisecond,
 			},
 		},
+		OnFinish: "idle",
 		Output: Output{
 			Type: OutputTypeFile,
 			UDP:  UDPOutputConfig{Host: "udp.env.example", Port: 5514, Workers: 4},
