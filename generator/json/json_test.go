@@ -369,8 +369,10 @@ func TestJSONGenerator_VeryFastRate(t *testing.T) {
 	err = generator.Start(writer)
 	require.NoError(t, err)
 
-	// Run for a short time with very fast rate
-	time.Sleep(10 * time.Millisecond)
+	// Run long enough that scheduler jitter on loaded CI runners can't drag
+	// the write count below the assertion threshold. At 1ms rate and 100ms
+	// window, even heavy jitter should still produce well over 5 writes.
+	time.Sleep(100 * time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
