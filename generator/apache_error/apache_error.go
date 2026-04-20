@@ -12,6 +12,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -220,7 +221,7 @@ func (g *ApacheErrorLogGenerator) generateApacheErrorLogData() (*apacheErrorLogD
 
 	// Generate client IP (sometimes empty for non-client errors)
 	if r.Float64() < 0.8 { // #nosec G404
-		data.client = generateRandomIP(r)
+		data.client = datagen.RandomIPv4(r)
 	} else {
 		data.client = ""
 	}
@@ -229,15 +230,6 @@ func (g *ApacheErrorLogGenerator) generateApacheErrorLogData() (*apacheErrorLogD
 	data.message = generateErrorMessage(r, data.level)
 
 	return data, nil
-}
-
-// generateRandomIP generates a random IP address
-func generateRandomIP(r *rand.Rand) string {
-	return fmt.Sprintf("%d.%d.%d.%d",
-		r.Intn(256), // #nosec G404
-		r.Intn(256), // #nosec G404
-		r.Intn(256), // #nosec G404
-		r.Intn(256)) // #nosec G404
 }
 
 // generateErrorMessage generates a random error message based on log level

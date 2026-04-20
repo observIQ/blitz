@@ -12,6 +12,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/generator/security"
 	"github.com/observiq/blitz/internal/useragent"
 	"github.com/observiq/blitz/output"
@@ -64,108 +65,9 @@ type Generator struct {
 	tracker *count.Tracker
 }
 
-// Predefined lists for fast random generation
-var (
-	httpMethods = []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
-
-	httpPaths = []string{
-		"/",
-		"/index.html",
-		"/api/v1/users",
-		"/api/v1/orders",
-		"/api/v1/products",
-		"/api/v1/inventory",
-		"/api/v1/customers",
-		"/api/v1/payments",
-		"/api/v1/transactions",
-		"/api/v1/accounts",
-		"/api/v1/auth",
-		"/api/v1/loans",
-		"/api/v1/transfers",
-		"/api/v1/verification",
-		"/api/v2/data",
-		"/health",
-		"/status",
-		"/about",
-		"/contact",
-		"/search",
-		"/login",
-		"/logout",
-		"/dashboard",
-		"/profile",
-		"/settings",
-		"/api/v1/users/profile/settings",
-		"/api/v2/analytics/reports/summary",
-		"/api/v1/orders/history/recent",
-		"/api/v2/recommendations/personalized",
-		"/api/v1/notifications/preferences",
-		"/api/v2/search/advanced/filters",
-		"/api/v1/subscriptions/billing/invoices",
-		"/api/v2/integrations/webhooks/events",
-		"/api/v1/admin/users/permissions/roles",
-		"/api/v2/metrics/performance/aggregated",
-		"/api/v1/catalog/products/featured",
-		"/api/v2/reports/exports/scheduled",
-		"/api/v1/account/security/mfa",
-		"/api/v2/workflows/tasks/assignments",
-		"/api/v1/content/media/uploads",
-	}
-
-	queryStrings = []string{
-		"?page=1&limit=25&sort=created_at&order=desc",
-		"?filter=active&category=electronics&min_price=10.00&max_price=500.00",
-		"?q=search+term&lang=en&results=20&offset=0",
-		"?user_id=12345&include=profile%2Csettings&format=json",
-		"?status=pending&from=2024-01-01&to=2024-12-31&page=1&limit=100",
-		"?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9&refresh=true",
-		"?fields=id%2Cname%2Cemail%2Ccreated_at&page=2&limit=50",
-		"?utm_source=google&utm_medium=cpc&utm_campaign=spring_sale&utm_content=banner",
-		"?session_id=abc123def456789&redirect_uri=%2Fdashboard&state=xyz789",
-		"?expand=orders%2Cpayments%2Caddress&include_deleted=false&version=2",
-		"?q=product+search&category=clothing&size=M&color=blue&brand=nike&sort=price_asc",
-		"?start_date=2024-01-01T00%3A00%3A00Z&end_date=2024-12-31T23%3A59%3A59Z&interval=daily",
-	}
-
-	httpProtocols = []string{"HTTP/1.0", "HTTP/1.1", "HTTP/2.0"}
-
-	statusCodes2xx = []int{200, 201, 204}
-	statusCodes4xx = []int{400, 401, 403, 404, 429}
-	statusCodes5xx = []int{500, 502, 503, 504}
-
-	refererDomains = []string{
-		"https://www.example.com",
-		"https://search.example.com",
-		"https://www.google.com",
-		"https://www.bing.com",
-		"https://github.com",
-		"https://stackoverflow.com",
-		"https://www.reddit.com",
-		"https://www.linkedin.com",
-	}
-
-	refererPages = []string{
-		"/",
-		"/search",
-		"/page1",
-		"/page2",
-		"/index.html",
-		"/products",
-		"/about",
-		"/contact",
-		"/search?q=opentelemetry+collector&category=tools",
-		"/products?category=electronics&sort=price_asc&page=2",
-		"/blog/posts?tag=observability&limit=10&page=1",
-		"/docs/api/v2/reference?section=authentication",
-		"/dashboard?view=analytics&period=last30days&metric=requests",
-		"/shop?department=networking&brand=cisco&in_stock=true&page=3",
-		"/articles?topic=distributed-systems&author=staff&year=2024",
-		"/account/orders?status=shipped&from=2024-01-01&limit=50",
-		"/pricing?plan=enterprise&billing=annual&seats=50",
-		"/docs/guides/getting-started?lang=go&version=v2",
-	}
-
-	remoteUsers = []string{"-", "admin", "user1", "user2", "guest"}
-)
+// remoteUsers is nginx-specific user values used in the $remote_user log field;
+// not generic enough to live in datagen.
+var remoteUsers = []string{"-", "admin", "user1", "user2", "guest"}
 
 // New creates a new NGINX log generator
 func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error) {
@@ -307,7 +209,7 @@ func (g *Generator) generateNginxLogData() (*nginxLogData, error) {
 		timestamp: time.Now(),
 	}
 
-	data.remoteAddr = generateRandomIP(r)
+	data.remoteAddr = datagen.RandomIPv4(r)
 	data.remoteUser = remoteUsers[r.Intn(len(remoteUsers))] // #nosec G404
 	data.request = generateRequest(r)
 	data.statusCode, data.severity = generateStatusAndSeverity(r)
@@ -320,74 +222,61 @@ func (g *Generator) generateNginxLogData() (*nginxLogData, error) {
 	return data, nil
 }
 
-// generateRandomIP generates a random IP address
-func generateRandomIP(r *rand.Rand) string {
-	return fmt.Sprintf("%d.%d.%d.%d",
-		r.Intn(256), // #nosec G404
-		r.Intn(256), // #nosec G404
-		r.Intn(256), // #nosec G404
-		r.Intn(256)) // #nosec G404
-}
-
-// generateXForwardedFor generates a comma-separated chain of 1-4 proxy IPs
+// generateXForwardedFor generates a comma-separated chain of 1-4 proxy IPs.
 func generateXForwardedFor(r *rand.Rand) string {
 	n := r.Intn(4) + 1 // #nosec G404
 	ips := make([]string, n)
 	for i := range ips {
-		ips[i] = generateRandomIP(r)
+		ips[i] = datagen.RandomIPv4(r)
 	}
 	return strings.Join(ips, ", ")
 }
 
-// generateRequest generates a random HTTP request string
+// generateRequest generates a random HTTP request string.
 func generateRequest(r *rand.Rand) string {
-	method := httpMethods[r.Intn(len(httpMethods))] // #nosec G404
+	method := datagen.Methods.Random(r)
 
 	// 20% chance of generating a security-focused path
 	var path string
 	if r.Float64() < 0.20 { // #nosec G404
 		path = security.RandomAttackPath(r)
 	} else {
-		path = httpPaths[r.Intn(len(httpPaths))] // #nosec G404
+		path = datagen.APIPaths.Random(r)
 	}
 
 	// Attach a query string 85% of the time for non-root, non-static paths
 	if r.Float64() < 0.85 && path != "/" && !strings.HasSuffix(path, ".html") { // #nosec G404
-		path += queryStrings[r.Intn(len(queryStrings))] // #nosec G404
+		path += datagen.QueryStrings.Random(r)
 	}
 
-	protocol := httpProtocols[r.Intn(len(httpProtocols))] // #nosec G404
+	protocol := datagen.Protocols.Random(r)
 
 	return fmt.Sprintf("%s %s %s", method, path, protocol)
 }
 
-// generateStatusAndSeverity generates a random HTTP status code and corresponding severity
+// generateStatusAndSeverity generates a random HTTP status code and
+// corresponding severity. Uses nginx-specific weighting (85% 2xx / 10% 4xx /
+// 5% 5xx) rather than datagen.RandomStatusCode's generic distribution.
 func generateStatusAndSeverity(r *rand.Rand) (int, string) {
 	roll := r.Float64() // #nosec G404
 
 	switch {
 	case roll < 0.85:
-		status := statusCodes2xx[r.Intn(len(statusCodes2xx))] // #nosec G404
-		return status, severityInfo
+		return datagen.Status2xx.Random(r), severityInfo
 	case roll < 0.95:
-		status := statusCodes4xx[r.Intn(len(statusCodes4xx))] // #nosec G404
-		return status, severityWarn
+		return datagen.Status4xx.Random(r), severityWarn
 	default:
-		status := statusCodes5xx[r.Intn(len(statusCodes5xx))] // #nosec G404
-		return status, severityError
+		return datagen.Status5xx.Random(r), severityError
 	}
 }
 
-// generateReferer generates a random referer URL
+// generateReferer generates a random referer URL.
 func generateReferer(r *rand.Rand) string {
 	if r.Float64() < 0.3 { // #nosec G404
 		return emptyValue
 	}
 
-	domain := refererDomains[r.Intn(len(refererDomains))] // #nosec G404
-	page := refererPages[r.Intn(len(refererPages))]       // #nosec G404
-
-	return fmt.Sprintf("%s%s", domain, page)
+	return fmt.Sprintf("%s%s", datagen.RefererURLs.Random(r), datagen.RefererPages.Random(r))
 }
 
 // formatAsNginxCombined converts nginxLogData to NGINX Combined Log Format

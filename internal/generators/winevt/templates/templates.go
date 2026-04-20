@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"strings"
 	"time"
+
+	"github.com/observiq/blitz/internal/datagen"
 )
 
 // RenderOptions controls rendering of a Windows Event template.
@@ -18,28 +20,18 @@ type RenderOptions struct {
 	Hostnames []string
 }
 
-// DefaultIPs provides fallback IP candidates if none are configured.
-var DefaultIPs = []string{
-	"103.165.114.4",
-	"192.0.2.10",
-	"198.51.100.23",
-	"203.0.113.77",
-	"10.0.0.5",
-}
+// DefaultIPs provides fallback IP candidates generated from a fixed seed.
+var DefaultIPs = func() []string {
+	r := rand.New(rand.NewSource(42)) // #nosec G404 - deterministic default
+	ips := make([]string, 5)
+	for i := range ips {
+		ips[i] = datagen.RandomPrivateIPv4(r)
+	}
+	return ips
+}()
 
-// DefaultHostnames provides fallback hostname candidates if none are configured.
-var DefaultHostnames = []string{
-	"iis-east1-prd-0",
-	"web-west2-stg-1",
-	"db-north1-prod-2",
-	"app-south1-dev-3",
-	"cache-central1-prod-4",
-	"api-east2-stg-5",
-	"worker-west1-prod-6",
-	"monitor-north2-prod-7",
-	"gateway-south2-stg-8",
-	"loadbalancer-central2-prod-9",
-}
+// DefaultHostnames provides fallback hostname candidates using mythology names.
+var DefaultHostnames = datagen.GenerateHostnames(42, 10, datagen.StyleWindows, datagen.RomanNames)
 
 // templateNames is a pre-computed list of all available template names for efficient random selection.
 var templateNames = []string{
