@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -25,9 +26,10 @@ type Generator struct {
 	workers int
 	rate    time.Duration
 
-	wg     sync.WaitGroup
-	stopCh chan struct{}
-	meter  metric.Meter
+	wg      sync.WaitGroup
+	stopCh  chan struct{}
+	tracker *count.Tracker
+	meter   metric.Meter
 
 	// Metrics
 	logsGenerated metric.Int64Counter
@@ -125,6 +127,11 @@ func (g *Generator) Stop(ctx context.Context) error {
 	}
 }
 
+// SetCountTracker sets the finite generation count tracker.
+func (g *Generator) SetCountTracker(t *count.Tracker) {
+	g.tracker = t
+}
+
 func (g *Generator) worker(workerID int, writer output.Writer) {
 	defer g.wg.Done()
 	g.logger.Debug("Starting worker", zap.Int("worker_id", workerID))
@@ -143,6 +150,14 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 			g.logger.Debug("Worker stopping", zap.Int("worker_id", workerID))
 			return
 		case <-backoffTicker.C:
+			if g.tracker != nil && !g.tracker.Acquire() {
+				select {
+				case <-g.stopCh:
+					return
+				case <-g.tracker.ResumeC():
+					continue
+				}
+			}
 			if err := g.generateAndWrite(writer, workerID); err != nil {
 				g.logger.Error("Failed to write log", zap.Int("worker_id", workerID), zap.Error(err))
 				continue
