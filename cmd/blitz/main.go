@@ -451,7 +451,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set up SIGUSR1 restart signal handler
-	setupRestartSignal(logger, tracker)
+	setupRestartSignal(ctx, logger, tracker)
 
 	svc, err := service.New(logger, generatorInstance, outputInstance)
 	if err != nil {
