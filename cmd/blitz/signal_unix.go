@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,8 +13,9 @@ import (
 )
 
 // setupRestartSignal listens for SIGUSR1 and resets the count tracker,
-// allowing generation to resume in idle mode.
-func setupRestartSignal(logger *zap.Logger, tracker *count.Tracker) {
+// allowing generation to resume in idle mode. The goroutine exits when
+// ctx is cancelled.
+func setupRestartSignal(ctx context.Context, logger *zap.Logger, tracker *count.Tracker) {
 	if tracker == nil {
 		return
 	}
@@ -22,9 +24,15 @@ func setupRestartSignal(logger *zap.Logger, tracker *count.Tracker) {
 	signal.Notify(sigChan, syscall.SIGUSR1)
 
 	go func() {
-		for range sigChan {
-			logger.Info("Received SIGUSR1, resetting generation count")
-			tracker.Reset()
+		defer signal.Stop(sigChan)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-sigChan:
+				logger.Info("Received SIGUSR1, resetting generation count")
+				tracker.Reset()
+			}
 		}
 	}()
 }
