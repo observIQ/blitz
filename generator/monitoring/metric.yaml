@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/open-telemetry/weaver/refs/heads/main/schemas/semconv.schema.json
+groups:
+- id: generator.entries
+  type: metric
+  metric_name: "blitz.generator.entries"
+  stability: stable
+  brief: "total number of telemetry entries generated"
+  instrument: counter
+  unit: "{entry}"
+  annotations:
+    exported: true
+  attributes:
+    - id: generator_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of generator"
+      examples: ["json", "apache-common", "nginx", "hostmetrics"]
+
+- id: generator.active_workers
+  type: metric
+  metric_name: "blitz.generator.active_workers"
+  stability: stable
+  brief: "number of active worker goroutines"
+  instrument: gauge
+  unit: "{worker}"
+  annotations:
+    exported: true
+  attributes:
+    - id: generator_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of generator"
+      examples: ["json", "apache-common", "nginx"]
+
+- id: generator.write_errors
+  type: metric
+  metric_name: "blitz.generator.write_errors"
+  stability: stable
+  brief: "total number of write errors"
+  instrument: counter
+  unit: "{error}"
+  annotations:
+    exported: true
+  attributes:
+    - id: generator_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of generator"
+      examples: ["json", "apache-common", "nginx"]
+    - id: error_type
+      stability: stable
+      requirement_level: recommended
+      brief: "classification of the error"
+      type:
+        members:
+          - id: unknown
+            value: unknown
+            stability: stable
+          - id: timeout
+            value: timeout
+            stability: stable
