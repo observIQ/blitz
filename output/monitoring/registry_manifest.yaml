@@ -1,0 +1,4 @@
+name: output
+description: Output Metrics
+semconv_version: 0.1.0
+schema_base_url: https://github.com/observiq/blitz/schemas/output/
