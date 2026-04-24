@@ -1,0 +1,7 @@
+templates:
+  - pattern: metric.md.j2
+    filter: >
+      .groups
+      | map(select(.type == "metric"))
+    application_mode: single
+    file_name: monitoring.md

@@ -1,0 +1,87 @@
+{%- macro smart_title_case(text) -%}
+{%- if text -%}
+{%- for i in range(0, text | length) -%}
+    {%- if i == 0 or text[i-1] in ['.', '_', '-'] -%}
+        {{ text[i] | upper }}
+    {%- elif not text[i] in ['.', '_', '-'] -%}
+        {{ text[i] }}
+    {%- endif -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endmacro -%}
+{%- macro lower_first(text) -%}
+{%- if text and text | length > 0 -%}
+{{ text[0] | lower }}{{ text[1:] }}
+{%- endif -%}
+{%- endmacro -%}
+{%- set registry_info = ctx[0] if ctx and ctx | length > 0 else none -%}
+{%- set registry_name = registry_info.id.split('.')[0] if registry_info else "unknown" -%}
+# {{ smart_title_case(registry_name) }} Metrics Reference
+
+## Quick Reference
+
+| Metric | Type | Unit | Description |
+|--------|------|------|-------------|
+{%- for metric in ctx %}
+| [`{{ metric.metric_name }}`](#{{ metric.metric_name | replace(".", "") | replace("_", "-") }}) | {{ metric.instrument | capitalize }} | `{{ metric.unit if metric.unit else "1" }}` | {{ metric.brief }} |
+{%- endfor %}
+
+---
+
+## Metrics Detail
+
+{% for metric in ctx -%}
+### {{ metric.metric_name }}
+
+| Property | Value |
+|----------|-------|
+| **Type** | {{ metric.instrument | capitalize }} |
+| **Unit** | `{{ metric.unit if metric.unit else "1" }}` |
+| **Meter** | `{{ metric.annotations.meter if metric.annotations and metric.annotations.meter else registry_name }}` |
+| **Stability** | {{ metric.stability | capitalize }} |
+| **Description** | {{ metric.brief }} |
+{%- if metric.attributes is defined and metric.attributes | length > 0 %}
+| **Attributes** | {%- for attr in metric.attributes %}`{{ attr.annotations['attribute.name'] if attr.annotations and 'attribute.name' in attr.annotations else attr.name }}`{% if not loop.last %}, {% endif %}{% endfor %} |
+{%- endif %}
+
+{%- if metric.attributes is defined and metric.attributes | length > 0 %}
+
+**Attributes:**
+
+| Name | Type | Required | Values |
+|------|------|----------|--------|
+{%- for attr in metric.attributes %}
+{%- if attr.type is mapping and attr.type.members is defined %}
+| `{{ attr.annotations['attribute.name'] if attr.annotations and 'attribute.name' in attr.annotations else attr.name }}` | enum | {{ "✓" if attr.requirement_level == "required" else "○" }} | {% for member in attr.type.members %}`{{ member.value }}`{% if not loop.last %}, {% endif %}{% endfor %} |
+{%- else %}
+| `{{ attr.annotations['attribute.name'] if attr.annotations and 'attribute.name' in attr.annotations else attr.name }}` | {{ attr.type if attr.type else "string" }} | {{ "✓" if attr.requirement_level == "required" else "○" }} | - |
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+
+{%- set is_observable = metric.annotations and metric.annotations.observable %}
+{%- if not is_observable %}
+{%- set required_attrs = metric.attributes | selectattr("requirement_level", "equalto", "required") | list if metric.attributes is defined else [] %}
+{%- if required_attrs | length > 0 %}
+
+**Usage:**
+```go
+// Type-safe wrapper with required attributes
+{{ lower_first(smart_title_case(metric.metric_name)) }}{{ metric.instrument | capitalize }}.{% if metric.instrument == "histogram" %}Record{% else %}Add{% endif %}(ctx, 1,{% for attr in required_attrs %} {{ lower_first(smart_title_case(attr.name)) }}Value{% if not loop.last %},{% endif %}{% endfor %})
+```
+{%- else %}
+
+**Usage:**
+```go
+{{ lower_first(smart_title_case(metric.metric_name)) }}{{ metric.instrument | capitalize }}.{% if metric.instrument == "histogram" %}Record{% else %}Add{% endif %}(ctx, 1)
+```
+{%- endif %}
+{%- endif %}
+
+---
+
+{% endfor %}
+
+---
+
+**Generated:** `make generate-o11y` | **Registry:** `{{ registry_name }}/monitoring/` | **Templates:** `weaver/templates/`
