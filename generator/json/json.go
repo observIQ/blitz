@@ -9,16 +9,18 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	jsonlib "github.com/goccy/go-json"
+	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/logtypes"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
 
 const (
+	componentName = "json"
+
 	// LogTypeDefault is the default log type
 	LogTypeDefault = logtypes.LogTypeDefault
 	// LogTypePII is the PII log type
@@ -34,12 +36,6 @@ type JSONLogGenerator struct {
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
 	tracker *count.Tracker
-	meter   metric.Meter
-
-	// Metrics
-	jsonLogsGenerated metric.Int64Counter
-	jsonActiveWorkers metric.Int64Gauge
-	jsonWriteErrors   metric.Int64Counter
 }
 
 // New creates a new JSON log generator
@@ -62,43 +58,12 @@ func New(logger *zap.Logger, workers int, rate time.Duration, logType string) (*
 		return nil, fmt.Errorf("logType must be one of: %s, %s, got %q", LogTypeDefault, LogTypePII, logType)
 	}
 
-	meter := otel.Meter("blitz-generator")
-
-	// Initialize metrics
-	jsonLogsGenerated, err := meter.Int64Counter(
-		"blitz.generator.logs.generated",
-		metric.WithDescription("Total number of logs generated"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs generated counter: %w", err)
-	}
-
-	jsonActiveWorkers, err := meter.Int64Gauge(
-		"blitz.generator.workers.active",
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	jsonWriteErrors, err := meter.Int64Counter(
-		"blitz.generator.write.errors",
-		metric.WithDescription("Total number of write errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create write errors counter: %w", err)
-	}
-
 	return &JSONLogGenerator{
-		logger:            logger,
-		workers:           workers,
-		rate:              rate,
-		logType:           logType,
-		stopCh:            make(chan struct{}),
-		meter:             meter,
-		jsonLogsGenerated: jsonLogsGenerated,
-		jsonActiveWorkers: jsonActiveWorkers,
-		jsonWriteErrors:   jsonWriteErrors,
+		logger:  logger,
+		workers: workers,
+		rate:    rate,
+		logType: logType,
+		stopCh:  make(chan struct{}),
 	}, nil
 }
 
@@ -110,13 +75,7 @@ func (g *JSONLogGenerator) Start(writer output.Writer) error {
 		zap.Duration("rate", g.rate))
 
 	// Record initial active workers count
-	g.jsonActiveWorkers.Record(context.Background(), int64(g.workers),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_json"),
-			),
-		),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
@@ -132,13 +91,7 @@ func (g *JSONLogGenerator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping JSON log generator")
 
 	// Record zero active workers
-	g.jsonActiveWorkers.Record(ctx, 0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_json"),
-			),
-		),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
 
 	close(g.stopCh)
 
@@ -235,13 +188,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID in
 	}
 
 	// Record logs generated counter
-	g.jsonLogsGenerated.Add(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_json"),
-			),
-		),
-	)
+	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	// Write the data with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -307,16 +254,9 @@ func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
 }
 
 // recordWriteError records metrics for write errors
-func (g *JSONLogGenerator) recordWriteError(errorType string, err error) {
-	ctx := context.Background()
-
-	g.jsonWriteErrors.Add(ctx, 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_json"),
-				attribute.String("error_type", errorType),
-			),
-		),
+func (g *JSONLogGenerator) recordWriteError(errorType string, _ error) {
+	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 }
 

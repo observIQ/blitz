@@ -10,14 +10,16 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/security"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
+
+const componentName = "apache"
 
 // apacheLogData represents the data needed to generate an Apache CLF log entry
 type apacheLogData struct {
@@ -39,12 +41,6 @@ type ApacheLogGenerator struct {
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
 	tracker *count.Tracker
-	meter   metric.Meter
-
-	// Metrics
-	apacheLogsGenerated metric.Int64Counter
-	apacheActiveWorkers metric.Int64Gauge
-	apacheWriteErrors   metric.Int64Counter
 }
 
 // New creates a new Apache log generator
@@ -57,42 +53,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*ApacheLogGenerat
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
-	meter := otel.Meter("blitz-generator")
-
-	// Initialize metrics
-	apacheLogsGenerated, err := meter.Int64Counter(
-		"blitz.generator.logs.generated",
-		metric.WithDescription("Total number of logs generated"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs generated counter: %w", err)
-	}
-
-	apacheActiveWorkers, err := meter.Int64Gauge(
-		"blitz.generator.workers.active",
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	apacheWriteErrors, err := meter.Int64Counter(
-		"blitz.generator.write.errors",
-		metric.WithDescription("Total number of write errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create write errors counter: %w", err)
-	}
-
 	return &ApacheLogGenerator{
-		logger:              logger,
-		workers:             workers,
-		rate:                rate,
-		stopCh:              make(chan struct{}),
-		meter:               meter,
-		apacheLogsGenerated: apacheLogsGenerated,
-		apacheActiveWorkers: apacheActiveWorkers,
-		apacheWriteErrors:   apacheWriteErrors,
+		logger:  logger,
+		workers: workers,
+		rate:    rate,
+		stopCh:  make(chan struct{}),
 	}, nil
 }
 
@@ -104,13 +69,7 @@ func (g *ApacheLogGenerator) Start(writer output.Writer) error {
 		zap.Duration("rate", g.rate))
 
 	// Record initial active workers count
-	g.apacheActiveWorkers.Record(context.Background(), int64(g.workers),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_apache"),
-			),
-		),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
@@ -126,13 +85,7 @@ func (g *ApacheLogGenerator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping Apache log generator")
 
 	// Record zero active workers
-	g.apacheActiveWorkers.Record(ctx, 0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_apache"),
-			),
-		),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
 
 	close(g.stopCh)
 
@@ -213,13 +166,7 @@ func (g *ApacheLogGenerator) generateAndWriteLog(writer output.Writer, workerID 
 	}
 
 	// Record logs generated counter
-	g.apacheLogsGenerated.Add(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_apache"),
-			),
-		),
-	)
+	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	// Write the data with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -429,15 +376,8 @@ func parseApacheCLF(line string) (map[string]any, error) {
 }
 
 // recordWriteError records metrics for write errors
-func (g *ApacheLogGenerator) recordWriteError(errorType string, err error) {
-	ctx := context.Background()
-
-	g.apacheWriteErrors.Add(ctx, 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_apache"),
-				attribute.String("error_type", errorType),
-			),
-		),
+func (g *ApacheLogGenerator) recordWriteError(errorType string, _ error) {
+	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 }

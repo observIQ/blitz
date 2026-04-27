@@ -90,9 +90,6 @@ func TestNew(t *testing.T) {
 	assert.Equal(t, workers, generator.workers)
 	assert.Equal(t, rate, generator.rate)
 	assert.NotNil(t, generator.stopCh)
-	assert.NotNil(t, generator.logsGenerated)
-	assert.NotNil(t, generator.activeWorkers)
-	assert.NotNil(t, generator.writeErrors)
 }
 
 func TestNew_NilLogger(t *testing.T) {

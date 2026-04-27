@@ -10,21 +10,16 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
 
 const (
-	componentName = "generator_kubernetes"
-	meterName     = "blitz-generator"
-
-	metricLogsGenerated = "blitz.generator.logs.generated"
-	metricWorkersActive = "blitz.generator.workers.active"
-	metricWriteErrors   = "blitz.generator.write.errors"
+	componentName = "kubernetes"
 
 	errorTypeUnknown = "unknown"
 	errorTypeTimeout = "timeout"
@@ -60,11 +55,6 @@ type Generator struct {
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
 	tracker *count.Tracker
-	meter   metric.Meter
-
-	kubernetesLogsGenerated metric.Int64Counter
-	kubernetesActiveWorkers metric.Int64Gauge
-	kubernetesWriteErrors   metric.Int64Counter
 }
 
 // New creates a new Kubernetes container log generator
@@ -85,42 +75,12 @@ func New(logger *zap.Logger, workers int, rate time.Duration, format string) (*G
 		return nil, fmt.Errorf("unsupported container log format: %s, must be one of: %s", format, formatCRIO)
 	}
 
-	meter := otel.Meter(meterName)
-
-	kubernetesLogsGenerated, err := meter.Int64Counter(
-		metricLogsGenerated,
-		metric.WithDescription("Total number of logs generated"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs generated counter: %w", err)
-	}
-
-	kubernetesActiveWorkers, err := meter.Int64Gauge(
-		metricWorkersActive,
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	kubernetesWriteErrors, err := meter.Int64Counter(
-		metricWriteErrors,
-		metric.WithDescription("Total number of write errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create write errors counter: %w", err)
-	}
-
 	return &Generator{
-		logger:                  logger,
-		workers:                 workers,
-		rate:                    rate,
-		format:                  logFormat,
-		stopCh:                  make(chan struct{}),
-		meter:                   meter,
-		kubernetesLogsGenerated: kubernetesLogsGenerated,
-		kubernetesActiveWorkers: kubernetesActiveWorkers,
-		kubernetesWriteErrors:   kubernetesWriteErrors,
+		logger:  logger,
+		workers: workers,
+		rate:    rate,
+		format:  logFormat,
+		stopCh:  make(chan struct{}),
 	}, nil
 }
 
@@ -170,22 +130,8 @@ func (g *Generator) SetCountTracker(t *count.Tracker) {
 func (g *Generator) worker(workerID int, writer output.Writer) {
 	defer g.wg.Done()
 
-	g.kubernetesActiveWorkers.Record(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", componentName),
-				attribute.Int("worker_id", workerID),
-			),
-		),
-	)
-	defer g.kubernetesActiveWorkers.Record(context.Background(), 0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", componentName),
-				attribute.Int("worker_id", workerID),
-			),
-		),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
+	defer generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 0, componentName)
 
 	backoffConfig := backoff.NewExponentialBackOff()
 	backoffConfig.InitialInterval = g.rate
@@ -240,13 +186,7 @@ func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) erro
 		},
 	}
 
-	g.kubernetesLogsGenerated.Add(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", componentName),
-			),
-		),
-	)
+	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -479,13 +419,8 @@ func parseContainerLog(message string) (map[string]any, error) {
 
 // recordWriteError records a write error metric
 func (g *Generator) recordWriteError(errorType string, err error) {
-	g.kubernetesWriteErrors.Add(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", componentName),
-				attribute.String("error_type", errorType),
-			),
-		),
+	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 	g.logger.Debug("Recorded write error",
 		zap.String("error_type", errorType),

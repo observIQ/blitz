@@ -12,13 +12,15 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
+
+const componentName = "paloalto"
 
 // Generator produces Palo Alto-style syslog lines.
 type Generator struct {
@@ -29,12 +31,6 @@ type Generator struct {
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
 	tracker *count.Tracker
-	meter   metric.Meter
-
-	// Metrics
-	logsGenerated metric.Int64Counter
-	activeWorkers metric.Int64Gauge
-	writeErrors   metric.Int64Counter
 }
 
 // New creates a new Palo Alto generator.
@@ -46,41 +42,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
-	meter := otel.Meter("blitz-generator")
-
-	logsGenerated, err := meter.Int64Counter(
-		"blitz.generator.logs.generated",
-		metric.WithDescription("Total number of logs generated"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs generated counter: %w", err)
-	}
-
-	activeWorkers, err := meter.Int64Gauge(
-		"blitz.generator.workers.active",
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	writeErrors, err := meter.Int64Counter(
-		"blitz.generator.write.errors",
-		metric.WithDescription("Total number of write errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create write errors counter: %w", err)
-	}
-
 	return &Generator{
-		logger:        logger,
-		workers:       workers,
-		rate:          rate,
-		stopCh:        make(chan struct{}),
-		meter:         meter,
-		logsGenerated: logsGenerated,
-		activeWorkers: activeWorkers,
-		writeErrors:   writeErrors,
+		logger:  logger,
+		workers: workers,
+		rate:    rate,
+		stopCh:  make(chan struct{}),
 	}, nil
 }
 
@@ -91,9 +57,7 @@ func (g *Generator) Start(writer output.Writer) error {
 		zap.Duration("rate", g.rate),
 	)
 
-	g.activeWorkers.Record(context.Background(), int64(g.workers),
-		metric.WithAttributeSet(attribute.NewSet(attribute.String("component", "generator_paloalto"))),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
@@ -106,9 +70,7 @@ func (g *Generator) Start(writer output.Writer) error {
 func (g *Generator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping Palo Alto generator")
 
-	g.activeWorkers.Record(ctx, 0,
-		metric.WithAttributeSet(attribute.NewSet(attribute.String("component", "generator_paloalto"))),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
 
 	close(g.stopCh)
 
@@ -170,9 +132,7 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 func (g *Generator) generateAndWrite(writer output.Writer, workerID int) error {
 	line := generatePaloAltoLog()
 
-	g.logsGenerated.Add(context.Background(), 1,
-		metric.WithAttributeSet(attribute.NewSet(attribute.String("component", "generator_paloalto"))),
-	)
+	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -195,13 +155,9 @@ func (g *Generator) generateAndWrite(writer output.Writer, workerID int) error {
 	return nil
 }
 
-func (g *Generator) recordWriteError(errorType string, err error) {
-	ctx := context.Background()
-	g.writeErrors.Add(ctx, 1,
-		metric.WithAttributeSet(attribute.NewSet(
-			attribute.String("component", "generator_paloalto"),
-			attribute.String("error_type", errorType),
-		)),
+func (g *Generator) recordWriteError(errorType string, _ error) {
+	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 }
 

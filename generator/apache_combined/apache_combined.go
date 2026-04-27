@@ -9,14 +9,16 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/useragent"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
+
+const componentName = "apache-combined"
 
 // apacheCombinedLogData represents the data needed to generate an Apache Combined Log Format entry
 type apacheCombinedLogData struct {
@@ -40,12 +42,6 @@ type ApacheCombinedLogGenerator struct {
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
 	tracker *count.Tracker
-	meter   metric.Meter
-
-	// Metrics
-	apacheCombinedLogsGenerated metric.Int64Counter
-	apacheCombinedActiveWorkers metric.Int64Gauge
-	apacheCombinedWriteErrors   metric.Int64Counter
 }
 
 // New creates a new Apache Combined log generator
@@ -58,42 +54,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*ApacheCombinedLo
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
-	meter := otel.Meter("blitz-generator")
-
-	// Initialize metrics
-	apacheCombinedLogsGenerated, err := meter.Int64Counter(
-		"blitz.generator.logs.generated",
-		metric.WithDescription("Total number of logs generated"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs generated counter: %w", err)
-	}
-
-	apacheCombinedActiveWorkers, err := meter.Int64Gauge(
-		"blitz.generator.workers.active",
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	apacheCombinedWriteErrors, err := meter.Int64Counter(
-		"blitz.generator.write.errors",
-		metric.WithDescription("Total number of write errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create write errors counter: %w", err)
-	}
-
 	return &ApacheCombinedLogGenerator{
-		logger:                      logger,
-		workers:                     workers,
-		rate:                        rate,
-		stopCh:                      make(chan struct{}),
-		meter:                       meter,
-		apacheCombinedLogsGenerated: apacheCombinedLogsGenerated,
-		apacheCombinedActiveWorkers: apacheCombinedActiveWorkers,
-		apacheCombinedWriteErrors:   apacheCombinedWriteErrors,
+		logger:  logger,
+		workers: workers,
+		rate:    rate,
+		stopCh:  make(chan struct{}),
 	}, nil
 }
 
@@ -143,22 +108,8 @@ func (g *ApacheCombinedLogGenerator) SetCountTracker(t *count.Tracker) {
 func (g *ApacheCombinedLogGenerator) worker(workerID int, writer output.Writer) {
 	defer g.wg.Done()
 
-	g.apacheCombinedActiveWorkers.Record(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_apache_combined"),
-				attribute.Int("worker_id", workerID),
-			),
-		),
-	)
-	defer g.apacheCombinedActiveWorkers.Record(context.Background(), 0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_apache_combined"),
-				attribute.Int("worker_id", workerID),
-			),
-		),
-	)
+	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
+	defer generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 0, componentName)
 
 	backoffConfig := backoff.NewExponentialBackOff()
 	backoffConfig.InitialInterval = g.rate
@@ -211,13 +162,7 @@ func (g *ApacheCombinedLogGenerator) generateAndWriteLog(writer output.Writer, w
 	}
 
 	// Record logs generated counter
-	g.apacheCombinedLogsGenerated.Add(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_apache_combined"),
-			),
-		),
-	)
+	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	// Write the data with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -443,13 +388,8 @@ func formatAsApacheCombined(data *apacheCombinedLogData) (output.LogRecord, erro
 
 // recordWriteError records a write error metric
 func (g *ApacheCombinedLogGenerator) recordWriteError(errorType string, err error) {
-	g.apacheCombinedWriteErrors.Add(context.Background(), 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "generator_apache_combined"),
-				attribute.String("error_type", errorType),
-			),
-		),
+	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 	g.logger.Debug("Recorded write error",
 		zap.String("error_type", errorType),
