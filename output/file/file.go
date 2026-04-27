@@ -7,8 +7,6 @@ import (
 
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -21,9 +19,8 @@ const (
 	// DefaultFileWorkers is the default number of worker goroutines
 	DefaultFileWorkers = 1
 
-	// metric attribute keys/values
-	metricAttrComponent       = "component"
-	metricComponentOutputFile = "output_file"
+	// outputType is the output_type attribute value for file metrics.
+	outputType = "file"
 )
 
 // RotationOptions contains file rotation settings
@@ -44,21 +41,11 @@ type File struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
-	meter         metric.Meter
 	writer        *lumberjack.Logger
-
-	// Metrics
-	fileLogsReceived     metric.Int64Counter
-	fileActiveWorkers    metric.Int64Gauge
-	fileLogRate          metric.Float64Counter
-	fileRequestSizeBytes metric.Int64Histogram
-	fileWriteErrors      metric.Int64Counter
 }
 
 // New creates a new File output instance
 func New(logger *zap.Logger, path string, workers int, rotation RotationOptions) (*File, error) {
-	var err error
-
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -70,54 +57,6 @@ func New(logger *zap.Logger, path string, workers int, rotation RotationOptions)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		if err != nil {
-			cancel()
-		}
-	}()
-
-	meter := otel.Meter("blitz-file-output")
-
-	// Initialize metrics
-	fileLogsReceived, err := meter.Int64Counter(
-		"blitz.file.logs.received",
-		metric.WithDescription("Number of logs received from the write channel"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs received counter: %w", err)
-	}
-
-	fileActiveWorkers, err := meter.Int64Gauge(
-		"blitz.file.workers.active",
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	fileLogRate, err := meter.Float64Counter(
-		"blitz.file.log.rate",
-		metric.WithDescription("Rate at which logs are successfully written to file"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create log rate counter: %w", err)
-	}
-
-	fileRequestSizeBytes, err := meter.Int64Histogram(
-		"blitz.file.request.size.bytes",
-		metric.WithDescription("Size of write requests in bytes"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create request size histogram: %w", err)
-	}
-
-	fileWriteErrors, err := meter.Int64Counter(
-		"blitz.file.write.errors",
-		metric.WithDescription("Total number of file write errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create write errors counter: %w", err)
-	}
 
 	writer := &lumberjack.Logger{
 		Filename:   path,
@@ -129,19 +68,13 @@ func New(logger *zap.Logger, path string, workers int, rotation RotationOptions)
 	}
 
 	f := &File{
-		logger:               logger.Named("output-file"),
-		path:                 path,
-		workers:              workers,
-		dataChan:             make(chan string, DefaultFileChannelSize),
-		ctx:                  ctx,
-		cancel:               cancel,
-		meter:                meter,
-		writer:               writer,
-		fileLogsReceived:     fileLogsReceived,
-		fileActiveWorkers:    fileActiveWorkers,
-		fileLogRate:          fileLogRate,
-		fileRequestSizeBytes: fileRequestSizeBytes,
-		fileWriteErrors:      fileWriteErrors,
+		logger:   logger.Named("output-file"),
+		path:     path,
+		workers:  workers,
+		dataChan: make(chan string, DefaultFileChannelSize),
+		ctx:      ctx,
+		cancel:   cancel,
+		writer:   writer,
 	}
 
 	f.logger.Info("Starting File output",
@@ -150,47 +83,31 @@ func New(logger *zap.Logger, path string, workers int, rotation RotationOptions)
 		zap.Int("channel_size", DefaultFileChannelSize),
 	)
 
-	// Channel size gauge
-	_, err = meter.Int64ObservableGauge(
-		"blitz.file.channel.size",
-		metric.WithDescription("Current size of the data channel"),
-		metric.WithInt64Callback(func(_ context.Context, io metric.Int64Observer) error {
-			io.Observe(int64(len(f.dataChan)))
-			return nil
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create channel size gauge: %w", err)
-	}
+	// Register observable metrics (queue_size)
+	output.InitObservableMetrics(f)
 
 	// Worker manager
 	f.workerManager = workermanager.NewWorkerManager(f.logger, workers, f.fileWorker)
 
 	// Record initial active workers count
-	f.fileActiveWorkers.Record(context.Background(), int64(workers),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String(metricAttrComponent, metricComponentOutputFile),
-			),
-		),
-	)
+	output.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(workers), outputType)
 
 	f.workerManager.Start()
 
 	return f, nil
 }
 
+// ObserveBlitzOutputQueueSize implements the output.ObservableCallbacks interface
+func (f *File) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int64Observer) error {
+	observer.Observe(int64(len(f.dataChan)))
+	return nil
+}
+
 // Write enqueues data for file workers.
 func (f *File) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case f.dataChan <- data.Message:
-		f.fileLogsReceived.Add(ctx, 1,
-			metric.WithAttributeSet(
-				attribute.NewSet(
-					attribute.String(metricAttrComponent, metricComponentOutputFile),
-				),
-			),
-		)
+		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType)
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -203,13 +120,7 @@ func (f *File) Write(ctx context.Context, data output.LogRecord) error {
 func (f *File) Stop(ctx context.Context) error {
 	f.logger.Info("Stopping File output")
 
-	f.fileActiveWorkers.Record(ctx, 0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String(metricAttrComponent, metricComponentOutputFile),
-			),
-		),
-	)
+	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
 	close(f.dataChan)
 	f.cancel()
@@ -263,20 +174,8 @@ func (f *File) writeData(data string) error {
 	}
 
 	latency := time.Since(start).Seconds()
-	f.fileLogRate.Add(context.Background(), 1.0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String(metricAttrComponent, metricComponentOutputFile),
-			),
-		),
-	)
-	f.fileRequestSizeBytes.Record(context.Background(), int64(bytesWritten),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String(metricAttrComponent, metricComponentOutputFile),
-			),
-		),
-	)
+	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType)
+	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType)
 
 	// Record latency as a histogram using Float64Histogram like TCP for symmetry
 	// Use a separate metric name if needed in the future; omitted here to reduce metric cardinality
@@ -285,14 +184,6 @@ func (f *File) writeData(data string) error {
 	return nil
 }
 
-func (f *File) recordWriteError(errorType string, err error) {
-	ctx := context.Background()
-	f.fileWriteErrors.Add(ctx, 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String(metricAttrComponent, metricComponentOutputFile),
-				attribute.String("error_type", errorType),
-			),
-		),
-	)
+func (f *File) recordWriteError(_ string, _ error) {
+	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType)
 }

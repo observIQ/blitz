@@ -9,8 +9,6 @@ import (
 
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
@@ -32,6 +30,9 @@ const (
 	DefaultTCPStopTimeout = 30 * time.Second
 )
 
+// outputType is the output_type attribute value for TCP metrics.
+const outputType = "tcp"
+
 // TCP implements the Output interface for TCP connections
 type TCP struct {
 	logger        *zap.Logger
@@ -43,21 +44,10 @@ type TCP struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
-	meter         metric.Meter
-
-	// Metrics
-	tcpLogsReceived     metric.Int64Counter
-	tcpActiveWorkers    metric.Int64Gauge
-	tcpLogRate          metric.Float64Counter
-	tcpRequestSizeBytes metric.Int64Histogram
-	tcpRequestLatency   metric.Float64Histogram
-	tcpSendErrors       metric.Int64Counter
 }
 
 // New creates a new TCP output instance
 func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Config) (*TCP, error) {
-	var err error
-
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -72,79 +62,16 @@ func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Conf
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		if err != nil {
-			cancel()
-		}
-	}()
-
-	meter := otel.Meter("blitz-tcp-output")
-
-	// Initialize metrics
-	tcpLogsReceived, err := meter.Int64Counter(
-		"blitz.tcp.logs.received",
-		metric.WithDescription("Number of logs received from the write channel"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create logs received counter: %w", err)
-	}
-
-	tcpActiveWorkers, err := meter.Int64Gauge(
-		"blitz.tcp.workers.active",
-		metric.WithDescription("Number of active worker goroutines"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create active workers gauge: %w", err)
-	}
-
-	tcpLogRate, err := meter.Float64Counter(
-		"blitz.tcp.log.rate",
-		metric.WithDescription("Rate at which logs are successfully sent to the configured host"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create log rate counter: %w", err)
-	}
-
-	tcpRequestSizeBytes, err := meter.Int64Histogram(
-		"blitz.tcp.request.size.bytes",
-		metric.WithDescription("Size of requests in bytes"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create request size histogram: %w", err)
-	}
-
-	tcpRequestLatency, err := meter.Float64Histogram(
-		"blitz.tcp.request.latency",
-		metric.WithDescription("Request latency in seconds"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create request latency histogram: %w", err)
-	}
-
-	tcpSendErrors, err := meter.Int64Counter(
-		"blitz.tcp.send.errors",
-		metric.WithDescription("Total number of send errors"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create send errors counter: %w", err)
-	}
 
 	tcp := &TCP{
-		logger:              logger.Named("output-tcp"),
-		host:                host,
-		port:                port,
-		workers:             workers,
-		tlsConfig:           tlsConfig,
-		dataChan:            make(chan string, DefaultTCPChannelSize),
-		ctx:                 ctx,
-		cancel:              cancel,
-		meter:               meter,
-		tcpLogsReceived:     tcpLogsReceived,
-		tcpActiveWorkers:    tcpActiveWorkers,
-		tcpLogRate:          tcpLogRate,
-		tcpRequestSizeBytes: tcpRequestSizeBytes,
-		tcpRequestLatency:   tcpRequestLatency,
-		tcpSendErrors:       tcpSendErrors,
+		logger:    logger.Named("output-tcp"),
+		host:      host,
+		port:      port,
+		workers:   workers,
+		tlsConfig: tlsConfig,
+		dataChan:  make(chan string, DefaultTCPChannelSize),
+		ctx:       ctx,
+		cancel:    cancel,
 	}
 
 	tcp.logger.Info("Starting TCP output",
@@ -155,35 +82,25 @@ func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Conf
 		zap.Bool("tls_enabled", tlsConfig != nil),
 	)
 
-	// Create channel size gauge
-	_, err = meter.Int64ObservableGauge(
-		"blitz.tcp.channel.size",
-		metric.WithDescription("Current size of the data channel"),
-		metric.WithInt64Callback(func(_ context.Context, io metric.Int64Observer) error {
-			io.Observe(int64(len(tcp.dataChan)))
-			return nil
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create channel size gauge: %w", err)
-	}
+	// Register observable metrics (queue_size)
+	output.InitObservableMetrics(tcp)
 
 	// Create worker manager
 	tcp.workerManager = workermanager.NewWorkerManager(tcp.logger, workers, tcp.tcpWorker)
 
 	// Record initial active workers count
-	tcp.tcpActiveWorkers.Record(context.Background(), int64(workers),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_tcp"),
-			),
-		),
-	)
+	output.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(workers), outputType)
 
 	// Start the workers
 	tcp.workerManager.Start()
 
 	return tcp, nil
+}
+
+// ObserveBlitzOutputQueueSize implements the output.ObservableCallbacks interface
+func (t *TCP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int64Observer) error {
+	observer.Observe(int64(len(t.dataChan)))
+	return nil
 }
 
 // Write sends data to the TCP output channel for processing by workers.
@@ -193,14 +110,7 @@ func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Conf
 func (t *TCP) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case t.dataChan <- data.Message:
-		// Record logs received
-		t.tcpLogsReceived.Add(ctx, 1,
-			metric.WithAttributeSet(
-				attribute.NewSet(
-					attribute.String("component", "output_tcp"),
-				),
-			),
-		)
+		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType)
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -217,13 +127,7 @@ func (t *TCP) Stop(ctx context.Context) error {
 	t.logger.Info("Stopping TCP output")
 
 	// Record zero active workers
-	t.tcpActiveWorkers.Record(ctx, 0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_tcp"),
-			),
-		),
-	)
+	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
 	// Close the channel to ensure workers do not
 	// process new data.
@@ -334,41 +238,14 @@ func (t *TCP) sendData(conn net.Conn, data string) error {
 
 	// Record successful send metrics
 	latency := time.Since(startTime).Seconds()
-	t.tcpLogRate.Add(context.Background(), 1.0,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_tcp"),
-			),
-		),
-	)
-	t.tcpRequestSizeBytes.Record(context.Background(), int64(bytesWritten),
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_tcp"),
-			),
-		),
-	)
-	t.tcpRequestLatency.Record(context.Background(), latency,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_tcp"),
-			),
-		),
-	)
+	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType)
+	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType)
+	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType)
 
 	return nil
 }
 
 // recordSendError records metrics for send errors
-func (t *TCP) recordSendError(errorType string, err error) {
-	ctx := context.Background()
-
-	t.tcpSendErrors.Add(ctx, 1,
-		metric.WithAttributeSet(
-			attribute.NewSet(
-				attribute.String("component", "output_tcp"),
-				attribute.String("error_type", errorType),
-			),
-		),
-	)
+func (t *TCP) recordSendError(_ string, _ error) {
+	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType)
 }
