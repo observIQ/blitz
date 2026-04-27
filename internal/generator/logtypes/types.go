@@ -58,20 +58,20 @@ type PIILogData struct {
 	StatusVal    string
 
 	// Core PII Fields
-	UserIDVal      string // UUID/GUID
-	SSNVal         string // Social Security Number
-	IBANVal        string // International Bank Account Number
-	PhoneVal       string // US Phone Number
-	IntlPhoneVal   string // International Phone Number
-	EmailVal       string // Email Address
-	CreditCardVal  string // Credit Card Number
-	DOBVal         string // Date of Birth
-	IPv4Val        string // IPv4 Address
-	IPv6Val        string // IPv6 Address
-	MACAddressVal  string // MAC Address
-	StreetAddrVal  string // US Street Address
-	CityStateVal   string // US City, State
-	ZipCodeVal     string // US Zip Code
+	UserIDVal     string // UUID/GUID
+	SSNVal        string // Social Security Number
+	IBANVal       string // International Bank Account Number
+	PhoneVal      string // US Phone Number
+	IntlPhoneVal  string // International Phone Number
+	EmailVal      string // Email Address
+	CreditCardVal string // Credit Card Number
+	DOBVal        string // Date of Birth
+	IPv4Val       string // IPv4 Address
+	IPv6Val       string // IPv6 Address
+	MACAddressVal string // MAC Address
+	StreetAddrVal string // US Street Address
+	CityStateVal  string // US City, State
+	ZipCodeVal    string // US Zip Code
 
 	// Government IDs
 	PassportVal       string // Passport Number
@@ -84,33 +84,33 @@ type PIILogData struct {
 	CryptoWalletVal  string // Cryptocurrency Wallet Address
 
 	// Healthcare
-	MedicalRecordVal  string // Medical Record Number (MRN)
+	MedicalRecordVal   string // Medical Record Number (MRN)
 	HealthInsuranceVal string // Health Insurance ID
 
 	// Vehicle
-	VINVal           string // Vehicle Identification Number
-	LicensePlateVal  string // License Plate Number
+	VINVal          string // Vehicle Identification Number
+	LicensePlateVal string // License Plate Number
 
 	// Employment/Education
 	EmployeeIDVal string // Employee ID
 	StudentIDVal  string // Student ID
 
 	// Authentication/Secrets
-	UsernameVal    string // Username
+	UsernameVal     string // Username
 	PasswordHashVal string // Password Hash
-	APIKeyVal      string // API Key/Token
+	APIKeyVal       string // API Key/Token
 	AWSAccessKeyVal string // AWS Access Key ID
-	PrivateKeyVal  string // Private Key (partial)
-	JWTTokenVal    string // JWT Token
+	PrivateKeyVal   string // Private Key (partial)
+	JWTTokenVal     string // JWT Token
 
 	// Location
 	GPSCoordsVal string // GPS Coordinates (lat,long)
 	GeohashVal   string // Geohash
 
 	// Personal
-	FullNameVal        string // Full Name
-	MothersMaidenVal   string // Mother's Maiden Name
-	SecurityAnswerVal  string // Security Question Answer
+	FullNameVal       string // Full Name
+	MothersMaidenVal  string // Mother's Maiden Name
+	SecurityAnswerVal string // Security Question Answer
 }
 
 // Timestamp implements LogData interface
