@@ -19,6 +19,7 @@ const (
 	IdentityServices     IdentityType = "services"
 	IdentityApplications IdentityType = "applications"
 	IdentityNetworks     IdentityType = "networks"
+	IdentityDomains      IdentityType = "domains"
 )
 
 // SeedConfig controls deterministic generation across all identity types.
@@ -40,6 +41,7 @@ type SeedConfig struct {
 	Services     int64
 	Applications int64
 	Networks     int64
+	Domains      int64
 }
 
 // NewSeedConfig returns a SeedConfig with every field set to -1 so that an
@@ -54,6 +56,7 @@ func NewSeedConfig() *SeedConfig {
 		Services:     -1,
 		Applications: -1,
 		Networks:     -1,
+		Domains:      -1,
 	}
 }
 
@@ -76,6 +79,8 @@ func (s *SeedConfig) ResolveSeed(identityType IdentityType) int64 {
 		override = s.Applications
 	case IdentityNetworks:
 		override = s.Networks
+	case IdentityDomains:
+		override = s.Domains
 	}
 	if override >= 0 {
 		return override
@@ -98,5 +103,6 @@ func (s *SeedConfig) Init(logger *zap.Logger) {
 		zap.Int64("services", s.ResolveSeed(IdentityServices)),
 		zap.Int64("applications", s.ResolveSeed(IdentityApplications)),
 		zap.Int64("networks", s.ResolveSeed(IdentityNetworks)),
+		zap.Int64("domains", s.ResolveSeed(IdentityDomains)),
 	)
 }
