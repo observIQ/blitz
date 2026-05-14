@@ -233,6 +233,9 @@ func run(cmd *cobra.Command, args []string) error {
 		if cfg.Output.OTLPGrpc.BatchTimeout > 0 {
 			opts = append(opts, otlpgrpc.WithBatchTimeout(cfg.Output.OTLPGrpc.BatchTimeout))
 		}
+		if cfg.Output.OTLPGrpc.RequestTimeout > 0 {
+			opts = append(opts, otlpgrpc.WithRequestTimeout(cfg.Output.OTLPGrpc.RequestTimeout))
+		}
 		if cfg.Output.OTLPGrpc.MaxQueueSize > 0 {
 			opts = append(opts, otlpgrpc.WithMaxQueueSize(cfg.Output.OTLPGrpc.MaxQueueSize))
 		}

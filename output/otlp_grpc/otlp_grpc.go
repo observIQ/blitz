@@ -47,6 +47,9 @@ const (
 
 	// DefaultOTLPGrpcStopTimeout is the default timeout for graceful shutdown
 	DefaultOTLPGrpcStopTimeout = 30 * time.Second
+
+	// DefaultOTLPGrpcRequestTimeout is the default timeout for each gRPC export call
+	DefaultOTLPGrpcRequestTimeout = 10 * time.Second
 )
 
 // OTLPGrpcOption is a functional option for configuring OTLP gRPC output
@@ -58,6 +61,7 @@ type OTLPGrpcConfig struct {
 	port               string
 	workers            int
 	batchTimeout       time.Duration
+	requestTimeout     time.Duration
 	maxQueueSize       int
 	maxExportBatchSize int
 	insecure           bool
@@ -92,6 +96,14 @@ func WithWorkers(workers int) OTLPGrpcOption {
 func WithBatchTimeout(timeout time.Duration) OTLPGrpcOption {
 	return func(cfg *OTLPGrpcConfig) error {
 		cfg.batchTimeout = timeout
+		return nil
+	}
+}
+
+// WithRequestTimeout sets the timeout for each individual gRPC export call
+func WithRequestTimeout(timeout time.Duration) OTLPGrpcOption {
+	return func(cfg *OTLPGrpcConfig) error {
+		cfg.requestTimeout = timeout
 		return nil
 	}
 }
@@ -146,6 +158,7 @@ type OTLPGrpc struct {
 
 	// Configuration
 	batchTimeout       time.Duration
+	requestTimeout     time.Duration
 	maxQueueSize       int
 	maxExportBatchSize int
 }
@@ -162,6 +175,7 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 		port:               DefaultOTLPGrpcPort,
 		workers:            DefaultOTLPGrpcWorkers,
 		batchTimeout:       DefaultOTLPGrpcBatchTimeout,
+		requestTimeout:     DefaultOTLPGrpcRequestTimeout,
 		maxQueueSize:       DefaultOTLPGrpcMaxQueueSize,
 		maxExportBatchSize: DefaultOTLPGrpcMaxExportBatchSize,
 		insecure:           true,
@@ -204,6 +218,7 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 		ctx:                ctx,
 		cancel:             cancel,
 		batchTimeout:       cfg.batchTimeout,
+		requestTimeout:     cfg.requestTimeout,
 		maxQueueSize:       cfg.maxQueueSize,
 		maxExportBatchSize: cfg.maxExportBatchSize,
 	}
@@ -214,6 +229,7 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 		zap.Int("workers", otlp.workers),
 		zap.Int("channel_size", DefaultOTLPGrpcChannelSize),
 		zap.Duration("batch_timeout", otlp.batchTimeout),
+		zap.Duration("request_timeout", otlp.requestTimeout),
 		zap.Int("max_queue_size", otlp.maxQueueSize),
 		zap.Int("max_export_batch_size", otlp.maxExportBatchSize),
 		zap.Bool("insecure", cfg.insecure),
@@ -498,7 +514,7 @@ func (o *OTLPGrpc) sendBatch(client collectorlogs.LogsServiceClient, batch *logB
 	request := o.buildOTLPRequest(logs)
 
 	// Send request
-	ctx, cancel := context.WithTimeout(context.Background(), o.batchTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), o.requestTimeout)
 	defer cancel()
 
 	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{}))

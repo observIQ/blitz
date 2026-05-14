@@ -18,6 +18,8 @@ const (
 	DefaultOTLPGrpcMaxQueueSize = 100
 	// DefaultOTLPGrpcMaxExportBatchSize is the default maximum export batch size for OTLP gRPC output
 	DefaultOTLPGrpcMaxExportBatchSize = 200
+	// DefaultOTLPGrpcRequestTimeout is the default timeout for each gRPC export call
+	DefaultOTLPGrpcRequestTimeout = 10 * time.Second
 )
 
 // OTLPGrpcOutputConfig contains configuration for OTLP gRPC output
@@ -30,6 +32,8 @@ type OTLPGrpcOutputConfig struct {
 	Workers int `yaml:"workers,omitempty" mapstructure:"workers,omitempty"`
 	// BatchTimeout is the timeout for batching log records
 	BatchTimeout time.Duration `yaml:"batchTimeout,omitempty" mapstructure:"batchTimeout,omitempty"`
+	// RequestTimeout is the timeout for each individual gRPC export call
+	RequestTimeout time.Duration `yaml:"requestTimeout,omitempty" mapstructure:"requestTimeout,omitempty"`
 	// MaxQueueSize is the maximum queue size for batching
 	MaxQueueSize int `yaml:"maxQueueSize,omitempty" mapstructure:"maxQueueSize,omitempty"`
 	// MaxExportBatchSize is the maximum batch size for export
@@ -62,6 +66,10 @@ func (c *OTLPGrpcOutputConfig) Validate() error {
 
 	if c.MaxExportBatchSize < 0 {
 		return fmt.Errorf("OTLP gRPC output max export batch size cannot be negative, got %d", c.MaxExportBatchSize)
+	}
+
+	if c.RequestTimeout < 0 {
+		return fmt.Errorf("OTLP gRPC output request timeout cannot be negative, got %s", c.RequestTimeout)
 	}
 
 	if c.EnableTLS {

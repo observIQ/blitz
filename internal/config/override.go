@@ -307,6 +307,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("output.otlpGrpc.port", "OTLP gRPC output target port", DefaultOTLPGrpcPort),
 		NewOverride("output.otlpGrpc.workers", "number of OTLP gRPC output workers", DefaultOTLPGrpcWorkers),
 		NewOverride("output.otlpGrpc.batchTimeout", "OTLP gRPC output batch timeout", DefaultOTLPGrpcBatchTimeout),
+		NewOverride("output.otlpGrpc.requestTimeout", "timeout for each OTLP gRPC export call", DefaultOTLPGrpcRequestTimeout),
 		NewOverride("output.otlpGrpc.maxQueueSize", "OTLP gRPC output maximum queue size", DefaultOTLPGrpcMaxQueueSize),
 		NewOverride("output.otlpGrpc.maxExportBatchSize", "OTLP gRPC output maximum export batch size", DefaultOTLPGrpcMaxExportBatchSize),
 		NewOverride("output.hec.host", "HEC output target host", ""),
