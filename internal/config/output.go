@@ -42,6 +42,8 @@ type Output struct {
 	File FileOutputConfig `yaml:"file,omitempty" mapstructure:"file,omitempty"`
 	// HEC contains Splunk HEC output configuration
 	HEC HECOutputConfig `yaml:"hec,omitempty" mapstructure:"hec,omitempty"`
+	// Stdout contains stdout output configuration
+	Stdout StdoutOutputConfig `yaml:"stdout,omitempty" mapstructure:"stdout,omitempty"`
 }
 
 // Validate validates the output configuration
@@ -55,7 +57,9 @@ func (o *Output) Validate() error {
 	case OutputTypeNop:
 		// NOP output requires no additional validation
 	case OutputTypeStdout:
-		// Stdout output requires no additional validation
+		if err := o.Stdout.Validate(); err != nil {
+			return fmt.Errorf("Stdout output validation failed: %w", err)
+		}
 	case OutputTypeTCP:
 		if err := o.TCP.Validate(); err != nil {
 			return fmt.Errorf("TCP output validation failed: %w", err)

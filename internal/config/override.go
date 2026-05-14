@@ -278,6 +278,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.okta.workers", "number of Okta generator workers", 1),
 		NewOverride("generator.okta.rate", "rate at which Okta logs are generated per worker", 1*time.Second),
 		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file|hec", OutputTypeNop),
+		NewOverride("output.stdout.flushInterval", "stdout output flush interval", DefaultStdoutFlushInterval),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),
 		NewOverride("output.udp.workers", "number of UDP output workers", 1),

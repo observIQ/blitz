@@ -156,7 +156,9 @@ func run(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	case config.OutputTypeStdout:
-		outputInstance, err = stdoutout.New(logger)
+		outputInstance, err = stdoutout.New(logger,
+			stdoutout.WithFlushInterval(cfg.Output.Stdout.FlushInterval),
+		)
 		if err != nil {
 			logger.Error("Failed to create stdout output", zap.Error(err))
 			return err
