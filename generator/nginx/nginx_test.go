@@ -134,7 +134,7 @@ func TestNginxGenerator_Start(t *testing.T) {
 	writes := writer.getWrites()
 	assert.Greater(t, len(writes), 0, "Expected some logs to be written")
 
-	nginxPattern := regexp.MustCompile(`^\d+\.\d+\.\d+\.\d+ - .* \[.*\] ".*" \d+ \d+ ".*" ".*"$`)
+	nginxPattern := regexp.MustCompile(`^\d+\.\d+\.\d+\.\d+ - .* \[.*\] ".*" \d+ \d+ ".*" ".*" [\d.]+ ".*"$`)
 	for _, write := range writes {
 		line := string(write)
 		assert.True(t, nginxPattern.MatchString(line), "Log should match NGINX Combined Log Format: %s", line)

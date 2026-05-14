@@ -27,6 +27,49 @@ const (
 	LogTypePII = logtypes.LogTypePII
 )
 
+// Operational context pools used when formatting PII logs (mirrors logtypes defaults)
+var (
+	jsonServices = []string{
+		"api-gateway", "auth-service", "payment-service", "user-service",
+		"notification-service", "data-pipeline", "cache-service", "search-service",
+		"event-bus", "analytics-service", "order-service", "inventory-service",
+	}
+	jsonHosts = []string{
+		"web-prod-01.us-east1.example.com", "web-prod-02.us-east1.example.com",
+		"web-prod-01.us-west1.example.com", "worker-prod-01.eu-west1.example.com",
+		"api-prod-01.us-east1.example.com", "api-prod-02.us-west1.example.com",
+		"db-worker-01.us-east1.example.com", "cache-prod-01.us-east1.example.com",
+		"batch-worker-01.us-east1.example.com", "stream-proc-01.eu-central1.example.com",
+	}
+	jsonComponents = []string{
+		"http-handler", "database", "cache", "message-queue",
+		"grpc-server", "storage", "scheduler", "auth-middleware",
+	}
+	jsonVersions = []string{"1.0.0", "1.1.0", "1.2.3", "2.0.0", "2.1.1", "3.0.0-rc1"}
+	jsonRegions  = []string{
+		"us-east-1", "us-west-2", "eu-west-1", "eu-central-1",
+		"ap-southeast-1", "ap-northeast-1", "ca-central-1", "sa-east-1",
+	}
+)
+
+func generateUUID(r *rand.Rand) string {
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		r.Uint32(),
+		r.Intn(0x10000),           // #nosec G404
+		r.Intn(0x10000),           // #nosec G404
+		r.Intn(0x10000),           // #nosec G404
+		r.Int63n(0x1000000000000), // #nosec G404
+	)
+}
+
+func generateTraceID(r *rand.Rand) string {
+	return fmt.Sprintf("%016x%016x", r.Int63(), r.Int63()) // #nosec G404
+}
+
+func generateSpanID(r *rand.Rand) string {
+	return fmt.Sprintf("%016x", r.Int63()) // #nosec G404
+}
+
 // JSONLogGenerator generates JSON log data with configurable workers
 type JSONLogGenerator struct {
 	logger  *zap.Logger
@@ -216,11 +259,21 @@ func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
 	switch d := data.(type) {
 	case *logtypes.DefaultLogData:
 		jsonData = map[string]any{
-			"timestamp":   d.TimestampVal,
-			"level":       d.LevelVal,
-			"environment": d.EnvironmentVal,
-			"location":    d.LocationVal,
-			"message":     d.MessageVal,
+			"timestamp":      d.TimestampVal,
+			"level":          d.LevelVal,
+			"environment":    d.EnvironmentVal,
+			"location":       d.LocationVal,
+			"message":        d.MessageVal,
+			"service":        d.ServiceVal,
+			"host":           d.HostVal,
+			"request_id":     d.RequestIDVal,
+			"trace_id":       d.TraceIDVal,
+			"span_id":        d.SpanIDVal,
+			"duration_ms":    d.DurationMsVal,
+			"component":      d.ComponentVal,
+			"version":        d.VersionVal,
+			"correlation_id": d.CorrelationIDVal,
+			"region":         d.RegionVal,
 		}
 		timestamp = d.TimestampVal
 		severity = d.LevelVal
@@ -331,9 +384,19 @@ func formatPIILogDataWithRand(r *rand.Rand, d *logtypes.PIILogData) map[string]a
 
 	// Start with base fields
 	jsonData := map[string]any{
-		"timestamp": d.TimestampVal,
-		"level":     d.LevelVal,
-		"message":   d.MessageVal,
+		"timestamp":      d.TimestampVal,
+		"level":          d.LevelVal,
+		"message":        d.MessageVal,
+		"service":        jsonServices[r.Intn(len(jsonServices))],   // #nosec G404
+		"host":           jsonHosts[r.Intn(len(jsonHosts))],         // #nosec G404
+		"request_id":     generateUUID(r),
+		"trace_id":       generateTraceID(r),
+		"span_id":        generateSpanID(r),
+		"duration_ms":    r.Intn(9999) + 1,                         // #nosec G404
+		"component":      jsonComponents[r.Intn(len(jsonComponents))], // #nosec G404
+		"version":        jsonVersions[r.Intn(len(jsonVersions))],   // #nosec G404
+		"correlation_id": generateUUID(r),
+		"region":         jsonRegions[r.Intn(len(jsonRegions))],     // #nosec G404
 	}
 
 	// Add optional context fields if present
@@ -358,8 +421,8 @@ func formatPIILogDataWithRand(r *rand.Rand, d *logtypes.PIILogData) map[string]a
 		piiFields[i], piiFields[j] = piiFields[j], piiFields[i]
 	})
 
-	// Select 1-5 random PII fields
-	numFields := r.Intn(5) + 1 // #nosec G404
+	// Select 3-8 random PII fields
+	numFields := r.Intn(6) + 3 // #nosec G404
 	for i := 0; i < numFields && i < len(piiFields); i++ {
 		jsonData[piiFields[i].key] = piiFields[i].value
 	}

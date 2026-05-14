@@ -28,6 +28,18 @@ type DefaultLogData struct {
 	EnvironmentVal string
 	LocationVal    string
 	MessageVal     string
+
+	// Operational context fields
+	ServiceVal       string
+	HostVal          string
+	RequestIDVal     string
+	TraceIDVal       string
+	SpanIDVal        string
+	DurationMsVal    int
+	ComponentVal     string
+	VersionVal       string
+	CorrelationIDVal string
+	RegionVal        string
 }
 
 // Timestamp implements LogData interface

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -37,16 +38,21 @@ const (
 
 // nginxLogData represents the data needed to generate an NGINX Combined Log Format entry
 type nginxLogData struct {
-	remoteAddr string
-	remoteUser string
-	timestamp  time.Time
-	request    string
-	statusCode int
-	bodyBytes  int
-	referer    string
-	userAgent  string
-	severity   string
+	remoteAddr    string
+	remoteUser    string
+	timestamp     time.Time
+	request       string
+	statusCode    int
+	bodyBytes     int
+	referer       string
+	userAgent     string
+	severity      string
+	requestTime   float64
+	xForwardedFor string
 }
+
+// nginxLogRe matches the extended NGINX Combined Log Format with request_time and x_forwarded_for.
+var nginxLogRe = regexp.MustCompile(`^(\S+) - (\S+) \[([^\]]+)\] "([^"]*)" (\d+) (\d+) "([^"]*)" "([^"]*)" ([\d.]+) "([^"]*)"$`)
 
 // Generator generates NGINX Combined Log Format log data
 type Generator struct {
@@ -88,6 +94,36 @@ var (
 		"/dashboard",
 		"/profile",
 		"/settings",
+		"/api/v1/users/profile/settings",
+		"/api/v2/analytics/reports/summary",
+		"/api/v1/orders/history/recent",
+		"/api/v2/recommendations/personalized",
+		"/api/v1/notifications/preferences",
+		"/api/v2/search/advanced/filters",
+		"/api/v1/subscriptions/billing/invoices",
+		"/api/v2/integrations/webhooks/events",
+		"/api/v1/admin/users/permissions/roles",
+		"/api/v2/metrics/performance/aggregated",
+		"/api/v1/catalog/products/featured",
+		"/api/v2/reports/exports/scheduled",
+		"/api/v1/account/security/mfa",
+		"/api/v2/workflows/tasks/assignments",
+		"/api/v1/content/media/uploads",
+	}
+
+	queryStrings = []string{
+		"?page=1&limit=25&sort=created_at&order=desc",
+		"?filter=active&category=electronics&min_price=10.00&max_price=500.00",
+		"?q=search+term&lang=en&results=20&offset=0",
+		"?user_id=12345&include=profile%2Csettings&format=json",
+		"?status=pending&from=2024-01-01&to=2024-12-31&page=1&limit=100",
+		"?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9&refresh=true",
+		"?fields=id%2Cname%2Cemail%2Ccreated_at&page=2&limit=50",
+		"?utm_source=google&utm_medium=cpc&utm_campaign=spring_sale&utm_content=banner",
+		"?session_id=abc123def456789&redirect_uri=%2Fdashboard&state=xyz789",
+		"?expand=orders%2Cpayments%2Caddress&include_deleted=false&version=2",
+		"?q=product+search&category=clothing&size=M&color=blue&brand=nike&sort=price_asc",
+		"?start_date=2024-01-01T00%3A00%3A00Z&end_date=2024-12-31T23%3A59%3A59Z&interval=daily",
 	}
 
 	httpProtocols = []string{"HTTP/1.0", "HTTP/1.1", "HTTP/2.0"}
@@ -116,6 +152,16 @@ var (
 		"/products",
 		"/about",
 		"/contact",
+		"/search?q=opentelemetry+collector&category=tools",
+		"/products?category=electronics&sort=price_asc&page=2",
+		"/blog/posts?tag=observability&limit=10&page=1",
+		"/docs/api/v2/reference?section=authentication",
+		"/dashboard?view=analytics&period=last30days&metric=requests",
+		"/shop?department=networking&brand=cisco&in_stock=true&page=3",
+		"/articles?topic=distributed-systems&author=staff&year=2024",
+		"/account/orders?status=shipped&from=2024-01-01&limit=50",
+		"/pricing?plan=enterprise&billing=annual&seats=50",
+		"/docs/guides/getting-started?lang=go&version=v2",
 	}
 
 	remoteUsers = []string{"-", "admin", "user1", "user2", "guest"}
@@ -268,6 +314,8 @@ func (g *Generator) generateNginxLogData() (*nginxLogData, error) {
 	data.bodyBytes = r.Intn(10000000) + 100 // #nosec G404
 	data.referer = generateReferer(r)
 	data.userAgent = useragent.RandomUserAgent(r)
+	data.requestTime = float64(r.Intn(5000)+1) / 1000.0 // #nosec G404
+	data.xForwardedFor = generateXForwardedFor(r)
 
 	return data, nil
 }
@@ -281,6 +329,16 @@ func generateRandomIP(r *rand.Rand) string {
 		r.Intn(256)) // #nosec G404
 }
 
+// generateXForwardedFor generates a comma-separated chain of 1-4 proxy IPs
+func generateXForwardedFor(r *rand.Rand) string {
+	n := r.Intn(4) + 1 // #nosec G404
+	ips := make([]string, n)
+	for i := range ips {
+		ips[i] = generateRandomIP(r)
+	}
+	return strings.Join(ips, ", ")
+}
+
 // generateRequest generates a random HTTP request string
 func generateRequest(r *rand.Rand) string {
 	method := httpMethods[r.Intn(len(httpMethods))] // #nosec G404
@@ -291,6 +349,11 @@ func generateRequest(r *rand.Rand) string {
 		path = security.RandomAttackPath(r)
 	} else {
 		path = httpPaths[r.Intn(len(httpPaths))] // #nosec G404
+	}
+
+	// Attach a query string 85% of the time for non-root, non-static paths
+	if r.Float64() < 0.85 && path != "/" && !strings.HasSuffix(path, ".html") { // #nosec G404
+		path += queryStrings[r.Intn(len(queryStrings))] // #nosec G404
 	}
 
 	protocol := httpProtocols[r.Intn(len(httpProtocols))] // #nosec G404
@@ -344,7 +407,7 @@ func formatAsNginxCombined(data *nginxLogData) (output.LogRecord, error) {
 	}
 	timestampStr := localTime.Format(fmt.Sprintf("02/Jan/2006:15:04:05 %s%02d%02d", offsetSign, offsetHours, offsetMins))
 
-	nginxLine := fmt.Sprintf(`%s - %s [%s] "%s" %d %d "%s" "%s"`,
+	nginxLine := fmt.Sprintf(`%s - %s [%s] "%s" %d %d "%s" "%s" %.3f "%s"`,
 		data.remoteAddr,
 		data.remoteUser,
 		timestampStr,
@@ -353,39 +416,29 @@ func formatAsNginxCombined(data *nginxLogData) (output.LogRecord, error) {
 		data.bodyBytes,
 		data.referer,
 		data.userAgent,
+		data.requestTime,
+		data.xForwardedFor,
 	)
 
 	return output.LogRecord{
 		Message: nginxLine,
 		ParseFunc: func(message string) (map[string]any, error) {
-			parts := strings.Fields(message)
-			if len(parts) < 9 {
-				return nil, fmt.Errorf("invalid NGINX Combined log format: expected at least 9 fields, got %d", len(parts))
+			m := nginxLogRe.FindStringSubmatch(message)
+			if m == nil {
+				return nil, fmt.Errorf("invalid NGINX Combined log format: %q", message)
 			}
-
-			parsed := make(map[string]any)
-			parsed["remote_addr"] = parts[0]
-			parsed["remote_user"] = parts[2]
-			if len(parts) > 3 {
-				parsed["time_local"] = strings.Trim(parts[3], "[]")
-			}
-			if len(parts) > 4 {
-				parsed["request"] = strings.Trim(parts[4], `"`)
-			}
-			if len(parts) > 5 {
-				parsed["status"] = parts[5]
-			}
-			if len(parts) > 6 {
-				parsed["body_bytes_sent"] = parts[6]
-			}
-			if len(parts) > 7 {
-				parsed["http_referer"] = strings.Trim(parts[7], `"`)
-			}
-			if len(parts) > 8 {
-				parsed["http_user_agent"] = strings.Trim(parts[8], `"`)
-			}
-
-			return parsed, nil
+			return map[string]any{
+				"remote_addr":     m[1],
+				"remote_user":     m[2],
+				"time_local":      m[3],
+				"request":         m[4],
+				"status":          m[5],
+				"body_bytes_sent": m[6],
+				"http_referer":    m[7],
+				"http_user_agent": m[8],
+				"request_time":    m[9],
+				"x_forwarded_for": m[10],
+			}, nil
 		},
 		Metadata: output.LogRecordMetadata{
 			Timestamp: data.timestamp,

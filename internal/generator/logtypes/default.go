@@ -1,9 +1,54 @@
 package logtypes
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 )
+
+var defaultServices = []string{
+	"api-gateway", "auth-service", "payment-service", "user-service",
+	"notification-service", "data-pipeline", "cache-service", "search-service",
+	"event-bus", "analytics-service", "order-service", "inventory-service",
+}
+
+var defaultHosts = []string{
+	"web-prod-01.us-east1.example.com", "web-prod-02.us-east1.example.com",
+	"web-prod-01.us-west1.example.com", "worker-prod-01.eu-west1.example.com",
+	"api-prod-01.us-east1.example.com", "api-prod-02.us-west1.example.com",
+	"db-worker-01.us-east1.example.com", "cache-prod-01.us-east1.example.com",
+	"batch-worker-01.us-east1.example.com", "stream-proc-01.eu-central1.example.com",
+}
+
+var defaultComponents = []string{
+	"http-handler", "database", "cache", "message-queue",
+	"grpc-server", "storage", "scheduler", "auth-middleware",
+}
+
+var defaultVersions = []string{"1.0.0", "1.1.0", "1.2.3", "2.0.0", "2.1.1", "3.0.0-rc1"}
+
+var defaultRegions = []string{
+	"us-east-1", "us-west-2", "eu-west-1", "eu-central-1",
+	"ap-southeast-1", "ap-northeast-1", "ca-central-1", "sa-east-1",
+}
+
+func generateUUIDDefault(r *rand.Rand) string {
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		r.Uint32(),
+		r.Intn(0x10000),         // #nosec G404
+		r.Intn(0x10000),         // #nosec G404
+		r.Intn(0x10000),         // #nosec G404
+		r.Int63n(0x1000000000000), // #nosec G404
+	)
+}
+
+func generateTraceIDDefault(r *rand.Rand) string {
+	return fmt.Sprintf("%016x%016x", r.Int63(), r.Int63()) // #nosec G404
+}
+
+func generateSpanIDDefault(r *rand.Rand) string {
+	return fmt.Sprintf("%016x", r.Int63()) // #nosec G404
+}
 
 // severityLevels contains random log severity levels
 var severityLevels = []string{"DEBUG", "INFO", "WARN", "ERROR", "FATAL"}
@@ -144,17 +189,23 @@ var logMessages = []string{
 
 // GenerateDefaultLogData creates structured log data for the default log type
 func GenerateDefaultLogData() (*DefaultLogData, error) {
-	// Use fast random generator with gosec nosec comment
-	messageIndex := rand.Intn(len(logMessages))  // #nosec G404
-	levelIndex := rand.Intn(len(severityLevels)) // #nosec G404
-	envIndex := rand.Intn(len(environments))     // #nosec G404
-	locationIndex := rand.Intn(len(locations))   // #nosec G404
+	r := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
 
 	return &DefaultLogData{
-		TimestampVal:   time.Now(),
-		LevelVal:       severityLevels[levelIndex],
-		EnvironmentVal: environments[envIndex],
-		LocationVal:    locations[locationIndex],
-		MessageVal:     logMessages[messageIndex],
+		TimestampVal:     time.Now(),
+		LevelVal:         severityLevels[r.Intn(len(severityLevels))],     // #nosec G404
+		EnvironmentVal:   environments[r.Intn(len(environments))],         // #nosec G404
+		LocationVal:      locations[r.Intn(len(locations))],               // #nosec G404
+		MessageVal:       logMessages[r.Intn(len(logMessages))],           // #nosec G404
+		ServiceVal:       defaultServices[r.Intn(len(defaultServices))],   // #nosec G404
+		HostVal:          defaultHosts[r.Intn(len(defaultHosts))],         // #nosec G404
+		RequestIDVal:     generateUUIDDefault(r),
+		TraceIDVal:       generateTraceIDDefault(r),
+		SpanIDVal:        generateSpanIDDefault(r),
+		DurationMsVal:    r.Intn(9999) + 1,                                // #nosec G404
+		ComponentVal:     defaultComponents[r.Intn(len(defaultComponents))], // #nosec G404
+		VersionVal:       defaultVersions[r.Intn(len(defaultVersions))],   // #nosec G404
+		CorrelationIDVal: generateUUIDDefault(r),
+		RegionVal:        defaultRegions[r.Intn(len(defaultRegions))],     // #nosec G404
 	}, nil
 }

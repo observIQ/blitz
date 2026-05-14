@@ -135,7 +135,7 @@ func TestPostgresGenerator_Start(t *testing.T) {
 	assert.Greater(t, len(writes), 0, "Expected some logs to be written")
 
 	// PostgreSQL log format: timestamp [process_id]: user=...,db=...,app=...,client=... <severity>: <message>
-	postgresPattern := regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [A-Z]+ \[\d+\]: user=[^,]+,db=[^,]+,app=[^,]+,client=\d+\.\d+\.\d+\.\d+ (LOG|ERROR|FATAL|PANIC|WARNING|NOTICE|DEBUG|INFO):  .+$`)
+	postgresPattern := regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [A-Z]+ \[\d+\]: user=[^,]+,db=[^,]+,app=[^,]+,client=[^,]+,session=[^,]+,vxid=[^,]+,txid=[^,]+,line=\d+ (LOG|ERROR|FATAL|PANIC|WARNING|NOTICE|DEBUG|INFO):  .+$`)
 	for _, write := range writes {
 		line := string(write)
 		assert.True(t, postgresPattern.MatchString(line), "Log should match PostgreSQL log format: %s", line)

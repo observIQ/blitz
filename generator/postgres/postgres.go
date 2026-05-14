@@ -37,14 +37,18 @@ const (
 
 // postgresLogData represents the data needed to generate a PostgreSQL log entry
 type postgresLogData struct {
-	timestamp  time.Time
-	processID  int
-	user       string
-	database   string
-	app        string
-	clientAddr string
-	severity   string
-	message    string
+	timestamp   time.Time
+	processID   int
+	user        string
+	database    string
+	app         string
+	clientAddr  string
+	sessionID   string
+	virtualTxID string
+	txID        int64
+	lineNum     int
+	severity    string
+	message     string
 }
 
 // Generator generates PostgreSQL log format log data
@@ -191,6 +195,29 @@ var (
 		{severityLog, "connection received: host=192.168.1.100 port=54321 (outside normal subnet)"},
 		{severityError, "SSL connection required but client connected without SSL"},
 		{severityWarning, "multiple databases accessed in single session: production, staging, backup"},
+
+		// Long-form operational messages (~200 chars each)
+		{severityLog, "statement: SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.created_at, u.updated_at, u.status, u.role FROM users u INNER JOIN user_profiles up ON u.id = up.user_id WHERE u.active = true AND u.last_login > NOW() - INTERVAL '30 days' ORDER BY u.created_at DESC LIMIT 100"},
+		{severityLog, "duration: 1234.567 ms  plan: Query Text: SELECT * FROM orders WHERE customer_id = $1 AND status IN ($2, $3)  ->  Index Scan using idx_orders_customer on orders  (cost=0.43..45.67 rows=50 width=300) (actual time=0.084..1.234 rows=50 loops=1)"},
+		{severityLog, "automatic vacuum of table \"production.public.user_events\": index scans: 2, pages: 0 removed, 125834 remain, 0 frozen, tuples: 50234 removed, 2847531 remain, 23456 are dead but not yet removable, oldest xmin: 1234567890"},
+		{severityLog, "checkpoint complete: wrote 4096 buffers (25.0%); 2 WAL file(s) added, 1 removed, 3 recycled; write=45.678 s, sync=2.345 s, total=48.023 s; sync files=42, longest=0.890 s, average=0.055 s; distance=65536 kB, estimate=98304 kB, lsn=0/A1B2C3D4"},
+		{severityLog, "statement: INSERT INTO audit_log (user_id, action, resource_type, resource_id, ip_address, user_agent, metadata, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW()) RETURNING id, created_at"},
+		{severityError, "duplicate key value violates unique constraint \"users_email_key\" DETAIL: Key (email)=(john.doe@example.com) already exists. SCHEMA NAME: public TABLE NAME: users CONSTRAINT NAME: users_email_key"},
+		{severityLog, "statement: UPDATE order_items SET quantity = $1, unit_price = $2, total_price = $1 * $2, updated_at = NOW() WHERE order_id = $3 AND product_id = $4 AND status NOT IN ('shipped', 'delivered', 'cancelled')"},
+		{severityLog, "connection authorized: user=analytics_user database=warehouse SSL enabled (protocol=TLSv1.3, cipher=TLS_AES_256_GCM_SHA384, compression=off) application_name=reporting_service host=10.0.1.45 port=54321"},
+		{severityLog, "statement: SELECT p.id, p.name, p.price, p.stock_quantity, c.name AS category, b.name AS brand FROM products p JOIN categories c ON p.category_id = c.id JOIN brands b ON p.brand_id = b.id WHERE p.active = true AND p.stock_quantity > 0 AND p.price BETWEEN $1 AND $2 ORDER BY p.popularity_score DESC LIMIT $3 OFFSET $4"},
+		{severityWarning, "temporary file: path \"base/pgsql_tmp/pgsql_tmp12345.0\", size 104857600 bytes. Temporary file created for sort operation on relation users; consider increasing work_mem (currently 4MB) to reduce disk spills"},
+		{severityLog, "statement: WITH ranked_orders AS (SELECT o.*, ROW_NUMBER() OVER (PARTITION BY o.customer_id ORDER BY o.created_at DESC) AS rn FROM orders o WHERE o.status = 'completed') SELECT * FROM ranked_orders WHERE rn <= 5 AND customer_id = $1"},
+		{severityLog, "replication: started streaming WAL from primary at 0/15000000 on timeline 1; replication slot pg_slot_01 confirmed flush up to 0/15001234, restart lsn 0/14FFFF00, output plugin pgoutput"},
+		{severityError, "deadlock detected DETAIL: Process 12345 waits for ShareLock on transaction 9876543; blocked by process 67890. Process 67890 waits for ShareLock on transaction 1234567; blocked by process 12345. HINT: See server log for query details."},
+		{severityLog, "statement: SELECT t.id, t.amount, t.currency, t.status, t.created_at, a.balance, a.account_number FROM transactions t JOIN accounts a ON t.account_id = a.id WHERE t.created_at >= NOW() - INTERVAL '24 hours' AND t.status IN ('pending', 'processing') ORDER BY t.created_at ASC FOR UPDATE SKIP LOCKED LIMIT 100"},
+		{severityLog, "autovacuum: found 15234 removable, 8924521 nonremovable row versions in 42561 out of 189432 pages TABLE: production.public.events VACUUM: index scans: 3, pages: 8421 removed, 180011 remain, 0 skipped due to pins, 42 skipped frozen"},
+		{severityLog, "statement: COPY (SELECT id, user_id, event_type, event_data::text, created_at FROM events WHERE created_at BETWEEN $1 AND $2 ORDER BY created_at ASC) TO STDOUT WITH (FORMAT CSV, HEADER true, DELIMITER ',', QUOTE '\"', ESCAPE '\\')"},
+		{severityWarning, "slow query detected: duration=8932.456 ms statement=SELECT * FROM large_table JOIN another_table USING (id) WHERE condition = true GROUP BY category HAVING COUNT(*) > 100 ORDER BY total DESC; rows_returned=45231; rows_examined=10234567"},
+		{severityLog, "statement: CREATE INDEX CONCURRENTLY idx_events_user_created ON events (user_id, created_at DESC) INCLUDE (event_type, metadata) WHERE deleted_at IS NULL AND status = 'active'; progress: 45% complete, 234521 tuples scanned, 156234 indexed"},
+		{severityLog, "logical replication apply worker for subscription \"sub_reporting\" has started; remote relation public.transactions (id integer, amount numeric, status text, created_at timestamp) mapped to local relation public.transactions"},
+		{severityLog, "statement: SELECT schemaname, tablename, attname, n_distinct, correlation, most_common_vals[1:5], histogram_bounds[1:10] FROM pg_stats WHERE schemaname = 'public' AND tablename IN ('users', 'orders', 'transactions', 'events') ORDER BY schemaname, tablename, attname"},
+		{severityError, "relation \"pg_temp_12345.temp_analysis_results\" does not exist CONTEXT: SQL statement \"SELECT * FROM temp_analysis_results WHERE score > $1\" PL/pgSQL function compute_scores(integer) line 42 at SQL statement DETAIL: function called at 2024-01-15 03:24:55 UTC"},
 	}
 )
 
@@ -331,12 +358,16 @@ func (g *Generator) generatePostgresLogData() (*postgresLogData, error) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
 
 	data := &postgresLogData{
-		timestamp:  time.Now(),
-		processID:  r.Intn(99999) + 1000,                    // #nosec G404
-		user:       users[r.Intn(len(users))],               // #nosec G404
-		database:   databases[r.Intn(len(databases))],       // #nosec G404
-		app:        applications[r.Intn(len(applications))], // #nosec G404
-		clientAddr: generateRandomIP(r),
+		timestamp:   time.Now(),
+		processID:   r.Intn(99999) + 1000,                    // #nosec G404
+		user:        users[r.Intn(len(users))],               // #nosec G404
+		database:    databases[r.Intn(len(databases))],       // #nosec G404
+		app:         applications[r.Intn(len(applications))], // #nosec G404
+		clientAddr:  generateRandomIP(r),
+		sessionID:   fmt.Sprintf("%08x", r.Uint32()),                                     // #nosec G404
+		virtualTxID: fmt.Sprintf("%d/%d", r.Intn(20)+1, r.Intn(1000)+1),                 // #nosec G404
+		txID:        r.Int63n(9000000000) + 1000000000,                                   // #nosec G404
+		lineNum:     r.Intn(99999) + 1,                                                   // #nosec G404
 	}
 
 	// Select a random log message
@@ -363,14 +394,18 @@ func formatAsPostgres(data *postgresLogData) (output.LogRecord, error) {
 	// Format timestamp as PostgreSQL does: YYYY-MM-DD HH:MM:SS.mmm UTC
 	timestampStr := data.timestamp.UTC().Format("2006-01-02 15:04:05.000 MST")
 
-	// Format the log line prefix: timestamp [process_id]: user=...,db=...,app=...,client=...
-	prefix := fmt.Sprintf("%s [%d]: user=%s,db=%s,app=%s,client=%s",
+	// Format the log line prefix: timestamp [process_id]: user=...,db=...,app=...,client=...,session=...,vxid=...,txid=...,line=...
+	prefix := fmt.Sprintf("%s [%d]: user=%s,db=%s,app=%s,client=%s,session=%s,vxid=%s,txid=%d,line=%d",
 		timestampStr,
 		data.processID,
 		data.user,
 		data.database,
 		data.app,
 		data.clientAddr,
+		data.sessionID,
+		data.virtualTxID,
+		data.txID,
+		data.lineNum,
 	)
 
 	// Format the full log line: prefix <severity>: <message>
@@ -405,7 +440,7 @@ func formatAsPostgres(data *postgresLogData) (output.LogRecord, error) {
 				parsed["process_id"] = prefixPart[processStart+1 : processEnd]
 			}
 
-			// Parse user=...,db=...,app=...,client=... from prefix
+			// Parse user=...,db=...,app=...,client=...,session=...,vxid=...,txid=...,line=... from prefix
 			prefixFields := strings.SplitSeq(prefixPart, ",")
 			for field := range prefixFields {
 				if strings.Contains(field, "user=") {
@@ -419,6 +454,18 @@ func formatAsPostgres(data *postgresLogData) (output.LogRecord, error) {
 				}
 				if strings.Contains(field, "client=") {
 					parsed["client"] = strings.TrimPrefix(field[strings.Index(field, "client="):], "client=")
+				}
+				if strings.Contains(field, "session=") {
+					parsed["session"] = strings.TrimPrefix(field[strings.Index(field, "session="):], "session=")
+				}
+				if strings.Contains(field, "vxid=") {
+					parsed["vxid"] = strings.TrimPrefix(field[strings.Index(field, "vxid="):], "vxid=")
+				}
+				if strings.Contains(field, "txid=") {
+					parsed["txid"] = strings.TrimPrefix(field[strings.Index(field, "txid="):], "txid=")
+				}
+				if strings.Contains(field, "line=") {
+					parsed["line"] = strings.TrimPrefix(field[strings.Index(field, "line="):], "line=")
 				}
 			}
 
