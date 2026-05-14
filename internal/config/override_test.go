@@ -123,6 +123,7 @@ func getTestOverrideFlagsArgs() []string {
 		"--output-hec-tls-ca", "/path/to/hec_ca1.pem,/path/to/hec_ca2.pem",
 		"--output-hec-tls-skip-verify", "true",
 		"--output-hec-tls-min-version", "1.3",
+		"--output-stdout-flushinterval", "50ms",
 		"--metrics-port", "8080",
 	}
 }
@@ -239,6 +240,7 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_OUTPUT_HEC_TLS_CA":                  "/env/hec_ca1.pem,/env/hec_ca2.pem",
 		"BLITZ_OUTPUT_HEC_TLS_SKIP_VERIFY":         "true",
 		"BLITZ_OUTPUT_HEC_TLS_MIN_VERSION":         "1.2",
+		"BLITZ_OUTPUT_STDOUT_FLUSHINTERVAL":        "75ms",
 		"BLITZ_METRICS_PORT":                       "9100",
 	}
 }
@@ -402,6 +404,9 @@ func TestOverrideDefaults(t *testing.T) {
 					MinTLSVersion:        "1.2",
 					CertificateAuthority: []string{},
 				},
+			},
+			Stdout: StdoutOutputConfig{
+				FlushInterval: DefaultStdoutFlushInterval,
 			},
 		},
 		Metrics: Metrics{
@@ -595,6 +600,9 @@ func TestOverrideFlags(t *testing.T) {
 					MinTLSVersion:        "1.3",
 				},
 			},
+			Stdout: StdoutOutputConfig{
+				FlushInterval: 50 * time.Millisecond,
+			},
 		},
 		Metrics: Metrics{
 			Port: 8080,
@@ -779,6 +787,9 @@ func TestOverrideEnvs(t *testing.T) {
 					InsecureSkipVerify:   true,
 					MinTLSVersion:        "1.2",
 				},
+			},
+			Stdout: StdoutOutputConfig{
+				FlushInterval: 75 * time.Millisecond,
 			},
 		},
 		Metrics: Metrics{
