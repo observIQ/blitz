@@ -140,6 +140,27 @@ func TestOTLPGrpcOutputConfig_Validate(t *testing.T) {
 			wantErr: true,
 			errMsg:  "OTLP gRPC output host validation failed",
 		},
+		{
+			name: "negative request timeout",
+			config: OTLPGrpcOutputConfig{
+				Host:           "localhost",
+				Port:           4317,
+				Workers:        1,
+				RequestTimeout: -1,
+			},
+			wantErr: true,
+			errMsg:  "OTLP gRPC output request timeout cannot be negative",
+		},
+		{
+			name: "valid request timeout",
+			config: OTLPGrpcOutputConfig{
+				Host:           "localhost",
+				Port:           4317,
+				Workers:        1,
+				RequestTimeout: 10 * time.Second,
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
