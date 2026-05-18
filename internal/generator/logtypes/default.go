@@ -35,9 +35,9 @@ var defaultRegions = []string{
 func generateUUIDDefault(r *rand.Rand) string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		r.Uint32(),
-		r.Intn(0x10000),         // #nosec G404
-		r.Intn(0x10000),         // #nosec G404
-		r.Intn(0x10000),         // #nosec G404
+		r.Intn(0x10000),           // #nosec G404
+		r.Intn(0x10000),           // #nosec G404
+		r.Intn(0x10000),           // #nosec G404
 		r.Int63n(0x1000000000000), // #nosec G404
 	)
 }
@@ -193,19 +193,19 @@ func GenerateDefaultLogData() (*DefaultLogData, error) {
 
 	return &DefaultLogData{
 		TimestampVal:     time.Now(),
-		LevelVal:         severityLevels[r.Intn(len(severityLevels))],     // #nosec G404
-		EnvironmentVal:   environments[r.Intn(len(environments))],         // #nosec G404
-		LocationVal:      locations[r.Intn(len(locations))],               // #nosec G404
-		MessageVal:       logMessages[r.Intn(len(logMessages))],           // #nosec G404
-		ServiceVal:       defaultServices[r.Intn(len(defaultServices))],   // #nosec G404
-		HostVal:          defaultHosts[r.Intn(len(defaultHosts))],         // #nosec G404
+		LevelVal:         severityLevels[r.Intn(len(severityLevels))],   // #nosec G404
+		EnvironmentVal:   environments[r.Intn(len(environments))],       // #nosec G404
+		LocationVal:      locations[r.Intn(len(locations))],             // #nosec G404
+		MessageVal:       logMessages[r.Intn(len(logMessages))],         // #nosec G404
+		ServiceVal:       defaultServices[r.Intn(len(defaultServices))], // #nosec G404
+		HostVal:          defaultHosts[r.Intn(len(defaultHosts))],       // #nosec G404
 		RequestIDVal:     generateUUIDDefault(r),
 		TraceIDVal:       generateTraceIDDefault(r),
 		SpanIDVal:        generateSpanIDDefault(r),
-		DurationMsVal:    r.Intn(9999) + 1,                                // #nosec G404
+		DurationMsVal:    r.Intn(9999) + 1,                                  // #nosec G404
 		ComponentVal:     defaultComponents[r.Intn(len(defaultComponents))], // #nosec G404
-		VersionVal:       defaultVersions[r.Intn(len(defaultVersions))],   // #nosec G404
+		VersionVal:       defaultVersions[r.Intn(len(defaultVersions))],     // #nosec G404
 		CorrelationIDVal: generateUUIDDefault(r),
-		RegionVal:        defaultRegions[r.Intn(len(defaultRegions))],     // #nosec G404
+		RegionVal:        defaultRegions[r.Intn(len(defaultRegions))], // #nosec G404
 	}, nil
 }

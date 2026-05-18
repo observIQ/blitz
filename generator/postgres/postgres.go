@@ -364,10 +364,10 @@ func (g *Generator) generatePostgresLogData() (*postgresLogData, error) {
 		database:    databases[r.Intn(len(databases))],       // #nosec G404
 		app:         applications[r.Intn(len(applications))], // #nosec G404
 		clientAddr:  generateRandomIP(r),
-		sessionID:   fmt.Sprintf("%08x", r.Uint32()),                                     // #nosec G404
-		virtualTxID: fmt.Sprintf("%d/%d", r.Intn(20)+1, r.Intn(1000)+1),                 // #nosec G404
-		txID:        r.Int63n(9000000000) + 1000000000,                                   // #nosec G404
-		lineNum:     r.Intn(99999) + 1,                                                   // #nosec G404
+		sessionID:   fmt.Sprintf("%08x", r.Uint32()),                    // #nosec G404
+		virtualTxID: fmt.Sprintf("%d/%d", r.Intn(20)+1, r.Intn(1000)+1), // #nosec G404
+		txID:        r.Int63n(9000000000) + 1000000000,                  // #nosec G404
+		lineNum:     r.Intn(99999) + 1,                                  // #nosec G404
 	}
 
 	// Select a random log message
