@@ -42,14 +42,70 @@ func TestHTTPStatusPools(t *testing.T) {
 }
 
 func TestAPIPaths(t *testing.T) {
-	if APIPaths.Len() < 15 {
-		t.Errorf("APIPaths has %d items, want at least 15", APIPaths.Len())
+	if APIPaths.Len() < 40 {
+		t.Errorf("APIPaths has %d items, want at least 40", APIPaths.Len())
+	}
+	// Sample assertions that the longer realistic paths are present —
+	// these underpin the "larger log lines" use case.
+	want := []string{
+		"/api/v1/users/profile/settings",
+		"/api/v2/analytics/reports/summary",
+		"/api/v1/admin/users/permissions/roles",
+	}
+	have := make(map[string]bool)
+	for _, p := range APIPaths.All() {
+		have[p] = true
+	}
+	for _, w := range want {
+		if !have[w] {
+			t.Errorf("APIPaths missing expected long path %q", w)
+		}
+	}
+}
+
+func TestQueryStrings(t *testing.T) {
+	if QueryStrings.Len() < 10 {
+		t.Errorf("QueryStrings has %d items, want at least 10", QueryStrings.Len())
+	}
+	for _, q := range QueryStrings.All() {
+		if len(q) == 0 || q[0] != '?' {
+			t.Errorf("QueryStrings entry %q should start with '?'", q)
+		}
 	}
 }
 
 func TestRefererDomains(t *testing.T) {
 	if RefererDomains.Len() < 5 {
 		t.Errorf("RefererDomains has %d items, want at least 5", RefererDomains.Len())
+	}
+	// Bare hostnames — no scheme prefix.
+	for _, d := range RefererDomains.All() {
+		if len(d) >= 7 && (d[:7] == "http://" || (len(d) >= 8 && d[:8] == "https://")) {
+			t.Errorf("RefererDomains entry %q must be a bare hostname (no scheme)", d)
+		}
+	}
+}
+
+func TestRefererURLs(t *testing.T) {
+	if RefererURLs.Len() < 5 {
+		t.Errorf("RefererURLs has %d items, want at least 5", RefererURLs.Len())
+	}
+	// Each entry must be a fully-qualified scheme+host URL prefix.
+	for _, u := range RefererURLs.All() {
+		if !(len(u) > 8 && u[:8] == "https://") && !(len(u) > 7 && u[:7] == "http://") {
+			t.Errorf("RefererURLs entry %q must start with http:// or https://", u)
+		}
+	}
+}
+
+func TestRefererPages(t *testing.T) {
+	if RefererPages.Len() < 15 {
+		t.Errorf("RefererPages has %d items, want at least 15", RefererPages.Len())
+	}
+	for _, p := range RefererPages.All() {
+		if len(p) == 0 || p[0] != '/' {
+			t.Errorf("RefererPages entry %q should start with '/'", p)
+		}
 	}
 }
 
