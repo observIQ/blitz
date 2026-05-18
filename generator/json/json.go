@@ -387,16 +387,16 @@ func formatPIILogDataWithRand(r *rand.Rand, d *logtypes.PIILogData) map[string]a
 		"timestamp":      d.TimestampVal,
 		"level":          d.LevelVal,
 		"message":        d.MessageVal,
-		"service":        jsonServices[r.Intn(len(jsonServices))],   // #nosec G404
-		"host":           jsonHosts[r.Intn(len(jsonHosts))],         // #nosec G404
+		"service":        jsonServices[r.Intn(len(jsonServices))], // #nosec G404
+		"host":           jsonHosts[r.Intn(len(jsonHosts))],       // #nosec G404
 		"request_id":     generateUUID(r),
 		"trace_id":       generateTraceID(r),
 		"span_id":        generateSpanID(r),
-		"duration_ms":    r.Intn(9999) + 1,                         // #nosec G404
+		"duration_ms":    r.Intn(9999) + 1,                            // #nosec G404
 		"component":      jsonComponents[r.Intn(len(jsonComponents))], // #nosec G404
-		"version":        jsonVersions[r.Intn(len(jsonVersions))],   // #nosec G404
+		"version":        jsonVersions[r.Intn(len(jsonVersions))],     // #nosec G404
 		"correlation_id": generateUUID(r),
-		"region":         jsonRegions[r.Intn(len(jsonRegions))],     // #nosec G404
+		"region":         jsonRegions[r.Intn(len(jsonRegions))], // #nosec G404
 	}
 
 	// Add optional context fields if present
