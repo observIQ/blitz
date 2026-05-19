@@ -3,6 +3,7 @@ package stdout
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -101,7 +102,31 @@ func (o *StdoutOutput) flushLoop() {
 	}
 }
 
+// WriteMetric writes a metric record to stdout as JSON.
+func (o *StdoutOutput) WriteMetric(_ context.Context, data output.MetricRecord) error {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("marshal metric: %w", err)
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	_, err = fmt.Fprintln(os.Stdout, string(b))
+	return err
+}
+
+// WriteTrace writes a trace record to stdout as JSON.
+func (o *StdoutOutput) WriteTrace(_ context.Context, data output.TraceRecord) error {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("marshal trace: %w", err)
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	_, err = fmt.Fprintln(os.Stdout, string(b))
+	return err
+}
+
 // SupportedTelemetry returns the telemetry types this output can consume.
 func (o *StdoutOutput) SupportedTelemetry() []telemetry.Type {
-	return []telemetry.Type{telemetry.Logs}
+	return []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces}
 }

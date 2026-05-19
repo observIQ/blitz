@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -76,6 +77,81 @@ func TestStdoutOutput_Write(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, buf.String(), "test log message")
+}
+
+func TestStdoutOutput_WriteMetric(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	stdout, err := New(logger)
+	require.NoError(t, err)
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+
+	v := 42.5
+	rec := output.MetricRecord{
+		Name:        "cpu.usage",
+		Type:        output.MetricTypeGauge,
+		DoubleValue: &v,
+		Timestamp:   time.Now(),
+		Attributes:  map[string]string{"host": "test"},
+	}
+
+	err = stdout.WriteMetric(context.Background(), rec)
+	require.NoError(t, err)
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
+
+	assert.Contains(t, buf.String(), "cpu.usage")
+	assert.Contains(t, buf.String(), "gauge")
+}
+
+func TestStdoutOutput_WriteTrace(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	stdout, err := New(logger)
+	require.NoError(t, err)
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+
+	rec := output.TraceRecord{
+		TraceID:   "abc123",
+		SpanID:    "span456",
+		Name:      "GET /api/users",
+		Kind:      output.SpanKindServer,
+		StartTime: time.Now(),
+		EndTime:   time.Now().Add(100 * time.Millisecond),
+	}
+
+	err = stdout.WriteTrace(context.Background(), rec)
+	require.NoError(t, err)
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
+
+	assert.Contains(t, buf.String(), "abc123")
+	assert.Contains(t, buf.String(), "GET /api/users")
+}
+
+func TestStdoutOutput_SupportedTelemetry(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	stdout, err := New(logger)
+	require.NoError(t, err)
+
+	types := stdout.SupportedTelemetry()
+	assert.Equal(t, []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces}, types)
 }
 
 func TestStdoutOutput_FlushOnInterval(t *testing.T) {
