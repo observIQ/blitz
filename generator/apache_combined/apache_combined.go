@@ -11,6 +11,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/useragent"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel/attribute"
@@ -191,7 +192,7 @@ func (g *ApacheCombinedLogGenerator) generateApacheCombinedLogData() (*apacheCom
 	}
 
 	// Generate remote host IP address
-	data.remoteHost = generateRandomIP(r)
+	data.remoteHost = datagen.RandomIPv4(r)
 
 	// Identity is typically "-" in CLF
 	data.identity = "-"
@@ -217,65 +218,24 @@ func (g *ApacheCombinedLogGenerator) generateApacheCombinedLogData() (*apacheCom
 	return data, nil
 }
 
-// generateRandomIP generates a random IP address
-func generateRandomIP(r *rand.Rand) string {
-	return fmt.Sprintf("%d.%d.%d.%d",
-		r.Intn(256), // #nosec G404
-		r.Intn(256), // #nosec G404
-		r.Intn(256), // #nosec G404
-		r.Intn(256)) // #nosec G404
-}
-
 // generateRequest generates a random HTTP request string
 func generateRequest(r *rand.Rand) string {
-	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
-	method := methods[r.Intn(len(methods))] // #nosec G404
-
-	paths := []string{
-		"/api/v1/users",
-		"/api/v1/orders",
-		"/health",
-		"/status",
-		"/api/v2/data",
-		"/index.html",
-		"/api/v1/auth",
-		"/api/v1/payments",
-		"/api/v1/transactions",
-		"/api/v1/accounts",
-		"/api/v1/products",
-		"/api/v1/inventory",
-		"/api/v1/customers",
-		"/api/v1/loans",
-		"/api/v1/transfers",
-		"/api/v1/verification",
-	}
-
-	path := paths[r.Intn(len(paths))] // #nosec G404
-
-	protocols := []string{"HTTP/1.0", "HTTP/1.1", "HTTP/2.0"}
-	protocol := protocols[r.Intn(len(protocols))] // #nosec G404
-
+	method := datagen.Methods.Random(r)
+	path := datagen.APIPaths.Random(r)
+	protocol := datagen.Protocols.Random(r)
 	return fmt.Sprintf("%s %s %s", method, path, protocol)
 }
 
 // generateStatusAndSeverity generates a random HTTP status code and corresponding severity
 func generateStatusAndSeverity(r *rand.Rand) (int, string) {
-	// Weight status codes to be more realistic (mostly 2xx, some 4xx, few 5xx)
-	roll := r.Float64() // #nosec G404
-
+	status := datagen.RandomStatusCode(r)
 	switch {
-	case roll < 0.85: // 85% success
-		statusCodes := []int{200, 201, 204}
-		status := statusCodes[r.Intn(len(statusCodes))] // #nosec G404
-		return status, "INFO"
-	case roll < 0.95: // 10% client errors
-		statusCodes := []int{400, 401, 403, 404, 429}
-		status := statusCodes[r.Intn(len(statusCodes))] // #nosec G404
-		return status, "WARN"
-	default: // 5% server errors
-		statusCodes := []int{500, 502, 503, 504}
-		status := statusCodes[r.Intn(len(statusCodes))] // #nosec G404
+	case status >= 500:
 		return status, "ERROR"
+	case status >= 400:
+		return status, "WARN"
+	default:
+		return status, "INFO"
 	}
 }
 
@@ -286,29 +246,9 @@ func generateReferer(r *rand.Rand) string {
 		return "-"
 	}
 
-	domains := []string{
-		"https://www.example.com",
-		"https://search.example.com",
-		"https://www.google.com",
-		"https://www.bing.com",
-		"https://github.com",
-		"https://stackoverflow.com",
-	}
-
-	pages := []string{
-		"/",
-		"/search",
-		"/page1",
-		"/page2",
-		"/index.html",
-		"/products",
-		"/about",
-	}
-
-	domain := domains[r.Intn(len(domains))] // #nosec G404
-	page := pages[r.Intn(len(pages))]       // #nosec G404
-
-	return fmt.Sprintf("%s%s", domain, page)
+	domain := datagen.RefererDomains.Random(r)
+	path := datagen.APIPaths.Random(r)
+	return fmt.Sprintf("https://%s%s", domain, path)
 }
 
 // formatAsApacheCombined converts apacheCombinedLogData to Apache Combined Log Format

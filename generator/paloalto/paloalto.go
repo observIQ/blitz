@@ -14,6 +14,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -299,9 +300,9 @@ func generateRandomIP() string {
 }
 
 func generateRandomPort() string {
-	common := []int{80, 443, 8080, 8088, 22, 21, 25, 53, 110, 143, 993, 995, 3306, 5432, 6379, 27017}
+	commonPorts := datagen.CommonPorts.All()
 	if randInt(0, 10) < 7 {
-		return strconv.Itoa(common[randInt(0, len(common)-1)])
+		return strconv.Itoa(commonPorts[randInt(0, len(commonPorts)-1)])
 	}
 	return strconv.Itoa(randInt(1024, 65535))
 }
