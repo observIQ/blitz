@@ -3,6 +3,8 @@ package output
 import (
 	"context"
 	"time"
+
+	"github.com/observiq/blitz/telemetry"
 )
 
 type LogRecord struct {
@@ -36,4 +38,7 @@ type Output interface {
 
 	// Stop stops the output.
 	Stop(ctx context.Context) error
+
+	// SupportedTelemetry returns the telemetry types this output can consume.
+	SupportedTelemetry() []telemetry.Type
 }

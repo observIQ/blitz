@@ -13,6 +13,7 @@ import (
 	"github.com/observiq/blitz/output/syslog/ident"
 	"github.com/observiq/blitz/output/tcp"
 	"github.com/observiq/blitz/output/udp"
+	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -272,6 +273,11 @@ func dashIfEmpty(s string) string {
 
 // Prevent unused import error if future changes remove net usage.
 var _ = net.IPv4len
+
+// SupportedTelemetry returns the telemetry types this output can consume.
+func (s *Syslog) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
+}
 
 // Ensure Syslog implements output.Output
 var _ output.Output = (*Syslog)(nil)

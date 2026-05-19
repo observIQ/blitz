@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 )
 
 // Generator is the interface for generating data.
@@ -14,4 +15,7 @@ type Generator interface {
 
 	// Stop stops the generator.
 	Stop(ctx context.Context) error
+
+	// SupportedTelemetry returns the telemetry types this generator produces.
+	SupportedTelemetry() []telemetry.Type
 }

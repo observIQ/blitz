@@ -11,6 +11,7 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generators/winevt/templates"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
@@ -159,4 +160,9 @@ func (g *WinevtGenerator) recordWriteError(errorType string, _ error) {
 	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
 		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
+}
+
+// SupportedTelemetry returns the telemetry types this generator produces.
+func (g *WinevtGenerator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/metric"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
@@ -660,6 +661,11 @@ func (o *OTLPGrpc) toAnyValue(v any) *commonpb.AnyValue {
 // recordSendError records metrics for send errors
 func (o *OTLPGrpc) recordSendError(_ string, _ error) {
 	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
+}
+
+// SupportedTelemetry returns the telemetry types this output can consume.
+func (o *OTLPGrpc) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 // mapSeverityNumber maps string log levels to OTLP severity numbers

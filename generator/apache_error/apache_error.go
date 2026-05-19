@@ -14,6 +14,7 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
@@ -441,4 +442,9 @@ func (g *ApacheErrorLogGenerator) recordWriteError(errorType string, err error) 
 		zap.String("error_type", errorType),
 		zap.Error(err),
 	)
+}
+
+// SupportedTelemetry returns the telemetry types this generator produces.
+func (g *ApacheErrorLogGenerator) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
