@@ -15,12 +15,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/observiq/blitz/generator"
 	apachegen "github.com/observiq/blitz/generator/apache"
 	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
 	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/filegen"
+	"github.com/observiq/blitz/generator/hostmetrics"
 	jsongen "github.com/observiq/blitz/generator/json"
 	"github.com/observiq/blitz/generator/kubernetes"
 	"github.com/observiq/blitz/generator/nginx"
@@ -28,6 +28,7 @@ import (
 	"github.com/observiq/blitz/generator/okta"
 	"github.com/observiq/blitz/generator/paloalto"
 	"github.com/observiq/blitz/generator/postgres"
+	tracesgen "github.com/observiq/blitz/generator/traces"
 	"github.com/observiq/blitz/generator/winevt"
 	"github.com/observiq/blitz/internal/build"
 	"github.com/observiq/blitz/internal/config"
@@ -314,151 +315,40 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid output type: %s", cfg.Output.Type)
 	}
 
-	// Configure generator
-	var generatorInstance generator.Generator
-	switch cfg.Generator.Type {
-	case config.GeneratorTypeNop:
-		generatorInstance, err = gennop.New(logger)
-		if err != nil {
-			logger.Error("Failed to create NOP generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypeJSON:
-		generatorInstance, err = jsongen.New(
-			logger,
-			cfg.Generator.JSON.Workers,
-			cfg.Generator.JSON.Rate,
-			cfg.Generator.JSON.Type,
-		)
-		if err != nil {
-			logger.Error("Failed to create JSON generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypeWinevt:
-		generatorInstance, err = winevt.New(
-			logger,
-			cfg.Generator.Winevt.Workers,
-			cfg.Generator.Winevt.Rate,
-		)
-		if err != nil {
-			logger.Error("Failed to create winevt generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypePaloAlto:
-		generatorInstance, err = paloalto.New(
-			logger,
-			cfg.Generator.PaloAlto.Workers,
-			cfg.Generator.PaloAlto.Rate,
-		)
-		if err != nil {
-			logger.Error("Failed to create palo-alto generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypeApache:
-		generatorInstance, err = apachegen.New(
-			logger,
-			cfg.Generator.Apache.Workers,
-			cfg.Generator.Apache.Rate,
-		)
-		if err != nil {
-			logger.Error("Failed to create Apache generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypeApacheCombined:
-		generatorInstance, err = apachecombinedgen.New(
-			logger,
-			cfg.Generator.ApacheCombined.Workers,
-			cfg.Generator.ApacheCombined.Rate,
-		)
-		if err != nil {
-			logger.Error("Failed to create Apache Combined generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypeApacheError:
-		generatorInstance, err = apacheerrorgen.New(
-			logger,
-			cfg.Generator.ApacheError.Workers,
-			cfg.Generator.ApacheError.Rate,
-		)
-		if err != nil {
-			logger.Error("Failed to create Apache Error generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypeNginx:
-		generatorInstance, err = nginx.New(
-			logger,
-			cfg.Generator.Nginx.Workers,
-			cfg.Generator.Nginx.Rate,
-		)
-		if err != nil {
-			logger.Error("Failed to create NGINX generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypePostgres:
-		generatorInstance, err = postgres.New(
-			logger,
-			cfg.Generator.Postgres.Workers,
-			cfg.Generator.Postgres.Rate,
-		)
-		if err != nil {
-			logger.Error("Failed to create PostgreSQL generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypeKubernetes:
-		generatorInstance, err = kubernetes.New(
-			logger,
-			cfg.Generator.Kubernetes.Workers,
-			cfg.Generator.Kubernetes.Rate,
-			cfg.Generator.Kubernetes.Format,
-		)
-		if err != nil {
-			logger.Error("Failed to create Kubernetes generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypeFile:
-		generatorInstance, err = filegen.New(
-			logger,
-			cfg.Generator.Filegen.Workers,
-			cfg.Generator.Filegen.Rate,
-			cfg.Generator.Filegen.Source,
-			cfg.Generator.Filegen.CacheEnabled,
-			cfg.Generator.Filegen.CacheTTL,
-		)
-		if err != nil {
-			logger.Error("Failed to create File generator", zap.Error(err))
-			return err
-		}
-	case config.GeneratorTypeOkta:
-		generatorInstance, err = okta.New(
-			logger,
-			cfg.Generator.Okta.Workers,
-			cfg.Generator.Okta.Rate,
-		)
-		if err != nil {
-			logger.Error("Failed to create Okta generator", zap.Error(err))
-			return err
-		}
-	default:
-		logger.Error("Invalid generator type", zap.String("type", string(cfg.Generator.Type)))
-		return fmt.Errorf("invalid generator type: %s", cfg.Generator.Type)
-	}
-
-	// Set up finite generation count tracker
+	// Configure generators
+	effectiveGens := cfg.EffectiveGenerators()
+	var generators []any
 	var tracker *count.Tracker
-	if cfg.Generator.Count > 0 {
-		tracker = count.NewTracker(int64(cfg.Generator.Count))
-		if s, ok := generatorInstance.(interface{ SetCountTracker(*count.Tracker) }); ok {
-			s.SetCountTracker(tracker)
+
+	for _, genCfg := range effectiveGens {
+		gen, genErr := createGenerator(logger, genCfg)
+		if genErr != nil {
+			logger.Error("Failed to create generator",
+				zap.String("type", string(genCfg.Type)),
+				zap.Error(genErr))
+			return genErr
 		}
-		logger.Info("Finite generation enabled",
-			zap.Int("count", cfg.Generator.Count),
-			zap.String("onFinish", cfg.OnFinish))
+
+		// Set up finite generation count tracker
+		if genCfg.Count > 0 {
+			if tracker == nil {
+				tracker = count.NewTracker(int64(genCfg.Count))
+				logger.Info("Finite generation enabled",
+					zap.Int("count", genCfg.Count),
+					zap.String("onFinish", cfg.OnFinish))
+			}
+			if s, ok := gen.(interface{ SetCountTracker(*count.Tracker) }); ok {
+				s.SetCountTracker(tracker)
+			}
+		}
+
+		generators = append(generators, gen)
 	}
 
 	// Set up SIGUSR1 restart signal handler
 	setupRestartSignal(ctx, logger, tracker)
 
-	svc, err := service.New(logger, generatorInstance, outputInstance)
+	svc, err := service.New(logger, generators, outputInstance)
 	if err != nil {
 		logger.Error("Failed to create service", zap.Error(err))
 		return err
@@ -508,6 +398,41 @@ shutdown:
 
 	logger.Info("blitz shutdown complete")
 	return nil
+}
+
+func createGenerator(logger *zap.Logger, genCfg config.Generator) (any, error) {
+	switch genCfg.Type {
+	case config.GeneratorTypeNop:
+		return gennop.New(logger)
+	case config.GeneratorTypeJSON:
+		return jsongen.New(logger, genCfg.JSON.Workers, genCfg.JSON.Rate, genCfg.JSON.Type)
+	case config.GeneratorTypeWinevt:
+		return winevt.New(logger, genCfg.Winevt.Workers, genCfg.Winevt.Rate)
+	case config.GeneratorTypePaloAlto:
+		return paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate)
+	case config.GeneratorTypeApache:
+		return apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate)
+	case config.GeneratorTypeApacheCombined:
+		return apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate)
+	case config.GeneratorTypeApacheError:
+		return apacheerrorgen.New(logger, genCfg.ApacheError.Workers, genCfg.ApacheError.Rate)
+	case config.GeneratorTypeNginx:
+		return nginx.New(logger, genCfg.Nginx.Workers, genCfg.Nginx.Rate)
+	case config.GeneratorTypePostgres:
+		return postgres.New(logger, genCfg.Postgres.Workers, genCfg.Postgres.Rate)
+	case config.GeneratorTypeKubernetes:
+		return kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format)
+	case config.GeneratorTypeFile:
+		return filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL)
+	case config.GeneratorTypeOkta:
+		return okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate)
+	case config.GeneratorTypeHostMetrics:
+		return hostmetrics.New(logger, genCfg.HostMetrics.Workers, genCfg.HostMetrics.Rate, genCfg.HostMetrics.OS, genCfg.HostMetrics.Hostname, genCfg.HostMetrics.Scrapers)
+	case config.GeneratorTypeTraces:
+		return tracesgen.New(logger, genCfg.Traces.Workers, genCfg.Traces.Rate)
+	default:
+		return nil, fmt.Errorf("invalid generator type: %s", genCfg.Type)
+	}
 }
 
 func setupMetrics(ctx context.Context, cfg *config.Config, logger *zap.Logger) error {
