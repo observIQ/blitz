@@ -13,9 +13,13 @@ import (
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/metric"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	collectormetrics "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
+	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
+	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
+	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -153,6 +157,8 @@ type OTLPGrpc struct {
 	insecure      bool
 	tlsConfig     *tls.Config
 	dataChan      chan *logspb.LogRecord
+	metricChan    chan *metricspb.Metric
+	traceChan     chan *tracepb.Span
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
@@ -216,6 +222,8 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 		insecure:           cfg.insecure,
 		tlsConfig:          cfg.tlsConfig,
 		dataChan:           make(chan *logspb.LogRecord, DefaultOTLPGrpcChannelSize),
+		metricChan:         make(chan *metricspb.Metric, DefaultOTLPGrpcChannelSize),
+		traceChan:          make(chan *tracepb.Span, DefaultOTLPGrpcChannelSize),
 		ctx:                ctx,
 		cancel:             cancel,
 		batchTimeout:       cfg.batchTimeout,
@@ -339,9 +347,11 @@ func (o *OTLPGrpc) Stop(ctx context.Context) error {
 	// Record zero active workers
 	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
-	// Close the channel to ensure workers do not
+	// Close the channels to ensure workers do not
 	// process new data.
 	close(o.dataChan)
+	close(o.metricChan)
+	close(o.traceChan)
 
 	// Signal the workers to stop.
 	o.cancel()
@@ -370,64 +380,194 @@ func (o *OTLPGrpc) otlpWorker(id int) {
 	}
 	defer conn.Close()
 
-	client := collectorlogs.NewLogsServiceClient(conn)
+	logsClient := collectorlogs.NewLogsServiceClient(conn)
+	metricsClient := collectormetrics.NewMetricsServiceClient(conn)
+	traceClient := collectortrace.NewTraceServiceClient(conn)
 
-	batch := newLogBatch(o.maxExportBatchSize, o.batchTimeout)
+	logBatch := newLogBatch(o.maxExportBatchSize, o.batchTimeout)
+	mBatch := newMetricBatch(o.maxExportBatchSize, o.batchTimeout)
+	tBatch := newTraceBatch(o.maxExportBatchSize, o.batchTimeout)
+
+	// Use the log batch timer as the common flush timer
+	flushTimer := logBatch.timer
 
 	for {
 		select {
 		case rec, ok := <-o.dataChan:
 			if !ok {
 				o.logger.Info("OTLP gRPC worker exiting - channel closed", zap.Int("worker_id", id))
-				// Flush remaining logs
-				if err := o.flushBatch(client, batch); err != nil {
-					o.logger.Error("Failed to flush final batch", zap.Int("worker_id", id), zap.Error(err))
-				}
+				o.flushAll(logsClient, metricsClient, traceClient, logBatch, mBatch, tBatch, id)
 				return
 			}
-
-			// Add to batch
-			batch.add(rec)
-
-			// Send batch if it's full
-			if batch.isFull() {
-				if !batch.timer.Stop() {
-					select {
-					case <-batch.timer.C:
-					default:
-					}
-				}
-				if err := o.sendBatch(client, batch); err != nil {
-					o.logger.Error("Failed to send OTLP gRPC batch",
-						zap.Int("worker_id", id),
-						zap.Error(err))
+			logBatch.add(rec)
+			if logBatch.isFull() {
+				o.resetTimer(flushTimer)
+				if err := o.sendBatch(logsClient, logBatch); err != nil {
+					o.logger.Error("Failed to send log batch", zap.Int("worker_id", id), zap.Error(err))
 					return
 				}
-				batch = newLogBatch(o.maxExportBatchSize, o.batchTimeout)
+				logBatch = newLogBatch(o.maxExportBatchSize, o.batchTimeout)
+				flushTimer = logBatch.timer
 			}
 
-		case <-batch.timer.C:
-			// Batch timeout reached, send batch
-			if !batch.isEmpty() {
-				if err := o.sendBatch(client, batch); err != nil {
-					o.logger.Error("Failed to send OTLP gRPC batch",
-						zap.Int("worker_id", id),
-						zap.Error(err))
+		case rec, ok := <-o.metricChan:
+			if !ok {
+				return
+			}
+			mBatch.add(rec)
+			if mBatch.isFull() {
+				if err := o.sendMetricBatch(metricsClient, mBatch); err != nil {
+					o.logger.Error("Failed to send metric batch", zap.Int("worker_id", id), zap.Error(err))
+					return
+				}
+				o.resetTimer(mBatch.timer)
+				mBatch = newMetricBatch(o.maxExportBatchSize, o.batchTimeout)
+			}
+
+		case rec, ok := <-o.traceChan:
+			if !ok {
+				return
+			}
+			tBatch.add(rec)
+			if tBatch.isFull() {
+				if err := o.sendTraceBatch(traceClient, tBatch); err != nil {
+					o.logger.Error("Failed to send trace batch", zap.Int("worker_id", id), zap.Error(err))
+					return
+				}
+				o.resetTimer(tBatch.timer)
+				tBatch = newTraceBatch(o.maxExportBatchSize, o.batchTimeout)
+			}
+
+		case <-flushTimer.C:
+			if !logBatch.isEmpty() {
+				if err := o.sendBatch(logsClient, logBatch); err != nil {
+					o.logger.Error("Failed to send log batch", zap.Int("worker_id", id), zap.Error(err))
 					return
 				}
 			}
-			// Create new batch with new timer
-			batch = newLogBatch(o.maxExportBatchSize, o.batchTimeout)
+			if !mBatch.isEmpty() {
+				if err := o.sendMetricBatch(metricsClient, mBatch); err != nil {
+					o.logger.Error("Failed to send metric batch", zap.Int("worker_id", id), zap.Error(err))
+					return
+				}
+			}
+			if !tBatch.isEmpty() {
+				if err := o.sendTraceBatch(traceClient, tBatch); err != nil {
+					o.logger.Error("Failed to send trace batch", zap.Int("worker_id", id), zap.Error(err))
+					return
+				}
+			}
+			logBatch = newLogBatch(o.maxExportBatchSize, o.batchTimeout)
+			mBatch = newMetricBatch(o.maxExportBatchSize, o.batchTimeout)
+			tBatch = newTraceBatch(o.maxExportBatchSize, o.batchTimeout)
+			flushTimer = logBatch.timer
 
 		case <-o.ctx.Done():
 			o.logger.Info("OTLP gRPC worker exiting - context cancelled", zap.Int("worker_id", id))
-			// Flush remaining logs
-			if err := o.flushBatch(client, batch); err != nil {
-				o.logger.Error("Failed to flush final batch", zap.Int("worker_id", id), zap.Error(err))
-			}
+			o.flushAll(logsClient, metricsClient, traceClient, logBatch, mBatch, tBatch, id)
 			return
 		}
 	}
+}
+
+func (o *OTLPGrpc) resetTimer(timer *time.Timer) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+}
+
+func (o *OTLPGrpc) flushAll(
+	logsClient collectorlogs.LogsServiceClient,
+	metricsClient collectormetrics.MetricsServiceClient,
+	traceClient collectortrace.TraceServiceClient,
+	logBatch *logBatch, mBatch *metricBatch, tBatch *traceBatch,
+	workerID int,
+) {
+	// Stop timers
+	logBatch.timer.Stop()
+	mBatch.timer.Stop()
+	tBatch.timer.Stop()
+
+	if !logBatch.isEmpty() {
+		if err := o.sendBatch(logsClient, logBatch); err != nil {
+			o.logger.Error("Failed to flush final log batch", zap.Int("worker_id", workerID), zap.Error(err))
+		}
+	}
+	if !mBatch.isEmpty() {
+		if err := o.sendMetricBatch(metricsClient, mBatch); err != nil {
+			o.logger.Error("Failed to flush final metric batch", zap.Int("worker_id", workerID), zap.Error(err))
+		}
+	}
+	if !tBatch.isEmpty() {
+		if err := o.sendTraceBatch(traceClient, tBatch); err != nil {
+			o.logger.Error("Failed to flush final trace batch", zap.Int("worker_id", workerID), zap.Error(err))
+		}
+	}
+}
+
+func (o *OTLPGrpc) sendMetricBatch(client collectormetrics.MetricsServiceClient, batch *metricBatch) error {
+	metrics := batch.getAndClear()
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	rm := buildMetricRequest(metrics, nil)
+	request := &collectormetrics.ExportMetricsServiceRequest{
+		ResourceMetrics: []*metricspb.ResourceMetrics{rm},
+	}
+
+	ctx, cancel := context.WithTimeout(o.ctx, o.batchTimeout)
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{}))
+
+	startTime := time.Now()
+	_, err := client.Export(ctx, request)
+	if err != nil {
+		output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "metrics")
+		return fmt.Errorf("failed to export metrics: %w", err)
+	}
+
+	latency := time.Since(startTime).Seconds()
+	requestSize := int64(proto.Size(request))
+	output.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(metrics)), outputType, "metrics")
+	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "metrics")
+	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "metrics")
+
+	return nil
+}
+
+func (o *OTLPGrpc) sendTraceBatch(client collectortrace.TraceServiceClient, batch *traceBatch) error {
+	spans := batch.getAndClear()
+	if len(spans) == 0 {
+		return nil
+	}
+
+	rs := buildTraceRequest(spans)
+	request := &collectortrace.ExportTraceServiceRequest{
+		ResourceSpans: []*tracepb.ResourceSpans{rs},
+	}
+
+	ctx, cancel := context.WithTimeout(o.ctx, o.batchTimeout)
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{}))
+
+	startTime := time.Now()
+	_, err := client.Export(ctx, request)
+	if err != nil {
+		output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "traces")
+		return fmt.Errorf("failed to export traces: %w", err)
+	}
+
+	latency := time.Since(startTime).Seconds()
+	requestSize := int64(proto.Size(request))
+	output.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(spans)), outputType, "traces")
+	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "traces")
+	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "traces")
+
+	return nil
 }
 
 // connect establishes a gRPC connection to the configured host and port
@@ -665,7 +805,7 @@ func (o *OTLPGrpc) recordSendError(_ string, _ error) {
 
 // SupportedTelemetry returns the telemetry types this output can consume.
 func (o *OTLPGrpc) SupportedTelemetry() []telemetry.Type {
-	return []telemetry.Type{telemetry.Logs}
+	return []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces}
 }
 
 // mapSeverityNumber maps string log levels to OTLP severity numbers
