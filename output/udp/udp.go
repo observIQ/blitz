@@ -103,7 +103,7 @@ func (u *UDP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 func (u *UDP) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case u.dataChan <- data.Message:
-		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType)
+		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -208,13 +208,13 @@ func (u *UDP) sendData(conn net.Conn, data string) error {
 	}
 
 	// Record successful send metrics
-	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType)
-	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType)
+	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType, "logs")
+	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType, "logs")
 
 	return nil
 }
 
 // recordSendError records metrics for send errors
 func (u *UDP) recordSendError(_ string, _ error) {
-	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType)
+	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
 }

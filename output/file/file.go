@@ -107,7 +107,7 @@ func (f *File) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.In
 func (f *File) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case f.dataChan <- data.Message:
-		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType)
+		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -174,8 +174,8 @@ func (f *File) writeData(data string) error {
 	}
 
 	latency := time.Since(start).Seconds()
-	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType)
-	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType)
+	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType, "logs")
+	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType, "logs")
 
 	// Record latency as a histogram using Float64Histogram like TCP for symmetry
 	// Use a separate metric name if needed in the future; omitted here to reduce metric cardinality
@@ -185,5 +185,5 @@ func (f *File) writeData(data string) error {
 }
 
 func (f *File) recordWriteError(_ string, _ error) {
-	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType)
+	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
 }

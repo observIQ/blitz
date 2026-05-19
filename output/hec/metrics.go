@@ -19,7 +19,7 @@ func newHECMetrics() (*hecMetrics, error) {
 }
 
 func (m *hecMetrics) recordLogsReceived(ctx context.Context, count int64) {
-	output.BlitzOutputEntriesReceivedCounter.Add(ctx, count, outputType)
+	output.BlitzOutputEntriesReceivedCounter.Add(ctx, count, outputType, "logs")
 }
 
 func (m *hecMetrics) recordActiveWorkers(ctx context.Context, count int64) {
@@ -27,19 +27,19 @@ func (m *hecMetrics) recordActiveWorkers(ctx context.Context, count int64) {
 }
 
 func (m *hecMetrics) recordLogRate(ctx context.Context, count float64) {
-	output.BlitzOutputEntryRateCounter.Add(ctx, count, outputType)
+	output.BlitzOutputEntryRateCounter.Add(ctx, count, outputType, "logs")
 }
 
 func (m *hecMetrics) recordRequestSize(ctx context.Context, bytes int64) {
-	output.BlitzOutputRequestSizeHistogram.Record(ctx, bytes, outputType)
+	output.BlitzOutputRequestSizeHistogram.Record(ctx, bytes, outputType, "logs")
 }
 
 func (m *hecMetrics) recordRequestLatency(ctx context.Context, seconds float64) {
-	output.BlitzOutputRequestLatencyHistogram.Record(ctx, seconds, outputType)
+	output.BlitzOutputRequestLatencyHistogram.Record(ctx, seconds, outputType, "logs")
 }
 
 func (m *hecMetrics) recordSendError(ctx context.Context, _ string) {
-	output.BlitzOutputSendErrorsCounter.Add(ctx, 1, outputType)
+	output.BlitzOutputSendErrorsCounter.Add(ctx, 1, outputType, "logs")
 }
 
 func (m *hecMetrics) recordBatchSize(ctx context.Context, size int64) {
