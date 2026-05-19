@@ -56,36 +56,35 @@ func TestWinevtGenerator_GeneratesAndWrites(t *testing.T) {
 	err = g.Start(writer)
 	require.NoError(t, err)
 
-	time.Sleep(120 * time.Millisecond)
+	// Poll until at least one emitted event contains an IP in both the rendered
+	// message body and the EventData payload. Only the 4625 (logon failure)
+	// template populates both fields; the other two templates the renderer can
+	// pick produce neither match. Polling avoids the fixed-sleep flake where
+	// random template selection happened to miss 4625 in a short window.
+	require.Eventually(t, func() bool {
+		for _, b := range writer.getWrites() {
+			out := string(b)
+			containsA := false
+			containsB := false
+			for _, ip := range templates.DefaultIPs {
+				if strings.Contains(out, "Source Network Address:\t"+ip) {
+					containsA = true
+				}
+				if strings.Contains(out, "<Data Name='IpAddress'>"+ip+"</Data>") {
+					containsB = true
+				}
+			}
+			if containsA && containsB {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second, 20*time.Millisecond, "expected to find IP address in both message and EventData")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	err = g.Stop(ctx)
 	require.NoError(t, err)
-
-	writes := writer.getWrites()
-	assert.Greater(t, len(writes), 0)
-
-	// Verify the rendered XML includes an IP from our list in both places
-	foundBoth := false
-	for _, b := range writes {
-		out := string(b)
-		containsA := false
-		containsB := false
-		for _, ip := range templates.DefaultIPs {
-			if strings.Contains(out, "Source Network Address:\t"+ip) {
-				containsA = true
-			}
-			if strings.Contains(out, "<Data Name='IpAddress'>"+ip+"</Data>") {
-				containsB = true
-			}
-		}
-		if containsA && containsB {
-			foundBoth = true
-			break
-		}
-	}
-	assert.True(t, foundBoth, "expected to find IP address in both message and EventData")
 }
 
 func TestRenderTemplate_RandomSelection(t *testing.T) {
