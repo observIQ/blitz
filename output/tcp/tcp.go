@@ -110,7 +110,7 @@ func (t *TCP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 func (t *TCP) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case t.dataChan <- data.Message:
-		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType)
+		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -238,14 +238,14 @@ func (t *TCP) sendData(conn net.Conn, data string) error {
 
 	// Record successful send metrics
 	latency := time.Since(startTime).Seconds()
-	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType)
-	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType)
-	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType)
+	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType, "logs")
+	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType, "logs")
+	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "logs")
 
 	return nil
 }
 
 // recordSendError records metrics for send errors
 func (t *TCP) recordSendError(_ string, _ error) {
-	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType)
+	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
 }

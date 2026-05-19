@@ -4,7 +4,7 @@ groups:
   type: metric
   metric_name: "blitz.output.entries_received"
   stability: stable
-  brief: "total number of log entries received by the output"
+  brief: "total number of telemetry entries received by the output"
   instrument: counter
   unit: "{entry}"
   annotations:
@@ -16,6 +16,12 @@ groups:
       requirement_level: required
       brief: "type of output"
       examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+    - id: telemetry_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "telemetry signal type"
+      examples: ["logs", "metrics", "traces"]
 
 - id: output.active_workers
   type: metric
@@ -38,7 +44,7 @@ groups:
   type: metric
   metric_name: "blitz.output.entry_rate"
   stability: stable
-  brief: "rate of log entries processed per second"
+  brief: "rate of telemetry entries processed per second"
   instrument: counter
   unit: "{entry}/s"
   annotations:
@@ -52,6 +58,12 @@ groups:
       requirement_level: required
       brief: "type of output"
       examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+    - id: telemetry_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "telemetry signal type"
+      examples: ["logs", "metrics", "traces"]
 
 - id: output.request_size
   type: metric
@@ -69,6 +81,12 @@ groups:
       requirement_level: required
       brief: "type of output"
       examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+    - id: telemetry_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "telemetry signal type"
+      examples: ["logs", "metrics", "traces"]
 
 - id: output.request_latency
   type: metric
@@ -88,6 +106,12 @@ groups:
       requirement_level: required
       brief: "type of output"
       examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+    - id: telemetry_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "telemetry signal type"
+      examples: ["logs", "metrics", "traces"]
 
 - id: output.send_errors
   type: metric
@@ -105,6 +129,12 @@ groups:
       requirement_level: required
       brief: "type of output"
       examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+    - id: telemetry_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "telemetry signal type"
+      examples: ["logs", "metrics", "traces"]
 
 - id: output.queue_size
   type: metric

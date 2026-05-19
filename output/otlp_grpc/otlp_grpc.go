@@ -319,7 +319,7 @@ func (o *OTLPGrpc) Write(ctx context.Context, data output.LogRecord) error {
 
 	select {
 	case o.dataChan <- record:
-		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType)
+		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -528,9 +528,9 @@ func (o *OTLPGrpc) sendBatch(client collectorlogs.LogsServiceClient, batch *logB
 	// Record successful send metrics
 	latency := time.Since(startTime).Seconds()
 	requestSize := int64(proto.Size(request))
-	output.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(logs)), outputType)
-	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType)
-	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType)
+	output.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(logs)), outputType, "logs")
+	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "logs")
+	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "logs")
 
 	return nil
 }
@@ -659,7 +659,7 @@ func (o *OTLPGrpc) toAnyValue(v any) *commonpb.AnyValue {
 
 // recordSendError records metrics for send errors
 func (o *OTLPGrpc) recordSendError(_ string, _ error) {
-	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType)
+	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
 }
 
 // mapSeverityNumber maps string log levels to OTLP severity numbers

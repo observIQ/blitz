@@ -16,7 +16,8 @@ import (
 
 // Attribute name constants
 const (
-	attrOutputType = "output_type"
+	attrOutputType    = "output_type"
+	attrTelemetryType = "telemetry_type"
 )
 
 // Wrapper types for metrics with required attributes
@@ -27,9 +28,10 @@ type BlitzOutputEntriesReceivedCounterType struct {
 }
 
 // Add records a value for blitz.output.entries_received with required attributes
-func (m BlitzOutputEntriesReceivedCounterType) Add(ctx context.Context, value int64, outputType string, opts ...metric.AddOption) {
+func (m BlitzOutputEntriesReceivedCounterType) Add(ctx context.Context, value int64, outputType string, telemetryType string, opts ...metric.AddOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
+		attribute.String(attrTelemetryType, telemetryType),
 	))
 
 	if len(opts) == 0 {
@@ -65,9 +67,10 @@ type BlitzOutputEntryRateCounterType struct {
 }
 
 // Add records a value for blitz.output.entry_rate with required attributes
-func (m BlitzOutputEntryRateCounterType) Add(ctx context.Context, value float64, outputType string, opts ...metric.AddOption) {
+func (m BlitzOutputEntryRateCounterType) Add(ctx context.Context, value float64, outputType string, telemetryType string, opts ...metric.AddOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
+		attribute.String(attrTelemetryType, telemetryType),
 	))
 
 	if len(opts) == 0 {
@@ -84,9 +87,10 @@ type BlitzOutputRequestSizeHistogramType struct {
 }
 
 // Record records a value for blitz.output.request_size with required attributes
-func (m BlitzOutputRequestSizeHistogramType) Record(ctx context.Context, value int64, outputType string, opts ...metric.RecordOption) {
+func (m BlitzOutputRequestSizeHistogramType) Record(ctx context.Context, value int64, outputType string, telemetryType string, opts ...metric.RecordOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
+		attribute.String(attrTelemetryType, telemetryType),
 	))
 
 	if len(opts) == 0 {
@@ -103,9 +107,10 @@ type BlitzOutputRequestLatencyHistogramType struct {
 }
 
 // Record records a value for blitz.output.request_latency with required attributes
-func (m BlitzOutputRequestLatencyHistogramType) Record(ctx context.Context, value float64, outputType string, opts ...metric.RecordOption) {
+func (m BlitzOutputRequestLatencyHistogramType) Record(ctx context.Context, value float64, outputType string, telemetryType string, opts ...metric.RecordOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
+		attribute.String(attrTelemetryType, telemetryType),
 	))
 
 	if len(opts) == 0 {
@@ -122,9 +127,10 @@ type BlitzOutputSendErrorsCounterType struct {
 }
 
 // Add records a value for blitz.output.send_errors with required attributes
-func (m BlitzOutputSendErrorsCounterType) Add(ctx context.Context, value int64, outputType string, opts ...metric.AddOption) {
+func (m BlitzOutputSendErrorsCounterType) Add(ctx context.Context, value int64, outputType string, telemetryType string, opts ...metric.AddOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
+		attribute.String(attrTelemetryType, telemetryType),
 	))
 
 	if len(opts) == 0 {
