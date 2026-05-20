@@ -105,7 +105,18 @@ Each consumer channel (Logs / Metrics / Traces) selects a backpressure mode at r
 
 - `BackpressureBlock` (default) — producer blocks until consumer accepts the batch.
 - `BackpressureDrop` — drop the batch when the consumer is not ready. Dropped batches are counted in a `records_dropped` metric.
-- `BackpressureBuffer{Size}` — queue in memory up to `Size`. When the buffer is full, behavior reverts to Block.
+- `BackpressureBuffer` — queue in memory up to a configured size. When the buffer is full, behavior reverts to Block.
+
+Mode and buffer size are set via `embed.ConsumerBackpressure` on each signal channel of `embed.Config`:
+
+```go
+embed.Config{
+    Modules: []embed.ProducerModule{...},
+    Logs:    embed.ConsumerBackpressure{Mode: embed.BackpressureBuffer, BufferSize: 1024},
+    Metrics: embed.ConsumerBackpressure{Mode: embed.BackpressureDrop},
+    Traces:  embed.ConsumerBackpressure{}, // zero value = Block
+}
+```
 
 ## Error semantics
 
@@ -127,14 +138,14 @@ For OTel hosts that want `pdata` rather than blitz records, the adapter lives in
 
 | Module                                            | Class    | Notes                                                   |
 |---------------------------------------------------|----------|---------------------------------------------------------|
-| apache, apache_combined, apache_error             | Producer | Common / Combined / Error log formats                   |
+| apache-common, apache-combined, apache-error      | Producer | Common / Combined / Error log formats                   |
 | filegen                                           | Producer | Replays lines from files; supports glob and directories |
 | json                                              | Producer | Structured JSON logs; `default` and `pii` log types     |
 | kubernetes                                        | Producer | CRI-O container log format                              |
 | nginx                                             | Producer | NGINX Combined log format                               |
 | nop                                               | Producer | No-op generator (testing helper)                        |
 | okta                                              | Producer | Okta System Log format                                  |
-| paloalto                                          | Producer | Palo Alto syslog                                        |
+| palo-alto                                         | Producer | Palo Alto syslog                                        |
 | postgres                                          | Producer | PostgreSQL log format                                   |
 | hostmetrics                                       | Producer | Host metric scrapers (CPU, disk, memory, etc.)          |
 | traces                                            | Producer | Synthetic distributed traces                            |
