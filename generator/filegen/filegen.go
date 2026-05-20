@@ -18,7 +18,6 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/ctime"
-	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
@@ -75,20 +74,22 @@ func (c *Cache) Set(key string, lines []string) {
 type FileLogGenerator struct {
 	embed.ProducerMarker
 
-	logger  *zap.Logger
-	workers int
-	rate    time.Duration
-	source  string // file path or directory path or glob pattern
-	stopCh  chan struct{}
-	tracker *count.Tracker
-	wg      sync.WaitGroup
+	logger   *zap.Logger
+	workers  int
+	rate     time.Duration
+	source   string // file path or directory path or glob pattern
+	consumer embed.LogConsumer
+	stopCh   chan struct{}
+	tracker  *count.Tracker
+	wg       sync.WaitGroup
 
 	// File cache
 	cache *Cache
 }
 
-// New creates a new File log generator
-func New(logger *zap.Logger, workers int, rate time.Duration, source string, cacheEnabled bool, cacheTTL time.Duration) (*FileLogGenerator, error) {
+// New creates a new File log generator. The consumer receives each
+// generated record as a size-1 batch via ConsumeLogs.
+func New(logger *zap.Logger, workers int, rate time.Duration, source string, cacheEnabled bool, cacheTTL time.Duration, consumer embed.LogConsumer) (*FileLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -105,23 +106,32 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string, cac
 		return nil, fmt.Errorf("source cannot be empty")
 	}
 
+	if consumer == nil {
+		return nil, fmt.Errorf("consumer cannot be nil")
+	}
+
 	cache, err := NewCache(cacheEnabled, cacheTTL, 1000) // 1000 is max size for LRU
 	if err != nil {
 		return nil, fmt.Errorf("create cache: %w", err)
 	}
 
 	return &FileLogGenerator{
-		logger:  logger,
-		workers: workers,
-		rate:    rate,
-		source:  source,
-		stopCh:  make(chan struct{}),
-		cache:   cache,
+		logger:   logger,
+		workers:  workers,
+		rate:     rate,
+		source:   source,
+		consumer: consumer,
+		stopCh:   make(chan struct{}),
+		cache:    cache,
 	}, nil
 }
 
-// Start starts the File log generator
-func (g *FileLogGenerator) Start(writer output.Writer) error {
+// Name returns the module identifier.
+func (g *FileLogGenerator) Name() string { return componentName }
+
+// Start starts the File log generator and launches workers that push
+// records to the configured consumer.
+func (g *FileLogGenerator) Start(_ context.Context) error {
 	g.logger.Info("Starting File log generator",
 		zap.String("source", g.source),
 		zap.Int("workers", g.workers),
@@ -145,7 +155,7 @@ func (g *FileLogGenerator) Start(writer output.Writer) error {
 	// Start workers
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i, writer, files)
+		go g.worker(i, files)
 	}
 
 	return nil
@@ -271,7 +281,7 @@ func (g *FileLogGenerator) SetCountTracker(t *count.Tracker) {
 	g.tracker = t
 }
 
-func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) {
+func (g *FileLogGenerator) worker(id int, files []string) {
 	defer g.wg.Done()
 
 	g.logger.Debug("Worker started", zap.Int("id", id))
@@ -308,7 +318,7 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 			}
 
 			file := files[fileIdx]
-			err := g.readAndWriteFile(file, writer)
+			err := g.readAndWriteFile(file)
 			if err != nil {
 				g.logger.Error("Error reading file", zap.String("file", file), zap.Error(err))
 				generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
@@ -323,8 +333,8 @@ func (g *FileLogGenerator) worker(id int, writer output.Writer, files []string) 
 	}
 }
 
-// readAndWriteFile reads a file, selects a random non-empty line, and writes it to the writer
-func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Writer) error {
+// readAndWriteFile reads a file, selects a random non-empty line, and pushes it to the consumer
+func (g *FileLogGenerator) readAndWriteFile(filename string) error {
 	// Check cache first
 	var lines []string
 	if cachedLines, found := g.cache.Get(filename); found {
@@ -354,14 +364,14 @@ func (g *FileLogGenerator) readAndWriteFile(filename string, writer output.Write
 	// Process timestamp directives in the line
 	processedLine := g.processTimestamps(selectedLine)
 
-	// Write with timeout
+	// Push as a size-1 batch with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	err := writer.Write(ctx, output.LogRecord{
+	err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{{
 		Message: processedLine,
-		Metadata: output.LogRecordMetadata{
+		Metadata: embed.LogRecordMetadata{
 			Timestamp: time.Now(),
 		},
-	})
+	}})
 	cancel()
 
 	if err != nil {
