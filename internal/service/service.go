@@ -7,15 +7,22 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
+	"github.com/observiq/blitz/internal/runtime"
 	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
 )
 
-// Service manages generators and an output.
+// Service manages generators and an output. It delegates orchestration
+// of migrated ProducerModule generators to internal/runtime.Runtime and
+// keeps the type-switch dispatch only for legacy generators that still
+// use the writer-based Start signature (winevt, hostmetrics, traces).
 type Service struct {
 	Logger     *zap.Logger
 	Generators []any
 	Output     output.Output
+
+	runtime *runtime.Runtime
+	legacy  []any
 }
 
 // New creates a new service with multiple generators and a single output.
@@ -30,33 +37,39 @@ func New(logger *zap.Logger, generators []any, output output.Output) (*Service, 
 		return nil, fmt.Errorf("output cannot be nil")
 	}
 
+	// Partition generators by type: ProducerModules go to the shared
+	// Runtime; everything else stays on legacy writer-based dispatch.
+	var modules []embed.ProducerModule
+	var legacy []any
+	for _, gen := range generators {
+		if pm, ok := gen.(embed.ProducerModule); ok {
+			modules = append(modules, pm)
+		} else {
+			legacy = append(legacy, gen)
+		}
+	}
+
 	return &Service{
 		Logger:     logger,
 		Generators: generators,
 		Output:     output,
+		runtime:    runtime.New(logger, modules),
+		legacy:     legacy,
 	}, nil
 }
 
-// Start starts all generators, dispatching each to the appropriate writer
-// based on type assertions.
+// Start starts all generators. ProducerModules run through Runtime;
+// legacy metric/trace/log generators dispatch via writer interfaces.
 func (s *Service) Start() error {
-	for i, gen := range s.Generators {
-		// PIPE-975 migration: embed.ProducerModule modules own their
-		// consumer wiring internally (configured at construction).
-		// Service just calls Start(ctx). This case precedes the legacy
-		// generator.* cases because migrated modules satisfy both the
-		// new and the old marker; legacy generators do not yet satisfy
-		// embed.ProducerModule.
-		//
-		// Concrete-telemetry legacy cases (MetricGenerator, TraceGenerator)
-		// precede the base Generator case so that a metric/trace generator
-		// can never be mis-dispatched to the log path if those interfaces
-		// ever come to share methods with Generator.
+	if err := s.runtime.Start(context.Background()); err != nil {
+		return err
+	}
+	for i, gen := range s.legacy {
 		switch g := gen.(type) {
-		case embed.ProducerModule:
-			if err := g.Start(context.Background()); err != nil {
-				return fmt.Errorf("start producer module %d: %w", i, err)
-			}
+		// Concrete-telemetry legacy cases (MetricGenerator, TraceGenerator)
+		// precede the base Generator case so a metric/trace generator can
+		// never be mis-dispatched to the log path if those interfaces
+		// ever come to share methods with Generator.
 		case generator.MetricGenerator:
 			mw, ok := s.Output.(output.MetricWriter)
 			if !ok {
@@ -93,30 +106,32 @@ func (s *Service) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	for i, gen := range s.Generators {
+	// Stop legacy generators first (in their declared order), then the
+	// Runtime which stops ProducerModules in reverse declared order.
+	var firstErr error
+	for i, gen := range s.legacy {
 		switch g := gen.(type) {
-		case embed.ProducerModule:
-			if err := g.Stop(ctx); err != nil {
-				return fmt.Errorf("stop producer module %d: %w", i, err)
-			}
 		case generator.MetricGenerator:
-			if err := g.Stop(ctx); err != nil {
-				return fmt.Errorf("stop metric generator %d: %w", i, err)
+			if err := g.Stop(ctx); err != nil && firstErr == nil {
+				firstErr = fmt.Errorf("stop metric generator %d: %w", i, err)
 			}
 		case generator.TraceGenerator:
-			if err := g.Stop(ctx); err != nil {
-				return fmt.Errorf("stop trace generator %d: %w", i, err)
+			if err := g.Stop(ctx); err != nil && firstErr == nil {
+				firstErr = fmt.Errorf("stop trace generator %d: %w", i, err)
 			}
 		case generator.Generator:
-			if err := g.Stop(ctx); err != nil {
-				return fmt.Errorf("stop log generator %d: %w", i, err)
+			if err := g.Stop(ctx); err != nil && firstErr == nil {
+				firstErr = fmt.Errorf("stop log generator %d: %w", i, err)
 			}
 		}
 	}
-
-	if err := s.Output.Stop(ctx); err != nil {
-		return fmt.Errorf("stop output: %w", err)
+	if err := s.runtime.Stop(ctx); err != nil && firstErr == nil {
+		firstErr = err
 	}
 
-	return nil
+	if err := s.Output.Stop(ctx); err != nil && firstErr == nil {
+		firstErr = fmt.Errorf("stop output: %w", err)
+	}
+
+	return firstErr
 }
