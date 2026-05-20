@@ -29,5 +29,21 @@ type Host struct {
 	// this map internally so concurrent worker goroutines read a
 	// runtime-owned copy that no caller can race with; callers must still
 	// treat their own reference as frozen once they hand the Host off.
+	// See cloneResource in this package.
 	Resource map[string]string
+}
+
+// cloneResource returns a defensive copy of m. Runner.Start uses it so
+// worker goroutines reading the per-session resource attributes race
+// neither with each other nor with a caller that retains a reference
+// and later mutates its own copy.
+func cloneResource(m map[string]string) map[string]string {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
