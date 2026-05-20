@@ -12,7 +12,6 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -57,12 +56,13 @@ type postgresLogData struct {
 type Generator struct {
 	embed.ProducerMarker
 
-	logger  *zap.Logger
-	workers int
-	rate    time.Duration
-	wg      sync.WaitGroup
-	stopCh  chan struct{}
-	tracker *count.Tracker
+	logger   *zap.Logger
+	workers  int
+	rate     time.Duration
+	consumer embed.LogConsumer
+	wg       sync.WaitGroup
+	stopCh   chan struct{}
+	tracker  *count.Tracker
 }
 
 // Predefined lists for fast random generation
@@ -225,8 +225,9 @@ var (
 	}
 )
 
-// New creates a new PostgreSQL log generator
-func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error) {
+// New creates a new PostgreSQL log generator. The consumer receives
+// each generated record as a size-1 batch via ConsumeLogs.
+func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer) (*Generator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -235,17 +236,25 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
+	if consumer == nil {
+		return nil, fmt.Errorf("consumer cannot be nil")
+	}
+
 	return &Generator{
-		logger:  logger,
-		workers: workers,
-		rate:    rate,
-		stopCh:  make(chan struct{}),
+		logger:   logger,
+		workers:  workers,
+		rate:     rate,
+		consumer: consumer,
+		stopCh:   make(chan struct{}),
 	}, nil
 }
 
-// Start starts the PostgreSQL log generator and writes data using the
-// provided generator writer.
-func (g *Generator) Start(writer output.Writer) error {
+// Name returns the module identifier.
+func (g *Generator) Name() string { return componentName }
+
+// Start launches the worker goroutines that push generated records to
+// the configured consumer.
+func (g *Generator) Start(_ context.Context) error {
 	g.logger.Info("Starting PostgreSQL log generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
@@ -253,7 +262,7 @@ func (g *Generator) Start(writer output.Writer) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i, writer)
+		go g.worker(i)
 	}
 
 	return nil
@@ -286,7 +295,7 @@ func (g *Generator) SetCountTracker(t *count.Tracker) {
 }
 
 // worker is the main worker loop that generates and writes logs
-func (g *Generator) worker(workerID int, writer output.Writer) {
+func (g *Generator) worker(workerID int) {
 	defer g.wg.Done()
 
 	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
@@ -314,7 +323,7 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 					continue
 				}
 			}
-			err := g.generateAndWriteLog(writer, workerID)
+			err := g.generateAndWriteLog(workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
@@ -327,7 +336,7 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 }
 
 // generateAndWriteLog generates a random log and writes it
-func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) error {
+func (g *Generator) generateAndWriteLog(_ int) error {
 	logData, err := g.generatePostgresLogData()
 	if err != nil {
 		g.recordWriteError(errorTypeUnknown, err)
@@ -345,7 +354,7 @@ func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) erro
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, logRecord); err != nil {
+	if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{logRecord}); err != nil {
 		errorType := errorTypeUnknown
 		if ctx.Err() == context.DeadlineExceeded {
 			errorType = errorTypeTimeout
@@ -394,7 +403,7 @@ func generateRandomIP(r *rand.Rand) string {
 // formatAsPostgres converts postgresLogData to PostgreSQL log format
 // Format: %t [%p]: user=%u,db=%d,app=%a,client=%h <severity>: <message>
 // Example: 2024-01-15 10:23:45.123 UTC [12345]: user=postgres,db=mydb,app=psql,client=127.0.0.1 LOG:  statement: SELECT * FROM users;
-func formatAsPostgres(data *postgresLogData) (output.LogRecord, error) {
+func formatAsPostgres(data *postgresLogData) (embed.LogRecord, error) {
 	// Format timestamp as PostgreSQL does: YYYY-MM-DD HH:MM:SS.mmm UTC
 	timestampStr := data.timestamp.UTC().Format("2006-01-02 15:04:05.000 MST")
 
@@ -419,7 +428,7 @@ func formatAsPostgres(data *postgresLogData) (output.LogRecord, error) {
 		data.message,
 	)
 
-	return output.LogRecord{
+	return embed.LogRecord{
 		Message: postgresLine,
 		ParseFunc: func(message string) (map[string]any, error) {
 			parsed := make(map[string]any)
@@ -484,7 +493,7 @@ func formatAsPostgres(data *postgresLogData) (output.LogRecord, error) {
 
 			return parsed, nil
 		},
-		Metadata: output.LogRecordMetadata{
+		Metadata: embed.LogRecordMetadata{
 			Timestamp: data.timestamp,
 			Severity:  data.severity,
 		},
