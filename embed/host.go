@@ -24,5 +24,10 @@ type Host struct {
 
 	// Resource is the per-session base resource attributes blitz applies
 	// to every emitted record before module-level overrides merge on top.
+	//
+	// Read-only after Host is passed to Runner.Start. The runner clones
+	// this map internally so concurrent worker goroutines read a
+	// runtime-owned copy that no caller can race with; callers must still
+	// treat their own reference as frozen once they hand the Host off.
 	Resource map[string]string
 }
