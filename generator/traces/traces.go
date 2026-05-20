@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
@@ -22,6 +23,8 @@ const generatorType = "traces"
 
 // Generator implements generator.TraceGenerator for synthetic distributed traces.
 type Generator struct {
+	embed.ProducerMarker
+
 	logger  *zap.Logger
 	workers int
 	rate    time.Duration

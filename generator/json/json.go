@@ -9,6 +9,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	jsonlib "github.com/goccy/go-json"
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/logtypes"
@@ -73,6 +74,8 @@ func generateSpanID(r *rand.Rand) string {
 
 // JSONLogGenerator generates JSON log data with configurable workers
 type JSONLogGenerator struct {
+	embed.ProducerMarker
+
 	logger  *zap.Logger
 	workers int
 	rate    time.Duration
