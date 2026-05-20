@@ -9,10 +9,26 @@ The File generator reads log entries from files on disk and selects a random lin
 - **Single file mode**: Read logs from a specified file path
 - **Directory mode**: Read logs from all files in a directory
 - **Glob pattern support**: Use wildcards to match multiple files or directories (e.g., `/var/log/*rfc5424*.log`, `/data/syslog_*/*.log`)
-- **Auto-detection**: Mode can auto-detect whether source is a file or directory
+- **Data library mode**: Reference a named package from blitz's built-in `data_library/` (via bare name or explicit `package:` prefix)
+- **Auto-detection**: Mode can auto-detect whether source is a file, directory, or library package
 - **Flexible rate limiting**: Configurable log generation rate per worker
 - **Multi-worker support**: Distribute file reading across multiple worker goroutines
 - **Dynamic timestamp processing**: Automatic substitution of timestamp directives (`%c`, `%Y-%m-%dT%H:%M:%SZ`, `%Y-%m-%d`, etc.) with actual formatted times
+
+## Source resolution — disk path vs data library
+
+The `source` value is resolved in this order:
+
+1. **Explicit `package:` prefix** (e.g. `source: package:syslog_generic`) — resolved only against the data library; no disk fallback. Use this to lock the interpretation and get clear errors on misspellings.
+2. **Disk path / glob / directory** — resolved against the local filesystem. This covers absolute paths (`/var/log/app.log`), relative paths (`./logs`), and globs (`/data/syslog_*/*.log`).
+3. **Bare name** (no path separator, no prefix; e.g. `source: syslog_generic`) — first tried against the data library; if the library has no matching entry, treated as a disk path. Preserves existing configs that reference data library packages by bare name.
+
+When a bare name matches both a data-library entry AND a directory on disk relative to cwd, a startup warning is logged pointing at the explicit `package:` prefix as the way to disambiguate. The library entry wins; the warning surfaces the ambiguity so users can lock the meaning.
+
+## Standalone CLI vs embedded library use
+
+- **Standalone CLI**: the data library is read from disk at runtime (from `./data_library/` relative to cwd). Editing files there takes effect on the next blitz run — no recompile required. This is the default behavior; the CLI passes no embedded library to `filegen.New`.
+- **Embedded library consumers** (e.g. the OTel `telemetrygeneratorreceiver`): import `github.com/observiq/blitz/generator/filegen/embeddedlibrary` and pass `embeddedlibrary.FS()` to `filegen.New`. The data library files are bundled into the consuming binary via `//go:embed` and travel with the import — no on-disk installation step required.
 
 ## Example Logs
 
