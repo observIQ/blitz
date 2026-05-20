@@ -14,7 +14,6 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/useragent"
-	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -41,16 +40,18 @@ type apacheCombinedLogData struct {
 type ApacheCombinedLogGenerator struct {
 	embed.ProducerMarker
 
-	logger  *zap.Logger
-	workers int
-	rate    time.Duration
-	wg      sync.WaitGroup
-	stopCh  chan struct{}
-	tracker *count.Tracker
+	logger   *zap.Logger
+	workers  int
+	rate     time.Duration
+	consumer embed.LogConsumer
+	wg       sync.WaitGroup
+	stopCh   chan struct{}
+	tracker  *count.Tracker
 }
 
-// New creates a new Apache Combined log generator
-func New(logger *zap.Logger, workers int, rate time.Duration) (*ApacheCombinedLogGenerator, error) {
+// New creates a new Apache Combined log generator. The consumer receives
+// each generated record as a size-1 batch via ConsumeLogs.
+func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer) (*ApacheCombinedLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -59,17 +60,25 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*ApacheCombinedLo
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
+	if consumer == nil {
+		return nil, fmt.Errorf("consumer cannot be nil")
+	}
+
 	return &ApacheCombinedLogGenerator{
-		logger:  logger,
-		workers: workers,
-		rate:    rate,
-		stopCh:  make(chan struct{}),
+		logger:   logger,
+		workers:  workers,
+		rate:     rate,
+		consumer: consumer,
+		stopCh:   make(chan struct{}),
 	}, nil
 }
 
-// Start starts the Apache Combined log generator and writes data using the
-// provided generator writer.
-func (g *ApacheCombinedLogGenerator) Start(writer output.Writer) error {
+// Name returns the module identifier.
+func (g *ApacheCombinedLogGenerator) Name() string { return componentName }
+
+// Start launches the worker goroutines that push generated records to
+// the configured consumer.
+func (g *ApacheCombinedLogGenerator) Start(_ context.Context) error {
 	g.logger.Info("Starting Apache Combined log generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
@@ -77,7 +86,7 @@ func (g *ApacheCombinedLogGenerator) Start(writer output.Writer) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i, writer)
+		go g.worker(i)
 	}
 
 	return nil
@@ -110,7 +119,7 @@ func (g *ApacheCombinedLogGenerator) SetCountTracker(t *count.Tracker) {
 }
 
 // worker is the main worker loop that generates and writes logs
-func (g *ApacheCombinedLogGenerator) worker(workerID int, writer output.Writer) {
+func (g *ApacheCombinedLogGenerator) worker(workerID int) {
 	defer g.wg.Done()
 
 	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
@@ -138,7 +147,7 @@ func (g *ApacheCombinedLogGenerator) worker(workerID int, writer output.Writer) 
 					continue
 				}
 			}
-			err := g.generateAndWriteLog(writer, workerID)
+			err := g.generateAndWriteLog(workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
@@ -150,8 +159,9 @@ func (g *ApacheCombinedLogGenerator) worker(workerID int, writer output.Writer) 
 	}
 }
 
-// generateAndWriteLog generates a random log and writes it
-func (g *ApacheCombinedLogGenerator) generateAndWriteLog(writer output.Writer, workerID int) error {
+// generateAndWriteLog generates a random log and pushes it as a
+// single-record batch to the configured consumer.
+func (g *ApacheCombinedLogGenerator) generateAndWriteLog(_ int) error {
 	// Generate Apache Combined log data
 	logData, err := g.generateApacheCombinedLogData()
 	if err != nil {
@@ -169,11 +179,11 @@ func (g *ApacheCombinedLogGenerator) generateAndWriteLog(writer output.Writer, w
 	// Record logs generated counter
 	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
-	// Write the data with timeout
+	// Push as a size-1 batch with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, logRecord); err != nil {
+	if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{logRecord}); err != nil {
 		// Classify error type
 		errorType := "unknown"
 		if ctx.Err() == context.DeadlineExceeded {
@@ -258,7 +268,7 @@ func generateReferer(r *rand.Rand) string {
 // formatAsApacheCombined converts apacheCombinedLogData to Apache Combined Log Format
 // Format: remotehost rfc931 authuser [date] "request" status bytes "referer" "user-agent"
 // Example: 127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"
-func formatAsApacheCombined(data *apacheCombinedLogData) (output.LogRecord, error) {
+func formatAsApacheCombined(data *apacheCombinedLogData) (embed.LogRecord, error) {
 	// Format timestamp as [dd/MMM/yyyy:HH:mm:ss -TZ]
 	// Use local timezone offset
 	loc := time.Now().Location()
@@ -287,7 +297,7 @@ func formatAsApacheCombined(data *apacheCombinedLogData) (output.LogRecord, erro
 		data.userAgent,
 	)
 
-	return output.LogRecord{
+	return embed.LogRecord{
 		Message: combinedLine,
 		ParseFunc: func(message string) (map[string]any, error) {
 			// Basic parsing - split by spaces but handle quoted fields
@@ -323,7 +333,7 @@ func formatAsApacheCombined(data *apacheCombinedLogData) (output.LogRecord, erro
 
 			return parsed, nil
 		},
-		Metadata: output.LogRecordMetadata{
+		Metadata: embed.LogRecordMetadata{
 			Timestamp: data.timestamp,
 			Severity:  data.severity,
 		},

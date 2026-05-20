@@ -413,7 +413,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	case config.GeneratorTypeApache:
 		return apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeApacheCombined:
-		return apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate)
+		return apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeApacheError:
 		return apacheerrorgen.New(logger, genCfg.ApacheError.Workers, genCfg.ApacheError.Rate)
 	case config.GeneratorTypeNginx:
