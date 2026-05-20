@@ -60,9 +60,36 @@ func New(logger *zap.Logger, generators []any, output output.Output) (*Service, 
 
 // Start starts all generators. ProducerModules run through Runtime;
 // legacy metric/trace/log generators dispatch via writer interfaces.
+//
+// If any legacy generator's Start fails (or the type switch hits the
+// default case), Start rolls back: legacy generators already started are
+// stopped in reverse order, then the Runtime is stopped, then the
+// original error is returned. This prevents goroutine/worker leaks when
+// Start aborts midway. Note that legacy generators' Stop methods use
+// close(stopCh) under the hood, which panics on a second close —
+// callers must NOT call Service.Stop after Service.Start returned an
+// error; the rollback already cleaned up.
 func (s *Service) Start() error {
 	if err := s.runtime.Start(context.Background()); err != nil {
 		return err
+	}
+	started := make([]any, 0, len(s.legacy))
+	rollback := func() {
+		ctx := context.Background()
+		for i := len(started) - 1; i >= 0; i-- {
+			if stopper, ok := started[i].(interface {
+				Stop(context.Context) error
+			}); ok {
+				if err := stopper.Stop(ctx); err != nil {
+					s.Logger.Warn("legacy generator stop failed during Start rollback",
+						zap.Error(err))
+				}
+			}
+		}
+		if err := s.runtime.Stop(ctx); err != nil {
+			s.Logger.Warn("runtime stop failed during Start rollback",
+				zap.Error(err))
+		}
 	}
 	for i, gen := range s.legacy {
 		switch g := gen.(type) {
@@ -78,8 +105,10 @@ func (s *Service) Start() error {
 				continue
 			}
 			if err := g.Start(mw); err != nil {
+				rollback()
 				return fmt.Errorf("start metric generator %d: %w", i, err)
 			}
+			started = append(started, g)
 		case generator.TraceGenerator:
 			tw, ok := s.Output.(output.TraceWriter)
 			if !ok {
@@ -88,13 +117,18 @@ func (s *Service) Start() error {
 				continue
 			}
 			if err := g.Start(tw); err != nil {
+				rollback()
 				return fmt.Errorf("start trace generator %d: %w", i, err)
 			}
+			started = append(started, g)
 		case generator.Generator:
 			if err := g.Start(s.Output); err != nil {
+				rollback()
 				return fmt.Errorf("start log generator %d: %w", i, err)
 			}
+			started = append(started, g)
 		default:
+			rollback()
 			return fmt.Errorf("generator %d has unsupported type %T", i, gen)
 		}
 	}
