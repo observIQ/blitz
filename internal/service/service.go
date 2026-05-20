@@ -39,7 +39,9 @@ func New(logger *zap.Logger, generators []any, output output.Output) (*Service, 
 
 	// Partition generators by type: ProducerModules go to the shared
 	// Runtime; everything else stays on legacy writer-based dispatch.
-	var modules []embed.ProducerModule
+	// Runtime is decoupled from embed (import-cycle avoidance), so the
+	// embed.ProducerModule check happens here at the seam.
+	var modules []runtime.Module
 	var legacy []any
 	for _, gen := range generators {
 		if pm, ok := gen.(embed.ProducerModule); ok {
