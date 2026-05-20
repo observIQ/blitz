@@ -1,5 +1,7 @@
 # File Generator (filegen)
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The File generator reads log entries from files on disk and selects a random line from each file on each run. It automatically processes timestamp directives on the selected line. It supports reading from a single file, reading from all files in a directory, or reading from a pre-distributed package of sample logs. Timestamp directives in log entries (like `%c`, `%Y-%m-%dT%H:%M:%SZ`, etc.) are replaced with actual formatted timestamps when the line is selected.
 
 ## Features

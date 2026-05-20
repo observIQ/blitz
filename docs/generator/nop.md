@@ -1,5 +1,7 @@
 # NOP Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The NOP (No Operation) generator performs no work and generates no data. It's useful for testing the application infrastructure without generating actual log data.
 
 ## Example Logs

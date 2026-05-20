@@ -1,5 +1,7 @@
 # JSON Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The JSON generator creates structured JSON log entries with configurable fields. Two log types are supported: default logs with standard fields, and PII logs with personally identifiable information fields suitable for testing PII detection and redaction systems.
 
 ## Example Logs

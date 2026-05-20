@@ -1,5 +1,7 @@
 # NGINX Combined Log Format Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The NGINX generator creates logs in NGINX's default Combined Log Format. This format matches NGINX's standard `log_format combined` directive and includes the client IP address, remote user, timestamp, request line, status code, response size, referer, and user-agent.
 
 ## Description

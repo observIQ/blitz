@@ -1,5 +1,7 @@
 # Okta System Log Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The Okta generator creates synthetic Okta System Log events in JSON format. It produces realistic authentication, security, user lifecycle, and administrative events that match the Okta System Log API schema.
 
 ## Description

@@ -1,5 +1,7 @@
 # Apache Error Log Format Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The Apache Error generator creates logs in Apache Error Log Format, used for logging server errors, warnings, and other diagnostic information. The format follows the specification: `[timestamp] [level] [pid:tid] [client] message`.
 
 ## Example Logs

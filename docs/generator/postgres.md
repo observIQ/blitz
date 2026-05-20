@@ -1,5 +1,7 @@
 # PostgreSQL Log Format Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The PostgreSQL generator creates logs in PostgreSQL's standard log format. This format matches PostgreSQL's default `log_line_prefix` configuration (`'%t [%p]: user=%u,db=%d,app=%a,client=%h '`) and includes timestamp, process ID, user, database, application name, client address, severity level, and log message. Query logs are included in the same format when `log_statement = 'all'` is configured in PostgreSQL.
 
 ## Description

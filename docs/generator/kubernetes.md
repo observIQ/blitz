@@ -1,5 +1,7 @@
 # Kubernetes Container Log Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The Kubernetes generator creates logs in Kubernetes container log format. Currently supports the CRI-O format, with support for additional formats (such as Docker) planned for the future.
 
 ## Description

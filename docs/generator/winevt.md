@@ -1,5 +1,7 @@
 # Windows Event (winevt) Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md)). The current XML-output mode is a Producer; a future Windows-API mode (PIPE-928) will land as an Effector via a separate constructor.
+
 The Windows Event generator generates Windows Event logs in unparsed XML format. These logs follow the standard Windows Event XML schema and are suitable for testing Windows Event log processing systems.
 
 ## Example Logs
