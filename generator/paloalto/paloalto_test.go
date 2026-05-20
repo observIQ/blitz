@@ -8,14 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-// mockWriter implements output.Writer for testing
+// Compile-time assertion: the migrated generator satisfies embed.ProducerModule.
+var _ embed.ProducerModule = (*Generator)(nil)
+
+// mockWriter implements embed.LogConsumer for testing.
 type mockWriter struct {
 	mu       sync.Mutex
 	writes   [][]byte
@@ -31,7 +34,7 @@ func newMockWriter() *mockWriter {
 	}
 }
 
-func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
+func (m *mockWriter) ConsumeLogs(ctx context.Context, records []embed.LogRecord) error {
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -49,7 +52,9 @@ func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
 		return err
 	}
 
-	m.writes = append(m.writes, append([]byte(nil), data.Message...))
+	for i := range records {
+		m.writes = append(m.writes, append([]byte(nil), records[i].Message...))
+	}
 	return nil
 }
 
@@ -82,7 +87,7 @@ func TestNew(t *testing.T) {
 	workers := 5
 	rate := 100 * time.Millisecond
 
-	generator, err := New(logger, workers, rate)
+	generator, err := New(logger, workers, rate, newMockWriter())
 
 	assert.NoError(t, err)
 	assert.NotNil(t, generator)
@@ -93,7 +98,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNew_NilLogger(t *testing.T) {
-	generator, err := New(nil, 5, 100*time.Millisecond)
+	generator, err := New(nil, 5, 100*time.Millisecond, newMockWriter())
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
@@ -104,13 +109,13 @@ func TestNew_InvalidWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Test zero workers
-	generator, err := New(logger, 0, 100*time.Millisecond)
+	generator, err := New(logger, 0, 100*time.Millisecond, newMockWriter())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
 
 	// Test negative workers
-	generator, err = New(logger, -1, 100*time.Millisecond)
+	generator, err = New(logger, -1, 100*time.Millisecond, newMockWriter())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
@@ -119,39 +124,42 @@ func TestNew_InvalidWorkers(t *testing.T) {
 func TestGenerator_Start(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 2, 50*time.Millisecond)
+	generator, err := New(logger, 2, 50*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	assert.NoError(t, err)
 
-	// Wait for some logs to be generated
-	time.Sleep(200 * time.Millisecond)
+	// Wait for at least one record to land before stopping.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 2*time.Second, 10*time.Millisecond, "Expected some logs to be written")
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err = generator.Stop(ctx)
 	assert.NoError(t, err)
-
-	// Verify logs were written
-	writes := writer.getWrites()
-	assert.Greater(t, len(writes), 0, "Expected some logs to be written")
 }
 
 func TestGenerator_Stop_GracefulShutdown(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 3, 10*time.Millisecond)
+	generator, err := New(logger, 3, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let it run briefly
-	time.Sleep(50 * time.Millisecond)
+	// Wait until at least one worker has emitted a record so the Stop
+	// path is exercised against actively-running workers, not a
+	// just-started generator that may not have produced anything yet.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 2*time.Second, 5*time.Millisecond, "Expected some logs to be written before stopping")
 
-	// Stop with context
+	// Stop with context — the duration assertion below is the real
+	// timing check this test cares about.
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -161,57 +169,51 @@ func TestGenerator_Stop_GracefulShutdown(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Less(t, duration, 500*time.Millisecond, "Stop should complete quickly")
-
-	// Verify some logs were written before stopping
-	writes := writer.getWrites()
-	assert.Greater(t, len(writes), 0, "Expected some logs to be written before stopping")
 }
 
 func TestGenerator_WriteErrors_Backoff(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 	writer.setWriteError(errors.New("write failed"))
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let it run briefly to trigger write errors and backoff
-	time.Sleep(200 * time.Millisecond)
+	// Wait until at least one write error has been recorded so the
+	// backoff path has clearly been exercised.
+	require.Eventually(t, func() bool {
+		return len(writer.getErrors()) > 0
+	}, 2*time.Second, 10*time.Millisecond, "Expected some write errors")
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	err = generator.Stop(ctx)
 	assert.NoError(t, err)
-
-	// Verify errors were logged
-	errors := writer.getErrors()
-	assert.Greater(t, len(errors), 0, "Expected some write errors")
 }
 
 func TestGenerator_ConcurrentWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 5, 20*time.Millisecond)
+	generator, err := New(logger, 5, 20*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let multiple workers run
-	time.Sleep(200 * time.Millisecond)
+	// Wait for the combined worker output to exceed 10 records — this
+	// demonstrates concurrent workers are actually producing.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 10
+	}, 2*time.Second, 10*time.Millisecond, "Expected many logs from multiple workers")
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	err = generator.Stop(ctx)
 	assert.NoError(t, err)
-
-	// Verify logs were written by multiple workers
-	writes := writer.getWrites()
-	assert.Greater(t, len(writes), 10, "Expected many logs from multiple workers")
 }
 
 func TestGeneratePaloAltoLog_Format(t *testing.T) {
@@ -290,52 +292,53 @@ func TestGenerator_MultipleStartStop(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 
-	// Start and stop multiple times with new generator instances
+	// Start and stop multiple times with new generator instances. Each
+	// cycle must produce at least one additional record before the
+	// generator is stopped — otherwise the cycle proved nothing.
 	for range 3 {
-		generator, err := New(logger, 2, 20*time.Millisecond)
+		generator, err := New(logger, 2, 20*time.Millisecond, writer)
 		require.NoError(t, err)
 
-		err = generator.Start(writer)
+		err = generator.Start(context.Background())
 		assert.NoError(t, err)
 
-		time.Sleep(50 * time.Millisecond)
+		baseline := len(writer.getWrites())
+		require.Eventually(t, func() bool {
+			return len(writer.getWrites()) > baseline
+		}, 2*time.Second, 5*time.Millisecond, "Expected this cycle to add at least one record")
 
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		err = generator.Stop(ctx)
 		cancel()
 		assert.NoError(t, err)
 	}
-
-	// Verify logs were written in each cycle
-	writes := writer.getWrites()
-	assert.Greater(t, len(writes), 0, "Expected logs from multiple start/stop cycles")
 }
 
 func TestGenerator_VeryFastRate(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 1*time.Millisecond)
+	generator, err := New(logger, 1, 1*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Run for a short time with very fast rate
-	time.Sleep(10 * time.Millisecond)
+	// Poll until the worker produces more than 5 records. A fixed
+	// time.Sleep + assert.Greater was flake-prone on CI: a slow scheduler
+	// could see exactly 5 writes inside the sleep budget.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 5
+	}, 2*time.Second, 5*time.Millisecond, "Expected many logs with fast rate")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	err = generator.Stop(ctx)
 	assert.NoError(t, err)
-
-	// Should have generated many logs
-	writes := writer.getWrites()
-	assert.Greater(t, len(writes), 5, "Expected many logs with fast rate")
 }
 
 func TestGenerator_SetCountTracker(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond)
+	gen, err := New(logger, 1, 50*time.Millisecond, newMockWriter())
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -349,13 +352,13 @@ func TestGenerator_CountLimited(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 
-	gen, err := New(logger, 2, 10*time.Millisecond)
+	gen, err := New(logger, 2, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)
 	gen.SetCountTracker(tracker)
 
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
 	select {
@@ -364,7 +367,13 @@ func TestGenerator_CountLimited(t *testing.T) {
 		t.Fatal("tracker should have been exhausted")
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// After tracker exhaustion, no additional records should be produced.
+	// Use Never to assert the bound holds across a short window; a fixed
+	// time.Sleep here only made it slightly more likely that a stray
+	// post-Done record would have landed before the assertion ran.
+	require.Never(t, func() bool {
+		return len(writer.getWrites()) > 5
+	}, 100*time.Millisecond, 10*time.Millisecond, "tracker should have halted further writes")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

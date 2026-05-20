@@ -409,7 +409,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	case config.GeneratorTypeWinevt:
 		return winevt.New(logger, genCfg.Winevt.Workers, genCfg.Winevt.Rate)
 	case config.GeneratorTypePaloAlto:
-		return paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate)
+		return paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeApache:
 		return apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeApacheCombined:
