@@ -13,7 +13,6 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -52,23 +51,29 @@ func (f *CRIOFormat) Format(timestamp time.Time, stream string, appLog string) s
 type Generator struct {
 	embed.ProducerMarker
 
-	logger  *zap.Logger
-	workers int
-	rate    time.Duration
-	format  ContainerLogFormat
-	wg      sync.WaitGroup
-	stopCh  chan struct{}
-	tracker *count.Tracker
+	logger   *zap.Logger
+	workers  int
+	rate     time.Duration
+	format   ContainerLogFormat
+	consumer embed.LogConsumer
+	wg       sync.WaitGroup
+	stopCh   chan struct{}
+	tracker  *count.Tracker
 }
 
-// New creates a new Kubernetes container log generator
-func New(logger *zap.Logger, workers int, rate time.Duration, format string) (*Generator, error) {
+// New creates a new Kubernetes container log generator. The consumer
+// receives each generated record as a size-1 batch via ConsumeLogs.
+func New(logger *zap.Logger, workers int, rate time.Duration, format string, consumer embed.LogConsumer) (*Generator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
 
 	if workers < 1 {
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
+	}
+
+	if consumer == nil {
+		return nil, fmt.Errorf("consumer cannot be nil")
 	}
 
 	var logFormat ContainerLogFormat
@@ -80,17 +85,21 @@ func New(logger *zap.Logger, workers int, rate time.Duration, format string) (*G
 	}
 
 	return &Generator{
-		logger:  logger,
-		workers: workers,
-		rate:    rate,
-		format:  logFormat,
-		stopCh:  make(chan struct{}),
+		logger:   logger,
+		workers:  workers,
+		rate:     rate,
+		format:   logFormat,
+		consumer: consumer,
+		stopCh:   make(chan struct{}),
 	}, nil
 }
 
-// Start starts the Kubernetes container log generator and writes data using the
-// provided generator writer.
-func (g *Generator) Start(writer output.Writer) error {
+// Name returns the module identifier.
+func (g *Generator) Name() string { return componentName }
+
+// Start launches the worker goroutines that push generated records to
+// the configured consumer.
+func (g *Generator) Start(_ context.Context) error {
 	g.logger.Info("Starting Kubernetes container log generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
@@ -98,7 +107,7 @@ func (g *Generator) Start(writer output.Writer) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i, writer)
+		go g.worker(i)
 	}
 
 	return nil
@@ -131,7 +140,7 @@ func (g *Generator) SetCountTracker(t *count.Tracker) {
 }
 
 // worker is the main worker loop that generates and writes logs
-func (g *Generator) worker(workerID int, writer output.Writer) {
+func (g *Generator) worker(workerID int) {
 	defer g.wg.Done()
 
 	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
@@ -159,7 +168,7 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 					continue
 				}
 			}
-			err := g.generateAndWriteLog(writer, workerID)
+			err := g.generateAndWriteLog(workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
@@ -171,20 +180,21 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 	}
 }
 
-// generateAndWriteLog generates a random log and writes it
-func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) error {
+// generateAndWriteLog generates a random log and pushes it as a
+// single-record batch to the configured consumer.
+func (g *Generator) generateAndWriteLog(_ int) error {
 	timestamp := time.Now()
 	stream := g.selectRandomStream()
 	appLog := g.generateApplicationLog()
 
 	logLine := g.format.Format(timestamp, stream, appLog)
 
-	logRecord := output.LogRecord{
+	logRecord := embed.LogRecord{
 		Message: logLine,
 		ParseFunc: func(message string) (map[string]any, error) {
 			return parseContainerLog(message)
 		},
-		Metadata: output.LogRecordMetadata{
+		Metadata: embed.LogRecordMetadata{
 			Timestamp: timestamp,
 			Severity:  g.extractSeverity(appLog),
 		},
@@ -195,7 +205,7 @@ func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) erro
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, logRecord); err != nil {
+	if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{logRecord}); err != nil {
 		errorType := errorTypeUnknown
 		if ctx.Err() == context.DeadlineExceeded {
 			errorType = errorTypeTimeout

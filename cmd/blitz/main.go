@@ -421,7 +421,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	case config.GeneratorTypePostgres:
 		return postgres.New(logger, genCfg.Postgres.Workers, genCfg.Postgres.Rate)
 	case config.GeneratorTypeKubernetes:
-		return kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format)
+		return kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeFile:
 		return filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeOkta:
