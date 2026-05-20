@@ -9,30 +9,32 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-// mockWriter implements output.Writer for testing
-type mockWriter struct {
-	mu       sync.Mutex
-	writes   [][]byte
-	errors   []error
-	writeErr error
-	delay    time.Duration
+// mockConsumer implements embed.LogConsumer for testing. It captures
+// every record pushed through ConsumeLogs and can inject errors for
+// failure-path tests.
+type mockConsumer struct {
+	mu         sync.Mutex
+	records    []embed.LogRecord
+	errors     []error
+	consumeErr error
+	delay      time.Duration
 }
 
-func newMockWriter() *mockWriter {
-	return &mockWriter{
-		writes: make([][]byte, 0),
-		errors: make([]error, 0),
+func newMockConsumer() *mockConsumer {
+	return &mockConsumer{
+		records: make([]embed.LogRecord, 0),
+		errors:  make([]error, 0),
 	}
 }
 
-func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
+func (m *mockConsumer) ConsumeLogs(ctx context.Context, records []embed.LogRecord) error {
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -44,38 +46,38 @@ func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.writeErr != nil {
-		err := m.writeErr
+	if m.consumeErr != nil {
+		err := m.consumeErr
 		m.errors = append(m.errors, err)
 		return err
 	}
 
-	m.writes = append(m.writes, append([]byte(nil), data.Message...))
+	for i := range records {
+		m.records = append(m.records, records[i])
+	}
 	return nil
 }
 
-func (m *mockWriter) getWrites() [][]byte {
+func (m *mockConsumer) writes() [][]byte {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return append([][]byte(nil), m.writes...)
+	out := make([][]byte, len(m.records))
+	for i, rec := range m.records {
+		out[i] = []byte(rec.Message)
+	}
+	return out
 }
 
-func (m *mockWriter) getErrors() []error {
+func (m *mockConsumer) getErrors() []error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]error(nil), m.errors...)
 }
 
-func (m *mockWriter) setWriteError(err error) {
+func (m *mockConsumer) setConsumeError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.writeErr = err
-}
-
-func (m *mockWriter) setDelay(delay time.Duration) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.delay = delay
+	m.consumeErr = err
 }
 
 func TestNew(t *testing.T) {
@@ -83,7 +85,7 @@ func TestNew(t *testing.T) {
 	workers := 5
 	rate := 100 * time.Millisecond
 
-	generator, err := New(logger, workers, rate)
+	generator, err := New(logger, workers, rate, newMockConsumer())
 
 	assert.NoError(t, err)
 	assert.NotNil(t, generator)
@@ -91,39 +93,61 @@ func TestNew(t *testing.T) {
 	assert.Equal(t, workers, generator.workers)
 	assert.Equal(t, rate, generator.rate)
 	assert.NotNil(t, generator.stopCh)
+	assert.NotNil(t, generator.consumer)
 }
 
 func TestNew_NilLogger(t *testing.T) {
-	generator, err := New(nil, 5, 100*time.Millisecond)
+	generator, err := New(nil, 5, 100*time.Millisecond, newMockConsumer())
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "logger cannot be nil")
 }
 
+func TestNew_NilConsumer(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	generator, err := New(logger, 5, 100*time.Millisecond, nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, generator)
+	assert.Contains(t, err.Error(), "consumer cannot be nil")
+}
+
 func TestNew_InvalidWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Test zero workers
-	generator, err := New(logger, 0, 100*time.Millisecond)
+	generator, err := New(logger, 0, 100*time.Millisecond, newMockConsumer())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
 
 	// Test negative workers
-	generator, err = New(logger, -1, 100*time.Millisecond)
+	generator, err = New(logger, -1, 100*time.Millisecond, newMockConsumer())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
 }
 
+func TestApacheGenerator_Name(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	generator, err := New(logger, 1, 100*time.Millisecond, newMockConsumer())
+	require.NoError(t, err)
+	assert.Equal(t, componentName, generator.Name())
+}
+
+// Compile-time assertion: the migrated generator satisfies
+// embed.ProducerModule. PR #1 contributed the marker; PR #2 wires up
+// Name/Start/Stop with the correct signatures.
+var _ embed.ProducerModule = (*ApacheLogGenerator)(nil)
+
 func TestApacheGenerator_Start(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	writer := newMockWriter()
-	generator, err := New(logger, 2, 50*time.Millisecond)
+	consumer := newMockConsumer()
+	generator, err := New(logger, 2, 50*time.Millisecond, consumer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	assert.NoError(t, err)
 
 	// Wait for some logs to be generated
@@ -136,7 +160,7 @@ func TestApacheGenerator_Start(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify logs were written
-	writes := writer.getWrites()
+	writes := consumer.writes()
 	assert.Greater(t, len(writes), 0, "Expected some logs to be written")
 
 	// Verify CLF format
@@ -149,11 +173,11 @@ func TestApacheGenerator_Start(t *testing.T) {
 
 func TestApacheGenerator_Stop_GracefulShutdown(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	writer := newMockWriter()
-	generator, err := New(logger, 3, 10*time.Millisecond)
+	consumer := newMockConsumer()
+	generator, err := New(logger, 3, 10*time.Millisecond, consumer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
 	// Let it run briefly
@@ -171,18 +195,18 @@ func TestApacheGenerator_Stop_GracefulShutdown(t *testing.T) {
 	assert.Less(t, duration, 500*time.Millisecond, "Stop should complete quickly")
 
 	// Verify some logs were written before stopping
-	writes := writer.getWrites()
+	writes := consumer.writes()
 	assert.Greater(t, len(writes), 0, "Expected some logs to be written before stopping")
 }
 
 func TestApacheGenerator_WriteErrors_Backoff(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	writer := newMockWriter()
-	writer.setWriteError(errors.New("write failed"))
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	consumer := newMockConsumer()
+	consumer.setConsumeError(errors.New("write failed"))
+	generator, err := New(logger, 1, 10*time.Millisecond, consumer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
 	// Let it run briefly to trigger write errors and backoff
@@ -195,17 +219,17 @@ func TestApacheGenerator_WriteErrors_Backoff(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify errors were logged
-	errors := writer.getErrors()
-	assert.Greater(t, len(errors), 0, "Expected some write errors")
+	errs := consumer.getErrors()
+	assert.Greater(t, len(errs), 0, "Expected some write errors")
 }
 
 func TestApacheGenerator_ConcurrentWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	writer := newMockWriter()
-	generator, err := New(logger, 5, 20*time.Millisecond)
+	consumer := newMockConsumer()
+	generator, err := New(logger, 5, 20*time.Millisecond, consumer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
 	// Let multiple workers run
@@ -218,17 +242,17 @@ func TestApacheGenerator_ConcurrentWorkers(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify logs were written by multiple workers
-	writes := writer.getWrites()
+	writes := consumer.writes()
 	assert.Greater(t, len(writes), 10, "Expected many logs from multiple workers")
 }
 
 func TestFormatAsApacheCLF_DefaultLog(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	writer := newMockWriter()
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	consumer := newMockConsumer()
+	generator, err := New(logger, 1, 10*time.Millisecond, consumer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
 	time.Sleep(50 * time.Millisecond)
@@ -238,7 +262,7 @@ func TestFormatAsApacheCLF_DefaultLog(t *testing.T) {
 	err = generator.Stop(ctx)
 	assert.NoError(t, err)
 
-	writes := writer.getWrites()
+	writes := consumer.writes()
 	require.Greater(t, len(writes), 0)
 
 	// Verify CLF structure
@@ -256,11 +280,11 @@ func TestFormatAsApacheCLF_DefaultLog(t *testing.T) {
 
 func TestFormatAsApacheCLF_ParseFunc(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	writer := newMockWriter()
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	consumer := newMockConsumer()
+	generator, err := New(logger, 1, 10*time.Millisecond, consumer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
 	time.Sleep(50 * time.Millisecond)
@@ -270,29 +294,35 @@ func TestFormatAsApacheCLF_ParseFunc(t *testing.T) {
 	err = generator.Stop(ctx)
 	assert.NoError(t, err)
 
-	writes := writer.getWrites()
+	writes := consumer.writes()
 	require.Greater(t, len(writes), 0)
 
-	// Get a log record to test ParseFunc
-	// We need to generate one directly to test ParseFunc
-	// For now, just verify the format is parseable
-	line := string(writes[0])
+	// Test that ParseFunc is wired on the captured record and that it
+	// returns a usable field map for the matching message.
+	consumer.mu.Lock()
+	rec := consumer.records[0]
+	consumer.mu.Unlock()
+	require.NotNil(t, rec.ParseFunc)
+	fields, err := rec.ParseFunc(rec.Message)
+	require.NoError(t, err)
+	assert.NotEmpty(t, fields["remote_host"])
 
-	// Test that we can parse it (basic validation)
+	// Test that the format is also parseable by raw inspection.
+	line := string(writes[0])
 	parts := strings.Fields(line)
 	assert.GreaterOrEqual(t, len(parts), 7, "CLF should have enough fields to parse")
 }
 
-// discardWriter implements output.Writer for benchmarking - discards all data
-type discardWriter struct{}
+// discardConsumer implements embed.LogConsumer for benchmarking — discards all data
+type discardConsumer struct{}
 
-func (d *discardWriter) Write(ctx context.Context, data output.LogRecord) error {
+func (d *discardConsumer) ConsumeLogs(_ context.Context, _ []embed.LogRecord) error {
 	return nil
 }
 
 func TestApacheLogGenerator_SetCountTracker(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond)
+	gen, err := New(logger, 1, 50*time.Millisecond, newMockConsumer())
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -304,15 +334,15 @@ func TestApacheLogGenerator_SetCountTracker(t *testing.T) {
 
 func TestApacheLogGenerator_CountLimited(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	writer := newMockWriter()
+	consumer := newMockConsumer()
 
-	gen, err := New(logger, 2, 10*time.Millisecond)
+	gen, err := New(logger, 2, 10*time.Millisecond, consumer)
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)
 	gen.SetCountTracker(tracker)
 
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
 	select {
@@ -328,17 +358,17 @@ func TestApacheLogGenerator_CountLimited(t *testing.T) {
 	err = gen.Stop(ctx)
 	require.NoError(t, err)
 
-	writes := writer.getWrites()
+	writes := consumer.writes()
 	assert.Equal(t, 5, len(writes), "Expected exactly 5 logs with count tracker")
 }
 
 func BenchmarkApacheGenerator(b *testing.B) {
 	logger := zaptest.NewLogger(b)
-	writer := &discardWriter{}
-	generator, err := New(logger, 1, 1*time.Millisecond)
+	consumer := &discardConsumer{}
+	generator, err := New(logger, 1, 1*time.Millisecond, consumer)
 	require.NoError(b, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(b, err)
 
 	b.ResetTimer()
