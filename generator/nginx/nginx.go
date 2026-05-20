@@ -16,7 +16,6 @@ import (
 	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/generator/security"
 	"github.com/observiq/blitz/internal/useragent"
-	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -61,20 +60,22 @@ var nginxLogRe = regexp.MustCompile(`^(\S+) - (\S+) \[([^\]]+)\] "([^"]*)" (\d+)
 type Generator struct {
 	embed.ProducerMarker
 
-	logger  *zap.Logger
-	workers int
-	rate    time.Duration
-	wg      sync.WaitGroup
-	stopCh  chan struct{}
-	tracker *count.Tracker
+	logger   *zap.Logger
+	workers  int
+	rate     time.Duration
+	consumer embed.LogConsumer
+	wg       sync.WaitGroup
+	stopCh   chan struct{}
+	tracker  *count.Tracker
 }
 
 // remoteUsers is nginx-specific user values used in the $remote_user log field;
 // not generic enough to live in datagen.
 var remoteUsers = []string{"-", "admin", "user1", "user2", "guest"}
 
-// New creates a new NGINX log generator
-func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error) {
+// New creates a new NGINX log generator. The consumer receives each
+// generated record as a size-1 batch via ConsumeLogs.
+func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer) (*Generator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -83,17 +84,25 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
+	if consumer == nil {
+		return nil, fmt.Errorf("consumer cannot be nil")
+	}
+
 	return &Generator{
-		logger:  logger,
-		workers: workers,
-		rate:    rate,
-		stopCh:  make(chan struct{}),
+		logger:   logger,
+		workers:  workers,
+		rate:     rate,
+		consumer: consumer,
+		stopCh:   make(chan struct{}),
 	}, nil
 }
 
-// Start starts the NGINX log generator and writes data using the
-// provided generator writer.
-func (g *Generator) Start(writer output.Writer) error {
+// Name returns the module identifier.
+func (g *Generator) Name() string { return componentName }
+
+// Start launches the worker goroutines that push generated records to
+// the configured consumer.
+func (g *Generator) Start(_ context.Context) error {
 	g.logger.Info("Starting NGINX log generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
@@ -101,7 +110,7 @@ func (g *Generator) Start(writer output.Writer) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i, writer)
+		go g.worker(i)
 	}
 
 	return nil
@@ -134,7 +143,7 @@ func (g *Generator) SetCountTracker(t *count.Tracker) {
 }
 
 // worker is the main worker loop that generates and writes logs
-func (g *Generator) worker(workerID int, writer output.Writer) {
+func (g *Generator) worker(workerID int) {
 	defer g.wg.Done()
 
 	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
@@ -162,7 +171,7 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 					continue
 				}
 			}
-			err := g.generateAndWriteLog(writer, workerID)
+			err := g.generateAndWriteLog(workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
@@ -174,8 +183,9 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 	}
 }
 
-// generateAndWriteLog generates a random log and writes it
-func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) error {
+// generateAndWriteLog generates a random log and pushes it as a
+// single-record batch to the configured consumer.
+func (g *Generator) generateAndWriteLog(_ int) error {
 	logData, err := g.generateNginxLogData()
 	if err != nil {
 		g.recordWriteError(errorTypeUnknown, err)
@@ -193,7 +203,7 @@ func (g *Generator) generateAndWriteLog(writer output.Writer, workerID int) erro
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, logRecord); err != nil {
+	if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{logRecord}); err != nil {
 		errorType := errorTypeUnknown
 		if ctx.Err() == context.DeadlineExceeded {
 			errorType = errorTypeTimeout
@@ -286,7 +296,7 @@ func generateReferer(r *rand.Rand) string {
 // formatAsNginxCombined converts nginxLogData to NGINX Combined Log Format
 // Format: $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"
 // Example: 127.0.0.1 - - [25/Dec/2023:10:15:30 -0800] "GET /index.html HTTP/1.1" 200 2326 "https://www.example.com/" "Mozilla/5.0..."
-func formatAsNginxCombined(data *nginxLogData) (output.LogRecord, error) {
+func formatAsNginxCombined(data *nginxLogData) (embed.LogRecord, error) {
 	loc := time.Now().Location()
 	localTime := data.timestamp.In(loc)
 	_, offset := localTime.Zone()
@@ -313,7 +323,7 @@ func formatAsNginxCombined(data *nginxLogData) (output.LogRecord, error) {
 		data.xForwardedFor,
 	)
 
-	return output.LogRecord{
+	return embed.LogRecord{
 		Message: nginxLine,
 		ParseFunc: func(message string) (map[string]any, error) {
 			m := nginxLogRe.FindStringSubmatch(message)
@@ -333,7 +343,7 @@ func formatAsNginxCombined(data *nginxLogData) (output.LogRecord, error) {
 				"x_forwarded_for": m[10],
 			}, nil
 		},
-		Metadata: output.LogRecordMetadata{
+		Metadata: embed.LogRecordMetadata{
 			Timestamp: data.timestamp,
 			Severity:  data.severity,
 		},

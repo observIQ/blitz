@@ -9,14 +9,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-// mockWriter implements output.Writer for testing
+// Compile-time assertion: the migrated generator satisfies embed.ProducerModule.
+var _ embed.ProducerModule = (*Generator)(nil)
+
+// mockWriter implements embed.LogConsumer for testing.
 type mockWriter struct {
 	mu       sync.Mutex
 	writes   [][]byte
@@ -32,7 +35,7 @@ func newMockWriter() *mockWriter {
 	}
 }
 
-func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
+func (m *mockWriter) ConsumeLogs(ctx context.Context, records []embed.LogRecord) error {
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -50,7 +53,9 @@ func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
 		return err
 	}
 
-	m.writes = append(m.writes, append([]byte(nil), data.Message...))
+	for i := range records {
+		m.writes = append(m.writes, append([]byte(nil), records[i].Message...))
+	}
 	return nil
 }
 
@@ -83,7 +88,7 @@ func TestNew(t *testing.T) {
 	workers := 5
 	rate := 100 * time.Millisecond
 
-	generator, err := New(logger, workers, rate)
+	generator, err := New(logger, workers, rate, newMockWriter())
 
 	assert.NoError(t, err)
 	assert.NotNil(t, generator)
@@ -94,7 +99,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNew_NilLogger(t *testing.T) {
-	generator, err := New(nil, 5, 100*time.Millisecond)
+	generator, err := New(nil, 5, 100*time.Millisecond, newMockWriter())
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
@@ -104,12 +109,12 @@ func TestNew_NilLogger(t *testing.T) {
 func TestNew_InvalidWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	generator, err := New(logger, 0, 100*time.Millisecond)
+	generator, err := New(logger, 0, 100*time.Millisecond, newMockWriter())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
 
-	generator, err = New(logger, -1, 100*time.Millisecond)
+	generator, err = New(logger, -1, 100*time.Millisecond, newMockWriter())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
@@ -118,10 +123,10 @@ func TestNew_InvalidWorkers(t *testing.T) {
 func TestNginxGenerator_Start(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 2, 50*time.Millisecond)
+	generator, err := New(logger, 2, 50*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	assert.NoError(t, err)
 
 	time.Sleep(200 * time.Millisecond)
@@ -145,10 +150,10 @@ func TestNginxGenerator_Start(t *testing.T) {
 func TestNginxGenerator_Stop_GracefulShutdown(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 3, 10*time.Millisecond)
+	generator, err := New(logger, 3, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
 	time.Sleep(50 * time.Millisecond)
@@ -171,10 +176,10 @@ func TestNginxGenerator_WriteErrors_Backoff(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 	writer.setWriteError(errors.New("write failed"))
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
 	time.Sleep(200 * time.Millisecond)
@@ -191,10 +196,10 @@ func TestNginxGenerator_WriteErrors_Backoff(t *testing.T) {
 func TestNginxGenerator_ConcurrentWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 5, 20*time.Millisecond)
+	generator, err := New(logger, 5, 20*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
 	time.Sleep(200 * time.Millisecond)
@@ -211,10 +216,10 @@ func TestNginxGenerator_ConcurrentWorkers(t *testing.T) {
 func TestFormatAsNginxCombined_Structure(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
 	time.Sleep(50 * time.Millisecond)
@@ -242,10 +247,10 @@ func TestFormatAsNginxCombined_Structure(t *testing.T) {
 func TestFormatAsNginxCombined_ParseFunc(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
 	time.Sleep(50 * time.Millisecond)
@@ -266,7 +271,7 @@ func TestFormatAsNginxCombined_ParseFunc(t *testing.T) {
 // discardWriter implements output.Writer for benchmarking - discards all data
 func TestGenerator_SetCountTracker(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond)
+	gen, err := New(logger, 1, 50*time.Millisecond, newMockWriter())
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -280,13 +285,13 @@ func TestGenerator_CountLimited(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 
-	gen, err := New(logger, 2, 10*time.Millisecond)
+	gen, err := New(logger, 2, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)
 	gen.SetCountTracker(tracker)
 
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
 	select {
@@ -308,17 +313,17 @@ func TestGenerator_CountLimited(t *testing.T) {
 
 type discardWriter struct{}
 
-func (d *discardWriter) Write(ctx context.Context, data output.LogRecord) error {
+func (d *discardWriter) ConsumeLogs(_ context.Context, _ []embed.LogRecord) error {
 	return nil
 }
 
 func BenchmarkNginxGenerator(b *testing.B) {
 	logger := zaptest.NewLogger(b)
 	writer := &discardWriter{}
-	generator, err := New(logger, 1, 1*time.Millisecond)
+	generator, err := New(logger, 1, 1*time.Millisecond, writer)
 	require.NoError(b, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(b, err)
 
 	b.ResetTimer()

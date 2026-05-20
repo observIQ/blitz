@@ -417,7 +417,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	case config.GeneratorTypeApacheError:
 		return apacheerrorgen.New(logger, genCfg.ApacheError.Workers, genCfg.ApacheError.Rate, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeNginx:
-		return nginx.New(logger, genCfg.Nginx.Workers, genCfg.Nginx.Rate)
+		return nginx.New(logger, genCfg.Nginx.Workers, genCfg.Nginx.Rate, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypePostgres:
 		return postgres.New(logger, genCfg.Postgres.Workers, genCfg.Postgres.Rate)
 	case config.GeneratorTypeKubernetes:
