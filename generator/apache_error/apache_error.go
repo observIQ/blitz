@@ -14,7 +14,6 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/datagen"
-	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -38,16 +37,18 @@ type apacheErrorLogData struct {
 type ApacheErrorLogGenerator struct {
 	embed.ProducerMarker
 
-	logger  *zap.Logger
-	workers int
-	rate    time.Duration
-	wg      sync.WaitGroup
-	stopCh  chan struct{}
-	tracker *count.Tracker
+	logger   *zap.Logger
+	workers  int
+	rate     time.Duration
+	consumer embed.LogConsumer
+	wg       sync.WaitGroup
+	stopCh   chan struct{}
+	tracker  *count.Tracker
 }
 
-// New creates a new Apache Error log generator
-func New(logger *zap.Logger, workers int, rate time.Duration) (*ApacheErrorLogGenerator, error) {
+// New creates a new Apache Error log generator. The consumer receives
+// each generated record as a size-1 batch via ConsumeLogs.
+func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer) (*ApacheErrorLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -56,17 +57,25 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*ApacheErrorLogGe
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
+	if consumer == nil {
+		return nil, fmt.Errorf("consumer cannot be nil")
+	}
+
 	return &ApacheErrorLogGenerator{
-		logger:  logger,
-		workers: workers,
-		rate:    rate,
-		stopCh:  make(chan struct{}),
+		logger:   logger,
+		workers:  workers,
+		rate:     rate,
+		consumer: consumer,
+		stopCh:   make(chan struct{}),
 	}, nil
 }
 
-// Start starts the Apache Error log generator and writes data using the
-// provided generator writer.
-func (g *ApacheErrorLogGenerator) Start(writer output.Writer) error {
+// Name returns the module identifier.
+func (g *ApacheErrorLogGenerator) Name() string { return componentName }
+
+// Start launches the worker goroutines that push generated records to
+// the configured consumer.
+func (g *ApacheErrorLogGenerator) Start(_ context.Context) error {
 	g.logger.Info("Starting Apache Error log generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
@@ -74,7 +83,7 @@ func (g *ApacheErrorLogGenerator) Start(writer output.Writer) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i, writer)
+		go g.worker(i)
 	}
 
 	return nil
@@ -107,7 +116,7 @@ func (g *ApacheErrorLogGenerator) SetCountTracker(t *count.Tracker) {
 }
 
 // worker is the main worker loop that generates and writes logs
-func (g *ApacheErrorLogGenerator) worker(workerID int, writer output.Writer) {
+func (g *ApacheErrorLogGenerator) worker(workerID int) {
 	defer g.wg.Done()
 
 	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
@@ -135,7 +144,7 @@ func (g *ApacheErrorLogGenerator) worker(workerID int, writer output.Writer) {
 					continue
 				}
 			}
-			err := g.generateAndWriteLog(writer, workerID)
+			err := g.generateAndWriteLog(workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
@@ -147,8 +156,9 @@ func (g *ApacheErrorLogGenerator) worker(workerID int, writer output.Writer) {
 	}
 }
 
-// generateAndWriteLog generates a random log and writes it
-func (g *ApacheErrorLogGenerator) generateAndWriteLog(writer output.Writer, workerID int) error {
+// generateAndWriteLog generates a random log and pushes it as a
+// single-record batch to the configured consumer.
+func (g *ApacheErrorLogGenerator) generateAndWriteLog(_ int) error {
 	// Generate Apache Error log data
 	logData, err := g.generateApacheErrorLogData()
 	if err != nil {
@@ -166,11 +176,11 @@ func (g *ApacheErrorLogGenerator) generateAndWriteLog(writer output.Writer, work
 	// Record logs generated counter
 	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
-	// Write the data with timeout
+	// Push as a size-1 batch with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, logRecord); err != nil {
+	if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{logRecord}); err != nil {
 		// Classify error type
 		errorType := "unknown"
 		if ctx.Err() == context.DeadlineExceeded {
@@ -343,7 +353,7 @@ func generateErrorMessage(r *rand.Rand, level string) string {
 // formatAsApacheError converts apacheErrorLogData to Apache Error Log Format
 // Format: [timestamp] [level] [pid:tid] [client] message
 // Example: [Wed Oct 11 14:32:52 2000] [error] [client 127.0.0.1] client denied by server configuration: /export/home/live/ap/htdocs/test
-func formatAsApacheError(data *apacheErrorLogData) (output.LogRecord, error) {
+func formatAsApacheError(data *apacheErrorLogData) (embed.LogRecord, error) {
 	// Format timestamp as [Day Mon DD HH:MM:SS YYYY]
 	timestampStr := data.timestamp.Format("[Mon Jan 02 15:04:05 2006]")
 
@@ -369,7 +379,7 @@ func formatAsApacheError(data *apacheErrorLogData) (output.LogRecord, error) {
 		)
 	}
 
-	return output.LogRecord{
+	return embed.LogRecord{
 		Message: errorLine,
 		ParseFunc: func(message string) (map[string]any, error) {
 			// Basic parsing - extract bracketed fields
@@ -429,7 +439,7 @@ func formatAsApacheError(data *apacheErrorLogData) (output.LogRecord, error) {
 
 			return parsed, nil
 		},
-		Metadata: output.LogRecordMetadata{
+		Metadata: embed.LogRecordMetadata{
 			Timestamp: data.timestamp,
 			Severity:  data.severity,
 		},
