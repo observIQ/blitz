@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
@@ -40,10 +41,22 @@ func New(logger *zap.Logger, generators []any, output output.Output) (*Service, 
 // based on type assertions.
 func (s *Service) Start() error {
 	for i, gen := range s.Generators {
-		// Concrete-telemetry cases precede the base Generator case so that a
-		// MetricGenerator/TraceGenerator can never be mis-dispatched to the
-		// log path if those interfaces ever come to share methods with Generator.
+		// PIPE-975 migration: embed.ProducerModule modules own their
+		// consumer wiring internally (configured at construction).
+		// Service just calls Start(ctx). This case precedes the legacy
+		// generator.* cases because migrated modules satisfy both the
+		// new and the old marker; legacy generators do not yet satisfy
+		// embed.ProducerModule.
+		//
+		// Concrete-telemetry legacy cases (MetricGenerator, TraceGenerator)
+		// precede the base Generator case so that a metric/trace generator
+		// can never be mis-dispatched to the log path if those interfaces
+		// ever come to share methods with Generator.
 		switch g := gen.(type) {
+		case embed.ProducerModule:
+			if err := g.Start(context.Background()); err != nil {
+				return fmt.Errorf("start producer module %d: %w", i, err)
+			}
 		case generator.MetricGenerator:
 			mw, ok := s.Output.(output.MetricWriter)
 			if !ok {
@@ -82,6 +95,10 @@ func (s *Service) Stop() error {
 
 	for i, gen := range s.Generators {
 		switch g := gen.(type) {
+		case embed.ProducerModule:
+			if err := g.Stop(ctx); err != nil {
+				return fmt.Errorf("stop producer module %d: %w", i, err)
+			}
 		case generator.MetricGenerator:
 			if err := g.Stop(ctx); err != nil {
 				return fmt.Errorf("stop metric generator %d: %w", i, err)

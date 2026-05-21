@@ -321,7 +321,7 @@ func run(cmd *cobra.Command, args []string) error {
 	var tracker *count.Tracker
 
 	for _, genCfg := range effectiveGens {
-		gen, genErr := createGenerator(logger, genCfg)
+		gen, genErr := createGenerator(logger, genCfg, outputInstance)
 		if genErr != nil {
 			logger.Error("Failed to create generator",
 				zap.String("type", string(genCfg.Type)),
@@ -400,7 +400,7 @@ shutdown:
 	return nil
 }
 
-func createGenerator(logger *zap.Logger, genCfg config.Generator) (any, error) {
+func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Output) (any, error) {
 	switch genCfg.Type {
 	case config.GeneratorTypeNop:
 		return gennop.New(logger)
@@ -411,7 +411,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator) (any, error) {
 	case config.GeneratorTypePaloAlto:
 		return paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate)
 	case config.GeneratorTypeApache:
-		return apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate)
+		return apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeApacheCombined:
 		return apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate)
 	case config.GeneratorTypeApacheError:
