@@ -9,14 +9,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-// mockWriter implements output.Writer for testing
+// Compile-time assertion: the migrated generator satisfies embed.ProducerModule.
+var _ embed.ProducerModule = (*Generator)(nil)
+
+// mockWriter implements embed.LogConsumer for testing.
 type mockWriter struct {
 	mu       sync.Mutex
 	writes   [][]byte
@@ -32,7 +35,7 @@ func newMockWriter() *mockWriter {
 	}
 }
 
-func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
+func (m *mockWriter) ConsumeLogs(ctx context.Context, records []embed.LogRecord) error {
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -50,7 +53,9 @@ func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
 		return err
 	}
 
-	m.writes = append(m.writes, append([]byte(nil), data.Message...))
+	for i := range records {
+		m.writes = append(m.writes, append([]byte(nil), records[i].Message...))
+	}
 	return nil
 }
 
@@ -83,7 +88,7 @@ func TestNew(t *testing.T) {
 	workers := 5
 	rate := 100 * time.Millisecond
 
-	generator, err := New(logger, workers, rate)
+	generator, err := New(logger, workers, rate, newMockWriter())
 
 	assert.NoError(t, err)
 	assert.NotNil(t, generator)
@@ -94,7 +99,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNew_NilLogger(t *testing.T) {
-	generator, err := New(nil, 5, 100*time.Millisecond)
+	generator, err := New(nil, 5, 100*time.Millisecond, newMockWriter())
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
@@ -104,12 +109,12 @@ func TestNew_NilLogger(t *testing.T) {
 func TestNew_InvalidWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	generator, err := New(logger, 0, 100*time.Millisecond)
+	generator, err := New(logger, 0, 100*time.Millisecond, newMockWriter())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
 
-	generator, err = New(logger, -1, 100*time.Millisecond)
+	generator, err = New(logger, -1, 100*time.Millisecond, newMockWriter())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
@@ -118,13 +123,15 @@ func TestNew_InvalidWorkers(t *testing.T) {
 func TestPostgresGenerator_Start(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 2, 50*time.Millisecond)
+	generator, err := New(logger, 2, 50*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	assert.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 2*time.Second, 10*time.Millisecond, "Expected some logs to be written")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -132,7 +139,6 @@ func TestPostgresGenerator_Start(t *testing.T) {
 	assert.NoError(t, err)
 
 	writes := writer.getWrites()
-	assert.Greater(t, len(writes), 0, "Expected some logs to be written")
 
 	// PostgreSQL log format: timestamp [process_id]: user=...,db=...,app=...,client=... <severity>: <message>
 	postgresPattern := regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [A-Z]+ \[\d+\]: user=[^,]+,db=[^,]+,app=[^,]+,client=[^,]+,session=[^,]+,vxid=[^,]+,txid=[^,]+,line=\d+ (LOG|ERROR|FATAL|PANIC|WARNING|NOTICE|DEBUG|INFO):  .+$`)
@@ -148,13 +154,15 @@ func TestPostgresGenerator_Start(t *testing.T) {
 func TestPostgresGenerator_Stop_GracefulShutdown(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 3, 10*time.Millisecond)
+	generator, err := New(logger, 3, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 2*time.Second, 5*time.Millisecond, "Expected some logs to be written before stopping")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -165,62 +173,59 @@ func TestPostgresGenerator_Stop_GracefulShutdown(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Less(t, duration, 500*time.Millisecond, "Stop should complete quickly")
-
-	writes := writer.getWrites()
-	assert.Greater(t, len(writes), 0, "Expected some logs to be written before stopping")
 }
 
 func TestPostgresGenerator_WriteErrors_Backoff(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 	writer.setWriteError(errors.New("write failed"))
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return len(writer.getErrors()) > 0
+	}, 2*time.Second, 10*time.Millisecond, "Expected some write errors")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	err = generator.Stop(ctx)
 	assert.NoError(t, err)
-
-	errors := writer.getErrors()
-	assert.Greater(t, len(errors), 0, "Expected some write errors")
 }
 
 func TestPostgresGenerator_ConcurrentWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 5, 20*time.Millisecond)
+	generator, err := New(logger, 5, 20*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 10
+	}, 2*time.Second, 10*time.Millisecond, "Expected many logs from multiple workers")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	err = generator.Stop(ctx)
 	assert.NoError(t, err)
-
-	writes := writer.getWrites()
-	assert.Greater(t, len(writes), 10, "Expected many logs from multiple workers")
 }
 
 func TestFormatAsPostgres_Structure(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 2*time.Second, 5*time.Millisecond, "Expected at least one log to inspect format")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -228,7 +233,6 @@ func TestFormatAsPostgres_Structure(t *testing.T) {
 	assert.NoError(t, err)
 
 	writes := writer.getWrites()
-	require.Greater(t, len(writes), 0)
 
 	line := string(writes[0])
 	// Should contain timestamp, process ID, user, database, app, client, severity, and message
@@ -242,13 +246,15 @@ func TestFormatAsPostgres_Structure(t *testing.T) {
 func TestFormatAsPostgres_ParseFunc(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 10*time.Millisecond)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 2*time.Second, 5*time.Millisecond, "Expected at least one log to parse")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -256,7 +262,6 @@ func TestFormatAsPostgres_ParseFunc(t *testing.T) {
 	assert.NoError(t, err)
 
 	writes := writer.getWrites()
-	require.Greater(t, len(writes), 0)
 
 	line := string(writes[0])
 	// Test that the parse function can extract fields
@@ -267,7 +272,7 @@ func TestFormatAsPostgres_ParseFunc(t *testing.T) {
 // discardWriter implements output.Writer for benchmarking - discards all data
 func TestGenerator_SetCountTracker(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond)
+	gen, err := New(logger, 1, 50*time.Millisecond, newMockWriter())
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -281,13 +286,13 @@ func TestGenerator_CountLimited(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 
-	gen, err := New(logger, 2, 10*time.Millisecond)
+	gen, err := New(logger, 2, 10*time.Millisecond, writer)
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)
 	gen.SetCountTracker(tracker)
 
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
 	select {
@@ -296,7 +301,10 @@ func TestGenerator_CountLimited(t *testing.T) {
 		t.Fatal("tracker should have been exhausted")
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// After tracker exhaustion, no additional records should be produced.
+	require.Never(t, func() bool {
+		return len(writer.getWrites()) > 5
+	}, 100*time.Millisecond, 10*time.Millisecond, "tracker should have halted further writes")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -309,17 +317,17 @@ func TestGenerator_CountLimited(t *testing.T) {
 
 type discardWriter struct{}
 
-func (d *discardWriter) Write(ctx context.Context, data output.LogRecord) error {
+func (d *discardWriter) ConsumeLogs(_ context.Context, _ []embed.LogRecord) error {
 	return nil
 }
 
 func BenchmarkPostgresGenerator(b *testing.B) {
 	logger := zaptest.NewLogger(b)
 	writer := &discardWriter{}
-	generator, err := New(logger, 1, 1*time.Millisecond)
+	generator, err := New(logger, 1, 1*time.Millisecond, writer)
 	require.NoError(b, err)
 
-	err = generator.Start(writer)
+	err = generator.Start(context.Background())
 	require.NoError(b, err)
 
 	b.ResetTimer()
