@@ -6,14 +6,11 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/internal/runtime"
 	"go.uber.org/zap/zaptest"
 )
 
 type recordingModule struct {
-	embed.ProducerMarker
-
 	name      string
 	startCnt  atomic.Int32
 	stopCnt   atomic.Int32
@@ -49,7 +46,7 @@ func TestRuntime_StartCallsEveryModuleInOrder(t *testing.T) {
 	b := &recordingModule{name: "b", startCall: startOrder}
 	c := &recordingModule{name: "c", startCall: startOrder}
 
-	rt := runtime.New(zaptest.NewLogger(t), []embed.ProducerModule{a, b, c})
+	rt := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, c})
 	if err := rt.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -70,7 +67,7 @@ func TestRuntime_StartRollsBackOnFailure(t *testing.T) {
 	b := &recordingModule{name: "b", stopCall: stopOrder}
 	failing := &recordingModule{name: "failing", startErr: errors.New("boom")}
 
-	rt := runtime.New(zaptest.NewLogger(t), []embed.ProducerModule{a, b, failing})
+	rt := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, failing})
 	err := rt.Start(context.Background())
 	if err == nil {
 		t.Fatal("expected error from Start")
@@ -98,7 +95,7 @@ func TestRuntime_StopCallsEveryModuleInReverseOrder(t *testing.T) {
 	b := &recordingModule{name: "b", stopCall: stopOrder}
 	c := &recordingModule{name: "c", stopCall: stopOrder}
 
-	rt := runtime.New(zaptest.NewLogger(t), []embed.ProducerModule{a, b, c})
+	rt := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, c})
 	if err := rt.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -117,7 +114,7 @@ func TestRuntime_StopContinuesOnError(t *testing.T) {
 	b := &recordingModule{name: "b", stopErr: errors.New("b-stop-fail")}
 	c := &recordingModule{name: "c"}
 
-	rt := runtime.New(zaptest.NewLogger(t), []embed.ProducerModule{a, b, c})
+	rt := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, c})
 	if err := rt.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
