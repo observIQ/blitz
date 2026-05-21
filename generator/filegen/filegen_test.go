@@ -10,28 +10,28 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-// mockWriter implements output.Writer for testing
-type mockWriter struct {
-	mu       sync.Mutex
-	writes   []output.LogRecord
-	writeErr error
-	delay    time.Duration
+// mockConsumer implements embed.LogConsumer for testing.
+type mockConsumer struct {
+	mu         sync.Mutex
+	records    []embed.LogRecord
+	consumeErr error
+	delay      time.Duration
 }
 
-func newMockWriter() *mockWriter {
-	return &mockWriter{
-		writes: make([]output.LogRecord, 0),
+func newMockConsumer() *mockConsumer {
+	return &mockConsumer{
+		records: make([]embed.LogRecord, 0),
 	}
 }
 
-func (m *mockWriter) Write(ctx context.Context, record output.LogRecord) error {
+func (m *mockConsumer) ConsumeLogs(ctx context.Context, records []embed.LogRecord) error {
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -40,26 +40,54 @@ func (m *mockWriter) Write(ctx context.Context, record output.LogRecord) error {
 		}
 	}
 
-	if m.writeErr != nil {
-		return m.writeErr
+	if m.consumeErr != nil {
+		return m.consumeErr
 	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.writes = append(m.writes, record)
+	for i := range records {
+		m.records = append(m.records, records[i])
+	}
 	return nil
 }
 
-func (m *mockWriter) Close(ctx context.Context) error {
-	return nil
-}
-
-func (m *mockWriter) getWrites() []output.LogRecord {
+func (m *mockConsumer) getWrites() []embed.LogRecord {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	writes := make([]output.LogRecord, len(m.writes))
-	copy(writes, m.writes)
-	return writes
+	out := make([]embed.LogRecord, len(m.records))
+	copy(out, m.records)
+	return out
+}
+
+func (m *mockConsumer) setConsumeError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.consumeErr = err
+}
+
+// Compile-time assertion: the migrated generator satisfies embed.ProducerModule.
+var _ embed.ProducerModule = (*FileLogGenerator)(nil)
+
+func TestFileLogGenerator_Name(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+
+	tmpfile, err := os.CreateTemp("", "test*.log")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+	tmpfile.Close()
+
+	gen, err := New(logger, 1, 100*time.Millisecond, tmpfile.Name(), true, 0, newMockConsumer())
+	require.NoError(t, err)
+	assert.Equal(t, componentName, gen.Name())
+}
+
+func TestFileLogGenerator_NilConsumer(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	gen, err := New(logger, 1, 100*time.Millisecond, "/tmp/test.log", true, 0, nil)
+	assert.Error(t, err)
+	assert.Nil(t, gen)
+	assert.Contains(t, err.Error(), "consumer cannot be nil")
 }
 
 func TestNewFileLogGenerator(t *testing.T) {
@@ -104,7 +132,7 @@ func TestNewFileLogGenerator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gen, err := New(logger, tt.workers, tt.rate, tt.source, true, 0)
+			gen, err := New(logger, tt.workers, tt.rate, tt.source, true, 0, newMockConsumer())
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, gen)
@@ -136,12 +164,11 @@ func TestFileLogGeneratorFileMode(t *testing.T) {
 	}
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name(), true, 0)
+	consumer := newMockConsumer()
+	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer)
 	require.NoError(t, err)
 
-	writer := newMockWriter()
-
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
 	// Let it run for a short time
@@ -152,7 +179,7 @@ func TestFileLogGeneratorFileMode(t *testing.T) {
 	cancel()
 	require.NoError(t, err)
 
-	writes := writer.getWrites()
+	writes := consumer.getWrites()
 	assert.Greater(t, len(writes), 0)
 }
 
@@ -181,12 +208,11 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 	}
 
 	// Test with directory mode (auto-detected)
-	gen, err := New(logger, 1, 10*time.Millisecond, tmpdir, true, 0)
+	consumer := newMockConsumer()
+	gen, err := New(logger, 1, 10*time.Millisecond, tmpdir, true, 0, consumer)
 	require.NoError(t, err)
 
-	writer := newMockWriter()
-
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
 	// Let it run for a short time
@@ -197,19 +223,17 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 	cancel()
 	require.NoError(t, err)
 
-	writes := writer.getWrites()
+	writes := consumer.getWrites()
 	assert.Greater(t, len(writes), 0)
 }
 
 func TestFileLogGeneratorNonexistentFile(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	gen, err := New(logger, 1, 100*time.Millisecond, "/nonexistent/path/file.log", true, 0)
+	gen, err := New(logger, 1, 100*time.Millisecond, "/nonexistent/path/file.log", true, 0, newMockConsumer())
 	require.NoError(t, err)
 
-	writer := newMockWriter()
-
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	assert.Error(t, err)
 }
 
@@ -225,12 +249,10 @@ func TestFileLogGeneratorStop(t *testing.T) {
 	require.NoError(t, err)
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 100*time.Millisecond, tmpfile.Name(), true, 0)
+	gen, err := New(logger, 1, 100*time.Millisecond, tmpfile.Name(), true, 0, newMockConsumer())
 	require.NoError(t, err)
 
-	writer := newMockWriter()
-
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -251,13 +273,12 @@ func TestFileLogGeneratorWriteError(t *testing.T) {
 	require.NoError(t, err)
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name(), true, 0)
+	consumer := newMockConsumer()
+	consumer.setConsumeError(errors.New("write failed"))
+	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer)
 	require.NoError(t, err)
 
-	writer := newMockWriter()
-	writer.writeErr = errors.New("write failed")
-
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
 	time.Sleep(50 * time.Millisecond)
@@ -281,12 +302,11 @@ func TestFileLogGeneratorMultipleWorkers(t *testing.T) {
 	}
 	tmpfile.Close()
 
-	gen, err := New(logger, 3, 10*time.Millisecond, tmpfile.Name(), true, 0)
+	consumer := newMockConsumer()
+	gen, err := New(logger, 3, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer)
 	require.NoError(t, err)
 
-	writer := newMockWriter()
-
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
 	time.Sleep(300 * time.Millisecond)
@@ -296,7 +316,7 @@ func TestFileLogGeneratorMultipleWorkers(t *testing.T) {
 	cancel()
 	require.NoError(t, err)
 
-	writes := writer.getWrites()
+	writes := consumer.getWrites()
 	assert.Greater(t, len(writes), 0)
 }
 
@@ -308,7 +328,7 @@ func TestTimestampProcessing(t *testing.T) {
 	require.NoError(t, err)
 	tmpFile.Close()
 
-	gen, err := New(logger, 1, 100*time.Millisecond, tmpFile.Name(), true, 0)
+	gen, err := New(logger, 1, 100*time.Millisecond, tmpFile.Name(), true, 0, newMockConsumer())
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -413,12 +433,11 @@ func TestFileLogGeneratorGlobPatterns(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern, true, 0)
+			consumer := newMockConsumer()
+			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern, true, 0, consumer)
 			require.NoError(t, err)
 
-			writer := newMockWriter()
-
-			err = gen.Start(writer)
+			err = gen.Start(context.Background())
 			require.NoError(t, err)
 
 			// Give enough time for at least one write
@@ -431,7 +450,7 @@ func TestFileLogGeneratorGlobPatterns(t *testing.T) {
 			require.NoError(t, err)
 
 			// Should have written at least one line
-			writes := writer.getWrites()
+			writes := consumer.getWrites()
 			require.Greater(t, len(writes), 0, "should have written at least one line")
 		})
 	}
@@ -485,12 +504,11 @@ func TestFileLogGeneratorGlobDirectories(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern, true, 0)
+			consumer := newMockConsumer()
+			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern, true, 0, consumer)
 			require.NoError(t, err)
 
-			writer := newMockWriter()
-
-			err = gen.Start(writer)
+			err = gen.Start(context.Background())
 			require.NoError(t, err)
 
 			// Wait for at least one write to occur (rate is 10ms per line)
@@ -502,7 +520,7 @@ func TestFileLogGeneratorGlobDirectories(t *testing.T) {
 			require.NoError(t, err)
 
 			// Should have written at least one line
-			writes := writer.getWrites()
+			writes := consumer.getWrites()
 			require.Greater(t, len(writes), 0, "should have written at least one line")
 		})
 	}
@@ -605,7 +623,7 @@ func TestFileLogGenerator_SetCountTracker(t *testing.T) {
 	}
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 50*time.Millisecond, tmpfile.Name(), true, 0)
+	gen, err := New(logger, 1, 50*time.Millisecond, tmpfile.Name(), true, 0, newMockConsumer())
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -628,15 +646,15 @@ func TestFileLogGenerator_CountLimited(t *testing.T) {
 	}
 	tmpfile.Close()
 
-	writer := newMockWriter()
+	consumer := newMockConsumer()
 
-	gen, err := New(logger, 2, 10*time.Millisecond, tmpfile.Name(), true, 0)
+	gen, err := New(logger, 2, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer)
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)
 	gen.SetCountTracker(tracker)
 
-	err = gen.Start(writer)
+	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
 	select {
@@ -652,6 +670,6 @@ func TestFileLogGenerator_CountLimited(t *testing.T) {
 	err = gen.Stop(ctx)
 	require.NoError(t, err)
 
-	writes := writer.getWrites()
+	writes := consumer.getWrites()
 	assert.Equal(t, 5, len(writes), "Expected exactly 5 logs with count tracker")
 }

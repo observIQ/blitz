@@ -423,7 +423,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	case config.GeneratorTypeKubernetes:
 		return kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format)
 	case config.GeneratorTypeFile:
-		return filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL)
+		return filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeOkta:
 		return okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate)
 	case config.GeneratorTypeHostMetrics:
