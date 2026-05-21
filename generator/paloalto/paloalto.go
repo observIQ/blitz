@@ -16,7 +16,6 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/datagen"
-	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -29,34 +28,44 @@ const componentName = "paloalto"
 type Generator struct {
 	embed.ProducerMarker
 
-	logger  *zap.Logger
-	workers int
-	rate    time.Duration
+	logger   *zap.Logger
+	workers  int
+	rate     time.Duration
+	consumer embed.LogConsumer
 
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
 	tracker *count.Tracker
 }
 
-// New creates a new Palo Alto generator.
-func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error) {
+// New creates a new Palo Alto generator. The consumer receives each
+// generated record as a size-1 batch via ConsumeLogs.
+func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer) (*Generator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
 	if workers < 1 {
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
+	if consumer == nil {
+		return nil, fmt.Errorf("consumer cannot be nil")
+	}
 
 	return &Generator{
-		logger:  logger,
-		workers: workers,
-		rate:    rate,
-		stopCh:  make(chan struct{}),
+		logger:   logger,
+		workers:  workers,
+		rate:     rate,
+		consumer: consumer,
+		stopCh:   make(chan struct{}),
 	}, nil
 }
 
-// Start starts the Palo Alto generator.
-func (g *Generator) Start(writer output.Writer) error {
+// Name returns the module identifier.
+func (g *Generator) Name() string { return componentName }
+
+// Start launches the worker goroutines that push generated records to
+// the configured consumer.
+func (g *Generator) Start(_ context.Context) error {
 	g.logger.Info("Starting Palo Alto generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
@@ -66,7 +75,7 @@ func (g *Generator) Start(writer output.Writer) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i, writer)
+		go g.worker(i)
 	}
 	return nil
 }
@@ -99,7 +108,7 @@ func (g *Generator) SetCountTracker(t *count.Tracker) {
 	g.tracker = t
 }
 
-func (g *Generator) worker(workerID int, writer output.Writer) {
+func (g *Generator) worker(workerID int) {
 	defer g.wg.Done()
 	g.logger.Debug("Starting worker", zap.Int("worker_id", workerID))
 
@@ -125,7 +134,7 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 					continue
 				}
 			}
-			if err := g.generateAndWrite(writer, workerID); err != nil {
+			if err := g.generateAndWrite(workerID); err != nil {
 				g.logger.Error("Failed to write log", zap.Int("worker_id", workerID), zap.Error(err))
 				continue
 			}
@@ -134,7 +143,7 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 	}
 }
 
-func (g *Generator) generateAndWrite(writer output.Writer, workerID int) error {
+func (g *Generator) generateAndWrite(_ int) error {
 	line := generatePaloAltoLog()
 
 	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
@@ -142,14 +151,14 @@ func (g *Generator) generateAndWrite(writer output.Writer, workerID int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	logRecord := output.LogRecord{
+	logRecord := embed.LogRecord{
 		Message: line,
-		Metadata: output.LogRecordMetadata{
+		Metadata: embed.LogRecordMetadata{
 			Severity: "INFO",
 		},
 	}
 
-	if err := writer.Write(ctx, logRecord); err != nil {
+	if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{logRecord}); err != nil {
 		errorType := "unknown"
 		if ctx.Err() == context.DeadlineExceeded {
 			errorType = "timeout"
