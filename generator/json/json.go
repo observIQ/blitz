@@ -13,7 +13,6 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/logtypes"
-	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -76,23 +75,29 @@ func generateSpanID(r *rand.Rand) string {
 type JSONLogGenerator struct {
 	embed.ProducerMarker
 
-	logger  *zap.Logger
-	workers int
-	rate    time.Duration
-	logType string
-	wg      sync.WaitGroup
-	stopCh  chan struct{}
-	tracker *count.Tracker
+	logger   *zap.Logger
+	workers  int
+	rate     time.Duration
+	logType  string
+	consumer embed.LogConsumer
+	wg       sync.WaitGroup
+	stopCh   chan struct{}
+	tracker  *count.Tracker
 }
 
-// New creates a new JSON log generator
-func New(logger *zap.Logger, workers int, rate time.Duration, logType string) (*JSONLogGenerator, error) {
+// New creates a new JSON log generator. The consumer receives each
+// generated record as a size-1 batch via ConsumeLogs.
+func New(logger *zap.Logger, workers int, rate time.Duration, logType string, consumer embed.LogConsumer) (*JSONLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
 
 	if workers < 1 {
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
+	}
+
+	if consumer == nil {
+		return nil, fmt.Errorf("consumer cannot be nil")
 	}
 
 	// Default to "default" if logType is empty
@@ -106,17 +111,21 @@ func New(logger *zap.Logger, workers int, rate time.Duration, logType string) (*
 	}
 
 	return &JSONLogGenerator{
-		logger:  logger,
-		workers: workers,
-		rate:    rate,
-		logType: logType,
-		stopCh:  make(chan struct{}),
+		logger:   logger,
+		workers:  workers,
+		rate:     rate,
+		logType:  logType,
+		consumer: consumer,
+		stopCh:   make(chan struct{}),
 	}, nil
 }
 
-// Start starts the JSON log generator and writes data using the
-// provided generator writer.
-func (g *JSONLogGenerator) Start(writer output.Writer) error {
+// Name returns the module identifier.
+func (g *JSONLogGenerator) Name() string { return componentName }
+
+// Start launches the worker goroutines that push generated records to
+// the configured consumer.
+func (g *JSONLogGenerator) Start(_ context.Context) error {
 	g.logger.Info("Starting JSON log generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate))
@@ -126,7 +135,7 @@ func (g *JSONLogGenerator) Start(writer output.Writer) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i, writer)
+		go g.worker(i)
 	}
 
 	return nil
@@ -163,7 +172,7 @@ func (g *JSONLogGenerator) SetCountTracker(t *count.Tracker) {
 }
 
 // worker runs a single worker goroutine
-func (g *JSONLogGenerator) worker(workerID int, writer output.Writer) {
+func (g *JSONLogGenerator) worker(workerID int) {
 	defer g.wg.Done()
 
 	g.logger.Debug("Starting worker", zap.Int("worker_id", workerID))
@@ -190,7 +199,7 @@ func (g *JSONLogGenerator) worker(workerID int, writer output.Writer) {
 					continue
 				}
 			}
-			err := g.generateAndWriteLog(writer, workerID)
+			err := g.generateAndWriteLog(workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
@@ -202,8 +211,9 @@ func (g *JSONLogGenerator) worker(workerID int, writer output.Writer) {
 	}
 }
 
-// generateAndWriteLog generates a random log and writes it
-func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID int) error {
+// generateAndWriteLog generates a random log and pushes it as a
+// single-record batch to the configured consumer.
+func (g *JSONLogGenerator) generateAndWriteLog(_ int) error {
 	var logData logtypes.LogData
 	var err error
 
@@ -241,7 +251,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID in
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, logRecord); err != nil {
+	if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{logRecord}); err != nil {
 		// Classify error type
 		errorType := "unknown"
 		if ctx.Err() == context.DeadlineExceeded {
@@ -255,7 +265,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(writer output.Writer, workerID in
 }
 
 // formatAsJSON converts LogData to a JSON-formatted LogRecord
-func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
+func formatAsJSON(data logtypes.LogData) (embed.LogRecord, error) {
 	var jsonData any
 	var timestamp time.Time
 	var severity string
@@ -286,15 +296,15 @@ func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
 		timestamp = d.TimestampVal
 		severity = d.LevelVal
 	default:
-		return output.LogRecord{}, fmt.Errorf("unsupported log data type: %T", data)
+		return embed.LogRecord{}, fmt.Errorf("unsupported log data type: %T", data)
 	}
 
 	b, err := jsonlib.Marshal(jsonData)
 	if err != nil {
-		return output.LogRecord{}, fmt.Errorf("marshal JSON log: %w", err)
+		return embed.LogRecord{}, fmt.Errorf("marshal JSON log: %w", err)
 	}
 
-	return output.LogRecord{
+	return embed.LogRecord{
 		Message: string(b),
 		ParseFunc: func(message string) (map[string]any, error) {
 			var parsed map[string]any
@@ -303,7 +313,7 @@ func formatAsJSON(data logtypes.LogData) (output.LogRecord, error) {
 			}
 			return parsed, nil
 		},
-		Metadata: output.LogRecordMetadata{
+		Metadata: embed.LogRecordMetadata{
 			Timestamp: timestamp,
 			Severity:  severity,
 		},
