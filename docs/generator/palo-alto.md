@@ -1,5 +1,7 @@
 # Palo Alto Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The Palo Alto generator generates realistic Palo Alto firewall syslog entries in the standard Palo Alto log format. These logs are suitable for testing Palo Alto firewall log processing and analysis systems.
 
 ## Example Logs

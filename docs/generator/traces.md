@@ -1,5 +1,7 @@
 # Traces Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The Traces generator produces synthetic distributed trace data. Each trace consists of an HTTP server root span, a database query child span, and optionally a processing internal span.
 
 ## Telemetry Type

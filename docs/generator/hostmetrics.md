@@ -1,5 +1,7 @@
 # Host Metrics Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The Host Metrics generator produces synthetic host-level metric data that mimics the OpenTelemetry Host Metrics receiver. It generates metrics for CPU, memory, disk, network, filesystem, load, paging, and processes.
 
 ## Telemetry Type

@@ -1,5 +1,7 @@
 # Apache Combined Log Format Generator
 
+**Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
+
 The Apache Combined generator creates logs in Apache Combined Log Format, which extends the Common Log Format by adding the Referer and User-Agent headers. The format follows the specification: `remotehost rfc931 authuser [date] "request" status bytes "referer" "user-agent"`.
 
 ## Example Logs
