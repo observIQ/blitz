@@ -12,7 +12,6 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -30,12 +29,13 @@ const (
 type Generator struct {
 	embed.ProducerMarker
 
-	logger  *zap.Logger
-	workers int
-	rate    time.Duration
-	wg      sync.WaitGroup
-	stopCh  chan struct{}
-	tracker *count.Tracker
+	logger   *zap.Logger
+	workers  int
+	rate     time.Duration
+	consumer embed.LogConsumer
+	wg       sync.WaitGroup
+	stopCh   chan struct{}
+	tracker  *count.Tracker
 }
 
 // Predefined data for realistic Okta log generation
@@ -186,8 +186,9 @@ var (
 	}
 )
 
-// New creates a new Okta log generator
-func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error) {
+// New creates a new Okta log generator. The consumer receives each
+// generated record as a size-1 batch via ConsumeLogs.
+func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer) (*Generator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -196,16 +197,25 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*Generator, error
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
+	if consumer == nil {
+		return nil, fmt.Errorf("consumer cannot be nil")
+	}
+
 	return &Generator{
-		logger:  logger,
-		workers: workers,
-		rate:    rate,
-		stopCh:  make(chan struct{}),
+		logger:   logger,
+		workers:  workers,
+		rate:     rate,
+		consumer: consumer,
+		stopCh:   make(chan struct{}),
 	}, nil
 }
 
-// Start starts the Okta log generator
-func (g *Generator) Start(writer output.Writer) error {
+// Name returns the module identifier.
+func (g *Generator) Name() string { return componentName }
+
+// Start launches the worker goroutines that push generated records to
+// the configured consumer.
+func (g *Generator) Start(_ context.Context) error {
 	g.logger.Info("Starting Okta log generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
@@ -213,7 +223,7 @@ func (g *Generator) Start(writer output.Writer) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i, writer)
+		go g.worker(i)
 	}
 
 	return nil
@@ -245,7 +255,7 @@ func (g *Generator) SetCountTracker(t *count.Tracker) {
 	g.tracker = t
 }
 
-func (g *Generator) worker(workerID int, writer output.Writer) {
+func (g *Generator) worker(workerID int) {
 	defer g.wg.Done()
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID))) // #nosec G404
@@ -275,7 +285,7 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 					continue
 				}
 			}
-			err := g.generateAndWriteLog(r, writer, workerID)
+			err := g.generateAndWriteLog(r, workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
@@ -287,7 +297,7 @@ func (g *Generator) worker(workerID int, writer output.Writer) {
 	}
 }
 
-func (g *Generator) generateAndWriteLog(r *rand.Rand, writer output.Writer, workerID int) error {
+func (g *Generator) generateAndWriteLog(r *rand.Rand, _ int) error {
 	logRecord, err := g.generateOktaLog(r)
 	if err != nil {
 		g.recordWriteError(errorTypeUnknown, err)
@@ -299,7 +309,7 @@ func (g *Generator) generateAndWriteLog(r *rand.Rand, writer output.Writer, work
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := writer.Write(ctx, logRecord); err != nil {
+	if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{logRecord}); err != nil {
 		errorType := errorTypeUnknown
 		if ctx.Err() == context.DeadlineExceeded {
 			errorType = errorTypeTimeout
@@ -311,7 +321,7 @@ func (g *Generator) generateAndWriteLog(r *rand.Rand, writer output.Writer, work
 	return nil
 }
 
-func (g *Generator) generateOktaLog(r *rand.Rand) (output.LogRecord, error) {
+func (g *Generator) generateOktaLog(r *rand.Rand) (embed.LogRecord, error) {
 	now := time.Now().UTC()
 	event := eventTypes[r.Intn(len(eventTypes))]     // #nosec G404
 	actor := actors[r.Intn(len(actors))]             // #nosec G404
@@ -407,10 +417,10 @@ func (g *Generator) generateOktaLog(r *rand.Rand) (output.LogRecord, error) {
 
 	jsonBytes, err := jsonlib.Marshal(logData)
 	if err != nil {
-		return output.LogRecord{}, fmt.Errorf("marshal Okta log: %w", err)
+		return embed.LogRecord{}, fmt.Errorf("marshal Okta log: %w", err)
 	}
 
-	return output.LogRecord{
+	return embed.LogRecord{
 		Message: string(jsonBytes),
 		ParseFunc: func(message string) (map[string]any, error) {
 			var parsed map[string]any
@@ -419,7 +429,7 @@ func (g *Generator) generateOktaLog(r *rand.Rand) (output.LogRecord, error) {
 			}
 			return parsed, nil
 		},
-		Metadata: output.LogRecordMetadata{
+		Metadata: embed.LogRecordMetadata{
 			Timestamp: now,
 			Severity:  event.severity,
 		},

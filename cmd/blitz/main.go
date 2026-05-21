@@ -425,7 +425,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	case config.GeneratorTypeFile:
 		return filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeOkta:
-		return okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate)
+		return okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeHostMetrics:
 		return hostmetrics.New(logger, genCfg.HostMetrics.Workers, genCfg.HostMetrics.Rate, genCfg.HostMetrics.OS, genCfg.HostMetrics.Hostname, genCfg.HostMetrics.Scrapers)
 	case config.GeneratorTypeTraces:
