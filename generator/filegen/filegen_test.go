@@ -77,14 +77,14 @@ func TestFileLogGenerator_Name(t *testing.T) {
 	defer os.Remove(tmpfile.Name())
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 100*time.Millisecond, tmpfile.Name(), true, 0, newMockConsumer())
+	gen, err := New(logger, 1, 100*time.Millisecond, tmpfile.Name(), true, 0, newMockConsumer(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, componentName, gen.Name())
 }
 
 func TestFileLogGenerator_NilConsumer(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 100*time.Millisecond, "/tmp/test.log", true, 0, nil)
+	gen, err := New(logger, 1, 100*time.Millisecond, "/tmp/test.log", true, 0, nil, nil)
 	assert.Error(t, err)
 	assert.Nil(t, gen)
 	assert.Contains(t, err.Error(), "consumer cannot be nil")
@@ -132,7 +132,7 @@ func TestNewFileLogGenerator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gen, err := New(logger, tt.workers, tt.rate, tt.source, true, 0, newMockConsumer())
+			gen, err := New(logger, tt.workers, tt.rate, tt.source, true, 0, newMockConsumer(), nil)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, gen)
@@ -165,7 +165,7 @@ func TestFileLogGeneratorFileMode(t *testing.T) {
 	tmpfile.Close()
 
 	consumer := newMockConsumer()
-	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer)
+	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer, nil)
 	require.NoError(t, err)
 
 	err = gen.Start(context.Background())
@@ -209,7 +209,7 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 
 	// Test with directory mode (auto-detected)
 	consumer := newMockConsumer()
-	gen, err := New(logger, 1, 10*time.Millisecond, tmpdir, true, 0, consumer)
+	gen, err := New(logger, 1, 10*time.Millisecond, tmpdir, true, 0, consumer, nil)
 	require.NoError(t, err)
 
 	err = gen.Start(context.Background())
@@ -230,7 +230,7 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 func TestFileLogGeneratorNonexistentFile(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	gen, err := New(logger, 1, 100*time.Millisecond, "/nonexistent/path/file.log", true, 0, newMockConsumer())
+	gen, err := New(logger, 1, 100*time.Millisecond, "/nonexistent/path/file.log", true, 0, newMockConsumer(), nil)
 	require.NoError(t, err)
 
 	err = gen.Start(context.Background())
@@ -249,7 +249,7 @@ func TestFileLogGeneratorStop(t *testing.T) {
 	require.NoError(t, err)
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 100*time.Millisecond, tmpfile.Name(), true, 0, newMockConsumer())
+	gen, err := New(logger, 1, 100*time.Millisecond, tmpfile.Name(), true, 0, newMockConsumer(), nil)
 	require.NoError(t, err)
 
 	err = gen.Start(context.Background())
@@ -275,7 +275,7 @@ func TestFileLogGeneratorWriteError(t *testing.T) {
 
 	consumer := newMockConsumer()
 	consumer.setConsumeError(errors.New("write failed"))
-	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer)
+	gen, err := New(logger, 1, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer, nil)
 	require.NoError(t, err)
 
 	err = gen.Start(context.Background())
@@ -303,7 +303,7 @@ func TestFileLogGeneratorMultipleWorkers(t *testing.T) {
 	tmpfile.Close()
 
 	consumer := newMockConsumer()
-	gen, err := New(logger, 3, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer)
+	gen, err := New(logger, 3, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer, nil)
 	require.NoError(t, err)
 
 	err = gen.Start(context.Background())
@@ -328,7 +328,7 @@ func TestTimestampProcessing(t *testing.T) {
 	require.NoError(t, err)
 	tmpFile.Close()
 
-	gen, err := New(logger, 1, 100*time.Millisecond, tmpFile.Name(), true, 0, newMockConsumer())
+	gen, err := New(logger, 1, 100*time.Millisecond, tmpFile.Name(), true, 0, newMockConsumer(), nil)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -434,7 +434,7 @@ func TestFileLogGeneratorGlobPatterns(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			consumer := newMockConsumer()
-			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern, true, 0, consumer)
+			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern, true, 0, consumer, nil)
 			require.NoError(t, err)
 
 			err = gen.Start(context.Background())
@@ -505,7 +505,7 @@ func TestFileLogGeneratorGlobDirectories(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			consumer := newMockConsumer()
-			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern, true, 0, consumer)
+			gen, err := New(logger, 1, 10*time.Millisecond, tc.pattern, true, 0, consumer, nil)
 			require.NoError(t, err)
 
 			err = gen.Start(context.Background())
@@ -623,7 +623,7 @@ func TestFileLogGenerator_SetCountTracker(t *testing.T) {
 	}
 	tmpfile.Close()
 
-	gen, err := New(logger, 1, 50*time.Millisecond, tmpfile.Name(), true, 0, newMockConsumer())
+	gen, err := New(logger, 1, 50*time.Millisecond, tmpfile.Name(), true, 0, newMockConsumer(), nil)
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -648,7 +648,7 @@ func TestFileLogGenerator_CountLimited(t *testing.T) {
 
 	consumer := newMockConsumer()
 
-	gen, err := New(logger, 2, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer)
+	gen, err := New(logger, 2, 10*time.Millisecond, tmpfile.Name(), true, 0, consumer, nil)
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)
