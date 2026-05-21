@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/datagen"
@@ -35,6 +36,8 @@ type apacheErrorLogData struct {
 
 // ApacheErrorLogGenerator generates Apache Error Log Format log data
 type ApacheErrorLogGenerator struct {
+	embed.ProducerMarker
+
 	logger  *zap.Logger
 	workers int
 	rate    time.Duration

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/datagen"
@@ -21,6 +22,8 @@ const generatorType = "hostmetrics"
 
 // Generator implements generator.MetricGenerator for host metrics.
 type Generator struct {
+	embed.ProducerMarker
+
 	logger   *zap.Logger
 	workers  int
 	rate     time.Duration

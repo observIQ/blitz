@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/security"
@@ -36,6 +37,8 @@ type apacheLogData struct {
 
 // ApacheLogGenerator generates Apache Common Log Format (CLF) log data
 type ApacheLogGenerator struct {
+	embed.ProducerMarker
+
 	logger  *zap.Logger
 	workers int
 	rate    time.Duration

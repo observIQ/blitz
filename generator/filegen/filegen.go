@@ -14,6 +14,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generator/ctime"
@@ -72,6 +73,8 @@ func (c *Cache) Set(key string, lines []string) {
 
 // FileLogGenerator generates log data by reading from files
 type FileLogGenerator struct {
+	embed.ProducerMarker
+
 	logger  *zap.Logger
 	workers int
 	rate    time.Duration

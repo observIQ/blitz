@@ -9,6 +9,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	jsonlib "github.com/goccy/go-json"
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
@@ -27,6 +28,8 @@ const (
 
 // Generator generates Okta System Log format log data
 type Generator struct {
+	embed.ProducerMarker
+
 	logger  *zap.Logger
 	workers int
 	rate    time.Duration

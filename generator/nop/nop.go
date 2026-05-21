@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
@@ -11,6 +12,8 @@ import (
 
 // NopGenerator is a no-operation generator that performs no work
 type NopGenerator struct {
+	embed.ProducerMarker
+
 	logger *zap.Logger
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generators/winevt/templates"
@@ -21,6 +22,8 @@ const componentName = "winevt"
 
 // WinevtGenerator generates Windows Event XML logs using templates.
 type WinevtGenerator struct {
+	embed.ProducerMarker
+
 	logger  *zap.Logger
 	workers int
 	rate    time.Duration
