@@ -11,10 +11,9 @@ import (
 var embeddedRoot embed.FS
 
 // libraryFS is the embedded snapshot used when the package is built
-// with `-tags embed_library`. The build pipeline (Makefile target
-// sync-embedded-library, also invoked from goreleaser before-hooks)
-// materializes the repo-root data_library/ into this package's
-// directory before compilation; //go:embed picks it up here.
+// with `-tags embed_library`. The data_library/ directory committed
+// alongside this file is the canonical location; //go:embed picks it
+// up directly with no separate staging step.
 var libraryFS fs.FS = func() fs.FS {
 	sub, err := fs.Sub(embeddedRoot, "data_library")
 	if err != nil {

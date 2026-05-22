@@ -2,7 +2,7 @@
 // into the Go binary via //go:embed, gated by the embed_library build tag.
 //
 // Standalone blitz CLI does NOT import this package — it reads the
-// repo-root data_library/ from disk at runtime so users can edit files
+// data_library/ files from disk at runtime so users can edit them
 // without a recompile. Library consumers (e.g. the OTel
 // telemetrygeneratorreceiver) that want the data library bundled into
 // their binary import this package and pass FS() to filegen.New.
@@ -11,15 +11,16 @@
 // `-tags embed_library`. Without the tag, FS() returns an empty
 // filesystem and no embed directive is compiled, so bare `go build`,
 // `go test ./...`, `go vet`, and IDE language servers work in this
-// repo without first materializing the snapshot. Embedded consumers
-// must add `-tags embed_library` to their build, and their build
-// pipeline must run `make sync-embedded-library` first to materialize
-// data_library/ into this package's directory.
+// repo without baking ~8 MB of data into every binary. Embedded
+// consumers add `-tags embed_library` to opt in.
 //
-// The repo-root data_library/ is the single source of truth.
-// 'make sync-embedded-library' copies it into
-// generator/filegen/embeddedlibrary/data_library as a build artifact
-// (gitignored). Building with -tags embed_library then //go:embeds it.
+// The canonical location for data_library/ is THIS package directory
+// (./generator/filegen/embeddedlibrary/data_library/) — there is no
+// separate root-level copy. The standalone CLI reads `./data_library/`
+// from the process cwd at runtime; release tarballs, nfpms, and
+// docker images stage the files at that path. From a fresh clone the
+// CLI's `libraryFS` falls back to the in-repo canonical path so
+// `./blitz` from repo root Just Works without a staging step.
 package embeddedlibrary
 
 import "io/fs"
