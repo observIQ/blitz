@@ -128,7 +128,69 @@ Consumer errors are best-effort: blitz logs the error, increments a `consumer_er
 
 ## Configuration
 
-Embedded mode is programmatic-Go-only. YAML configuration is CLI-only. `embed.Config` is a Go struct populated by the host directly — no YAML loader is exposed for embed mode.
+Two supported paths:
+
+- **Programmatic Go** — host populates `embed.Config` directly, constructs each generator with the appropriate `embed.LogConsumer`, passes the slice to `embed.New`. This is the lowest-level entry point and is shown in the "Constructing an embedded runner" example above.
+- **Blitz YAML via the public `config` package** — for hosts that want their users to drop a blitz YAML config (the same shape the standalone CLI accepts) and have blitz construct the modules. Import `github.com/observiq/blitz/config`:
+
+  ```go
+  import (
+      blitzconfig "github.com/observiq/blitz/config"
+      "github.com/observiq/blitz/embed"
+  )
+
+  // Parse + construct in one call.
+  modules, err := blitzconfig.LoadModules(yamlBytes, blitzconfig.EmbedOpts{
+      Logger:      logger,
+      LogConsumer: myLogConsumer,
+      // FileGenLibrary: embeddedlibrary.FS(), // optional; nil = ./data_library/ on disk
+  })
+  if err != nil { /* ... */ }
+
+  runner, err := embed.New(embed.Config{Modules: modules})
+  ```
+
+  Or use the lower-level `blitzconfig.Load(yamlBytes, blitzconfig.LoadOpts{})` if the host wants the parsed `*Config` to do its own module construction (e.g., a host that only wants to expose a subset of generators).
+
+### Environment overlay (host-driven)
+
+The embedded loader does **not** read `os.Environ()` directly. The standalone CLI binds `BLITZ_*` env vars automatically via viper; embedded mode requires the host to do its own env-variable scanning (so the host's prefix conventions, secret resolution, and env-loading order aren't bypassed) and pass the resolved values to blitz as a YAML-path → value map.
+
+```go
+// Host scans its process env for BLITZ_*-prefixed vars and translates each
+// to its YAML-dotted-path form. For example BLITZ_GENERATOR_APACHE-COMMON_WORKERS=4
+// becomes the entry "generator.apache-common.workers": "4". The host applies
+// whatever prefix/normalization conventions its framework expects.
+envOverrides := host.CollectEnvOverridesForBlitz(os.Environ())
+
+modules, err := blitzconfig.LoadModules(yamlBytes, blitzconfig.EmbedOpts{
+    Logger:       logger,
+    LogConsumer:  myLogConsumer,
+    EnvOverrides: envOverrides,
+})
+```
+
+`EnvOverrides` overlays on top of the parsed YAML, matching the precedence the CLI gives `BLITZ_*` env vars over YAML values.
+
+CLI cobra-flag bindings (`--generator-type`, `--output-otlpgrpc-host`, etc.) are **out of scope for embedded mode** and are NOT honored via this map. Embedded hosts have no flags to bind — they're a library being called by another program. Hosts that want flag-like overrides translate them into YAML paths themselves.
+
+`LoadModules` only constructs Producer-class **log** generators in this release. Generator types that should logically be in the embed contract but aren't yet return an explicit error rather than being silently dropped, so the host's parsed config can't lose generators the user expected.
+
+### Not yet in the embed contract (slated for v0.17.0)
+
+The following generators are valid in the standalone CLI but are intentionally rejected by `LoadModules` today. The rejections are documented as roadmap, not as long-term design:
+
+- **`hostmetrics`** — produces metrics, not logs. The embed contract has `MetricConsumer` for this and the generator class fits naturally as a Producer wired to it, but `hostmetrics.New` has not been migrated to take a `MetricConsumer` at construction time. Migration is planned alongside the v0.17.0 release.
+- **`traces`** — produces spans, not logs. Same story: `TraceConsumer` exists in the contract; `tracesgen.New` has not been migrated. Planned for v0.17.0.
+- **`winevt`** — the legacy single-template Windows Event XML generator. Replaced by the new multi-channel `wel` generator landing in the PIPE-928 stack (the WEL stack is being merged ahead of v0.17.0). `winevt` will be deprecated when `wel` lands rather than being migrated to embed.
+
+The v0.17.0 release sequence is: (1) land the WEL stack; (2) land a follow-up stack that migrates `hostmetrics` and `traces` to the embed contract; (3) deprecate `winevt`; (4) cut v0.17.0. After v0.17.0, `LoadModules` will return a `[]embed.ProducerModule` that contains log, metric, AND trace producers, each wired to the appropriate consumer the host supplied.
+
+### Not embed-eligible at all (by design)
+
+- **`nop`** — does nothing; never produces records. Excluded from `LoadModules` because there's no Consumer for it to push to and an embedded host has no reason to instantiate a generator that yields nothing.
+- **WEL Windows-API mode (PIPE-928, future)** — writes to the actual Windows Event Log via the OS API. Effector-class. The whole point of Effectors is that their side effects land outside blitz's process, so an embedded host can't observe them. Excluded by design.
+- **REST simulators (PIPE-943, future)** — HTTP servers external clients poll. Effector-class for the same reason.
 
 ## Consuming via OTel pdata
 
