@@ -286,7 +286,7 @@ func generateThreatLog(timestamp, dateTime, sessionID string) string {
 	domain := domains[randInt(0, len(domains)-1)]
 
 	return fmt.Sprintf("%s 1,%s,%s,THREAT,url,1,%s,%s,%s,%s,%s,RFC1918 to Internet,,,web-browsing,vsys1,Trust,Untrust,ae1.902,ae1.1000,LoggingToPanorama,%s,%d,1,%s,%s,%s,%s,0x408000,%s,alert,\"%s\",(9999),not-defined,informational,client-to-server,%d,0x0,%s,0,text/html",
-		timestamp, dateTime, sessionID, dateTime, sourceIP, destIP, sourceIP, destIP, dateTime, randInt(100000, 999999), sourcePort, destPort, sourcePort, destPort, protocol, domain, randInt(1000000000, 9999999999), sourceIP)
+		timestamp, dateTime, sessionID, dateTime, sourceIP, destIP, sourceIP, destIP, dateTime, randInt(100000, 999999), sourcePort, destPort, sourcePort, destPort, protocol, domain, randInt64(1000000000, 9999999999), sourceIP)
 }
 
 func generateRandomIP() string {
@@ -348,6 +348,15 @@ func randInt(min, max int) int {
 	delta := max - min + 1
 	n, _ := rand.Int(rand.Reader, big.NewInt(int64(delta)))
 	return min + int(n.Int64())
+}
+
+// randInt64 is the int64 sibling of randInt. Required at call sites
+// where min or max exceeds the int range on 32-bit platforms (notably
+// linux/arm) — see the 10-digit session-id field in the THREAT log.
+func randInt64(min, max int64) int64 {
+	delta := max - min + 1
+	n, _ := rand.Int(rand.Reader, big.NewInt(delta))
+	return min + n.Int64()
 }
 
 // SupportedTelemetry returns the telemetry types this generator produces.
