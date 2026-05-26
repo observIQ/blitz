@@ -26,6 +26,21 @@ func TestEncodeFieldsOrderPreserved(t *testing.T) {
 	}
 }
 
+// TestEncodeFieldsSkipsZeroTag pins the skip-semantic that lets a
+// FieldGenerator return Field{} (Tag==0) to conditionally omit itself
+// from the wire — used for CDS-only tags on non-CDS swaps, etc.
+func TestEncodeFieldsSkipsZeroTag(t *testing.T) {
+	got := EncodeFields(nil, []Field{
+		{Tag: 49, Value: "SENDER"},
+		{},
+		{Tag: 56, Value: "TARGET"},
+	})
+	want := []byte("49=SENDER\x0156=TARGET\x01")
+	if !bytes.Equal(got, want) {
+		t.Errorf("EncodeFields skipping zero tag = %q, want %q", got, want)
+	}
+}
+
 func TestCheckSumSpecVector(t *testing.T) {
 	// Spec example from QuickFIX docs: the checksum of the literal
 	// payload "8=FIX.4.4\x019=12\x0135=A\x01" is 88 (sum mod 256).
