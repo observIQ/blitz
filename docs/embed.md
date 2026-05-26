@@ -174,6 +174,13 @@ modules, err := blitzconfig.LoadModules(yamlBytes, blitzconfig.EmbedOpts{
 
 CLI cobra-flag bindings (`--generator-type`, `--output-otlpgrpc-host`, etc.) are **out of scope for embedded mode** and are NOT honored via this map. Embedded hosts have no flags to bind — they're a library being called by another program. Hosts that want flag-like overrides translate them into YAML paths themselves.
 
+### Distributing the `data_library/` files for embedding
+
+The `filegen` generator references files under `data_library/` for the `package:`-prefixed source syntax and bare-name library fallback. The canonical location is `generator/filegen/embeddedlibrary/data_library/` — there is exactly one copy in the repo. Embedding hosts have two options for getting the files to the running process:
+
+- **Disk** — leave `FileGenLibrary` nil in `EmbedOpts`. The generator probes a fixed sequence of disk locations, in order: `$BLITZ_DATA_LIBRARY_DIR` (host-supplied override), `./data_library/` (cwd-relative, where release tarballs unpack), `./generator/filegen/embeddedlibrary/data_library/` (in-repo canonical for `./blitz` from a fresh clone), `/usr/share/blitz/data_library/` (the nfpm `deb`/`rpm` install path). First match wins; the env override is the recommended path for containers and custom install prefixes.
+- **Embedded snapshot** — import `github.com/observiq/blitz/generator/filegen/embeddedlibrary` and pass `embeddedlibrary.FS()` as `FileGenLibrary`. The blitz module ships the `data_library/` files inside the embeddedlibrary package, so `go get github.com/observiq/blitz/generator/filegen/embeddedlibrary` fetches them as part of the module cache — no separate file staging by the host. The package is gated by the `//go:build embed_library` tag so default builds skip the embed; tagged builds get the files baked into the binary.
+
 `LoadModules` only constructs Producer-class **log** generators in this release. Generator types that should logically be in the embed contract but aren't yet return an explicit error rather than being silently dropped, so the host's parsed config can't lose generators the user expected.
 
 ### Not yet in the embed contract (slated for v0.17.0)

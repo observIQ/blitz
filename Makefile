@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: tools test lint security all man man-check release release-test generate-o11y generate-o11y-check sync-embedded-library test-embedded
+.PHONY: tools test lint security all man man-check release release-test generate-o11y generate-o11y-check test-embedded
 
 WEAVER_IMAGE ?= otel/weaver:v0.19.0
 
@@ -37,10 +37,10 @@ tidy:
 bench:
 	go test -bench=. ./...
 
-# Runs the embedded-library tests under -tags embed_library. Materializes
-# the snapshot first, then invokes go test with the tag so //go:embed
-# picks up data_library/ inside the sub-package.
-test-embedded: sync-embedded-library
+# Runs the embedded-library tests under -tags embed_library. The
+# canonical data_library/ lives inside the embeddedlibrary package so
+# //go:embed picks it up directly — no separate staging step needed.
+test-embedded:
 	go test -tags embed_library ./generator/filegen/embeddedlibrary/... ./generator/filegen/...
 
 man:
@@ -85,15 +85,3 @@ generate-o11y:
 release-test:
 	@source ./scripts/set-build-host.sh && goreleaser release --clean --skip=publish --parallelism=2 --skip=sign --snapshot
 
-# Materializes the canonical data_library/ at repo root into the
-# generator/filegen/embeddedlibrary/ sub-package so //go:embed can pick
-# it up when the embed_library build tag is set. The materialized copy
-# is a build artifact — it is gitignored and reproduced on demand. The
-# on-disk data_library/ at the repo root is the single source of truth;
-# the standalone CLI reads it from there at runtime. Default (untagged)
-# builds compile a stub FS and do NOT need this sync.
-sync-embedded-library:
-	@echo "Syncing data_library to generator/filegen/embeddedlibrary/data_library..."
-	@rm -rf generator/filegen/embeddedlibrary/data_library
-	@cp -r data_library generator/filegen/embeddedlibrary/data_library
-	@echo "✓ Synced data_library to embedded library snapshot"

@@ -50,7 +50,14 @@ archives:
       - LICENSE
       - docs/configuration.md
       - docs/metrics.md
-      - data_library/**
+      # data_library lives inside the embeddedlibrary package as the
+      # single canonical location; stage it at ./data_library/ in the
+      # archive so users untarring a release see the path the CLI
+      # expects to read from. Without strip_parent, files keep their
+      # subpath relative to the glob base (the data_library/ dir under
+      # the canonical path), which preserves the per-vendor subdirs.
+      - src: generator/filegen/embeddedlibrary/data_library/**/*
+        dst: data_library
 
 nfpms:
   - id: linux-packages
@@ -119,7 +126,7 @@ nfpms:
           mode: 0644
           owner: root
           group: root
-      - src: data_library
+      - src: generator/filegen/embeddedlibrary/data_library
         dst: /usr/share/blitz/data_library
         type: dir
         file_info:

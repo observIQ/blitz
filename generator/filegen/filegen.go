@@ -261,13 +261,45 @@ func (g *FileLogGenerator) getFiles() ([]string, error) {
 }
 
 // libraryFS returns the data library backend to use: the supplied fs.FS
-// when present, otherwise the on-disk ./data_library/ directory wrapped
-// as an fs.FS so the two backends share one walk/read code path.
+// when present, otherwise an on-disk directory wrapped as an fs.FS so
+// the two backends share one walk/read code path.
+//
+// Disk-lookup probe order:
+//  1. $BLITZ_DATA_LIBRARY_DIR — explicit override for unusual install
+//     layouts (containers, custom prefixes). Always wins if set.
+//  2. ./data_library/ relative to cwd — where release tarballs unpack
+//     and where most users naturally cd before running the binary.
+//  3. ./generator/filegen/embeddedlibrary/data_library/ — the in-repo
+//     canonical location, so `./blitz` from a fresh clone Just Works
+//     without a pre-build staging step.
+//  4. /usr/share/blitz/data_library/ — the nfpm-package install path
+//     (deb/rpm). Lets a system-installed `blitz` find its library
+//     regardless of which cwd the user invoked it from.
+//
+// The first directory that exists wins; if none exist, the final probe
+// (nfpm path) is returned and subsequent reads will surface a useful
+// "file does not exist" error pointing at the missing canonical path.
 func (g *FileLogGenerator) libraryFS() fs.FS {
 	if g.dataLibrary != nil {
 		return g.dataLibrary
 	}
-	return os.DirFS("data_library")
+	candidates := []string{
+		os.Getenv("BLITZ_DATA_LIBRARY_DIR"),
+		"data_library",
+		"generator/filegen/embeddedlibrary/data_library",
+		"/usr/share/blitz/data_library",
+	}
+	for _, p := range candidates {
+		if p == "" {
+			continue
+		}
+		if info, err := os.Stat(p); err == nil && info.IsDir() {
+			return os.DirFS(p)
+		}
+	}
+	// None of the probes resolved; surface that with a clear path in
+	// the eventual read error rather than silently returning an empty FS.
+	return os.DirFS("/usr/share/blitz/data_library")
 }
 
 // libraryFiles walks the named entry inside the library FS and returns
