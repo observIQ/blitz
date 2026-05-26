@@ -20,6 +20,8 @@ import (
 	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/filegen"
+	fixgen "github.com/observiq/blitz/generator/fix"
+	fixcatalog "github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/hostmetrics"
 	jsongen "github.com/observiq/blitz/generator/json"
 	"github.com/observiq/blitz/generator/kubernetes"
@@ -451,6 +453,29 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 			Channels: genCfg.Wel.Channels,
 			Consumer: output.WriterAsLogConsumer(out),
 		})
+	case config.GeneratorTypeFIX:
+		fc := fixgen.Config{
+			Workers:      genCfg.FIX.Workers,
+			Rate:         genCfg.FIX.Rate,
+			SenderCompID: genCfg.FIX.SenderCompID,
+			TargetCompID: genCfg.FIX.TargetCompID,
+			Seed:         genCfg.FIX.Seed,
+		}
+		if genCfg.FIX.Version != "" {
+			v, err := fixcatalog.VersionFromString(genCfg.FIX.Version)
+			if err != nil {
+				return nil, fmt.Errorf("fix: %w", err)
+			}
+			fc.Version = v
+		}
+		for _, s := range genCfg.FIX.EnabledCategories {
+			c, err := fixcatalog.AssetCategoryFromString(s)
+			if err != nil {
+				return nil, fmt.Errorf("fix: %w", err)
+			}
+			fc.EnabledCategories = append(fc.EnabledCategories, c)
+		}
+		return fixgen.New(logger, fc, output.WriterAsLogConsumer(out))
 	default:
 		return nil, fmt.Errorf("invalid generator type: %s", genCfg.Type)
 	}

@@ -38,6 +38,9 @@ const (
 	GeneratorTypeTraces GeneratorType = "traces"
 	// GeneratorTypeWel represents Windows Event Log generator
 	GeneratorTypeWel GeneratorType = "wel"
+	// GeneratorTypeFIX represents the FIX (Financial Information
+	// eXchange) protocol generator
+	GeneratorTypeFIX GeneratorType = "fix"
 )
 
 // Generator contains configuration for log generators
@@ -74,6 +77,8 @@ type Generator struct {
 	Traces TracesGeneratorConfig `yaml:"traces,omitempty" mapstructure:"traces,omitempty"`
 	// Wel contains Windows Event Log generator configuration
 	Wel WelGeneratorConfig `yaml:"wel,omitempty" mapstructure:"wel,omitempty"`
+	// FIX contains FIX generator configuration
+	FIX FIXGeneratorConfig `yaml:"fix,omitempty" mapstructure:"fix,omitempty"`
 }
 
 // Validate validates the generator configuration
@@ -146,8 +151,12 @@ func (g *Generator) Validate() error {
 		if err := g.Wel.Validate(); err != nil {
 			return fmt.Errorf("wel generator validation failed: %w", err)
 		}
+	case GeneratorTypeFIX:
+		if err := g.FIX.Validate(); err != nil {
+			return fmt.Errorf("fix generator validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen, okta, hostmetrics, traces, wel", g.Type)
+		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen, okta, hostmetrics, traces, wel, fix", g.Type)
 	}
 
 	return nil

@@ -101,6 +101,43 @@ func AllAssetCategories() []AssetCategory {
 	}
 }
 
+// AssetCategoryFromString parses an AssetCategory from its String()
+// label. Returns AssetCategoryUnknown and a non-nil error for any
+// unrecognized token.
+func AssetCategoryFromString(s string) (AssetCategory, error) {
+	switch s {
+	case "equities":
+		return AssetCategoryEquities, nil
+	case "fx":
+		return AssetCategoryFX, nil
+	case "futures":
+		return AssetCategoryFutures, nil
+	case "options":
+		return AssetCategoryOptions, nil
+	case "govbonds":
+		return AssetCategoryGovBonds, nil
+	case "corpbonds":
+		return AssetCategoryCorpBonds, nil
+	case "structured":
+		return AssetCategoryStructured, nil
+	case "otcderivs":
+		return AssetCategoryOTCDerivs, nil
+	case "repos":
+		return AssetCategoryRepos, nil
+	case "moneymarket":
+		return AssetCategoryMoneyMarket, nil
+	default:
+		return AssetCategoryUnknown, &AssetCategoryParseError{Token: s}
+	}
+}
+
+// AssetCategoryParseError reports an unrecognized asset category token.
+type AssetCategoryParseError struct{ Token string }
+
+func (e *AssetCategoryParseError) Error() string {
+	return "fix: unknown asset category " + e.Token + " (want one of: equities, fx, futures, options, govbonds, corpbonds, structured, otcderivs, repos, moneymarket)"
+}
+
 // SecurityType is the FIX tag-167 value (the on-the-wire string).
 // Constants below enumerate every value the FIX generator emits, and
 // Category() maps each to its owning AssetCategory.

@@ -108,6 +108,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 | `blitz-hostmetrics-linux` | Host Metrics | Synthetic host metrics (CPU, memory, disk, etc.) for Linux |
 | `blitz-hostmetrics-windows` | Host Metrics | Synthetic host metrics (CPU, memory, disk, etc.) for Windows |
 | `blitz-traces` | Traces | Synthetic distributed traces (HTTP + DB spans) |
+| `blitz-fix` | FIX | FIX protocol messages (4.2 / 4.4 / 5.0 SP2) across 10 asset categories — NewOrderSingle, ExecutionReport, cancel/replace/status |
 
 ## Running Individual Generators
 

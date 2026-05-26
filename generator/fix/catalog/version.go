@@ -71,3 +71,26 @@ func (v Version) String() string {
 func AllVersions() []Version {
 	return []Version{V42, V44, V50SP2}
 }
+
+// VersionFromString parses a config-friendly version token into a
+// Version. Accepted tokens: "4.2", "4.4", "5.0sp2" (case-insensitive).
+// Returns VersionUnknown and a non-nil error for any other input.
+func VersionFromString(s string) (Version, error) {
+	switch s {
+	case "4.2", "FIX.4.2", "fix.4.2":
+		return V42, nil
+	case "4.4", "FIX.4.4", "fix.4.4":
+		return V44, nil
+	case "5.0sp2", "5.0SP2", "FIX.5.0SP2", "fix.5.0sp2", "FIXT.1.1", "fixt.1.1":
+		return V50SP2, nil
+	default:
+		return VersionUnknown, &VersionParseError{Token: s}
+	}
+}
+
+// VersionParseError reports an unrecognized version token.
+type VersionParseError struct{ Token string }
+
+func (e *VersionParseError) Error() string {
+	return "fix: unknown version " + e.Token + " (want one of: 4.2, 4.4, 5.0sp2)"
+}
