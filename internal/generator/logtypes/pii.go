@@ -92,13 +92,15 @@ func generateUserID(r *rand.Rand) string {
 	return fmt.Sprintf("%016x-%016x", hi, lo)
 }
 
-// generateIBAN generates a random IBAN
+// generateIBAN generates a random IBAN. The 12-digit account suffix
+// uses Int63n because 10^12 overflows the int return of Intn on 32-bit
+// platforms (notably linux/arm).
 func generateIBAN(r *rand.Rand) string {
 	return fmt.Sprintf("US%02d%04d%04d%012d",
 		r.Intn(100),
 		r.Intn(10000),
 		r.Intn(10000),
-		r.Intn(1000000000000))
+		r.Int63n(1000000000000))
 }
 
 // generatePhone generates a random US phone number
