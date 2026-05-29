@@ -20,6 +20,8 @@ import (
 	"github.com/observiq/blitz/generator/okta"
 	"github.com/observiq/blitz/generator/paloalto"
 	"github.com/observiq/blitz/generator/postgres"
+	"github.com/observiq/blitz/generator/wel"
+	welcatalog "github.com/observiq/blitz/generator/wel/catalog"
 	"github.com/observiq/blitz/internal/config"
 	"go.uber.org/zap"
 )
@@ -32,7 +34,7 @@ import (
 // from the process cwd.
 //
 // Returns an error for non-Producer generator types (nop, winevt,
-// hostmetrics, traces, wel) — these either don't yield logs at all or
+// hostmetrics, traces) — these either don't yield logs at all or
 // are not yet migrated to the embed.LogConsumer contract.
 func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumer embed.LogConsumer, fileGenLibrary fs.FS) (embed.ProducerModule, error) {
 	if logger == nil {
@@ -62,10 +64,25 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumer embed.LogCon
 		return filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, consumer, fileGenLibrary)
 	case config.GeneratorTypeOkta:
 		return okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate, consumer)
+	case config.GeneratorTypeWel:
+		role := welcatalog.MachineRole(genCfg.Wel.Role)
+		if role == "" {
+			role = welcatalog.RoleMember
+		}
+		return wel.New(wel.Config{
+			Logger:   logger,
+			Workers:  genCfg.Wel.Workers,
+			Rate:     genCfg.Wel.Rate,
+			Computer: genCfg.Wel.Computer,
+			Domain:   genCfg.Wel.Domain,
+			Role:     role,
+			Channels: genCfg.Wel.Channels,
+			Consumer: consumer,
+		})
 	case config.GeneratorTypeNop:
 		return nil, fmt.Errorf("generator type %q does not produce log records; not embed-eligible", genCfg.Type)
 	case config.GeneratorTypeWinevt:
-		return nil, fmt.Errorf("generator type %q is not yet migrated to the embed.LogConsumer contract; use the multi-channel `wel` generator (PIPE-928) when it lands, or run the standalone blitz CLI", genCfg.Type)
+		return nil, fmt.Errorf("generator type %q is the legacy single-template Windows Event XML generator; use the multi-channel `wel` generator instead, or run the standalone blitz CLI", genCfg.Type)
 	case config.GeneratorTypeHostMetrics:
 		return nil, fmt.Errorf("generator type %q produces metrics, not logs; the embed contract supports a separate MetricConsumer path that is not yet wired for this generator", genCfg.Type)
 	case config.GeneratorTypeTraces:

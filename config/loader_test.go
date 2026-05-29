@@ -187,7 +187,7 @@ metrics:
 	_, err := config.LoadModules(yaml, config.EmbedOpts{LogConsumer: &mockConsumer{}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "winevt")
-	assert.Contains(t, err.Error(), "not yet migrated")
+	assert.Contains(t, err.Error(), "use the multi-channel `wel` generator")
 }
 
 func TestLoadModules_PartialResultNotReturnedOnError(t *testing.T) {
