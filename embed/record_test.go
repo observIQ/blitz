@@ -15,6 +15,39 @@ func TestLogRecordZeroValueIsUsable(t *testing.T) {
 	if !rec.Metadata.Timestamp.IsZero() {
 		t.Errorf("zero LogRecord Metadata.Timestamp should be zero")
 	}
+	if rec.Metadata.Attributes != nil {
+		t.Errorf("zero LogRecord Metadata.Attributes should be nil, got %v", rec.Metadata.Attributes)
+	}
+	if rec.Metadata.Resource != nil {
+		t.Errorf("zero LogRecord Metadata.Resource should be nil, got %v", rec.Metadata.Resource)
+	}
+}
+
+func TestLogRecordMetadataCarriesResourceAndAttributes(t *testing.T) {
+	rec := embed.LogRecord{
+		Message: "GET / 200",
+		Metadata: embed.LogRecordMetadata{
+			Severity: "INFO",
+			Resource: map[string]string{
+				"host.name":        "web-01",
+				"telemetry.source": "apache",
+				"apache.format":    "common",
+			},
+			Attributes: map[string]any{
+				"http.status_code": 200,
+				"http.method":      "GET",
+			},
+		},
+	}
+	if got := rec.Metadata.Resource["host.name"]; got != "web-01" {
+		t.Errorf("Resource[host.name]: want web-01, got %q", got)
+	}
+	if got := rec.Metadata.Resource["telemetry.source"]; got != "apache" {
+		t.Errorf("Resource[telemetry.source]: want apache, got %q", got)
+	}
+	if got := rec.Metadata.Attributes["http.status_code"]; got != 200 {
+		t.Errorf("Attributes[http.status_code]: want 200, got %v", got)
+	}
 }
 
 func TestMetricPointIntValueAndDoubleValueAreSeparatePointers(t *testing.T) {
