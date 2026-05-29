@@ -124,7 +124,65 @@ Consumer errors are best-effort: blitz logs the error, increments a `consumer_er
 
 ## Resource attributes
 
-`Host.Resource` holds the per-session base resource (key-value map). Modules may attach module-specific attributes that merge on top of the base at emit time.
+Every blitz record carries a per-record `Metadata.Resource` map describing the entity that emitted it (host, module, format, version). The three signal types follow a parallel shape:
+
+- `LogRecord.Metadata.Resource` — `map[string]string`
+- `MetricPoint.Metadata.Resource` — `map[string]string`
+- `Span.Metadata.Resource` — `map[string]string`
+
+Similarly for `Metadata.Attributes`:
+
+- `LogRecord.Metadata.Attributes` — `map[string]any` (logs and spans allow richly-typed values)
+- `MetricPoint.Metadata.Attributes` — `map[string]string` (OTel metric-attribute convention is string-typed)
+- `Span.Metadata.Attributes` — `map[string]any`
+
+### Host base vs per-record Resource — merge semantics
+
+Two layers of Resource are in play at consumption time:
+
+1. **`embed.Host.Resource`** — host-wide ambient values that no individual module should hardcode (deployment ID, environment name, cluster identifier, etc.). The host populates this once at runner construction.
+2. **`Metadata.Resource`** — per-record values the generator knows internally at emit time (the hostname the log line semantically describes, the module identifier, format flavor, protocol version, etc.).
+
+Recommended merge: `embed.Host.Resource` is the base; per-record `Metadata.Resource` entries take precedence on key conflict. Hosts that want different semantics can override.
+
+### Resource conventions populated by built-in Producers
+
+Every shipped Producer populates at least:
+
+- `host.name` — the hostname the record semantically describes (defaults to `os.Hostname()`, falls back to `blitz`).
+- `telemetry.source` — the module identifier (`apache`, `nginx`, `paloalto`, `fix`, `wel`, …).
+
+Some Producers populate additional dimensions:
+
+| Source                | Extra Resource keys                                                   |
+|-----------------------|-----------------------------------------------------------------------|
+| `apache` (all 3)      | `apache.format` — `common` / `combined` / `error`                     |
+| `json`                | `json.type` — `default` / `pii`                                       |
+| `kubernetes`          | `kubernetes.format` — currently `cri-o` (only supported format today) |
+| `filegen`             | `filegen.source` — the file / package / glob the line came from       |
+| `wel`                 | `wel.channel`, `wel.computer`, `wel.domain`, `wel.role`               |
+| `fix` (when it lands) | `fix.version` — `FIX.4.2` / `FIX.4.4` / `FIX.5.0SP2`                  |
+
+Generators MUST NOT carry secret or per-deployment-specific values they don't already legitimately know — that remains the host's concern via `embed.Host.Resource`.
+
+### Building a Resource for a new Producer
+
+Use the helper in `github.com/observiq/blitz/generator/resource`:
+
+```go
+import "github.com/observiq/blitz/generator/resource"
+
+// In your emit path:
+Metadata: embed.LogRecordMetadata{
+    Severity: "INFO",
+    Resource: resource.Default("my-module",
+        "my-module.format", formatName,
+        "my-module.version", versionString,
+    ),
+},
+```
+
+`resource.Default(source, extras...)` returns a fresh map per call (so consumers can mutate safely without affecting subsequent emissions) and memoizes `os.Hostname()` once per process.
 
 ## Configuration
 
