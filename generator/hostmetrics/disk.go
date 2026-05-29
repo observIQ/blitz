@@ -30,44 +30,72 @@ func (s *diskScraper) Scrape(r *rand.Rand, _ string, resource map[string]string)
 		{
 			Name: "system.disk.io", Description: "Disk I/O bytes",
 			Unit: "By", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(readBytes), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "read"), Resource: resource,
+			IntValue: int64Ptr(readBytes),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "read"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.disk.io", Description: "Disk I/O bytes",
 			Unit: "By", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(writeBytes), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "write"), Resource: resource,
+			IntValue: int64Ptr(writeBytes),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "write"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.disk.operations", Description: "Disk operations",
 			Unit: "{operation}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(readOps), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "read"), Resource: resource,
+			IntValue: int64Ptr(readOps),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "read"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.disk.operations", Description: "Disk operations",
 			Unit: "{operation}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(writeOps), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "write"), Resource: resource,
+			IntValue: int64Ptr(writeOps),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "write"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.disk.operation_time", Description: "Time spent in disk operations",
 			Unit: "s", Type: output.MetricTypeSum,
-			DoubleValue: float64Ptr(readTime), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "read"), Resource: resource,
+			DoubleValue: float64Ptr(readTime),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "read"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.disk.operation_time", Description: "Time spent in disk operations",
 			Unit: "s", Type: output.MetricTypeSum,
-			DoubleValue: float64Ptr(writeTime), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "write"), Resource: resource,
+			DoubleValue: float64Ptr(writeTime),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "write"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.disk.io_time", Description: "Time disk spent activated",
 			Unit: "s", Type: output.MetricTypeSum,
-			DoubleValue: float64Ptr(ioTime), Timestamp: now,
-			Attributes: attrs, Resource: resource,
+			DoubleValue: float64Ptr(ioTime),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: attrs,
+				Resource:   resource,
+			},
 		},
 	}
 }

@@ -94,8 +94,10 @@ func TestStdoutOutput_WriteMetric(t *testing.T) {
 		Name:        "cpu.usage",
 		Type:        output.MetricTypeGauge,
 		DoubleValue: &v,
-		Timestamp:   time.Now(),
-		Attributes:  map[string]string{"host": "test"},
+		Metadata: output.MetricPointMetadata{
+			Timestamp:  time.Now(),
+			Attributes: map[string]string{"host": "test"},
+		},
 	}
 
 	err = stdout.WriteMetric(context.Background(), rec)

@@ -26,12 +26,14 @@ func TestSpanKindConstants(t *testing.T) {
 func TestMetricRecordIntValue(t *testing.T) {
 	v := int64(42)
 	rec := MetricRecord{
-		Name:      "cpu.usage",
-		Type:      MetricTypeGauge,
-		IntValue:  &v,
-		Timestamp: time.Now(),
-		Attributes: map[string]string{
-			"host": "test-host",
+		Name:     "cpu.usage",
+		Type:     MetricTypeGauge,
+		IntValue: &v,
+		Metadata: MetricPointMetadata{
+			Timestamp: time.Now(),
+			Attributes: map[string]string{
+				"host": "test-host",
+			},
 		},
 	}
 
@@ -48,7 +50,7 @@ func TestMetricRecordDoubleValue(t *testing.T) {
 		Name:        "cpu.percent",
 		Type:        MetricTypeGauge,
 		DoubleValue: &v,
-		Timestamp:   time.Now(),
+		Metadata:    MetricPointMetadata{Timestamp: time.Now()},
 	}
 
 	assert.NotNil(t, rec.DoubleValue)
@@ -66,7 +68,7 @@ func TestMetricRecordHistogram(t *testing.T) {
 		HistogramMax:          50.0,
 		HistogramBucketBounds: []float64{1, 5, 10, 25, 50},
 		HistogramBucketCounts: []uint64{10, 30, 40, 15, 5},
-		Timestamp:             time.Now(),
+		Metadata:              MetricPointMetadata{Timestamp: time.Now()},
 	}
 
 	assert.Equal(t, MetricTypeHistogram, rec.Type)
@@ -90,9 +92,11 @@ func TestTraceRecord(t *testing.T) {
 		Kind:          SpanKindServer,
 		StartTime:     start,
 		EndTime:       end,
-		Attributes:    map[string]any{"http.method": "GET", "http.status_code": 200},
 		StatusCode:    0,
 		StatusMessage: "",
+		Metadata: SpanMetadata{
+			Attributes: map[string]any{"http.method": "GET", "http.status_code": 200},
+		},
 	}
 
 	assert.Equal(t, "abc123", rec.TraceID)
@@ -101,7 +105,7 @@ func TestTraceRecord(t *testing.T) {
 	assert.Equal(t, SpanKindServer, rec.Kind)
 	assert.Equal(t, start, rec.StartTime)
 	assert.Equal(t, end, rec.EndTime)
-	assert.Equal(t, "GET", rec.Attributes["http.method"])
+	assert.Equal(t, "GET", rec.Metadata.Attributes["http.method"])
 }
 
 func TestErrUnsupportedTelemetryType(t *testing.T) {

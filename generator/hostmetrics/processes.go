@@ -24,32 +24,52 @@ func (s *processesScraper) Scrape(r *rand.Rand, _ string, resource map[string]st
 		{
 			Name: "system.processes.count", Description: "Total process count by state",
 			Unit: "{process}", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(running), Timestamp: now,
-			Attributes: map[string]string{"status": "running"}, Resource: resource,
+			IntValue: int64Ptr(running),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"status": "running"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.processes.count", Description: "Total process count by state",
 			Unit: "{process}", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(sleeping), Timestamp: now,
-			Attributes: map[string]string{"status": "sleeping"}, Resource: resource,
+			IntValue: int64Ptr(sleeping),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"status": "sleeping"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.processes.count", Description: "Total process count by state",
 			Unit: "{process}", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(stopped), Timestamp: now,
-			Attributes: map[string]string{"status": "stopped"}, Resource: resource,
+			IntValue: int64Ptr(stopped),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"status": "stopped"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.processes.count", Description: "Total process count by state",
 			Unit: "{process}", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(zombie), Timestamp: now,
-			Attributes: map[string]string{"status": "zombie"}, Resource: resource,
+			IntValue: int64Ptr(zombie),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"status": "zombie"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.processes.count", Description: "Total process count",
 			Unit: "{process}", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(total), Timestamp: now,
-			Attributes: map[string]string{}, Resource: resource,
+			IntValue: int64Ptr(total),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{},
+				Resource:   resource,
+			},
 		},
 	}
 }

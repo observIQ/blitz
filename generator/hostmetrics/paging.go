@@ -27,38 +27,62 @@ func (s *pagingScraper) Scrape(r *rand.Rand, _ string, resource map[string]strin
 		{
 			Name: "system.paging.usage", Description: "Swap usage in bytes",
 			Unit: "By", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(swapUsed), Timestamp: now,
-			Attributes: map[string]string{"state": "used"}, Resource: resource,
+			IntValue: int64Ptr(swapUsed),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"state": "used"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.paging.usage", Description: "Swap usage in bytes",
 			Unit: "By", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(swapFree), Timestamp: now,
-			Attributes: map[string]string{"state": "free"}, Resource: resource,
+			IntValue: int64Ptr(swapFree),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"state": "free"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.paging.utilization", Description: "Swap utilization as a fraction",
 			Unit: "1", Type: output.MetricTypeGauge,
-			DoubleValue: float64Ptr(swapUsedPct), Timestamp: now,
-			Attributes: map[string]string{}, Resource: resource,
+			DoubleValue: float64Ptr(swapUsedPct),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.paging.operations", Description: "Paging operations",
 			Unit: "{operation}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(pageIn), Timestamp: now,
-			Attributes: map[string]string{"direction": "page_in"}, Resource: resource,
+			IntValue: int64Ptr(pageIn),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"direction": "page_in"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.paging.operations", Description: "Paging operations",
 			Unit: "{operation}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(pageOut), Timestamp: now,
-			Attributes: map[string]string{"direction": "page_out"}, Resource: resource,
+			IntValue: int64Ptr(pageOut),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"direction": "page_out"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.paging.faults", Description: "Page faults",
 			Unit: "{fault}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(faults), Timestamp: now,
-			Attributes: map[string]string{}, Resource: resource,
+			IntValue: int64Ptr(faults),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{},
+				Resource:   resource,
+			},
 		},
 	}
 }

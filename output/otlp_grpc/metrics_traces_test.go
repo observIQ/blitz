@@ -21,8 +21,10 @@ func TestConvertMetricRecord_Gauge(t *testing.T) {
 		Unit:        "percent",
 		Type:        output.MetricTypeGauge,
 		DoubleValue: &v,
-		Timestamp:   time.Now(),
-		Attributes:  map[string]string{"host": "test"},
+		Metadata: output.MetricPointMetadata{
+			Timestamp:  time.Now(),
+			Attributes: map[string]string{"host": "test"},
+		},
 	}
 
 	m := convertMetricRecord(rec)
@@ -39,10 +41,10 @@ func TestConvertMetricRecord_Gauge(t *testing.T) {
 func TestConvertMetricRecord_GaugeInt(t *testing.T) {
 	v := int64(100)
 	rec := output.MetricRecord{
-		Name:      "memory.usage",
-		Type:      output.MetricTypeGauge,
-		IntValue:  &v,
-		Timestamp: time.Now(),
+		Name:     "memory.usage",
+		Type:     output.MetricTypeGauge,
+		IntValue: &v,
+		Metadata: output.MetricPointMetadata{Timestamp: time.Now()},
 	}
 
 	m := convertMetricRecord(rec)
@@ -57,7 +59,7 @@ func TestConvertMetricRecord_Sum(t *testing.T) {
 		Name:        "disk.io",
 		Type:        output.MetricTypeSum,
 		DoubleValue: &v,
-		Timestamp:   time.Now(),
+		Metadata:    output.MetricPointMetadata{Timestamp: time.Now()},
 	}
 
 	m := convertMetricRecord(rec)
@@ -70,10 +72,10 @@ func TestConvertMetricRecord_Sum(t *testing.T) {
 func TestConvertMetricRecord_Counter(t *testing.T) {
 	v := int64(42)
 	rec := output.MetricRecord{
-		Name:      "requests.total",
-		Type:      output.MetricTypeCounter,
-		IntValue:  &v,
-		Timestamp: time.Now(),
+		Name:     "requests.total",
+		Type:     output.MetricTypeCounter,
+		IntValue: &v,
+		Metadata: output.MetricPointMetadata{Timestamp: time.Now()},
 	}
 
 	m := convertMetricRecord(rec)
@@ -86,13 +88,13 @@ func TestConvertMetricRecord_Histogram(t *testing.T) {
 	rec := output.MetricRecord{
 		Name:                  "request.duration",
 		Type:                  output.MetricTypeHistogram,
-		Timestamp:             time.Now(),
 		HistogramCount:        100,
 		HistogramSum:          1500.5,
 		HistogramMin:          0.5,
 		HistogramMax:          50.0,
 		HistogramBucketBounds: []float64{1, 5, 10, 25, 50},
 		HistogramBucketCounts: []uint64{10, 30, 40, 15, 5},
+		Metadata:              output.MetricPointMetadata{Timestamp: time.Now()},
 	}
 
 	m := convertMetricRecord(rec)
@@ -120,9 +122,11 @@ func TestConvertTraceRecord(t *testing.T) {
 		Kind:          output.SpanKindServer,
 		StartTime:     start,
 		EndTime:       end,
-		Attributes:    map[string]any{"http.method": "GET", "http.status_code": 200},
 		StatusCode:    0,
 		StatusMessage: "",
+		Metadata: output.SpanMetadata{
+			Attributes: map[string]any{"http.method": "GET", "http.status_code": 200},
+		},
 	}
 
 	span := convertTraceRecord(rec)

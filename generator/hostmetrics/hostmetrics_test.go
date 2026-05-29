@@ -137,8 +137,8 @@ func TestScrapers(t *testing.T) {
 			assert.NotEmpty(t, records, "scraper %s should produce records", s.Name())
 			for _, rec := range records {
 				assert.NotEmpty(t, rec.Name, "metric name should not be empty")
-				assert.NotZero(t, rec.Timestamp, "timestamp should not be zero")
-				assert.NotNil(t, rec.Resource, "resource should not be nil")
+				assert.NotZero(t, rec.Metadata.Timestamp, "timestamp should not be zero")
+				assert.NotNil(t, rec.Metadata.Resource, "resource should not be nil")
 				// Each record should have either IntValue or DoubleValue set
 				assert.True(t, rec.IntValue != nil || rec.DoubleValue != nil,
 					"metric %s should have a value", rec.Name)

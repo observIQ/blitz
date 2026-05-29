@@ -43,20 +43,32 @@ func (s *filesystemScraper) Scrape(r *rand.Rand, _ string, resource map[string]s
 		{
 			Name: "system.filesystem.usage", Description: "Filesystem usage in bytes",
 			Unit: "By", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(used), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "state", "used"), Resource: resource,
+			IntValue: int64Ptr(used),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "state", "used"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.filesystem.usage", Description: "Filesystem usage in bytes",
 			Unit: "By", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(free), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "state", "free"), Resource: resource,
+			IntValue: int64Ptr(free),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "state", "free"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.filesystem.utilization", Description: "Filesystem utilization as a fraction",
 			Unit: "1", Type: output.MetricTypeGauge,
-			DoubleValue: float64Ptr(usedPct), Timestamp: now,
-			Attributes: attrs, Resource: resource,
+			DoubleValue: float64Ptr(usedPct),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: attrs,
+				Resource:   resource,
+			},
 		},
 	}
 }

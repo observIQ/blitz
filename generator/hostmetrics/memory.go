@@ -26,32 +26,52 @@ func (s *memoryScraper) Scrape(r *rand.Rand, _ string, resource map[string]strin
 		{
 			Name: "system.memory.usage", Description: "Memory usage in bytes",
 			Unit: "By", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(used), Timestamp: now,
-			Attributes: map[string]string{"state": "used"}, Resource: resource,
+			IntValue: int64Ptr(used),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"state": "used"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.memory.usage", Description: "Memory usage in bytes",
 			Unit: "By", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(free), Timestamp: now,
-			Attributes: map[string]string{"state": "free"}, Resource: resource,
+			IntValue: int64Ptr(free),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"state": "free"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.memory.usage", Description: "Memory usage in bytes",
 			Unit: "By", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(cached), Timestamp: now,
-			Attributes: map[string]string{"state": "cached"}, Resource: resource,
+			IntValue: int64Ptr(cached),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"state": "cached"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.memory.usage", Description: "Memory usage in bytes",
 			Unit: "By", Type: output.MetricTypeGauge,
-			IntValue: int64Ptr(buffered), Timestamp: now,
-			Attributes: map[string]string{"state": "buffered"}, Resource: resource,
+			IntValue: int64Ptr(buffered),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{"state": "buffered"},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.memory.utilization", Description: "Memory utilization as a fraction",
 			Unit: "1", Type: output.MetricTypeGauge,
-			DoubleValue: float64Ptr(usedPct), Timestamp: now,
-			Attributes: map[string]string{}, Resource: resource,
+			DoubleValue: float64Ptr(usedPct),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{},
+				Resource:   resource,
+			},
 		},
 	}
 }
