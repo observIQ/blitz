@@ -12,6 +12,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/internal/generator/logtypes"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
@@ -269,6 +270,7 @@ func formatAsJSON(data logtypes.LogData) (embed.LogRecord, error) {
 	var jsonData any
 	var timestamp time.Time
 	var severity string
+	var jsonType string
 
 	switch d := data.(type) {
 	case *logtypes.DefaultLogData:
@@ -291,10 +293,12 @@ func formatAsJSON(data logtypes.LogData) (embed.LogRecord, error) {
 		}
 		timestamp = d.TimestampVal
 		severity = d.LevelVal
+		jsonType = LogTypeDefault
 	case *logtypes.PIILogData:
 		jsonData = formatPIILogData(d)
 		timestamp = d.TimestampVal
 		severity = d.LevelVal
+		jsonType = LogTypePII
 	default:
 		return embed.LogRecord{}, fmt.Errorf("unsupported log data type: %T", data)
 	}
@@ -316,6 +320,7 @@ func formatAsJSON(data logtypes.LogData) (embed.LogRecord, error) {
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: timestamp,
 			Severity:  severity,
+			Resource:  resource.Default(componentName, "json.type", jsonType),
 		},
 	}, nil
 }

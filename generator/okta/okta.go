@@ -12,6 +12,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -432,6 +433,7 @@ func (g *Generator) generateOktaLog(r *rand.Rand) (embed.LogRecord, error) {
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: now,
 			Severity:  event.severity,
+			Resource:  resource.Default(componentName),
 		},
 	}, nil
 }

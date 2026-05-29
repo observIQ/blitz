@@ -13,6 +13,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/generator/security"
 	"github.com/observiq/blitz/internal/useragent"
@@ -346,6 +347,7 @@ func formatAsNginxCombined(data *nginxLogData) (embed.LogRecord, error) {
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: data.timestamp,
 			Severity:  data.severity,
+			Resource:  resource.Default(componentName),
 		},
 	}, nil
 }
