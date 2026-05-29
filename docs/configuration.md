@@ -333,7 +333,7 @@ generator:
 
 output:
   type: otlp-grpc
-  otlpGrpc:
+  otlp-grpc:
     host: collector.example.com
     port: 4317
     workers: 3
@@ -351,7 +351,7 @@ logging:
 
 generator:
   type: palo-alto
-  paloAlto:
+  palo-alto:
     workers: 2
     rate: 500ms
 
@@ -365,7 +365,7 @@ output:
 
 ## Duration Format
 
-Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `generator.paloAlto.rate`) support the following formats:
+Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `generator.palo-alto.rate`) support the following formats:
 
 - `500ms` - 500 milliseconds
 - `1s` - 1 second
@@ -384,8 +384,8 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `output.udp.port` - Required when using UDP output
 - `output.syslog.host` - Required when using Syslog output
 - `output.syslog.port` - Required when using Syslog output
-- `output.otlpGrpc.host` - Required when using OTLP gRPC output
-- `output.otlpGrpc.port` - Required when using OTLP gRPC output
+- `output.otlp-grpc.host` - Required when using OTLP gRPC output
+- `output.otlp-grpc.port` - Required when using OTLP gRPC output
 - `output.file.path` - Required when using File output
 
 ### Validation Constraints
@@ -393,19 +393,19 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `generator.json.rate` - Must be > 0
 - `generator.winevt.workers` - Must be ≥ 1
 - `generator.winevt.rate` - Must be > 0
-- `generator.paloAlto.workers` - Must be ≥ 1
-- `generator.paloAlto.rate` - Must be > 0
+- `generator.palo-alto.workers` - Must be ≥ 1
+- `generator.palo-alto.rate` - Must be > 0
 - `output.tcp.workers` - Must be ≥ 0
 - `output.udp.workers` - Must be ≥ 0
 - `output.syslog.workers` - Must be ≥ 0
-- `output.otlpGrpc.workers` - Must be ≥ 0
+- `output.otlp-grpc.workers` - Must be ≥ 0
 - `output.tcp.port` - Must be between 1 and 65535
 - `output.udp.port` - Must be between 1 and 65535
 - `output.syslog.port` - Must be between 1 and 65535
-- `output.otlpGrpc.port` - Must be between 1 and 65535
-- `output.otlpGrpc.maxQueueSize` - Must be ≥ 0
-- `output.otlpGrpc.maxExportBatchSize` - Must be ≥ 0
-- `output.otlpGrpc.batchTimeout` - Must be > 0 (duration format)
+- `output.otlp-grpc.port` - Must be between 1 and 65535
+- `output.otlp-grpc.maxQueueSize` - Must be ≥ 0
+- `output.otlp-grpc.maxExportBatchSize` - Must be ≥ 0
+- `output.otlp-grpc.batchTimeout` - Must be > 0 (duration format)
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
 - `logging.type` - Must be one of: `stdout`, `file`
 - `logging.file.path` - Required when `logging.type` is `file`
@@ -438,14 +438,14 @@ Failed to read config file nonexistent.yaml: open nonexistent.yaml: no such file
 
 ### Using Palo Alto Generator
 ```bash
-./blitz --generator-type palo-alto --generator-paloalto-workers 3 --generator-paloalto-rate 250ms
+./blitz --generator-type palo-alto --generator-palo-alto-workers 3 --generator-palo-alto-rate 250ms
 ```
 
 Or with environment variables:
 ```bash
 export BLITZ_GENERATOR_TYPE=palo-alto
-export BLITZ_GENERATOR_PALOALTO_WORKERS=3
-export BLITZ_GENERATOR_PALOALTO_RATE=250ms
+export BLITZ_GENERATOR_PALO_ALTO_WORKERS=3
+export BLITZ_GENERATOR_PALO_ALTO_RATE=250ms
 ./blitz
 ```
 
@@ -460,15 +460,15 @@ export BLITZ_OUTPUT_TCP_PORT=9090
 
 ### Using OTLP gRPC Output
 ```bash
-./blitz --output-type otlp-grpc --output-otlpgrpc-host collector.example.com --output-otlpgrpc-port 4317
+./blitz --output-type otlp-grpc --output-otlp-grpc-host collector.example.com --output-otlp-grpc-port 4317
 ```
 
 Or with environment variables:
 ```bash
 export BLITZ_OUTPUT_TYPE=otlp-grpc
-export BLITZ_OUTPUT_OTLPGRPC_HOST=collector.example.com
-export BLITZ_OUTPUT_OTLPGRPC_PORT=4317
-export BLITZ_OUTPUT_OTLPGRPC_BATCHTIMEOUT=10s
+export BLITZ_OUTPUT_OTLP_GRPC_HOST=collector.example.com
+export BLITZ_OUTPUT_OTLP_GRPC_PORT=4317
+export BLITZ_OUTPUT_OTLP_GRPC_BATCHTIMEOUT=10s
 ./blitz
 ```
 
@@ -532,7 +532,7 @@ Or with command-line flags:
 ```yaml
 output:
   type: otlp-grpc
-  otlpGrpc:
+  otlp-grpc:
     host: collector.example.com
     port: 4317
     workers: 3
@@ -549,8 +549,8 @@ output:
 Or with command-line flags:
 ```bash
 ./blitz --output-type otlp-grpc \
-  --output-otlpgrpc-host collector.example.com \
-  --output-otlpgrpc-port 4317 \
+  --output-otlp-grpc-host collector.example.com \
+  --output-otlp-grpc-port 4317 \
   --otlp-grpc-tls-insecure false \
   --otlp-grpc-tls-cert /path/to/cert.pem \
   --otlp-grpc-tls-key /path/to/key.pem \

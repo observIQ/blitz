@@ -37,7 +37,7 @@ type Output struct {
 	// Syslog contains Syslog output configuration
 	Syslog SyslogOutputConfig `yaml:"syslog,omitempty" mapstructure:"syslog,omitempty"`
 	// OTLPGrpc contains OTLP gRPC output configuration
-	OTLPGrpc OTLPGrpcOutputConfig `yaml:"otlpGrpc,omitempty" mapstructure:"otlpGrpc,omitempty"`
+	OTLPGrpc OTLPGrpcOutputConfig `yaml:"otlp-grpc,omitempty" mapstructure:"otlp-grpc,omitempty"`
 	// File contains File output configuration
 	File FileOutputConfig `yaml:"file,omitempty" mapstructure:"file,omitempty"`
 	// HEC contains Splunk HEC output configuration

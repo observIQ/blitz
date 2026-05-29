@@ -114,6 +114,8 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	config.MigrateDeprecatedKeys(viper.GetViper())
+
 	cfg := config.NewConfig()
 	if err := viper.Unmarshal(cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)

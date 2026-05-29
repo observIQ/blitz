@@ -15,15 +15,15 @@ The Palo Alto generator generates realistic Palo Alto firewall syslog entries in
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
 | `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Set to `palo-alto` to use this generator. |
-| `generator.paloAlto.workers` | `--generator-paloalto-workers` | `BLITZ_GENERATOR_PALOALTO_WORKERS` | `1` | Number of Palo Alto generator workers (must be ≥ 1) |
-| `generator.paloAlto.rate` | `--generator-paloalto-rate` | `BLITZ_GENERATOR_PALOALTO_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
+| `generator.palo-alto.workers` | `--generator-palo-alto-workers` | `BLITZ_GENERATOR_PALO_ALTO_WORKERS` | `1` | Number of Palo Alto generator workers (must be ≥ 1) |
+| `generator.palo-alto.rate` | `--generator-palo-alto-rate` | `BLITZ_GENERATOR_PALO_ALTO_RATE` | `1s` | Rate at which logs are generated per worker (duration format) |
 
 ## Example Configuration
 
 ```yaml
 generator:
   type: palo-alto
-  paloAlto:
+  palo-alto:
     workers: 2
     rate: 500ms
 ```

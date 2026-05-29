@@ -38,7 +38,7 @@ type LoadOpts struct {
 	// host supplies on top of the parsed YAML, mirroring the override
 	// path the standalone blitz CLI uses for BLITZ_* environment
 	// variables. Keys use the dotted YAML path (e.g. "generator.type"
-	// overrides cfg.Generator.Type; "output.otlpGrpc.host" overrides
+	// overrides cfg.Generator.Type; "output.otlp-grpc.host" overrides
 	// cfg.Output.OTLPGrpc.Host).
 	//
 	// Hosts populate this from their own environment-loading mechanism
@@ -73,6 +73,7 @@ func Load(yamlBytes []byte, opts LoadOpts) (*Config, error) {
 	if err := v.ReadConfig(bytes.NewReader(yamlBytes)); err != nil {
 		return nil, fmt.Errorf("parse blitz YAML: %w", err)
 	}
+	internalconfig.MigrateDeprecatedKeys(v)
 	for k, val := range opts.EnvOverrides {
 		v.Set(k, val)
 	}
