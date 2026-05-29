@@ -49,7 +49,7 @@ generator:
       - disk
 output:
   type: otlp-grpc
-  otlpGrpc:
+  otlp-grpc:
     host: localhost
     port: 4317
 ```

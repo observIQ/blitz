@@ -192,9 +192,16 @@ changelog:
   sort: asc
   use: github
   groups:
+    # Breaking changes: commit subjects using Conventional Commits "!:"
+    # syntax (e.g. "feat!:", "fix!(config):", "refactor!:"). These get
+    # promoted to the top of the release notes so users can't miss
+    # config/CLI/API breaks when upgrading.
+    - title: "⚠ Breaking Changes"
+      regexp: '^.*[a-z]+(\([^)]*\))?!:\s.*$'
+      order: 0
     - title: "New Features"
       regexp: "^.*feat[(\\w)]*:+.*$"
-      order: 0
+      order: 1
     - title: "Bug Fixes"
       regexp: "^.*fix[(\\w)]*:+.*$"
       order: 10

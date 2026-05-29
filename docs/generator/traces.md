@@ -36,7 +36,7 @@ generator:
     rate: 1s
 output:
   type: otlp-grpc
-  otlpGrpc:
+  otlp-grpc:
     host: localhost
     port: 4317
 ```
@@ -44,5 +44,5 @@ output:
 ## Example CLI Usage
 
 ```bash
-blitz --generator-type traces --output-type otlp-grpc --output-otlpgrpc-host localhost --output-otlpgrpc-port 4317
+blitz --generator-type traces --output-type otlp-grpc --output-otlp-grpc-host localhost --output-otlp-grpc-port 4317
 ```

@@ -51,7 +51,7 @@ type Generator struct {
 	// Winevt contains Windows Event generator configuration
 	Winevt WinevtGeneratorConfig `yaml:"winevt,omitempty" mapstructure:"winevt,omitempty"`
 	// PaloAlto contains Palo Alto generator configuration
-	PaloAlto PaloAltoGeneratorConfig `yaml:"paloAlto,omitempty" mapstructure:"paloAlto,omitempty"`
+	PaloAlto PaloAltoGeneratorConfig `yaml:"palo-alto,omitempty" mapstructure:"palo-alto,omitempty"`
 	// Apache contains Apache generator configuration
 	Apache ApacheGeneratorConfig `yaml:"apache-common,omitempty" mapstructure:"apache-common,omitempty"`
 	// ApacheCombined contains Apache Combined generator configuration

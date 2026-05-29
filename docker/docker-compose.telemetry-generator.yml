@@ -22,8 +22,8 @@ x-blitz-common: &blitz-common
   restart: unless-stopped
   environment:
     BLITZ_OUTPUT_TYPE: otlp-grpc
-    BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-    BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+    BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+    BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
     BLITZ_LOGGING_LEVEL: info
   depends_on:
     - bdot-collector
@@ -57,8 +57,8 @@ services:
       BLITZ_GENERATOR_JSON_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_JSON_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # PII Log Generator (JSON with comprehensive PII data - 37 sensitive data types)
   blitz-pii:
@@ -69,8 +69,8 @@ services:
       BLITZ_GENERATOR_JSON_WORKERS: ${BLITZ_PII_WORKERS:-1}
       BLITZ_GENERATOR_JSON_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Windows Event Log Generator (XML mode, legacy single-template variant)
   blitz-winevt:
@@ -80,8 +80,8 @@ services:
       BLITZ_GENERATOR_WINEVT_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_WINEVT_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Windows Event Log Generator (multi-channel, role-aware)
   blitz-wel:
@@ -92,19 +92,19 @@ services:
       BLITZ_GENERATOR_WEL_RATE: ${BLITZ_RATE:-1s}
       BLITZ_GENERATOR_WEL_ROLE: ${BLITZ_WEL_ROLE:-member}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Palo Alto Firewall Log Generator
   blitz-palo-alto:
     <<: *blitz-common
     environment:
       BLITZ_GENERATOR_TYPE: palo-alto
-      BLITZ_GENERATOR_PALOALTO_WORKERS: ${BLITZ_WORKERS:-1}
-      BLITZ_GENERATOR_PALOALTO_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_PALO_ALTO_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_PALO_ALTO_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Apache Common Log Generator
   blitz-apache-common:
@@ -114,8 +114,8 @@ services:
       BLITZ_GENERATOR_APACHECOMMON_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_APACHECOMMON_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Apache Combined Log Generator
   blitz-apache-combined:
@@ -125,8 +125,8 @@ services:
       BLITZ_GENERATOR_APACHECOMBINED_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_APACHECOMBINED_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Apache Error Log Generator
   blitz-apache-error:
@@ -136,8 +136,8 @@ services:
       BLITZ_GENERATOR_APACHEERROR_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_APACHEERROR_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # NGINX Log Generator
   blitz-nginx:
@@ -147,8 +147,8 @@ services:
       BLITZ_GENERATOR_NGINX_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_NGINX_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # PostgreSQL Log Generator
   blitz-postgres:
@@ -158,8 +158,8 @@ services:
       BLITZ_GENERATOR_POSTGRES_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_POSTGRES_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Kubernetes Log Generator
   blitz-kubernetes:
@@ -169,8 +169,8 @@ services:
       BLITZ_GENERATOR_KUBERNETES_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_KUBERNETES_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Okta System Log Generator
   blitz-okta:
@@ -180,8 +180,8 @@ services:
       BLITZ_GENERATOR_OKTA_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_OKTA_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Host Metrics Generator (Linux)
   blitz-hostmetrics-linux:
@@ -192,8 +192,8 @@ services:
       BLITZ_GENERATOR_HOSTMETRICS_RATE: ${BLITZ_RATE:-1s}
       BLITZ_GENERATOR_HOSTMETRICS_OS: linux
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Host Metrics Generator (Windows)
   blitz-hostmetrics-windows:
@@ -204,8 +204,8 @@ services:
       BLITZ_GENERATOR_HOSTMETRICS_RATE: ${BLITZ_RATE:-1s}
       BLITZ_GENERATOR_HOSTMETRICS_OS: windows
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Traces Generator
   blitz-traces:
@@ -215,8 +215,8 @@ services:
       BLITZ_GENERATOR_TRACES_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_TRACES_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
 networks:
   telemetry-net:
