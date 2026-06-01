@@ -3,10 +3,13 @@ package config_test
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/observiq/blitz/internal/config"
 )
@@ -143,4 +146,78 @@ output:
 		"legacy otlpGrpc.port must override the bound default")
 	assert.Equal(t, 5, cfg.Output.OTLPGrpc.Workers,
 		"legacy otlpGrpc.workers must override the bound default")
+}
+
+// TestLogGeneratorDeprecations_WinevtEmitsWarn asserts that the
+// helper fires exactly one Warn-level entry mentioning `wel` when a
+// winevt generator is configured.
+func TestLogGeneratorDeprecations_WinevtEmitsWarn(t *testing.T) {
+	core, recorded := observer.New(zap.WarnLevel)
+	logger := zap.New(core)
+
+	cfg := &config.Config{
+		Generator: config.Generator{
+			Type:   config.GeneratorTypeWinevt,
+			Winevt: config.WinevtGeneratorConfig{Workers: 1, Rate: time.Second},
+		},
+	}
+
+	config.LogGeneratorDeprecations(logger, cfg)
+
+	entries := recorded.FilterMessageSnippet("DEPRECATED").All()
+	require.Len(t, entries, 1, "winevt should produce exactly one Warn-level deprecation entry")
+	assert.Equal(t, zap.WarnLevel, entries[0].Level)
+	assert.Contains(t, entries[0].Message, "`wel` generator")
+	assert.Contains(t, entries[0].Message, "winevt")
+}
+
+// TestLogGeneratorDeprecations_NoWinevtNoWarn confirms a non-winevt
+// config produces no deprecation log entries.
+func TestLogGeneratorDeprecations_NoWinevtNoWarn(t *testing.T) {
+	core, recorded := observer.New(zap.WarnLevel)
+	logger := zap.New(core)
+
+	cfg := &config.Config{
+		Generator: config.Generator{
+			Type: config.GeneratorTypeNop,
+		},
+	}
+
+	config.LogGeneratorDeprecations(logger, cfg)
+
+	assert.Empty(t, recorded.All(),
+		"non-deprecated generator types must not emit any deprecation warnings")
+}
+
+// TestLogGeneratorDeprecations_MultiGeneratorCatchesEach confirms each
+// winevt entry in a multi-generator config produces its own warning.
+func TestLogGeneratorDeprecations_MultiGeneratorCatchesEach(t *testing.T) {
+	core, recorded := observer.New(zap.WarnLevel)
+	logger := zap.New(core)
+
+	cfg := &config.Config{
+		Generators: []config.Generator{
+			{Type: config.GeneratorTypeNop},
+			{Type: config.GeneratorTypeWinevt, Winevt: config.WinevtGeneratorConfig{Workers: 1, Rate: time.Second}},
+			{Type: config.GeneratorTypeJSON},
+			{Type: config.GeneratorTypeWinevt, Winevt: config.WinevtGeneratorConfig{Workers: 2, Rate: time.Second}},
+		},
+	}
+
+	config.LogGeneratorDeprecations(logger, cfg)
+
+	entries := recorded.FilterMessageSnippet("DEPRECATED").All()
+	assert.Len(t, entries, 2, "each winevt entry should produce its own warning")
+}
+
+// TestLogGeneratorDeprecations_NilSafe confirms nil logger/cfg are no-ops
+// (defensive guard for early-startup callers).
+func TestLogGeneratorDeprecations_NilSafe(t *testing.T) {
+	assert.NotPanics(t, func() { config.LogGeneratorDeprecations(nil, nil) })
+	assert.NotPanics(t, func() {
+		config.LogGeneratorDeprecations(zap.NewNop(), nil)
+	})
+	assert.NotPanics(t, func() {
+		config.LogGeneratorDeprecations(nil, &config.Config{})
+	})
 }

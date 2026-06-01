@@ -135,6 +135,10 @@ func run(cmd *cobra.Command, args []string) error {
 
 	logger.Info("blitz started")
 
+	// Emit Warn-level banners for any deprecated generator types
+	// configured by the user. Fires once per startup, not per record.
+	config.LogGeneratorDeprecations(logger, cfg)
+
 	// Create signal context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

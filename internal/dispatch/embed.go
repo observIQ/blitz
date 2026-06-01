@@ -86,7 +86,7 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumer embed.LogCon
 	case config.GeneratorTypeNop:
 		return nil, fmt.Errorf("generator type %q does not produce log records; not embed-eligible", genCfg.Type)
 	case config.GeneratorTypeWinevt:
-		return nil, fmt.Errorf("generator type %q is the legacy single-template Windows Event XML generator; use the multi-channel `wel` generator instead, or run the standalone blitz CLI", genCfg.Type)
+		return nil, fmt.Errorf("generator type %q is DEPRECATED and is not available via embed; the legacy single-template Windows Event XML generator has been superseded by the multi-channel `wel` generator (see docs/generator/wel.md). The standalone blitz CLI still accepts `winevt` with a deprecation warning", genCfg.Type)
 	case config.GeneratorTypeHostMetrics:
 		return nil, fmt.Errorf("generator type %q produces metrics, not logs; the embed contract supports a separate MetricConsumer path that is not yet wired for this generator", genCfg.Type)
 	case config.GeneratorTypeTraces:

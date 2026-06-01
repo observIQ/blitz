@@ -49,6 +49,7 @@ func TestForEmbedWinevtRejectionMentionsWel(t *testing.T) {
 	cfg := config.Generator{Type: config.GeneratorTypeWinevt}
 	_, err := ForEmbed(zap.NewNop(), cfg, noopConsumer{}, nil)
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DEPRECATED")
 	assert.Contains(t, err.Error(), "`wel` generator")
 	assert.NotContains(t, err.Error(), "when it lands")
 }
