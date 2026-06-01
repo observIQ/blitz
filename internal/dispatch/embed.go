@@ -14,6 +14,8 @@ import (
 	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
 	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
 	"github.com/observiq/blitz/generator/filegen"
+	fixgen "github.com/observiq/blitz/generator/fix"
+	"github.com/observiq/blitz/generator/fix/catalog"
 	jsongen "github.com/observiq/blitz/generator/json"
 	"github.com/observiq/blitz/generator/kubernetes"
 	"github.com/observiq/blitz/generator/nginx"
@@ -79,6 +81,8 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumer embed.LogCon
 			Channels: genCfg.Wel.Channels,
 			Consumer: consumer,
 		})
+	case config.GeneratorTypeFIX:
+		return newFIX(logger, genCfg.FIX, consumer)
 	case config.GeneratorTypeNop:
 		return nil, fmt.Errorf("generator type %q does not produce log records; not embed-eligible", genCfg.Type)
 	case config.GeneratorTypeWinevt:
@@ -90,4 +94,33 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumer embed.LogCon
 	default:
 		return nil, fmt.Errorf("unknown generator type %q", genCfg.Type)
 	}
+}
+
+// newFIX translates the YAML-shaped FIXGeneratorConfig into the
+// catalog-typed fix.Config and constructs a FIX generator. Version and
+// EnabledCategories strings are validated; an empty version defaults to
+// FIX 4.4 and an empty EnabledCategories means "all 10 categories".
+func newFIX(logger *zap.Logger, cfg config.FIXGeneratorConfig, consumer embed.LogConsumer) (embed.ProducerModule, error) {
+	fc := fixgen.Config{
+		Workers:      cfg.Workers,
+		Rate:         cfg.Rate,
+		SenderCompID: cfg.SenderCompID,
+		TargetCompID: cfg.TargetCompID,
+		Seed:         cfg.Seed,
+	}
+	if cfg.Version != "" {
+		v, err := catalog.VersionFromString(cfg.Version)
+		if err != nil {
+			return nil, fmt.Errorf("fix: %w", err)
+		}
+		fc.Version = v
+	}
+	for _, s := range cfg.EnabledCategories {
+		c, err := catalog.AssetCategoryFromString(s)
+		if err != nil {
+			return nil, fmt.Errorf("fix: %w", err)
+		}
+		fc.EnabledCategories = append(fc.EnabledCategories, c)
+	}
+	return fixgen.New(logger, fc, consumer)
 }
