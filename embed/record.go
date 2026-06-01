@@ -16,9 +16,29 @@ type LogRecord struct {
 }
 
 // LogRecordMetadata is the metadata for a log record.
+//
+// Resource and Attributes describe the entity emitting the record and
+// the per-record dimensions, following OpenTelemetry semantics:
+//
+//   - Resource identifies the source (host, process, module). Per-record
+//     Resource entries take precedence over `embed.Host.Resource` on key
+//     conflict; `embed.Host.Resource` provides host-process-wide ambient
+//     values that no individual generator should hardcode (deployment
+//     ID, environment name, etc.).
+//   - Attributes are key-value pairs the generator knows about this
+//     specific record. Values are `any` to accommodate strings, ints,
+//     bools, slices, and other JSON-compatible types.
+//
+// Both maps may be nil (treated as empty by consumers). Generators
+// SHOULD populate at minimum `host.name` and `telemetry.source` (the
+// module identifier — `apache`, `fix`, `wel`, etc.) in Resource, plus
+// any format / version / module-specific dimensions the generator
+// internally knows.
 type LogRecordMetadata struct {
-	Timestamp time.Time
-	Severity  string
+	Timestamp  time.Time
+	Severity   string
+	Attributes map[string]any
+	Resource   map[string]string
 }
 
 // MetricType represents the type of a metric data point.
