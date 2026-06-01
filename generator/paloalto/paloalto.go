@@ -15,6 +15,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
@@ -155,6 +156,7 @@ func (g *Generator) generateAndWrite(_ int) error {
 		Message: line,
 		Metadata: embed.LogRecordMetadata{
 			Severity: "INFO",
+			Resource: resource.Default(componentName),
 		},
 	}
 

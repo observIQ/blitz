@@ -19,6 +19,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
@@ -524,6 +525,7 @@ func (g *FileLogGenerator) readAndWriteFile(filename string) error {
 		Message: processedLine,
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: time.Now(),
+			Resource:  resource.Default("filegen", "filegen.source", g.source),
 		},
 	}})
 	cancel()

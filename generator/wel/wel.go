@@ -11,6 +11,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
+	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/generator/wel/catalog"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
@@ -238,6 +239,12 @@ func (g *Generator) generateAndWrite(rng *rand.Rand) error {
 		Message: xml,
 		Metadata: embed.LogRecordMetadata{
 			Severity: record.LevelName,
+			Resource: resource.Default(componentName,
+				"wel.channel", record.Channel,
+				"wel.computer", g.computer,
+				"wel.domain", g.domain,
+				"wel.role", string(g.role),
+			),
 		},
 	}
 
