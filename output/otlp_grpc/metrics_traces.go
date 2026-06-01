@@ -44,7 +44,7 @@ func (o *OTLPGrpc) WriteTrace(ctx context.Context, data output.TraceRecord) erro
 
 // convertMetricRecord converts an output.MetricRecord to an OTLP metric protobuf.
 func convertMetricRecord(rec output.MetricRecord) *metricspb.Metric {
-	ts := uint64(rec.Timestamp.UnixNano()) // #nosec G115 -- Unix nanoseconds are always non-negative for current epoch
+	ts := uint64(rec.Metadata.Timestamp.UnixNano()) // #nosec G115 -- Unix nanoseconds are always non-negative for current epoch
 
 	m := &metricspb.Metric{
 		Name:        rec.Name,
@@ -52,7 +52,7 @@ func convertMetricRecord(rec output.MetricRecord) *metricspb.Metric {
 		Unit:        rec.Unit,
 	}
 
-	attrs := stringMapToKeyValues(rec.Attributes)
+	attrs := stringMapToKeyValues(rec.Metadata.Attributes)
 
 	switch rec.Type {
 	case output.MetricTypeGauge:
@@ -131,8 +131,8 @@ func convertTraceRecord(rec output.TraceRecord) *tracepb.Span {
 		span.ParentSpanId = hexToBytes(rec.ParentSpanID, 8)
 	}
 
-	if len(rec.Attributes) > 0 {
-		span.Attributes = anyMapToKeyValues(rec.Attributes)
+	if len(rec.Metadata.Attributes) > 0 {
+		span.Attributes = anyMapToKeyValues(rec.Metadata.Attributes)
 	}
 
 	return span

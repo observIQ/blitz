@@ -107,7 +107,7 @@ func TestTraceStructure(t *testing.T) {
 	assert.False(t, root.StartTime.IsZero())
 	assert.False(t, root.EndTime.IsZero())
 	assert.True(t, root.EndTime.After(root.StartTime))
-	assert.NotNil(t, root.Attributes)
+	assert.NotNil(t, root.Metadata.Attributes)
 
 	// Check second record (DB child span)
 	if len(records) >= 2 {

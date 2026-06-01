@@ -141,21 +141,23 @@ func (g *Generator) generateTrace(r *mathrand.Rand, writer output.TraceWriter) {
 	duration := time.Duration(r.Intn(500)+10) * time.Millisecond // #nosec G404
 
 	rootSpan := output.TraceRecord{
-		TraceID:   traceID,
-		SpanID:    rootSpanID,
-		Name:      fmt.Sprintf("%s %s", method, path),
-		Kind:      output.SpanKindServer,
-		StartTime: now,
-		EndTime:   now.Add(duration),
-		Attributes: map[string]any{
-			"http.method":      method,
-			"http.target":      path,
-			"http.status_code": statusCode,
-			"http.scheme":      "https",
-			"net.host.name":    "api.example.com",
-			"net.host.port":    443,
-		},
+		TraceID:    traceID,
+		SpanID:     rootSpanID,
+		Name:       fmt.Sprintf("%s %s", method, path),
+		Kind:       output.SpanKindServer,
+		StartTime:  now,
+		EndTime:    now.Add(duration),
 		StatusCode: statusCodeFromHTTP(statusCode),
+		Metadata: output.SpanMetadata{
+			Attributes: map[string]any{
+				"http.method":      method,
+				"http.target":      path,
+				"http.status_code": statusCode,
+				"http.scheme":      "https",
+				"net.host.name":    "api.example.com",
+				"net.host.port":    443,
+			},
+		},
 	}
 
 	if err := writer.WriteTrace(ctx, rootSpan); err != nil {
@@ -181,14 +183,16 @@ func (g *Generator) generateTrace(r *mathrand.Rand, writer output.TraceWriter) {
 		Kind:         output.SpanKindClient,
 		StartTime:    dbStart,
 		EndTime:      dbStart.Add(dbDuration),
-		Attributes: map[string]any{
-			"db.system":     "postgresql",
-			"db.statement":  dbOp,
-			"db.name":       "production",
-			"net.peer.name": "db.internal",
-			"net.peer.port": 5432,
+		StatusCode:   0,
+		Metadata: output.SpanMetadata{
+			Attributes: map[string]any{
+				"db.system":     "postgresql",
+				"db.statement":  dbOp,
+				"db.name":       "production",
+				"net.peer.name": "db.internal",
+				"net.peer.port": 5432,
+			},
 		},
-		StatusCode: 0,
 	}
 
 	if err := writer.WriteTrace(ctx, dbSpan); err != nil {
@@ -214,10 +218,12 @@ func (g *Generator) generateTrace(r *mathrand.Rand, writer output.TraceWriter) {
 			Kind:         output.SpanKindInternal,
 			StartTime:    procStart,
 			EndTime:      procStart.Add(procDuration),
-			Attributes: map[string]any{
-				"processing.stage": "validation",
+			StatusCode:   0,
+			Metadata: output.SpanMetadata{
+				Attributes: map[string]any{
+					"processing.stage": "validation",
+				},
 			},
-			StatusCode: 0,
 		}
 
 		if err := writer.WriteTrace(ctx, procSpan); err != nil {

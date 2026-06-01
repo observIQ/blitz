@@ -71,12 +71,6 @@ type MetricPoint struct {
 	// DoubleValue is the floating-point value for gauge/sum/counter metrics.
 	// Mutually exclusive with IntValue.
 	DoubleValue *float64
-	// Timestamp is the time of the metric data point.
-	Timestamp time.Time
-	// Attributes are key-value pairs associated with the metric.
-	Attributes map[string]string
-	// Resource is the resource associated with the metric.
-	Resource map[string]string
 
 	// HistogramCount is the total count of observations.
 	HistogramCount uint64
@@ -90,6 +84,24 @@ type MetricPoint struct {
 	HistogramBucketBounds []float64
 	// HistogramBucketCounts are the counts for each bucket.
 	HistogramBucketCounts []uint64
+
+	// Metadata carries timestamp, per-record Attributes, and Resource.
+	// See MetricPointMetadata for the conventions.
+	Metadata MetricPointMetadata
+}
+
+// MetricPointMetadata is the metadata for a metric data point. See
+// LogRecordMetadata's doc comment for the Resource/Attributes semantics
+// (host.name, telemetry.source, per-record dimensions, etc.) — they
+// apply identically here.
+//
+// Attribute values are typed as map[string]string (rather than
+// map[string]any used for logs and spans) to match the OpenTelemetry
+// metric-attribute typing convention.
+type MetricPointMetadata struct {
+	Timestamp  time.Time
+	Attributes map[string]string
+	Resource   map[string]string
 }
 
 // SpanKind represents the kind of a trace span.
@@ -124,10 +136,25 @@ type Span struct {
 	StartTime time.Time
 	// EndTime is the end time of the span.
 	EndTime time.Time
-	// Attributes are key-value pairs associated with the span.
-	Attributes map[string]any
 	// StatusCode is the span status code (0=Unset, 1=Ok, 2=Error).
 	StatusCode int
 	// StatusMessage is the span status message.
 	StatusMessage string
+
+	// Metadata carries per-record Attributes and Resource. See
+	// SpanMetadata for the conventions.
+	Metadata SpanMetadata
+}
+
+// SpanMetadata is the metadata for a trace span. See LogRecordMetadata's
+// doc comment for Resource/Attributes semantics (host.name,
+// telemetry.source, per-record dimensions, etc.) — they apply
+// identically here.
+//
+// Attribute values are typed as map[string]any to match the
+// OpenTelemetry span-attribute typing convention (strings, ints, bools,
+// arrays).
+type SpanMetadata struct {
+	Attributes map[string]any
+	Resource   map[string]string
 }

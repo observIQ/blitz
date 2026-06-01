@@ -39,6 +39,11 @@ const (
 // existing call sites while later PRs migrate to the new name.
 type MetricRecord = embed.MetricPoint
 
+// MetricPointMetadata aliases embed.MetricPointMetadata so callers in
+// this package can construct MetricRecord values without depending on
+// embed directly.
+type MetricPointMetadata = embed.MetricPointMetadata
+
 // SpanKind aliases embed.SpanKind.
 type SpanKind = embed.SpanKind
 
@@ -58,6 +63,10 @@ const (
 // TraceRecord aliases embed.Span. The embed canonical name is Span; this
 // alias preserves the older TraceRecord name for existing call sites.
 type TraceRecord = embed.Span
+
+// SpanMetadata aliases embed.SpanMetadata so callers in this package
+// can construct TraceRecord values without depending on embed directly.
+type SpanMetadata = embed.SpanMetadata
 
 // Writer can consume log records.
 type Writer interface {

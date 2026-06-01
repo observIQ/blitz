@@ -31,50 +31,82 @@ func (s *networkScraper) Scrape(r *rand.Rand, _ string, resource map[string]stri
 		{
 			Name: "system.network.io", Description: "Network I/O bytes",
 			Unit: "By", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(recvBytes), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "receive"), Resource: resource,
+			IntValue: int64Ptr(recvBytes),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "receive"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.network.io", Description: "Network I/O bytes",
 			Unit: "By", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(sentBytes), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "transmit"), Resource: resource,
+			IntValue: int64Ptr(sentBytes),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "transmit"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.network.packets", Description: "Network packets",
 			Unit: "{packet}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(recvPkts), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "receive"), Resource: resource,
+			IntValue: int64Ptr(recvPkts),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "receive"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.network.packets", Description: "Network packets",
 			Unit: "{packet}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(sentPkts), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "transmit"), Resource: resource,
+			IntValue: int64Ptr(sentPkts),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "transmit"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.network.errors", Description: "Network errors",
 			Unit: "{error}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(recvErrs), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "receive"), Resource: resource,
+			IntValue: int64Ptr(recvErrs),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "receive"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.network.errors", Description: "Network errors",
 			Unit: "{error}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(sentErrs), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "transmit"), Resource: resource,
+			IntValue: int64Ptr(sentErrs),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "transmit"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.network.dropped", Description: "Network dropped packets",
 			Unit: "{packet}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(recvDrops), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "receive"), Resource: resource,
+			IntValue: int64Ptr(recvDrops),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "receive"),
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.network.dropped", Description: "Network dropped packets",
 			Unit: "{packet}", Type: output.MetricTypeSum,
-			IntValue: int64Ptr(sentDrops), Timestamp: now,
-			Attributes: mergeAttrs(attrs, "direction", "transmit"), Resource: resource,
+			IntValue: int64Ptr(sentDrops),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: mergeAttrs(attrs, "direction", "transmit"),
+				Resource:   resource,
+			},
 		},
 	}
 }

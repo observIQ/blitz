@@ -23,20 +23,32 @@ func (s *loadScraper) Scrape(r *rand.Rand, _ string, resource map[string]string)
 		{
 			Name: "system.cpu.load_average.1m", Description: "1-minute load average",
 			Unit: "1", Type: output.MetricTypeGauge,
-			DoubleValue: float64Ptr(load1), Timestamp: now,
-			Attributes: map[string]string{}, Resource: resource,
+			DoubleValue: float64Ptr(load1),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.cpu.load_average.5m", Description: "5-minute load average",
 			Unit: "1", Type: output.MetricTypeGauge,
-			DoubleValue: float64Ptr(load5), Timestamp: now,
-			Attributes: map[string]string{}, Resource: resource,
+			DoubleValue: float64Ptr(load5),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{},
+				Resource:   resource,
+			},
 		},
 		{
 			Name: "system.cpu.load_average.15m", Description: "15-minute load average",
 			Unit: "1", Type: output.MetricTypeGauge,
-			DoubleValue: float64Ptr(load15), Timestamp: now,
-			Attributes: map[string]string{}, Resource: resource,
+			DoubleValue: float64Ptr(load15),
+			Metadata: output.MetricPointMetadata{
+				Timestamp:  now,
+				Attributes: map[string]string{},
+				Resource:   resource,
+			},
 		},
 	}
 }

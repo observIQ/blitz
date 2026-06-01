@@ -40,9 +40,11 @@ func (s *cpuScraper) Scrape(r *rand.Rand, hostname string, resource map[string]s
 				Unit:        "s",
 				Type:        output.MetricTypeSum,
 				DoubleValue: float64Ptr(val),
-				Timestamp:   now,
-				Attributes:  attrs,
-				Resource:    resource,
+				Metadata: output.MetricPointMetadata{
+					Timestamp:  now,
+					Attributes: attrs,
+					Resource:   resource,
+				},
 			})
 		}
 	}
@@ -55,9 +57,11 @@ func (s *cpuScraper) Scrape(r *rand.Rand, hostname string, resource map[string]s
 		Unit:        "1",
 		Type:        output.MetricTypeGauge,
 		DoubleValue: float64Ptr(utilization / 100.0),
-		Timestamp:   now,
-		Attributes:  map[string]string{},
-		Resource:    resource,
+		Metadata: output.MetricPointMetadata{
+			Timestamp:  now,
+			Attributes: map[string]string{},
+			Resource:   resource,
+		},
 	})
 
 	return records
