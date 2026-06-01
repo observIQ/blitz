@@ -1,6 +1,9 @@
 package config
 
-import "github.com/spf13/viper"
+import (
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+)
 
 // MigrateDeprecatedKeys rewrites legacy YAML key names to their current
 // canonical equivalents in the supplied viper instance, so old configs
@@ -47,6 +50,31 @@ func MigrateDeprecatedKeys(v *viper.Viper) {
 	for _, r := range renames {
 		if v.InConfig(r.from) && !v.InConfig(r.to) {
 			v.Set(r.to, v.Get(r.from))
+		}
+	}
+}
+
+// LogGeneratorDeprecations emits a Warn-level banner once per startup
+// for every configured generator type that has been deprecated. The
+// generator itself continues to function — this is a migration nudge,
+// not a refusal. Embed users get a hard refusal at construction time
+// in dispatch.ForEmbed; this function exists for the standalone CLI
+// path where backward compatibility is preserved.
+//
+// Currently emits warnings for:
+//   - generator.type: winevt → replaced by the multi-channel `wel` generator
+func LogGeneratorDeprecations(logger *zap.Logger, cfg *Config) {
+	if logger == nil || cfg == nil {
+		return
+	}
+	for _, g := range cfg.EffectiveGenerators() {
+		if g.Type == GeneratorTypeWinevt {
+			logger.Warn(
+				"DEPRECATED: the `winevt` generator is deprecated and not available via embed; " +
+					"migrate to the `wel` generator (multi-channel, embed-friendly Windows Event Log). " +
+					"See docs/generator/wel.md. The `winevt` generator continues to function in standalone " +
+					"CLI mode for now.",
+			)
 		}
 	}
 }

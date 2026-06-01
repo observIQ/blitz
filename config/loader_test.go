@@ -187,7 +187,8 @@ metrics:
 	_, err := config.LoadModules(yaml, config.EmbedOpts{LogConsumer: &mockConsumer{}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "winevt")
-	assert.Contains(t, err.Error(), "use the multi-channel `wel` generator")
+	assert.Contains(t, err.Error(), "DEPRECATED")
+	assert.Contains(t, err.Error(), "`wel` generator")
 }
 
 func TestLoadModules_PartialResultNotReturnedOnError(t *testing.T) {
