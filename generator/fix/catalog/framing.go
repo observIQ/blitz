@@ -32,10 +32,15 @@ func EncodeField(b []byte, f Field) []byte {
 	return b
 }
 
-// EncodeFields writes a sequence of fields in order. Equivalent to
-// repeated EncodeField but reads cleaner at the call site.
+// EncodeFields writes a sequence of fields in order. Fields with
+// Tag==0 (the zero-value Field, returned by generators that want to
+// conditionally omit a field for the current message — e.g. CDS-only
+// tags on a non-CDS swap) are skipped.
 func EncodeFields(b []byte, fields []Field) []byte {
 	for _, f := range fields {
+		if f.Tag == 0 {
+			continue
+		}
 		b = EncodeField(b, f)
 	}
 	return b

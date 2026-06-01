@@ -44,6 +44,14 @@ type GenerateCtx struct {
 	// across a build session — never read from time.Now() inside a
 	// generator.
 	SendingTime string
+	// Memo is per-message scratch space for FieldGenerators that need
+	// to share derived state across multiple fields within one message
+	// — e.g. an instrument pick that must stay consistent across
+	// Symbol/SecurityType/SecurityID/price/etc. so the message is
+	// internally coherent. Lazily initialized by the first writer in
+	// each message; keys are conventionally typed values defined by
+	// the package using them.
+	Memo map[any]any
 }
 
 // LiteralField returns a FieldGenerator that always emits the given
