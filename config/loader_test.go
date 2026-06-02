@@ -183,6 +183,27 @@ metrics:
 	assert.Contains(t, err.Error(), "MetricConsumer")
 }
 
+func TestLoadModules_TracesRequiresTraceConsumer(t *testing.T) {
+	// traces is a trace Producer; LoadModules must require
+	// EmbedOpts.TraceConsumer rather than accepting a log-only opts.
+	yaml := []byte(`
+generator:
+  type: traces
+  traces:
+    workers: 1
+    rate: 1s
+output:
+  type: nop
+logging:
+  type: stdout
+metrics:
+  port: 19000
+`)
+	_, err := config.LoadModules(yaml, config.EmbedOpts{LogConsumer: &mockConsumer{}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TraceConsumer")
+}
+
 func TestLoadModules_RejectsWinevt(t *testing.T) {
 	yaml := []byte(`
 generator:
