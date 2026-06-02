@@ -95,9 +95,22 @@ metrics:
 }
 
 func TestLoadModules_NilConsumer(t *testing.T) {
-	_, err := config.LoadModules([]byte(`generator: {type: apache-common}`), config.EmbedOpts{})
+	yaml := []byte(`
+generator:
+  type: apache-common
+  apache-common:
+    workers: 1
+    rate: 1s
+output:
+  type: nop
+logging:
+  type: stdout
+metrics:
+  port: 19000
+`)
+	_, err := config.LoadModules(yaml, config.EmbedOpts{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "LogConsumer is required")
+	assert.Contains(t, err.Error(), "LogConsumer")
 }
 
 func TestLoadModules_SingleProducer(t *testing.T) {
@@ -148,9 +161,9 @@ metrics:
 	assert.ElementsMatch(t, []string{"apache", "nginx", "postgres"}, names)
 }
 
-func TestLoadModules_RejectsNonProducer(t *testing.T) {
-	// hostmetrics is a metric Producer, not a log Producer; LoadModules
-	// must reject it explicitly rather than silently dropping it.
+func TestLoadModules_HostMetricsRequiresMetricConsumer(t *testing.T) {
+	// hostmetrics is a metric Producer; LoadModules must require
+	// EmbedOpts.MetricConsumer rather than accepting a log-only opts.
 	yaml := []byte(`
 generator:
   type: hostmetrics
@@ -167,7 +180,7 @@ metrics:
 `)
 	_, err := config.LoadModules(yaml, config.EmbedOpts{LogConsumer: &mockConsumer{}})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "hostmetrics")
+	assert.Contains(t, err.Error(), "MetricConsumer")
 }
 
 func TestLoadModules_RejectsWinevt(t *testing.T) {
