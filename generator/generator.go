@@ -7,20 +7,10 @@ import (
 	"github.com/observiq/blitz/telemetry"
 )
 
-// Generator is the interface for generating log data.
-type Generator interface {
-	// Start starts the generator and writes data using the
-	// provided generator writer.
-	Start(writer output.Writer) error
-
-	// Stop stops the generator.
-	Stop(ctx context.Context) error
-
-	// SupportedTelemetry returns the telemetry types this generator produces.
-	SupportedTelemetry() []telemetry.Type
-}
-
-// MetricGenerator is the interface for generating metric data.
+// MetricGenerator is the legacy interface for generating metric data.
+// Retained until generator/hostmetrics migrates to embed.MetricConsumer
+// (PIPE-1023); will be removed in that PR alongside the hostmetrics
+// migration.
 type MetricGenerator interface {
 	// Start starts the metric generator and writes data using the
 	// provided metric writer.
@@ -33,7 +23,10 @@ type MetricGenerator interface {
 	SupportedTelemetry() []telemetry.Type
 }
 
-// TraceGenerator is the interface for generating trace data.
+// TraceGenerator is the legacy interface for generating trace data.
+// Retained until generator/traces migrates to embed.TraceConsumer
+// (PIPE-1024); will be removed in that PR alongside the traces
+// migration.
 type TraceGenerator interface {
 	// Start starts the trace generator and writes data using the
 	// provided trace writer.

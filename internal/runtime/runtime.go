@@ -7,10 +7,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// Module is the narrow lifecycle interface Runtime operates on. Both
-// embed.ProducerModule and the legacy generator.Generator interfaces
-// can be wrapped to satisfy this contract — Runtime stays decoupled
-// from the embed package to avoid an import cycle.
+// Module is the narrow lifecycle interface Runtime operates on. The
+// embed.ProducerModule type can be wrapped to satisfy this contract —
+// Runtime stays decoupled from the embed package to avoid an import
+// cycle.
 type Module interface {
 	// Name returns the module's identifier used in logs and errors.
 	Name() string

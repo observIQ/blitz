@@ -123,12 +123,6 @@ func (s *Service) Start() error {
 				return fmt.Errorf("start trace generator %d: %w", i, err)
 			}
 			started = append(started, g)
-		case generator.Generator:
-			if err := g.Start(s.Output); err != nil {
-				rollback()
-				return fmt.Errorf("start log generator %d: %w", i, err)
-			}
-			started = append(started, g)
 		default:
 			rollback()
 			return fmt.Errorf("generator %d has unsupported type %T", i, gen)
@@ -154,10 +148,6 @@ func (s *Service) Stop() error {
 		case generator.TraceGenerator:
 			if err := g.Stop(ctx); err != nil && firstErr == nil {
 				firstErr = fmt.Errorf("stop trace generator %d: %w", i, err)
-			}
-		case generator.Generator:
-			if err := g.Stop(ctx); err != nil && firstErr == nil {
-				firstErr = fmt.Errorf("stop log generator %d: %w", i, err)
 			}
 		}
 	}
