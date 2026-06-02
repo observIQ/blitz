@@ -26,14 +26,6 @@ func (s *stubLogGen) Start(_ context.Context) error        { s.started = true; r
 func (s *stubLogGen) Stop(_ context.Context) error         { return nil }
 func (s *stubLogGen) SupportedTelemetry() []telemetry.Type { return []telemetry.Type{telemetry.Logs} }
 
-type stubTraceGen struct{ started bool }
-
-func (s *stubTraceGen) Start(_ output.TraceWriter) error { s.started = true; return nil }
-func (s *stubTraceGen) Stop(_ context.Context) error     { return nil }
-func (s *stubTraceGen) SupportedTelemetry() []telemetry.Type {
-	return []telemetry.Type{telemetry.Traces}
-}
-
 type stubOutput struct{}
 
 func (s *stubOutput) Write(_ context.Context, _ output.LogRecord) error          { return nil }
@@ -82,7 +74,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("valid multi generator", func(t *testing.T) {
-		gens := []any{&stubLogGen{}, &stubTraceGen{}}
+		gens := []any{&stubLogGen{}, &stubLogGen{}}
 		svc, err := New(logger, gens, &stubOutput{})
 		require.NoError(t, err)
 		assert.NotNil(t, svc)
@@ -93,14 +85,14 @@ func TestStartStop(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	logGen := &stubLogGen{}
-	traceGen := &stubTraceGen{}
+	logGen2 := &stubLogGen{}
 
-	svc, err := New(logger, []any{logGen, traceGen}, &stubOutput{})
+	svc, err := New(logger, []any{logGen, logGen2}, &stubOutput{})
 	require.NoError(t, err)
 
 	require.NoError(t, svc.Start())
 	assert.True(t, logGen.started)
-	assert.True(t, traceGen.started)
+	assert.True(t, logGen2.started)
 
 	require.NoError(t, svc.Stop())
 }

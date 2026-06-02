@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/embed"
-	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/internal/runtime"
 	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
@@ -15,7 +14,7 @@ import (
 // Service manages generators and an output. It delegates orchestration
 // of migrated ProducerModule generators to internal/runtime.Runtime and
 // keeps the type-switch dispatch only for legacy generators that still
-// use the writer-based Start signature (winevt, hostmetrics, traces).
+// use the writer-based Start signature.
 type Service struct {
 	Logger     *zap.Logger
 	Generators []any
@@ -60,17 +59,16 @@ func New(logger *zap.Logger, generators []any, output output.Output) (*Service, 
 	}, nil
 }
 
-// Start starts all generators. ProducerModules run through Runtime;
-// legacy metric/trace/log generators dispatch via writer interfaces.
+// Start starts all generators. ProducerModules run through Runtime; any
+// remaining legacy generator returns an unsupported-type error.
 //
-// If any legacy generator's Start fails (or the type switch hits the
-// default case), Start rolls back: legacy generators already started are
-// stopped in reverse order, then the Runtime is stopped, then the
-// original error is returned. This prevents goroutine/worker leaks when
-// Start aborts midway. Note that legacy generators' Stop methods use
-// close(stopCh) under the hood, which panics on a second close —
-// callers must NOT call Service.Stop after Service.Start returned an
-// error; the rollback already cleaned up.
+// If the type switch hits the default case, Start rolls back: legacy
+// generators already started are stopped in reverse order, then the
+// Runtime is stopped, then the original error is returned. This prevents
+// goroutine/worker leaks when Start aborts midway. Note that legacy
+// generators' Stop methods use close(stopCh) under the hood, which
+// panics on a second close — callers must NOT call Service.Stop after
+// Service.Start returned an error; the rollback already cleaned up.
 func (s *Service) Start() error {
 	if err := s.runtime.Start(context.Background()); err != nil {
 		return err
@@ -94,23 +92,8 @@ func (s *Service) Start() error {
 		}
 	}
 	for i, gen := range s.legacy {
-		switch g := gen.(type) {
-		case generator.TraceGenerator:
-			tw, ok := s.Output.(output.TraceWriter)
-			if !ok {
-				s.Logger.Warn("Output does not support TraceWriter, skipping trace generator",
-					zap.Int("generator_index", i))
-				continue
-			}
-			if err := g.Start(tw); err != nil {
-				rollback()
-				return fmt.Errorf("start trace generator %d: %w", i, err)
-			}
-			started = append(started, g)
-		default:
-			rollback()
-			return fmt.Errorf("generator %d has unsupported type %T", i, gen)
-		}
+		rollback()
+		return fmt.Errorf("generator %d has unsupported type %T", i, gen)
 	}
 	return nil
 }
@@ -120,17 +103,8 @@ func (s *Service) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Stop legacy generators first (in their declared order), then the
-	// Runtime which stops ProducerModules in reverse declared order.
+	// Stop the Runtime which stops ProducerModules in reverse declared order.
 	var firstErr error
-	for i, gen := range s.legacy {
-		switch g := gen.(type) {
-		case generator.TraceGenerator:
-			if err := g.Stop(ctx); err != nil && firstErr == nil {
-				firstErr = fmt.Errorf("stop trace generator %d: %w", i, err)
-			}
-		}
-	}
 	if err := s.runtime.Stop(ctx); err != nil && firstErr == nil {
 		firstErr = err
 	}
