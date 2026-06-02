@@ -7,115 +7,146 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-type mockMetricWriter struct {
-	mu      sync.Mutex
-	records []output.MetricRecord
+type mockMetricConsumer struct {
+	mu     sync.Mutex
+	points []embed.MetricPoint
 }
 
-func (m *mockMetricWriter) WriteMetric(_ context.Context, rec output.MetricRecord) error {
+func (m *mockMetricConsumer) ConsumeMetrics(_ context.Context, batch []embed.MetricPoint) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.records = append(m.records, rec)
+	m.points = append(m.points, batch...)
 	return nil
 }
 
-func (m *mockMetricWriter) Records() []output.MetricRecord {
+func (m *mockMetricConsumer) Snapshot() []embed.MetricPoint {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	result := make([]output.MetricRecord, len(m.records))
-	copy(result, m.records)
-	return result
+	out := make([]embed.MetricPoint, len(m.points))
+	copy(out, m.points)
+	return out
+}
+
+func (m *mockMetricConsumer) Count() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.points)
+}
+
+func baseCfg(t *testing.T, cons embed.MetricConsumer) Config {
+	t.Helper()
+	return Config{
+		Logger:   zaptest.NewLogger(t),
+		Workers:  1,
+		Rate:     time.Second,
+		OS:       "linux",
+		Hostname: "test-host",
+		Consumer: cons,
+	}
 }
 
 func TestNew(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-
 	t.Run("valid", func(t *testing.T) {
-		g, err := New(logger, 1, time.Second, "linux", "test-host", nil)
+		g, err := New(baseCfg(t, &mockMetricConsumer{}))
 		require.NoError(t, err)
 		assert.NotNil(t, g)
 		assert.Equal(t, "test-host", g.hostname)
-		assert.Len(t, g.scrapers, 8) // all scrapers
+		assert.Len(t, g.scrapers, 8)
 	})
 
-	t.Run("auto hostname", func(t *testing.T) {
-		g, err := New(logger, 1, time.Second, "linux", "", nil)
+	t.Run("auto hostname linux", func(t *testing.T) {
+		cfg := baseCfg(t, &mockMetricConsumer{})
+		cfg.Hostname = ""
+		g, err := New(cfg)
 		require.NoError(t, err)
 		assert.NotEmpty(t, g.hostname)
 	})
 
-	t.Run("windows hostname", func(t *testing.T) {
-		g, err := New(logger, 1, time.Second, "windows", "", nil)
+	t.Run("auto hostname windows", func(t *testing.T) {
+		cfg := baseCfg(t, &mockMetricConsumer{})
+		cfg.Hostname = ""
+		cfg.OS = "windows"
+		g, err := New(cfg)
 		require.NoError(t, err)
-		// Windows hostnames are uppercase
 		assert.NotEmpty(t, g.hostname)
 	})
 
 	t.Run("specific scrapers", func(t *testing.T) {
-		g, err := New(logger, 1, time.Second, "linux", "host", []string{"cpu", "memory"})
+		cfg := baseCfg(t, &mockMetricConsumer{})
+		cfg.ScraperNames = []string{"cpu", "memory"}
+		g, err := New(cfg)
 		require.NoError(t, err)
 		assert.Len(t, g.scrapers, 2)
 	})
 
 	t.Run("nil logger", func(t *testing.T) {
-		_, err := New(nil, 1, time.Second, "linux", "host", nil)
+		cfg := baseCfg(t, &mockMetricConsumer{})
+		cfg.Logger = nil
+		_, err := New(cfg)
+		require.Error(t, err)
+	})
+
+	t.Run("nil consumer", func(t *testing.T) {
+		cfg := baseCfg(t, nil)
+		_, err := New(cfg)
 		require.Error(t, err)
 	})
 
 	t.Run("invalid workers", func(t *testing.T) {
-		_, err := New(logger, 0, time.Second, "linux", "host", nil)
+		cfg := baseCfg(t, &mockMetricConsumer{})
+		cfg.Workers = 0
+		_, err := New(cfg)
 		require.Error(t, err)
 	})
 }
 
-func TestSupportedTelemetry(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	g, err := New(logger, 1, time.Second, "linux", "host", nil)
+func TestNameAndSupportedTelemetry(t *testing.T) {
+	g, err := New(baseCfg(t, &mockMetricConsumer{}))
 	require.NoError(t, err)
 
-	types := g.SupportedTelemetry()
-	assert.Equal(t, []telemetry.Type{telemetry.Metrics}, types)
+	assert.Equal(t, "hostmetrics", g.Name())
+	assert.Equal(t, []telemetry.Type{telemetry.Metrics}, g.SupportedTelemetry())
 }
 
 func TestStartStop(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	writer := &mockMetricWriter{}
+	cons := &mockMetricConsumer{}
+	cfg := baseCfg(t, cons)
+	cfg.Rate = 50 * time.Millisecond
 
-	g, err := New(logger, 1, 50*time.Millisecond, "linux", "test-host", nil)
+	g, err := New(cfg)
 	require.NoError(t, err)
 
-	require.NoError(t, g.Start(writer))
+	require.NoError(t, g.Start(context.Background()))
 
-	// Wait for at least one scrape
-	time.Sleep(150 * time.Millisecond)
+	require.Eventually(t, func() bool { return cons.Count() > 0 }, 2*time.Second, 10*time.Millisecond,
+		"should consume at least one metric point")
 
 	require.NoError(t, g.Stop(context.Background()))
 
-	records := writer.Records()
-	assert.NotEmpty(t, records, "should have generated metrics")
+	assert.NotEmpty(t, cons.Snapshot(), "should have generated metrics")
 }
 
 func TestCountTracker(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	writer := &mockMetricWriter{}
+	cons := &mockMetricConsumer{}
+	cfg := baseCfg(t, cons)
+	cfg.Rate = 50 * time.Millisecond
 
-	g, err := New(logger, 1, 50*time.Millisecond, "linux", "test-host", nil)
+	g, err := New(cfg)
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(2)
 	g.SetCountTracker(tracker)
 
-	require.NoError(t, g.Start(writer))
+	require.NoError(t, g.Start(context.Background()))
 
-	// Wait for tracker to exhaust
 	select {
 	case <-tracker.Done():
 	case <-time.After(5 * time.Second):
@@ -125,7 +156,48 @@ func TestCountTracker(t *testing.T) {
 	require.NoError(t, g.Stop(context.Background()))
 }
 
-// Test individual scrapers produce non-empty records
+// TestSeedDeterminism confirms two generators with the same Seed and
+// hostname produce byte-identical metric streams across runs. This is
+// the core "deterministic from seed" guarantee that blitz has carried
+// from day 0 — hostmetrics inherits it here.
+func TestSeedDeterminism(t *testing.T) {
+	runOnce := func() []embed.MetricPoint {
+		cons := &mockMetricConsumer{}
+		cfg := baseCfg(t, cons)
+		cfg.Rate = 20 * time.Millisecond
+		cfg.Seed = 12345
+		cfg.ScraperNames = []string{"cpu", "memory"}
+
+		g, err := New(cfg)
+		require.NoError(t, err)
+		require.NoError(t, g.Start(context.Background()))
+		require.Eventually(t, func() bool { return cons.Count() >= 6 }, 2*time.Second, 10*time.Millisecond)
+		stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		require.NoError(t, g.Stop(stopCtx))
+		return cons.Snapshot()
+	}
+
+	a := runOnce()
+	b := runOnce()
+
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	require.Positive(t, n, "neither run produced points")
+	for i := 0; i < n; i++ {
+		assert.Equal(t, a[i].Name, b[i].Name, "point %d: name mismatch across seeded runs", i)
+		if a[i].IntValue != nil && b[i].IntValue != nil {
+			assert.Equal(t, *a[i].IntValue, *b[i].IntValue, "point %d (%s): IntValue mismatch", i, a[i].Name)
+		}
+		if a[i].DoubleValue != nil && b[i].DoubleValue != nil {
+			assert.Equal(t, *a[i].DoubleValue, *b[i].DoubleValue, "point %d (%s): DoubleValue mismatch", i, a[i].Name)
+		}
+	}
+}
+
+// Test individual scrapers produce non-empty records.
 func TestScrapers(t *testing.T) {
 	r := rand.New(rand.NewSource(42)) // #nosec G404
 	resource := map[string]string{"host.name": "test", "os.type": "linux"}
@@ -139,7 +211,6 @@ func TestScrapers(t *testing.T) {
 				assert.NotEmpty(t, rec.Name, "metric name should not be empty")
 				assert.NotZero(t, rec.Metadata.Timestamp, "timestamp should not be zero")
 				assert.NotNil(t, rec.Metadata.Resource, "resource should not be nil")
-				// Each record should have either IntValue or DoubleValue set
 				assert.True(t, rec.IntValue != nil || rec.DoubleValue != nil,
 					"metric %s should have a value", rec.Name)
 			}

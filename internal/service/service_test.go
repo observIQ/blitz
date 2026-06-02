@@ -26,14 +26,6 @@ func (s *stubLogGen) Start(_ context.Context) error        { s.started = true; r
 func (s *stubLogGen) Stop(_ context.Context) error         { return nil }
 func (s *stubLogGen) SupportedTelemetry() []telemetry.Type { return []telemetry.Type{telemetry.Logs} }
 
-type stubMetricGen struct{ started bool }
-
-func (s *stubMetricGen) Start(_ output.MetricWriter) error { s.started = true; return nil }
-func (s *stubMetricGen) Stop(_ context.Context) error      { return nil }
-func (s *stubMetricGen) SupportedTelemetry() []telemetry.Type {
-	return []telemetry.Type{telemetry.Metrics}
-}
-
 type stubTraceGen struct{ started bool }
 
 func (s *stubTraceGen) Start(_ output.TraceWriter) error { s.started = true; return nil }
@@ -90,7 +82,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("valid multi generator", func(t *testing.T) {
-		gens := []any{&stubLogGen{}, &stubMetricGen{}, &stubTraceGen{}}
+		gens := []any{&stubLogGen{}, &stubTraceGen{}}
 		svc, err := New(logger, gens, &stubOutput{})
 		require.NoError(t, err)
 		assert.NotNil(t, svc)
@@ -101,30 +93,14 @@ func TestStartStop(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	logGen := &stubLogGen{}
-	metricGen := &stubMetricGen{}
 	traceGen := &stubTraceGen{}
 
-	svc, err := New(logger, []any{logGen, metricGen, traceGen}, &stubOutput{})
+	svc, err := New(logger, []any{logGen, traceGen}, &stubOutput{})
 	require.NoError(t, err)
 
 	require.NoError(t, svc.Start())
 	assert.True(t, logGen.started)
-	assert.True(t, metricGen.started)
 	assert.True(t, traceGen.started)
-
-	require.NoError(t, svc.Stop())
-}
-
-func TestStart_MetricGenWithLogsOnlyOutput(t *testing.T) {
-	// MetricGenerator paired with logs-only output should skip (not error)
-	logger := zaptest.NewLogger(t)
-
-	metricGen := &stubMetricGen{}
-	svc, err := New(logger, []any{metricGen}, &stubLogsOnlyOutput{})
-	require.NoError(t, err)
-
-	require.NoError(t, svc.Start())
-	assert.False(t, metricGen.started, "metric gen should be skipped when output doesn't support metrics")
 
 	require.NoError(t, svc.Stop())
 }

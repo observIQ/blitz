@@ -17,6 +17,21 @@ type HostMetricsGeneratorConfig struct {
 	Hostname string `yaml:"hostname,omitempty" mapstructure:"hostname,omitempty"`
 	// Scrapers is the list of scrapers to enable. If empty, all scrapers are enabled.
 	Scrapers []string `yaml:"scrapers,omitempty" mapstructure:"scrapers,omitempty"`
+	// Seed controls per-worker RNG seeding for scrape values.
+	// Negative → randomize (worker N receives time.Now().UnixNano()+N).
+	// Positive → deterministic (worker N receives seed Seed+N), so same
+	// config + same start state produces byte-identical scrape values
+	// across runs.
+	//
+	// **YAML omitted ⇒ randomize.** Because the YAML zero-value is 0
+	// and the architectural intent is that generator data output is
+	// stochastic by default, the dispatch layer translates `seed: 0`
+	// (and an omitted `seed:` key) into the negative-randomize path.
+	// Set an explicit positive value for reproducibility. Per-machine
+	// identity determinism (hostname, OS) is governed separately by
+	// the top-level `environment.seed_config` (PIPE-1036) and is not
+	// affected by this field.
+	Seed int64 `yaml:"seed,omitempty" mapstructure:"seed,omitempty"`
 }
 
 // ValidScrapers is the list of valid scraper names.
