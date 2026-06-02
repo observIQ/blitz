@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
@@ -11,9 +12,17 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-type stubLogGen struct{ started bool }
+// stubLogGen is a ProducerModule that records whether Start was called.
+// Mirrors the shape every log generator package uses (apache, json,
+// nginx, etc.) after the embed-seam migration: Name + Start(ctx) +
+// Stop(ctx), with embed.ProducerMarker satisfying the marker method.
+type stubLogGen struct {
+	embed.ProducerMarker
+	started bool
+}
 
-func (s *stubLogGen) Start(_ output.Writer) error          { s.started = true; return nil }
+func (s *stubLogGen) Name() string                         { return "stub-log" }
+func (s *stubLogGen) Start(_ context.Context) error        { s.started = true; return nil }
 func (s *stubLogGen) Stop(_ context.Context) error         { return nil }
 func (s *stubLogGen) SupportedTelemetry() []telemetry.Type { return []telemetry.Type{telemetry.Logs} }
 

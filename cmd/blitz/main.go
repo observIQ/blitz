@@ -15,27 +15,14 @@ import (
 	"syscall"
 	"time"
 
-	apachegen "github.com/observiq/blitz/generator/apache"
-	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
-	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/generator/filegen"
-	fixgen "github.com/observiq/blitz/generator/fix"
-	fixcatalog "github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/hostmetrics"
-	jsongen "github.com/observiq/blitz/generator/json"
-	"github.com/observiq/blitz/generator/kubernetes"
-	"github.com/observiq/blitz/generator/nginx"
 	gennop "github.com/observiq/blitz/generator/nop"
-	"github.com/observiq/blitz/generator/okta"
-	"github.com/observiq/blitz/generator/paloalto"
-	"github.com/observiq/blitz/generator/postgres"
 	tracesgen "github.com/observiq/blitz/generator/traces"
-	"github.com/observiq/blitz/generator/wel"
-	"github.com/observiq/blitz/generator/wel/catalog"
 	"github.com/observiq/blitz/generator/winevt"
 	"github.com/observiq/blitz/internal/build"
 	"github.com/observiq/blitz/internal/config"
+	"github.com/observiq/blitz/internal/dispatch"
 	"github.com/observiq/blitz/internal/logging"
 	"github.com/observiq/blitz/internal/service"
 	"github.com/observiq/blitz/internal/telemetry/metrics"
@@ -407,78 +394,31 @@ shutdown:
 }
 
 func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Output) (any, error) {
+	// Standalone-CLI-only generator types that dispatch.ForEmbed does not
+	// construct (winevt is deprecated for embed; nop yields no records;
+	// hostmetrics + traces are not yet migrated — those land in
+	// PIPE-1023 / PIPE-1024). All other generators delegate to
+	// dispatch.ForEmbed so the construction logic lives in exactly one
+	// place.
 	switch genCfg.Type {
 	case config.GeneratorTypeNop:
 		return gennop.New(logger)
-	case config.GeneratorTypeJSON:
-		return jsongen.New(logger, genCfg.JSON.Workers, genCfg.JSON.Rate, genCfg.JSON.Type, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeWinevt:
 		return winevt.New(logger, genCfg.Winevt.Workers, genCfg.Winevt.Rate)
-	case config.GeneratorTypePaloAlto:
-		return paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate, output.WriterAsLogConsumer(out))
-	case config.GeneratorTypeApache:
-		return apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate, output.WriterAsLogConsumer(out))
-	case config.GeneratorTypeApacheCombined:
-		return apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate, output.WriterAsLogConsumer(out))
-	case config.GeneratorTypeApacheError:
-		return apacheerrorgen.New(logger, genCfg.ApacheError.Workers, genCfg.ApacheError.Rate, output.WriterAsLogConsumer(out))
-	case config.GeneratorTypeNginx:
-		return nginx.New(logger, genCfg.Nginx.Workers, genCfg.Nginx.Rate, output.WriterAsLogConsumer(out))
-	case config.GeneratorTypePostgres:
-		return postgres.New(logger, genCfg.Postgres.Workers, genCfg.Postgres.Rate, output.WriterAsLogConsumer(out))
-	case config.GeneratorTypeKubernetes:
-		return kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format, output.WriterAsLogConsumer(out))
-	case config.GeneratorTypeFile:
-		// dataLibrary = nil → standalone CLI falls back to ./data_library/
-		// on disk so the library remains editable without recompile.
-		return filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, output.WriterAsLogConsumer(out), nil)
-	case config.GeneratorTypeOkta:
-		return okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate, output.WriterAsLogConsumer(out))
 	case config.GeneratorTypeHostMetrics:
 		return hostmetrics.New(logger, genCfg.HostMetrics.Workers, genCfg.HostMetrics.Rate, genCfg.HostMetrics.OS, genCfg.HostMetrics.Hostname, genCfg.HostMetrics.Scrapers)
 	case config.GeneratorTypeTraces:
 		return tracesgen.New(logger, genCfg.Traces.Workers, genCfg.Traces.Rate)
-	case config.GeneratorTypeWel:
-		role := catalog.MachineRole(genCfg.Wel.Role)
-		if role == "" {
-			role = catalog.RoleMember
-		}
-		return wel.New(wel.Config{
-			Logger:   logger,
-			Workers:  genCfg.Wel.Workers,
-			Rate:     genCfg.Wel.Rate,
-			Computer: genCfg.Wel.Computer,
-			Domain:   genCfg.Wel.Domain,
-			Role:     role,
-			Channels: genCfg.Wel.Channels,
-			Consumer: output.WriterAsLogConsumer(out),
-		})
-	case config.GeneratorTypeFIX:
-		fc := fixgen.Config{
-			Workers:      genCfg.FIX.Workers,
-			Rate:         genCfg.FIX.Rate,
-			SenderCompID: genCfg.FIX.SenderCompID,
-			TargetCompID: genCfg.FIX.TargetCompID,
-			Seed:         genCfg.FIX.Seed,
-		}
-		if genCfg.FIX.Version != "" {
-			v, err := fixcatalog.VersionFromString(genCfg.FIX.Version)
-			if err != nil {
-				return nil, fmt.Errorf("fix: %w", err)
-			}
-			fc.Version = v
-		}
-		for _, s := range genCfg.FIX.EnabledCategories {
-			c, err := fixcatalog.AssetCategoryFromString(s)
-			if err != nil {
-				return nil, fmt.Errorf("fix: %w", err)
-			}
-			fc.EnabledCategories = append(fc.EnabledCategories, c)
-		}
-		return fixgen.New(logger, fc, output.WriterAsLogConsumer(out))
-	default:
-		return nil, fmt.Errorf("invalid generator type: %s", genCfg.Type)
 	}
+
+	// All remaining (embed-eligible) types go through the canonical
+	// dispatch.ForEmbed path, with the standalone output wrapped as a
+	// LogConsumer.
+	mod, err := dispatch.ForEmbed(logger, genCfg, output.WriterAsLogConsumer(out), nil)
+	if err != nil {
+		return nil, err
+	}
+	return mod, nil
 }
 
 func setupMetrics(ctx context.Context, cfg *config.Config, logger *zap.Logger) error {
