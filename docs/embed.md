@@ -53,6 +53,16 @@ type TraceConsumer  interface { ConsumeTraces(ctx, []Span) error }
 
 Consumers receive batches. Producer modules push size-1 batches today; the framework allows larger batches if a module wants to coalesce.
 
+### Generators by signal type
+
+| Signal  | Generators wired today                                                                   | Consumer field on `embed.Host` |
+|---------|-------------------------------------------------------------------------------------------|--------------------------------|
+| Logs    | `apache`, `apache_combined`, `apache_error`, `filegen`, `fix`, `json`, `kubernetes`, `nginx`, `okta`, `paloalto`, `postgres`, `wel` | `Host.Logs`                    |
+| Metrics | `hostmetrics`                                                                             | `Host.Metrics`                 |
+| Traces  | `traces` *(not yet wired through embed — see PIPE-1024)*                                  | `Host.Traces`                  |
+
+Embedded hosts that load configuration via `config.LoadModules` must populate the relevant `LogConsumer` / `MetricConsumer` / `TraceConsumer` field on `EmbedOpts` for whichever signal types their generators yield; missing consumers surface as a clear construction-time error rather than a runtime no-op.
+
 ## Constructing an embedded runner
 
 ```go
@@ -69,16 +79,24 @@ func main() {
     // 1. Host owns the consumers and ambient resources.
     host := embed.Host{
         Logs:    myLogConsumer,
+        Metrics: myMetricConsumer, // optional — required when a metric generator is wired
         Logger:  logger,
-        // Metrics / Traces / Resource also available.
+        // Traces / Resource also available.
     }
 
     // 2. Construct modules, passing the appropriate consumer from host.
     apacheGen, _ := apache.New(logger, /*workers*/ 1, /*rate*/ time.Second, host.Logs)
+    hmGen, _ := hostmetrics.New(hostmetrics.Config{
+        Logger:   logger,
+        Workers:  1,
+        Rate:     10 * time.Second,
+        OS:       "linux",
+        Consumer: host.Metrics,
+    })
 
     // 3. Build the runner.
     runner, err := embed.New(embed.Config{
-        Modules: []embed.ProducerModule{apacheGen},
+        Modules: []embed.ProducerModule{apacheGen, hmGen},
     })
     if err != nil { /* ... */ }
 
