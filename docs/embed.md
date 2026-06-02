@@ -51,7 +51,17 @@ type MetricConsumer interface { ConsumeMetrics(ctx, []MetricPoint) error }
 type TraceConsumer  interface { ConsumeTraces(ctx, []Span) error }
 ```
 
-Consumers receive batches. Producer modules push size-1 batches today; the framework allows larger batches if a module wants to coalesce.
+Consumers receive batches. Most Producer modules push size-1 batches; the framework allows larger batches if a module wants to coalesce. The `traces` Producer is intentionally size-1 per call — each span is scheduled at its own `EndTime` via `time.AfterFunc`, so the consumer observes spans arriving at staggered wall-clock moments the way a real distributed system delivers them.
+
+### Generators by signal type
+
+| Signal  | Consumer        | Generators                                                                                                |
+|---------|-----------------|-----------------------------------------------------------------------------------------------------------|
+| Logs    | `LogConsumer`   | `apache-common`, `apache-combined`, `apache-error`, `filegen`, `json`, `kubernetes`, `nginx`, `okta`, `palo-alto`, `postgres`, `wel` |
+| Metrics | `MetricConsumer`| `hostmetrics`                                                                                             |
+| Traces  | `TraceConsumer` | `traces`                                                                                                  |
+
+A host populates `embed.Host` with whichever consumers correspond to the generators in its `Modules` slice.
 
 ### Generators by signal type
 
@@ -71,6 +81,7 @@ import (
 
     "github.com/observiq/blitz/embed"
     "github.com/observiq/blitz/generator/apache"
+    "github.com/observiq/blitz/generator/traces"
 )
 
 func main() {
@@ -80,8 +91,9 @@ func main() {
     host := embed.Host{
         Logs:    myLogConsumer,
         Metrics: myMetricConsumer, // optional — required when a metric generator is wired
+        Traces:  myTraceConsumer,  // optional — required when a trace generator is wired
         Logger:  logger,
-        // Traces / Resource also available.
+        // Resource also available.
     }
 
     // 2. Construct modules, passing the appropriate consumer from host.
@@ -93,10 +105,16 @@ func main() {
         OS:       "linux",
         Consumer: host.Metrics,
     })
+    tracesGen, _ := traces.New(traces.Config{
+        Logger:   logger,
+        Workers:  1,
+        Rate:     time.Second,
+        Consumer: host.Traces,
+    })
 
     // 3. Build the runner.
     runner, err := embed.New(embed.Config{
-        Modules: []embed.ProducerModule{apacheGen, hmGen},
+        Modules: []embed.ProducerModule{apacheGen, hmGen, tracesGen},
     })
     if err != nil { /* ... */ }
 
@@ -215,10 +233,13 @@ Two supported paths:
       "github.com/observiq/blitz/embed"
   )
 
-  // Parse + construct in one call.
+  // Parse + construct in one call. Populate whichever consumers correspond
+  // to the generators in the parsed YAML; unused consumers may be left nil.
   modules, err := blitzconfig.LoadModules(yamlBytes, blitzconfig.EmbedOpts{
-      Logger:      logger,
-      LogConsumer: myLogConsumer,
+      Logger:        logger,
+      LogConsumer:   myLogConsumer,
+      TraceConsumer: myTraceConsumer,
+      // MetricConsumer also available.
       // FileGenLibrary: embeddedlibrary.FS(), // optional; nil = ./data_library/ on disk
   })
   if err != nil { /* ... */ }
@@ -257,17 +278,11 @@ The `filegen` generator references files under `data_library/` for the `package:
 - **Disk** — leave `FileGenLibrary` nil in `EmbedOpts`. The generator probes a fixed sequence of disk locations, in order: `$BLITZ_DATA_LIBRARY_DIR` (host-supplied override), `./data_library/` (cwd-relative, where release tarballs unpack), `./generator/filegen/embeddedlibrary/data_library/` (in-repo canonical for `./blitz` from a fresh clone), `/usr/share/blitz/data_library/` (the nfpm `deb`/`rpm` install path). First match wins; the env override is the recommended path for containers and custom install prefixes.
 - **Embedded snapshot** — import `github.com/observiq/blitz/generator/filegen/embeddedlibrary` and pass `embeddedlibrary.FS()` as `FileGenLibrary`. The blitz module ships the `data_library/` files inside the embeddedlibrary package, so `go get github.com/observiq/blitz/generator/filegen/embeddedlibrary` fetches them as part of the module cache — no separate file staging by the host. The package is gated by the `//go:build embed_library` tag so default builds skip the embed; tagged builds get the files baked into the binary.
 
-`LoadModules` only constructs Producer-class **log** generators in this release. Generator types that should logically be in the embed contract but aren't yet return an explicit error rather than being silently dropped, so the host's parsed config can't lose generators the user expected.
+`LoadModules` constructs every Producer-class generator that has been migrated to the embed contract — logs, metrics, and traces — wired to whichever consumer on `EmbedOpts` corresponds to the generator's signal. Generator types not yet migrated return an explicit error rather than being silently dropped, so the host's parsed config can't lose generators the user expected.
 
-### Not yet in the embed contract (slated for v0.17.0)
+### Not yet in the embed contract
 
-The following generators are valid in the standalone CLI but are intentionally rejected by `LoadModules` today. The rejections are documented as roadmap, not as long-term design:
-
-- **`hostmetrics`** — produces metrics, not logs. The embed contract has `MetricConsumer` for this and the generator class fits naturally as a Producer wired to it, but `hostmetrics.New` has not been migrated to take a `MetricConsumer` at construction time. Migration is planned alongside the v0.17.0 release.
-- **`traces`** — produces spans, not logs. Same story: `TraceConsumer` exists in the contract; `tracesgen.New` has not been migrated. Planned for v0.17.0.
-- **`winevt`** — the legacy single-template Windows Event XML generator. Replaced by the new multi-channel `wel` generator landing in the PIPE-928 stack (the WEL stack is being merged ahead of v0.17.0). `winevt` will be deprecated when `wel` lands rather than being migrated to embed.
-
-The v0.17.0 release sequence is: (1) land the WEL stack; (2) land a follow-up stack that migrates `hostmetrics` and `traces` to the embed contract; (3) deprecate `winevt`; (4) cut v0.17.0. After v0.17.0, `LoadModules` will return a `[]embed.ProducerModule` that contains log, metric, AND trace producers, each wired to the appropriate consumer the host supplied.
+- **`winevt`** — the legacy single-template Windows Event XML generator. Deprecated in favor of the new multi-channel `wel` generator; rejected by `LoadModules` with a pointer at `wel`.
 
 ### Not embed-eligible at all (by design)
 
