@@ -95,22 +95,6 @@ func (s *Service) Start() error {
 	}
 	for i, gen := range s.legacy {
 		switch g := gen.(type) {
-		// Concrete-telemetry legacy cases (MetricGenerator, TraceGenerator)
-		// precede the base Generator case so a metric/trace generator can
-		// never be mis-dispatched to the log path if those interfaces
-		// ever come to share methods with Generator.
-		case generator.MetricGenerator:
-			mw, ok := s.Output.(output.MetricWriter)
-			if !ok {
-				s.Logger.Warn("Output does not support MetricWriter, skipping metric generator",
-					zap.Int("generator_index", i))
-				continue
-			}
-			if err := g.Start(mw); err != nil {
-				rollback()
-				return fmt.Errorf("start metric generator %d: %w", i, err)
-			}
-			started = append(started, g)
 		case generator.TraceGenerator:
 			tw, ok := s.Output.(output.TraceWriter)
 			if !ok {
@@ -141,10 +125,6 @@ func (s *Service) Stop() error {
 	var firstErr error
 	for i, gen := range s.legacy {
 		switch g := gen.(type) {
-		case generator.MetricGenerator:
-			if err := g.Stop(ctx); err != nil && firstErr == nil {
-				firstErr = fmt.Errorf("stop metric generator %d: %w", i, err)
-			}
 		case generator.TraceGenerator:
 			if err := g.Stop(ctx); err != nil && firstErr == nil {
 				firstErr = fmt.Errorf("stop trace generator %d: %w", i, err)

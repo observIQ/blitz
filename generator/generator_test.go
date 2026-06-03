@@ -7,18 +7,9 @@ import (
 	"github.com/observiq/blitz/telemetry"
 )
 
-// Compile-time interface assertions for MetricGenerator
-var _ MetricGenerator = (*testMetricGen)(nil)
-
-type testMetricGen struct{}
-
-func (t *testMetricGen) Start(_ output.MetricWriter) error { return nil }
-func (t *testMetricGen) Stop(_ context.Context) error      { return nil }
-func (t *testMetricGen) SupportedTelemetry() []telemetry.Type {
-	return []telemetry.Type{telemetry.Metrics}
-}
-
-// Compile-time interface assertions for TraceGenerator
+// Compile-time interface assertion for TraceGenerator (the last
+// surviving legacy interface — MetricGenerator was removed alongside
+// the hostmetrics migration to embed.MetricConsumer in this PR).
 var _ TraceGenerator = (*testTraceGen)(nil)
 
 type testTraceGen struct{}

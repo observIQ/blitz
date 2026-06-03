@@ -410,7 +410,20 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	case config.GeneratorTypeWinevt:
 		return winevt.New(logger, genCfg.Winevt.Workers, genCfg.Winevt.Rate)
 	case config.GeneratorTypeHostMetrics:
-		return hostmetrics.New(logger, genCfg.HostMetrics.Workers, genCfg.HostMetrics.Rate, genCfg.HostMetrics.OS, genCfg.HostMetrics.Hostname, genCfg.HostMetrics.Scrapers)
+		mw, ok := out.(output.MetricWriter)
+		if !ok {
+			return nil, fmt.Errorf("hostmetrics requires an output that supports MetricWriter; configured output does not")
+		}
+		return hostmetrics.New(hostmetrics.Config{
+			Logger:       logger,
+			Workers:      genCfg.HostMetrics.Workers,
+			Rate:         genCfg.HostMetrics.Rate,
+			OS:           genCfg.HostMetrics.OS,
+			Hostname:     genCfg.HostMetrics.Hostname,
+			ScraperNames: genCfg.HostMetrics.Scrapers,
+			Consumer:     output.WriterAsMetricConsumer(mw),
+			Seed:         genCfg.HostMetrics.Seed,
+		})
 	case config.GeneratorTypeTraces:
 		return tracesgen.New(logger, genCfg.Traces.Workers, genCfg.Traces.Rate)
 	}
