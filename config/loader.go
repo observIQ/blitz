@@ -103,9 +103,9 @@ type EmbedOpts struct {
 	// when a metric-yielding generator is configured.
 	MetricConsumer embed.MetricConsumer
 
-	// TraceConsumer is the destination for every span batch any
-	// constructed trace generator (e.g. traces) produces. Required when
-	// a trace-yielding generator is configured.
+	// TraceConsumer is the destination for every span any constructed
+	// trace generator (e.g. traces) produces. Required when a
+	// trace-yielding generator is configured.
 	TraceConsumer embed.TraceConsumer
 
 	// FileGenLibrary is the optional filesystem the filegen generator

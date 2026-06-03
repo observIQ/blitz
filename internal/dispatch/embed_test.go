@@ -23,6 +23,10 @@ func (noopMetricConsumer) ConsumeMetrics(_ context.Context, _ []embed.MetricPoin
 	return nil
 }
 
+type noopTraceConsumer struct{}
+
+func (noopTraceConsumer) ConsumeTraces(_ context.Context, _ []embed.Span) error { return nil }
+
 func logsOnly() EmbedConsumers {
 	return EmbedConsumers{LogConsumer: noopConsumer{}}
 }
@@ -147,4 +151,32 @@ func TestForEmbedHostMetricsRejectsMissingMetricConsumer(t *testing.T) {
 	_, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{}, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "MetricConsumer")
+}
+
+// PIPE-1024 additions — traces dispatch.
+func TestForEmbedTracesReturnsProducerModule(t *testing.T) {
+	cfg := config.Generator{
+		Type: config.GeneratorTypeTraces,
+		Traces: config.TracesGeneratorConfig{
+			Workers: 1,
+			Rate:    50 * time.Millisecond,
+		},
+	}
+	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{TraceConsumer: noopTraceConsumer{}}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, mod)
+	assert.Equal(t, "traces", mod.Name())
+}
+
+func TestForEmbedTracesRejectsMissingTraceConsumer(t *testing.T) {
+	cfg := config.Generator{
+		Type: config.GeneratorTypeTraces,
+		Traces: config.TracesGeneratorConfig{
+			Workers: 1,
+			Rate:    time.Second,
+		},
+	}
+	_, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{}, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TraceConsumer")
 }

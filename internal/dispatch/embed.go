@@ -23,6 +23,7 @@ import (
 	"github.com/observiq/blitz/generator/okta"
 	"github.com/observiq/blitz/generator/paloalto"
 	"github.com/observiq/blitz/generator/postgres"
+	tracesgen "github.com/observiq/blitz/generator/traces"
 	"github.com/observiq/blitz/generator/wel"
 	welcatalog "github.com/observiq/blitz/generator/wel/catalog"
 	"github.com/observiq/blitz/internal/config"
@@ -72,8 +73,8 @@ func (c EmbedConsumers) requireTrace(typ config.GeneratorType) error {
 //
 // Returns an error when the configured generator type requires a
 // consumer that is nil in `consumers` (e.g. hostmetrics without a
-// MetricConsumer), and for generator types that are not embed-eligible
-// at all (nop, winevt — see PIPE-1032).
+// MetricConsumer, traces without a TraceConsumer), and for generator
+// types that are not embed-eligible at all (nop, winevt — see PIPE-1032).
 func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsumers, fileGenLibrary fs.FS) (embed.ProducerModule, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
@@ -166,12 +167,22 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			Consumer:     consumers.MetricConsumer,
 			Seed:         yamlSeedDefault(genCfg.HostMetrics.Seed),
 		})
+	case config.GeneratorTypeTraces:
+		if err := consumers.requireTrace(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return tracesgen.New(tracesgen.Config{
+			Logger:   logger,
+			Workers:  genCfg.Traces.Workers,
+			Rate:     genCfg.Traces.Rate,
+			Hostname: genCfg.Traces.Hostname,
+			Consumer: consumers.TraceConsumer,
+			Seed:     yamlSeedDefault(genCfg.Traces.Seed),
+		})
 	case config.GeneratorTypeNop:
 		return nil, fmt.Errorf("generator type %q does not produce records; not embed-eligible", genCfg.Type)
 	case config.GeneratorTypeWinevt:
 		return nil, fmt.Errorf("generator type %q is DEPRECATED and is not available via embed; the legacy single-template Windows Event XML generator has been superseded by the multi-channel `wel` generator (see docs/generator/wel.md). The standalone blitz CLI still accepts `winevt` with a deprecation warning", genCfg.Type)
-	case config.GeneratorTypeTraces:
-		return nil, fmt.Errorf("generator type %q produces traces; the embed contract supports a separate TraceConsumer path that is not yet wired for this generator", genCfg.Type)
 	default:
 		return nil, fmt.Errorf("unknown generator type %q", genCfg.Type)
 	}
