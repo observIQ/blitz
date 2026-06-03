@@ -114,6 +114,67 @@ func TestWriterAsMetricConsumerStopsOnFirstError(t *testing.T) {
 	}
 }
 
+type recordingTraceWriter struct {
+	mu    sync.Mutex
+	spans []output.TraceRecord
+	err   error
+}
+
+func (w *recordingTraceWriter) WriteTrace(_ context.Context, rec output.TraceRecord) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.err != nil {
+		return w.err
+	}
+	w.spans = append(w.spans, rec)
+	return nil
+}
+
+func TestWriterAsTraceConsumerPushesEachSpan(t *testing.T) {
+	w := &recordingTraceWriter{}
+	c := output.WriterAsTraceConsumer(w)
+
+	batch := []embed.Span{
+		{Name: "one"},
+		{Name: "two"},
+		{Name: "three"},
+	}
+	if err := c.ConsumeTraces(context.Background(), batch); err != nil {
+		t.Fatalf("ConsumeTraces: %v", err)
+	}
+	if got, want := len(w.spans), 3; got != want {
+		t.Fatalf("recorded %d, want %d", got, want)
+	}
+	for i, want := range []string{"one", "two", "three"} {
+		if w.spans[i].Name != want {
+			t.Errorf("span %d: %q, want %q", i, w.spans[i].Name, want)
+		}
+	}
+}
+
+func TestWriterAsTraceConsumerStopsOnFirstError(t *testing.T) {
+	wantErr := errors.New("trace boom")
+	w := &recordingTraceWriter{err: wantErr}
+	c := output.WriterAsTraceConsumer(w)
+
+	err := c.ConsumeTraces(context.Background(), []embed.Span{
+		{Name: "one"},
+		{Name: "two"},
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected wantErr, got %v", err)
+	}
+}
+
+func TestWriterAsTraceConsumerPanicsOnNilWriter(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic on nil writer, got none")
+		}
+	}()
+	_ = output.WriterAsTraceConsumer(nil)
+}
+
 func TestWriterAsLogConsumerPanicsOnNilWriter(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
