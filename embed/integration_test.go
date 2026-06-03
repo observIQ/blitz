@@ -9,6 +9,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/apache"
 	"github.com/observiq/blitz/generator/hostmetrics"
+	"github.com/observiq/blitz/generator/traces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -34,6 +35,27 @@ func (c *memoryLogConsumer) snapshot() []embed.LogRecord {
 	defer c.mu.Unlock()
 	out := make([]embed.LogRecord, len(c.records))
 	copy(out, c.records)
+	return out
+}
+
+// memoryTraceConsumer captures every span pushed through ConsumeTraces.
+type memoryTraceConsumer struct {
+	mu    sync.Mutex
+	spans []embed.Span
+}
+
+func (c *memoryTraceConsumer) ConsumeTraces(_ context.Context, spans []embed.Span) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.spans = append(c.spans, spans...)
+	return nil
+}
+
+func (c *memoryTraceConsumer) snapshot() []embed.Span {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]embed.Span, len(c.spans))
+	copy(out, c.spans)
 	return out
 }
 
@@ -75,6 +97,60 @@ func TestEmbed_ApacheRecordsFlowToMemoryConsumer(t *testing.T) {
 	for _, rec := range records {
 		assert.NotEmpty(t, rec.Message, "expected non-empty Message on captured record")
 	}
+}
+
+// TestEmbed_TracesSpansFlowToMemoryConsumer exercises the embed seam for
+// the traces signal: a traces ProducerModule constructed against a host
+// TraceConsumer emits spans (scheduled individually at each span's
+// EndTime) that the host observes in-process.
+func TestEmbed_TracesSpansFlowToMemoryConsumer(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	traceConsumer := &memoryTraceConsumer{}
+
+	gen, err := traces.New(traces.Config{
+		Logger:   logger,
+		Workers:  1,
+		Rate:     10 * time.Millisecond,
+		Consumer: traceConsumer,
+	})
+	require.NoError(t, err)
+
+	runner, err := embed.New(embed.Config{
+		Modules: []embed.ProducerModule{gen},
+	})
+	require.NoError(t, err)
+
+	host := embed.Host{
+		Traces: traceConsumer,
+		Logger: logger,
+	}
+	require.NoError(t, runner.Start(context.Background(), host))
+
+	// Wait for several spans. Each trace yields 2-3 spans, each scheduled
+	// at its own EndTime, so a handful of ticks should produce > 3.
+	require.Eventually(t,
+		func() bool { return len(traceConsumer.snapshot()) >= 3 },
+		3*time.Second, 20*time.Millisecond,
+		"expected at least 3 spans to flow through the embed seam",
+	)
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, runner.Stop(stopCtx))
+
+	spans := traceConsumer.snapshot()
+	assert.GreaterOrEqual(t, len(spans), 3)
+	traceIDs := map[string]struct{}{}
+	for _, sp := range spans {
+		assert.NotEmpty(t, sp.TraceID, "expected non-empty TraceID on captured span")
+		assert.NotEmpty(t, sp.SpanID, "expected non-empty SpanID on captured span")
+		assert.NotEmpty(t, sp.Name, "expected non-empty Name on captured span")
+		traceIDs[sp.TraceID] = struct{}{}
+	}
+	// Prove the worker loop iterates past a single trace — otherwise a
+	// 2-5-span single trace would satisfy the ≥3-span threshold above
+	// without exercising the rate-tick path.
+	assert.GreaterOrEqual(t, len(traceIDs), 2, "expected at least 2 distinct traces")
 }
 
 func TestEmbed_NewRejectsEmptyModules(t *testing.T) {
