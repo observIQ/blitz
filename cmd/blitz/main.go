@@ -408,7 +408,18 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	case config.GeneratorTypeWinevt:
 		return winevt.New(logger, genCfg.Winevt.Workers, genCfg.Winevt.Rate)
 	case config.GeneratorTypeTraces:
-		return tracesgen.New(logger, genCfg.Traces.Workers, genCfg.Traces.Rate)
+		tw, ok := out.(output.TraceWriter)
+		if !ok {
+			return nil, fmt.Errorf("traces requires an output that supports TraceWriter; configured output does not")
+		}
+		return tracesgen.New(tracesgen.Config{
+			Logger:   logger,
+			Workers:  genCfg.Traces.Workers,
+			Rate:     genCfg.Traces.Rate,
+			Hostname: genCfg.Traces.Hostname,
+			Consumer: output.WriterAsTraceConsumer(tw),
+			Seed:     genCfg.Traces.Seed,
+		})
 	}
 
 	// All remaining (embed-eligible) types go through the canonical
