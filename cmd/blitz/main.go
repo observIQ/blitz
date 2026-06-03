@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/generator/hostmetrics"
 	gennop "github.com/observiq/blitz/generator/nop"
 	tracesgen "github.com/observiq/blitz/generator/traces"
 	"github.com/observiq/blitz/generator/winevt"
@@ -400,38 +399,31 @@ shutdown:
 func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Output) (any, error) {
 	// Standalone-CLI-only generator types that dispatch.ForEmbed does not
 	// construct (winevt is deprecated for embed; nop yields no records;
-	// hostmetrics + traces are not yet migrated — those land in
-	// PIPE-1023 / PIPE-1024). All other generators delegate to
-	// dispatch.ForEmbed so the construction logic lives in exactly one
-	// place.
+	// traces is not yet migrated — lands in PIPE-1024). All other
+	// generators delegate to dispatch.ForEmbed so the construction logic
+	// lives in exactly one place.
 	switch genCfg.Type {
 	case config.GeneratorTypeNop:
 		return gennop.New(logger)
 	case config.GeneratorTypeWinevt:
 		return winevt.New(logger, genCfg.Winevt.Workers, genCfg.Winevt.Rate)
-	case config.GeneratorTypeHostMetrics:
-		mw, ok := out.(output.MetricWriter)
-		if !ok {
-			return nil, fmt.Errorf("hostmetrics requires an output that supports MetricWriter; configured output does not")
-		}
-		return hostmetrics.New(hostmetrics.Config{
-			Logger:       logger,
-			Workers:      genCfg.HostMetrics.Workers,
-			Rate:         genCfg.HostMetrics.Rate,
-			OS:           genCfg.HostMetrics.OS,
-			Hostname:     genCfg.HostMetrics.Hostname,
-			ScraperNames: genCfg.HostMetrics.Scrapers,
-			Consumer:     output.WriterAsMetricConsumer(mw),
-			Seed:         genCfg.HostMetrics.Seed,
-		})
 	case config.GeneratorTypeTraces:
 		return tracesgen.New(logger, genCfg.Traces.Workers, genCfg.Traces.Rate)
 	}
 
 	// All remaining (embed-eligible) types go through the canonical
-	// dispatch.ForEmbed path, with the standalone output wrapped as a
-	// LogConsumer.
-	mod, err := dispatch.ForEmbed(logger, genCfg, output.WriterAsLogConsumer(out), nil)
+	// dispatch.ForEmbed path. Outputs that implement MetricWriter get
+	// wrapped as a MetricConsumer so metric-yielding generators
+	// (hostmetrics) work standalone; ForEmbed rejects with a clear
+	// message when an output doesn't support a signal the configured
+	// generator needs.
+	consumers := dispatch.EmbedConsumers{
+		LogConsumer: output.WriterAsLogConsumer(out),
+	}
+	if mw, ok := out.(output.MetricWriter); ok {
+		consumers.MetricConsumer = output.WriterAsMetricConsumer(mw)
+	}
+	mod, err := dispatch.ForEmbed(logger, genCfg, consumers, nil)
 	if err != nil {
 		return nil, err
 	}

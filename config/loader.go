@@ -94,8 +94,19 @@ type EmbedOpts struct {
 	Logger *zap.Logger
 
 	// LogConsumer is the destination for every record any constructed
-	// log generator produces. Required.
+	// log generator produces. Required when a log-yielding generator is
+	// configured.
 	LogConsumer embed.LogConsumer
+
+	// MetricConsumer is the destination for every metric point any
+	// constructed metric generator (e.g. hostmetrics) produces. Required
+	// when a metric-yielding generator is configured.
+	MetricConsumer embed.MetricConsumer
+
+	// TraceConsumer is the destination for every span batch any
+	// constructed trace generator (e.g. traces) produces. Required when
+	// a trace-yielding generator is configured.
+	TraceConsumer embed.TraceConsumer
 
 	// FileGenLibrary is the optional filesystem the filegen generator
 	// consults for `package:`-prefixed source references and bare-name
@@ -129,9 +140,6 @@ type EmbedOpts struct {
 // embed-eligible; partial results are NOT returned, so callers don't
 // silently lose generators they thought would be wired up.
 func LoadModules(yamlBytes []byte, opts EmbedOpts) ([]embed.ProducerModule, error) {
-	if opts.LogConsumer == nil {
-		return nil, fmt.Errorf("EmbedOpts.LogConsumer is required")
-	}
 	logger := opts.Logger
 	if logger == nil {
 		logger = zap.NewNop()
@@ -141,9 +149,14 @@ func LoadModules(yamlBytes []byte, opts EmbedOpts) ([]embed.ProducerModule, erro
 		return nil, err
 	}
 	gens := cfg.EffectiveGenerators()
+	consumers := dispatch.EmbedConsumers{
+		LogConsumer:    opts.LogConsumer,
+		MetricConsumer: opts.MetricConsumer,
+		TraceConsumer:  opts.TraceConsumer,
+	}
 	modules := make([]embed.ProducerModule, 0, len(gens))
 	for i, gen := range gens {
-		mod, err := dispatch.ForEmbed(logger, gen, opts.LogConsumer, opts.FileGenLibrary)
+		mod, err := dispatch.ForEmbed(logger, gen, consumers, opts.FileGenLibrary)
 		if err != nil {
 			return nil, fmt.Errorf("generator[%d] type=%q: %w", i, gen.Type, err)
 		}

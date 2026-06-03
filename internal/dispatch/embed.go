@@ -16,6 +16,7 @@ import (
 	"github.com/observiq/blitz/generator/filegen"
 	fixgen "github.com/observiq/blitz/generator/fix"
 	"github.com/observiq/blitz/generator/fix/catalog"
+	"github.com/observiq/blitz/generator/hostmetrics"
 	jsongen "github.com/observiq/blitz/generator/json"
 	"github.com/observiq/blitz/generator/kubernetes"
 	"github.com/observiq/blitz/generator/nginx"
@@ -28,45 +29,110 @@ import (
 	"go.uber.org/zap"
 )
 
+// EmbedConsumers bundles the per-signal consumers an embedding host can
+// supply. LogConsumer is required for any log-yielding generator;
+// MetricConsumer is required for metric-yielding generators
+// (hostmetrics); TraceConsumer is required for trace-yielding
+// generators (traces). ForEmbed only consults the field that matches
+// the requested generator type — pass nil for the others when their
+// signal isn't needed.
+type EmbedConsumers struct {
+	LogConsumer    embed.LogConsumer
+	MetricConsumer embed.MetricConsumer
+	TraceConsumer  embed.TraceConsumer
+}
+
+func (c EmbedConsumers) requireLog(typ config.GeneratorType) error {
+	if c.LogConsumer == nil {
+		return fmt.Errorf("generator type %q requires EmbedConsumers.LogConsumer", typ)
+	}
+	return nil
+}
+
+func (c EmbedConsumers) requireMetric(typ config.GeneratorType) error {
+	if c.MetricConsumer == nil {
+		return fmt.Errorf("generator type %q requires EmbedConsumers.MetricConsumer", typ)
+	}
+	return nil
+}
+
+func (c EmbedConsumers) requireTrace(typ config.GeneratorType) error {
+	if c.TraceConsumer == nil {
+		return fmt.Errorf("generator type %q requires EmbedConsumers.TraceConsumer", typ)
+	}
+	return nil
+}
+
 // ForEmbed constructs an embed.ProducerModule for the given generator
-// config wired to the supplied log consumer. fileGenLibrary is optional
-// and only consulted by the filegen generator: pass embeddedlibrary.FS()
-// (with the `embed_library` build tag set) to use the snapshot shipped
-// in the blitz module, or nil to fall back to reading ./data_library/
-// from the process cwd.
+// config wired to the relevant consumer in `consumers`. fileGenLibrary
+// is optional and only consulted by the filegen generator: pass
+// embeddedlibrary.FS() (with the `embed_library` build tag set) to use
+// the snapshot shipped in the blitz module, or nil to fall back to
+// reading ./data_library/ from the process cwd.
 //
-// Returns an error for non-Producer generator types (nop, winevt,
-// hostmetrics, traces) — these either don't yield logs at all or
-// are not yet migrated to the embed.LogConsumer contract.
-func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumer embed.LogConsumer, fileGenLibrary fs.FS) (embed.ProducerModule, error) {
+// Returns an error when the configured generator type requires a
+// consumer that is nil in `consumers` (e.g. hostmetrics without a
+// MetricConsumer), and for generator types that are not embed-eligible
+// at all (nop, winevt — see PIPE-1032).
+func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsumers, fileGenLibrary fs.FS) (embed.ProducerModule, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
-	if consumer == nil {
-		return nil, fmt.Errorf("consumer cannot be nil")
-	}
 	switch genCfg.Type {
 	case config.GeneratorTypeJSON:
-		return jsongen.New(logger, genCfg.JSON.Workers, genCfg.JSON.Rate, genCfg.JSON.Type, consumer)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return jsongen.New(logger, genCfg.JSON.Workers, genCfg.JSON.Rate, genCfg.JSON.Type, consumers.LogConsumer)
 	case config.GeneratorTypePaloAlto:
-		return paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate, consumer)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate, consumers.LogConsumer)
 	case config.GeneratorTypeApache:
-		return apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate, consumer)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate, consumers.LogConsumer)
 	case config.GeneratorTypeApacheCombined:
-		return apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate, consumer)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate, consumers.LogConsumer)
 	case config.GeneratorTypeApacheError:
-		return apacheerrorgen.New(logger, genCfg.ApacheError.Workers, genCfg.ApacheError.Rate, consumer)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return apacheerrorgen.New(logger, genCfg.ApacheError.Workers, genCfg.ApacheError.Rate, consumers.LogConsumer)
 	case config.GeneratorTypeNginx:
-		return nginx.New(logger, genCfg.Nginx.Workers, genCfg.Nginx.Rate, consumer)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return nginx.New(logger, genCfg.Nginx.Workers, genCfg.Nginx.Rate, consumers.LogConsumer)
 	case config.GeneratorTypePostgres:
-		return postgres.New(logger, genCfg.Postgres.Workers, genCfg.Postgres.Rate, consumer)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return postgres.New(logger, genCfg.Postgres.Workers, genCfg.Postgres.Rate, consumers.LogConsumer)
 	case config.GeneratorTypeKubernetes:
-		return kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format, consumer)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format, consumers.LogConsumer)
 	case config.GeneratorTypeFile:
-		return filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, consumer, fileGenLibrary)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, consumers.LogConsumer, fileGenLibrary)
 	case config.GeneratorTypeOkta:
-		return okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate, consumer)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate, consumers.LogConsumer)
 	case config.GeneratorTypeWel:
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
 		role := welcatalog.MachineRole(genCfg.Wel.Role)
 		if role == "" {
 			role = welcatalog.RoleMember
@@ -79,21 +145,55 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumer embed.LogCon
 			Domain:   genCfg.Wel.Domain,
 			Role:     role,
 			Channels: genCfg.Wel.Channels,
-			Consumer: consumer,
+			Consumer: consumers.LogConsumer,
 		})
 	case config.GeneratorTypeFIX:
-		return newFIX(logger, genCfg.FIX, consumer)
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return newFIX(logger, genCfg.FIX, consumers.LogConsumer)
+	case config.GeneratorTypeHostMetrics:
+		if err := consumers.requireMetric(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return hostmetrics.New(hostmetrics.Config{
+			Logger:       logger,
+			Workers:      genCfg.HostMetrics.Workers,
+			Rate:         genCfg.HostMetrics.Rate,
+			OS:           genCfg.HostMetrics.OS,
+			Hostname:     genCfg.HostMetrics.Hostname,
+			ScraperNames: genCfg.HostMetrics.Scrapers,
+			Consumer:     consumers.MetricConsumer,
+			Seed:         yamlSeedDefault(genCfg.HostMetrics.Seed),
+		})
 	case config.GeneratorTypeNop:
-		return nil, fmt.Errorf("generator type %q does not produce log records; not embed-eligible", genCfg.Type)
+		return nil, fmt.Errorf("generator type %q does not produce records; not embed-eligible", genCfg.Type)
 	case config.GeneratorTypeWinevt:
 		return nil, fmt.Errorf("generator type %q is DEPRECATED and is not available via embed; the legacy single-template Windows Event XML generator has been superseded by the multi-channel `wel` generator (see docs/generator/wel.md). The standalone blitz CLI still accepts `winevt` with a deprecation warning", genCfg.Type)
-	case config.GeneratorTypeHostMetrics:
-		return nil, fmt.Errorf("generator type %q produces metrics, not logs; the embed contract supports a separate MetricConsumer path that is not yet wired for this generator", genCfg.Type)
 	case config.GeneratorTypeTraces:
-		return nil, fmt.Errorf("generator type %q produces traces, not logs; the embed contract supports a separate TraceConsumer path that is not yet wired for this generator", genCfg.Type)
+		return nil, fmt.Errorf("generator type %q produces traces; the embed contract supports a separate TraceConsumer path that is not yet wired for this generator", genCfg.Type)
 	default:
 		return nil, fmt.Errorf("unknown generator type %q", genCfg.Type)
 	}
+}
+
+// yamlSeedDefault translates a YAML-loaded Seed value into the
+// generator-Config Seed value, applying the "stochastic by default"
+// architectural intent for YAML users. YAML zero-value (omitted `seed:`
+// key) and an explicit `seed: 0` both map to -1 (randomize per worker).
+// Any other value passes through unchanged.
+//
+// Programmatic Go callers bypass this translation and observe whatever
+// literal value they pass — useful for tests that want to pin seed=0.
+//
+// PIPE-1036 will route per-machine identity determinism through the
+// top-level `environment.seed_config` instead; this knob will then
+// govern only the generator's record-content RNG, not host identity.
+func yamlSeedDefault(yamlSeed int64) int64 {
+	if yamlSeed == 0 {
+		return -1
+	}
+	return yamlSeed
 }
 
 // newFIX translates the YAML-shaped FIXGeneratorConfig into the
