@@ -55,7 +55,7 @@ func TestEventRecordToXML(t *testing.T) {
 		`<Data Name="SubjectUserSid">S-1-5-18</Data>`,
 		`<Data Name="TargetUserName">jsmith</Data>`,
 		`<Data Name="LogonType">3</Data>`,
-		`<RenderingInfo>`,
+		`<RenderingInfo Culture="en-US">`,
 		`<Message>An account was successfully logged on.</Message>`,
 		`<Level>Information</Level>`,
 		`<Task>Logon</Task>`,
@@ -66,6 +66,59 @@ func TestEventRecordToXML(t *testing.T) {
 		if !strings.Contains(xml, check) {
 			t.Errorf("XML missing expected content: %q\n\nFull XML:\n%s", check, xml)
 		}
+	}
+}
+
+func TestEventRecordToXMLRenderingInfoKeywordsWrapper(t *testing.T) {
+	rec := &EventRecord{
+		ProviderName:  "Microsoft-Windows-Security-Auditing",
+		EventID:       4624,
+		Channel:       "Security",
+		Computer:      "WIN-SERVER01.contoso.com",
+		Keywords:      0x8020000000000000,
+		KeywordNames:  []string{"Audit Success"},
+		Message:       "An account was successfully logged on.",
+		LevelName:     "Information",
+		TimeCreated:   time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC),
+		EventRecordID: 12345,
+	}
+
+	xml := rec.ToXML()
+
+	// Per the WEL schema, <Keyword> elements inside <RenderingInfo> must be
+	// wrapped in a <Keywords> container. This is distinct from the System-level
+	// <Keywords>0x...</Keywords> hex bitmask.
+	wantBlock := "    <Keywords>\n      <Keyword>Audit Success</Keyword>\n    </Keywords>\n"
+	if !strings.Contains(xml, wantBlock) {
+		t.Errorf("RenderingInfo keywords not wrapped in <Keywords> container.\nwant block:\n%s\nfull XML:\n%s", wantBlock, xml)
+	}
+
+	// A bare <Keyword> directly under <RenderingInfo> (4-space indent, no wrapper)
+	// is the non-conformant form and must not appear.
+	if strings.Contains(xml, "  <RenderingInfo>\n    <Keyword>") {
+		t.Errorf("found bare <Keyword> directly under <RenderingInfo> (missing <Keywords> wrapper)\n\nfull XML:\n%s", xml)
+	}
+}
+
+func TestEventRecordToXMLRenderingInfoCulture(t *testing.T) {
+	rec := &EventRecord{
+		ProviderName:  "Microsoft-Windows-Security-Auditing",
+		EventID:       4624,
+		Channel:       "Security",
+		Computer:      "WIN-SERVER01.contoso.com",
+		KeywordNames:  []string{"Audit Success"},
+		Message:       "An account was successfully logged on.",
+		LevelName:     "Information",
+		TimeCreated:   time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC),
+		EventRecordID: 12345,
+	}
+
+	xml := rec.ToXML()
+
+	// Per the WEL schema, the RenderingInfo element carries a required Culture
+	// attribute, and real (WEC-forwarded, rendered-text) events always include it.
+	if !strings.Contains(xml, `<RenderingInfo Culture="en-US">`) {
+		t.Errorf("RenderingInfo missing required Culture attribute.\n\nfull XML:\n%s", xml)
 	}
 }
 
