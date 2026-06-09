@@ -78,7 +78,7 @@ func (e *EventRecord) ToXML() string {
 
 	// RenderingInfo
 	if e.Message != "" || e.LevelName != "" || e.TaskName != "" {
-		b.WriteString("  <RenderingInfo>\n")
+		b.WriteString("  <RenderingInfo Culture=\"en-US\">\n")
 		if e.Message != "" {
 			fmt.Fprintf(&b, "    <Message>%s</Message>\n", xmlEscape(e.Message))
 		}
@@ -91,8 +91,12 @@ func (e *EventRecord) ToXML() string {
 		if e.OpcodeName != "" {
 			fmt.Fprintf(&b, "    <Opcode>%s</Opcode>\n", xmlEscape(e.OpcodeName))
 		}
-		for _, kw := range e.KeywordNames {
-			fmt.Fprintf(&b, "    <Keyword>%s</Keyword>\n", xmlEscape(kw))
+		if len(e.KeywordNames) > 0 {
+			b.WriteString("    <Keywords>\n")
+			for _, kw := range e.KeywordNames {
+				fmt.Fprintf(&b, "      <Keyword>%s</Keyword>\n", xmlEscape(kw))
+			}
+			b.WriteString("    </Keywords>\n")
 		}
 		b.WriteString("  </RenderingInfo>\n")
 	}
