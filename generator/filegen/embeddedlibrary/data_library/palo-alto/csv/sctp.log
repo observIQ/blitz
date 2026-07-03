@@ -1,0 +1,1 @@
+%b %e %T localhost 1,%Y/%m/%d %H:%M:%S,001901000123,SCTP,,,%Y/%m/%d %H:%M:%S,203.0.113.20,198.51.100.30,,,SCTP-Policy,,,,vsys1,trust,untrust,ethernet1/1,ethernet1/2,default,,,1,0,0,,,,,sctp,deny,0,0,0,0,,PA-VM,7000000000000001,,5001,,low,data,,,,,,,,,,,,,,,,,,,,,%Y/%m/%d %H:%M:%S

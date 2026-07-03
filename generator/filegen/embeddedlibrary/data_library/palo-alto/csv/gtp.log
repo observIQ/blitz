@@ -1,0 +1,1 @@
+%b %e %T localhost 1,%Y/%m/%d %H:%M:%S,001901000123,GTP,gtp,,%Y/%m/%d %H:%M:%S,203.0.113.20,198.51.100.30,,,GTP-Inspect,,,gtp,vsys1,trust,untrust,ethernet1/1,ethernet1/2,default,,,,0,0,,,,,deny,create-session,,,,32,10.20.30.40,,,S11,16,low,,,,,,,,United States,United States,,,,,,,,,,,,,,,,,,,,,,,,,,%Y/%m/%d %H:%M:%S,,,,,,,%Y/%m/%d %H:%M:%S,,,,,,,,,,
