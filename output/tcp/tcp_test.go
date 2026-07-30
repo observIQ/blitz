@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/output"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -183,26 +184,29 @@ func TestTCP_Integration(t *testing.T) {
 		t.Errorf("First Write() failed: %v", err)
 	}
 
-	// Give some time for first message to be sent
-	time.Sleep(50 * time.Millisecond)
-
 	// Send second message
 	err = tcp.Write(ctx, output.LogRecord{Message: testData2})
 	if err != nil {
 		t.Errorf("Second Write() failed: %v", err)
 	}
 
-	// Give some time for data to be sent
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the server to receive both messages before stopping. Stop closes
+	// the data channel and cancels the worker context at the same time, so any
+	// data still buffered can be dropped if we stop before the worker drains it.
+	require.Eventually(t, func() bool {
+		var allData []byte
+		for _, data := range getReceivedData(t) {
+			allData = append(allData, data...)
+		}
+		s := string(allData)
+		return strings.Contains(s, testData1) && strings.Contains(s, testData2)
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the client
 	err = tcp.Stop(ctx)
 	if err != nil {
 		t.Errorf("Stop() failed: %v", err)
 	}
-
-	// Wait a bit more for final data to arrive
-	time.Sleep(100 * time.Millisecond)
 
 	// Verify the server received the data
 	receivedData := getReceivedData(t)
@@ -370,9 +374,10 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 		}
 	}()
 
-	// Wait for server to be ready
+	// Wait for server to be ready. Once Accept is being driven, the kernel
+	// backlog accepts the client connection, and the final Eventually poll
+	// covers actual data delivery, so no fixed startup sleep is needed.
 	<-serverReady
-	time.Sleep(50 * time.Millisecond)
 
 	// Extract host and port from the server address
 	host, port, err := net.SplitHostPort(serverAddr)
@@ -406,9 +411,6 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 		t.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
 
-	// Give time for the worker to establish TLS connection
-	time.Sleep(200 * time.Millisecond)
-
 	// Test data to send
 	testData1 := "Hello, TLS World!"
 	testData2 := "Second TLS message"
@@ -422,26 +424,29 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 		t.Errorf("First Write() failed: %v", err)
 	}
 
-	// Give some time for first message to be sent
-	time.Sleep(100 * time.Millisecond)
-
 	// Send second message
 	err = tcp.Write(ctx, output.LogRecord{Message: testData2})
 	if err != nil {
 		t.Errorf("Second Write() failed: %v", err)
 	}
 
-	// Give some time for data to be sent
-	time.Sleep(200 * time.Millisecond)
+	// Wait for the server to receive both messages before stopping. Stop closes
+	// the data channel and cancels the worker context at the same time, so any
+	// data still buffered can be dropped if we stop before the worker drains it.
+	require.Eventually(t, func() bool {
+		var allData []byte
+		for _, data := range getReceivedData(t) {
+			allData = append(allData, data...)
+		}
+		s := string(allData)
+		return strings.Contains(s, testData1) && strings.Contains(s, testData2)
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the client
 	err = tcp.Stop(ctx)
 	if err != nil {
 		t.Errorf("Stop() failed: %v", err)
 	}
-
-	// Wait a bit more for final data to arrive
-	time.Sleep(100 * time.Millisecond)
 
 	// Verify the server received the data
 	receivedData := getReceivedData(t)
