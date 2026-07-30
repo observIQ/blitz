@@ -187,12 +187,14 @@ func TestHEC_WriteAndBatchByTimeout(t *testing.T) {
 }
 
 func TestHEC_AuthHeader(t *testing.T) {
-	var gotAuth string
-	var gotChannel string
+	// atomic.Value so the test goroutine can poll these while the server
+	// goroutine writes them without a data race.
+	var gotAuth atomic.Value
+	var gotChannel atomic.Value
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotAuth = r.Header.Get("Authorization")
-		gotChannel = r.Header.Get("X-Splunk-Request-Channel")
+		gotAuth.Store(r.Header.Get("Authorization"))
+		gotChannel.Store(r.Header.Get("X-Splunk-Request-Channel"))
 
 		resp := hecResponse{Text: "Success", Code: 0}
 		w.WriteHeader(200)
@@ -204,8 +206,8 @@ func TestHEC_AuthHeader(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	t.Run("with ACK enabled sends channel header", func(t *testing.T) {
-		gotAuth = ""
-		gotChannel = ""
+		gotAuth.Store("")
+		gotChannel.Store("")
 
 		h, err := New(logger,
 			WithHost(host),
@@ -225,17 +227,19 @@ func TestHEC_AuthHeader(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		time.Sleep(500 * time.Millisecond)
+		require.Eventually(t, func() bool {
+			return gotChannel.Load().(string) != ""
+		}, 5*time.Second, 10*time.Millisecond)
 
-		assert.Equal(t, "Splunk my-secret-token", gotAuth)
-		assert.NotEmpty(t, gotChannel, "expected X-Splunk-Request-Channel header when ACK enabled")
+		assert.Equal(t, "Splunk my-secret-token", gotAuth.Load().(string))
+		assert.NotEmpty(t, gotChannel.Load().(string), "expected X-Splunk-Request-Channel header when ACK enabled")
 
 		require.NoError(t, h.Stop(ctx))
 	})
 
 	t.Run("with ACK disabled omits channel header", func(t *testing.T) {
-		gotAuth = ""
-		gotChannel = ""
+		gotAuth.Store("")
+		gotChannel.Store("")
 
 		h, err := New(logger,
 			WithHost(host),
@@ -255,20 +259,27 @@ func TestHEC_AuthHeader(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		time.Sleep(500 * time.Millisecond)
+		// Wait for the request to arrive (auth header is always set); the
+		// channel header must remain empty when ACK is disabled.
+		require.Eventually(t, func() bool {
+			return gotAuth.Load().(string) != ""
+		}, 5*time.Second, 10*time.Millisecond)
 
-		assert.Equal(t, "Splunk my-secret-token", gotAuth)
-		assert.Empty(t, gotChannel, "expected no X-Splunk-Request-Channel header when ACK disabled")
+		assert.Equal(t, "Splunk my-secret-token", gotAuth.Load().(string))
+		assert.Empty(t, gotChannel.Load().(string), "expected no X-Splunk-Request-Channel header when ACK disabled")
 
 		require.NoError(t, h.Stop(ctx))
 	})
 }
 
 func TestHEC_EventFormatRaw(t *testing.T) {
-	var receivedBody []byte
+	// atomic.Value so the test goroutine can poll the captured body while the
+	// server goroutine writes it without a data race.
+	var receivedBody atomic.Value
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedBody, _ = io.ReadAll(r.Body)
+		body, _ := io.ReadAll(r.Body)
+		receivedBody.Store(body)
 		resp := hecResponse{Text: "Success", Code: 0}
 		w.WriteHeader(200)
 		json.NewEncoder(w).Encode(resp)
@@ -297,20 +308,26 @@ func TestHEC_EventFormatRaw(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		b, _ := receivedBody.Load().([]byte)
+		return len(b) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	var event hecEvent
-	require.NoError(t, json.Unmarshal(receivedBody, &event))
+	require.NoError(t, json.Unmarshal(receivedBody.Load().([]byte), &event))
 	assert.Equal(t, `{"key":"value"}`, event.Event)
 
 	require.NoError(t, h.Stop(ctx))
 }
 
 func TestHEC_EventFormatParsed(t *testing.T) {
-	var receivedBody []byte
+	// atomic.Value so the test goroutine can poll the captured body while the
+	// server goroutine writes it without a data race.
+	var receivedBody atomic.Value
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedBody, _ = io.ReadAll(r.Body)
+		body, _ := io.ReadAll(r.Body)
+		receivedBody.Store(body)
 		resp := hecResponse{Text: "Success", Code: 0}
 		w.WriteHeader(200)
 		json.NewEncoder(w).Encode(resp)
@@ -342,10 +359,13 @@ func TestHEC_EventFormatParsed(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		b, _ := receivedBody.Load().([]byte)
+		return len(b) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	var event hecEvent
-	require.NoError(t, json.Unmarshal(receivedBody, &event))
+	require.NoError(t, json.Unmarshal(receivedBody.Load().([]byte), &event))
 	// In parsed mode, event should be a map
 	eventMap, ok := event.Event.(map[string]any)
 	require.True(t, ok, "expected event to be a map, got %T", event.Event)
@@ -356,10 +376,13 @@ func TestHEC_EventFormatParsed(t *testing.T) {
 }
 
 func TestHEC_EventFormatParsedFallback(t *testing.T) {
-	var receivedBody []byte
+	// atomic.Value so the test goroutine can poll the captured body while the
+	// server goroutine writes it without a data race.
+	var receivedBody atomic.Value
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedBody, _ = io.ReadAll(r.Body)
+		body, _ := io.ReadAll(r.Body)
+		receivedBody.Store(body)
 		resp := hecResponse{Text: "Success", Code: 0}
 		w.WriteHeader(200)
 		json.NewEncoder(w).Encode(resp)
@@ -389,10 +412,13 @@ func TestHEC_EventFormatParsedFallback(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		b, _ := receivedBody.Load().([]byte)
+		return len(b) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	var event hecEvent
-	require.NoError(t, json.Unmarshal(receivedBody, &event))
+	require.NoError(t, json.Unmarshal(receivedBody.Load().([]byte), &event))
 	assert.Equal(t, "raw fallback", event.Event)
 
 	require.NoError(t, h.Stop(ctx))
@@ -431,9 +457,10 @@ func TestHEC_HECErrorResponse(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
-
 	// Should have attempted the request (error is logged, not returned)
+	require.Eventually(t, func() bool {
+		return requestCount.Load() >= int32(1)
+	}, 5*time.Second, 10*time.Millisecond)
 	assert.GreaterOrEqual(t, requestCount.Load(), int32(1))
 
 	require.NoError(t, h.Stop(ctx))
@@ -480,9 +507,10 @@ func TestHEC_GracefulShutdown(t *testing.T) {
 	// Stop should flush remaining events
 	require.NoError(t, h.Stop(ctx))
 
-	// Give a moment for the final flush
-	time.Sleep(200 * time.Millisecond)
-
+	// Wait for the final flush to reach the server
+	require.Eventually(t, func() bool {
+		return batchCount.Load() >= int32(1)
+	}, 5*time.Second, 10*time.Millisecond)
 	assert.GreaterOrEqual(t, batchCount.Load(), int32(1), "expected at least one batch to be sent during shutdown")
 }
 
@@ -523,8 +551,9 @@ func TestHEC_MultipleWorkers(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	time.Sleep(1 * time.Second)
-
+	require.Eventually(t, func() bool {
+		return requestCount.Load() >= int32(10)
+	}, 5*time.Second, 10*time.Millisecond)
 	assert.GreaterOrEqual(t, requestCount.Load(), int32(10), "expected at least 10 requests with batch size 1")
 
 	require.NoError(t, h.Stop(ctx))

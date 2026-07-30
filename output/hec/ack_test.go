@@ -183,18 +183,18 @@ func TestHEC_ACKConfirmFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Wait for the event to be sent and tracked
-	time.Sleep(500 * time.Millisecond)
-
-	// Verify ackId is being tracked
+	require.Eventually(t, func() bool {
+		return h.workers[0].tracker.size() == 1
+	}, 5*time.Second, 10*time.Millisecond)
 	assert.Equal(t, 1, h.workers[0].tracker.size(), "expected 1 pending ackId")
 
 	// Confirm the ackId in the mock server
 	state.setACKStatus(0, true)
 
-	// Wait for the poller to pick it up
-	time.Sleep(500 * time.Millisecond)
-
-	// Should be confirmed and removed
+	// Wait for the poller to pick it up and remove the confirmed ackId
+	require.Eventually(t, func() bool {
+		return h.workers[0].tracker.size() == 0
+	}, 5*time.Second, 10*time.Millisecond)
 	assert.Equal(t, 0, h.workers[0].tracker.size(), "expected 0 pending ackIds after confirmation")
 
 	require.NoError(t, h.Stop(ctx))
@@ -230,9 +230,12 @@ func TestHEC_ACKExpireAndResend(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Wait for event to be sent, ackId 0 to expire, and resend to produce a new ackId.
-	// With 300ms timeout and 100ms poll, after ~500ms the first resend should have happened.
-	time.Sleep(600 * time.Millisecond)
+	// Wait for event to be sent, ackId 0 to expire, and a resend to produce a
+	// new ackId. The mock server auto-increments ackIds: the initial send is
+	// ackId 0 (nextAckID -> 1); once a resend happens nextAckID reaches 2.
+	require.Eventually(t, func() bool {
+		return state.nextAckID.Load() >= 2
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Confirm ALL ackIds the server has seen so far (one of them will be the current pending)
 	// The server auto-increments ackIds, so let's confirm a range
@@ -241,8 +244,9 @@ func TestHEC_ACKExpireAndResend(t *testing.T) {
 	}
 
 	// Wait for the poller to pick up the confirmation
-	time.Sleep(300 * time.Millisecond)
-
+	require.Eventually(t, func() bool {
+		return h.workers[0].tracker.size() == 0
+	}, 5*time.Second, 10*time.Millisecond)
 	assert.Equal(t, 0, h.workers[0].tracker.size(), "expected 0 pending after resend+confirm")
 
 	require.NoError(t, h.Stop(ctx))
@@ -278,11 +282,18 @@ func TestHEC_ACKMaxRetriesDrop(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Wait for initial send, expiry, resend, second expiry, and drop
-	// With 50ms poll + 100ms timeout, this should cycle through quickly
-	time.Sleep(2 * time.Second)
+	// First wait for the event to be sent and tracked, so the subsequent
+	// wait-for-drop cannot pass vacuously against an empty tracker.
+	require.Eventually(t, func() bool {
+		return h.workers[0].tracker.size() == 1
+	}, 5*time.Second, 10*time.Millisecond)
 
-	// After maxRetries exhausted, tracker should be empty (batch dropped)
+	// After initial send, expiry, resend, second expiry, and drop
+	// (50ms poll + 100ms timeout), maxRetries is exhausted and the batch
+	// is dropped, leaving the tracker empty.
+	require.Eventually(t, func() bool {
+		return h.workers[0].tracker.size() == 0
+	}, 5*time.Second, 10*time.Millisecond)
 	assert.Equal(t, 0, h.workers[0].tracker.size(), "expected 0 pending after max retries drop")
 
 	require.NoError(t, h.Stop(ctx))
@@ -317,7 +328,7 @@ func TestHEC_ACKDisabledNoTracker(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	time.Sleep(300 * time.Millisecond)
+	// Stop flushes any pending event; no state to wait on beforehand.
 	require.NoError(t, h.Stop(ctx))
 }
 
