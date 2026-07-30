@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/output"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -81,16 +82,9 @@ func TestFileOutputWriteMultipleLines(t *testing.T) {
 
 func waitForLines(t *testing.T, path string, want int, timeout time.Duration) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		lines := readLines(t, path)
-		if len(lines) >= want {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	lines := readLines(t, path)
-	t.Fatalf("timed out waiting for %d lines, got %d", want, len(lines))
+	require.Eventually(t, func() bool {
+		return len(readLines(t, path)) >= want
+	}, timeout, 50*time.Millisecond)
 }
 
 func readLines(t *testing.T, path string) []string {
