@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/output"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -178,26 +179,29 @@ func TestUDP_Integration(t *testing.T) {
 		t.Errorf("First Write() failed: %v", err)
 	}
 
-	// Give some time for first message to be sent
-	time.Sleep(50 * time.Millisecond)
-
 	// Send second message
 	err = udp.Write(ctx, output.LogRecord{Message: testData2})
 	if err != nil {
 		t.Errorf("Second Write() failed: %v", err)
 	}
 
-	// Give some time for data to be sent
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the server to receive both messages before stopping. Stop closes
+	// the data channel and cancels the worker context at the same time, so any
+	// data still buffered can be dropped if we stop before the worker drains it.
+	require.Eventually(t, func() bool {
+		var allData []byte
+		for _, data := range getReceivedUDPData(t) {
+			allData = append(allData, data...)
+		}
+		s := string(allData)
+		return strings.Contains(s, testData1) && strings.Contains(s, testData2)
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the client
 	err = udp.Stop(ctx)
 	if err != nil {
 		t.Errorf("Stop() failed: %v", err)
 	}
-
-	// Wait a bit more for final data to arrive
-	time.Sleep(100 * time.Millisecond)
 
 	// Verify the server received the data
 	receivedData := getReceivedUDPData(t)
