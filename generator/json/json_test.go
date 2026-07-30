@@ -140,8 +140,10 @@ func TestJSONGenerator_Start(t *testing.T) {
 	err = generator.Start(context.Background())
 	assert.NoError(t, err)
 
-	// Wait for some logs to be generated
-	time.Sleep(200 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -177,8 +179,10 @@ func TestJSONGenerator_Stop_GracefulShutdown(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let it run briefly
-	time.Sleep(50 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop with context
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -205,8 +209,10 @@ func TestJSONGenerator_WriteErrors_Backoff(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let it run briefly to trigger write errors and backoff
-	time.Sleep(200 * time.Millisecond)
+	// Poll until write errors have been recorded, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getErrors()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -228,8 +234,10 @@ func TestJSONGenerator_ConcurrentWorkers(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let multiple workers run
-	time.Sleep(200 * time.Millisecond)
+	// Poll until many logs have been written by the workers, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 10
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -261,8 +269,10 @@ func TestJSONGenerator_LogMessageVariety(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let it run to generate many logs
-	time.Sleep(100 * time.Millisecond)
+	// Poll until many logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 10
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -306,8 +316,10 @@ func TestJSONGenerator_LogMessageSize(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let it run briefly
-	time.Sleep(50 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -343,7 +355,11 @@ func TestJSONGenerator_MultipleStartStop(t *testing.T) {
 		err = generator.Start(context.Background())
 		assert.NoError(t, err)
 
-		time.Sleep(50 * time.Millisecond)
+		// Poll until this cycle has written at least one more log, then stop.
+		before := len(writer.getWrites())
+		require.Eventually(t, func() bool {
+			return len(writer.getWrites()) > before
+		}, 5*time.Second, 10*time.Millisecond)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		err = generator.Stop(ctx)
@@ -374,10 +390,11 @@ func TestJSONGenerator_VeryFastRate(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Run long enough that scheduler jitter on loaded CI runners can't drag
-	// the write count below the assertion threshold. At 1ms rate and 100ms
-	// window, even heavy jitter should still produce well over 5 writes.
-	time.Sleep(100 * time.Millisecond)
+	// Poll until enough logs have been generated, then stop. Polling removes the
+	// scheduler-jitter flakiness a fixed window had at the assertion threshold.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 5
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -421,8 +438,11 @@ func TestJSONGenerator_CountLimited(t *testing.T) {
 		t.Fatal("tracker should have been exhausted")
 	}
 
-	// Give a short window for any in-flight writes to complete
-	time.Sleep(100 * time.Millisecond)
+	// Poll until all 5 writes have landed (the tracker caps at 5, so it will not
+	// exceed), then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) == 5
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
