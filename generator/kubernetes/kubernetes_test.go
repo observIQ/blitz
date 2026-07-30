@@ -86,7 +86,11 @@ func TestGenerator_CountLimited(t *testing.T) {
 		t.Fatal("tracker should have been exhausted")
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// After tracker exhaustion, no additional records should be produced.
+	// Assert the bound holds across a short window instead of sleeping.
+	require.Never(t, func() bool {
+		return len(writer.getWrites()) > 5
+	}, 100*time.Millisecond, 10*time.Millisecond, "tracker should have halted further writes")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
