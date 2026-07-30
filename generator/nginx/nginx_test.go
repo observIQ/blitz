@@ -129,7 +129,10 @@ func TestNginxGenerator_Start(t *testing.T) {
 	err = generator.Start(context.Background())
 	assert.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -156,7 +159,10 @@ func TestNginxGenerator_Stop_GracefulShutdown(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -182,7 +188,10 @@ func TestNginxGenerator_WriteErrors_Backoff(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// Poll until write errors have been recorded, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getErrors()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -202,7 +211,10 @@ func TestNginxGenerator_ConcurrentWorkers(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// Poll until many logs have been written by the workers, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 10
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -222,7 +234,10 @@ func TestFormatAsNginxCombined_Structure(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -253,7 +268,10 @@ func TestFormatAsNginxCombined_ParseFunc(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -300,7 +318,11 @@ func TestGenerator_CountLimited(t *testing.T) {
 		t.Fatal("tracker should have been exhausted")
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// Poll until all 5 writes have landed (the tracker caps at 5, so it will not
+	// exceed), then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) == 5
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
