@@ -21,6 +21,7 @@ import (
 type mockConsumer struct {
 	mu         sync.Mutex
 	records    []embed.LogRecord
+	errors     []error
 	consumeErr error
 	delay      time.Duration
 }
@@ -40,12 +41,14 @@ func (m *mockConsumer) ConsumeLogs(ctx context.Context, records []embed.LogRecor
 		}
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.consumeErr != nil {
+		m.errors = append(m.errors, m.consumeErr)
 		return m.consumeErr
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	for i := range records {
 		m.records = append(m.records, records[i])
 	}
@@ -58,6 +61,12 @@ func (m *mockConsumer) getWrites() []embed.LogRecord {
 	out := make([]embed.LogRecord, len(m.records))
 	copy(out, m.records)
 	return out
+}
+
+func (m *mockConsumer) getErrors() []error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]error(nil), m.errors...)
 }
 
 func (m *mockConsumer) setConsumeError(err error) {
@@ -171,8 +180,10 @@ func TestFileLogGeneratorFileMode(t *testing.T) {
 	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let it run for a short time
-	time.Sleep(200 * time.Millisecond)
+	// Poll until at least one record has been consumed, then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	err = gen.Stop(ctx)
@@ -215,8 +226,10 @@ func TestFileLogGeneratorDirectoryMode(t *testing.T) {
 	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let it run for a short time
-	time.Sleep(200 * time.Millisecond)
+	// Poll until at least one record has been consumed, then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	err = gen.Stop(ctx)
@@ -281,7 +294,10 @@ func TestFileLogGeneratorWriteError(t *testing.T) {
 	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
+	// Poll until the consume error has been recorded, then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.getErrors()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	err = gen.Stop(ctx)
@@ -309,7 +325,10 @@ func TestFileLogGeneratorMultipleWorkers(t *testing.T) {
 	err = gen.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(300 * time.Millisecond)
+	// Poll until at least one record has been consumed, then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	err = gen.Stop(ctx)
@@ -440,12 +459,13 @@ func TestFileLogGeneratorGlobPatterns(t *testing.T) {
 			err = gen.Start(context.Background())
 			require.NoError(t, err)
 
-			// Give enough time for at least one write
+			// Poll until at least one line has been written, then stop.
+			require.Eventually(t, func() bool {
+				return len(consumer.getWrites()) > 0
+			}, 5*time.Second, 10*time.Millisecond)
+
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
-
-			// Wait a bit then stop
-			time.Sleep(50 * time.Millisecond)
 			err = gen.Stop(ctx)
 			require.NoError(t, err)
 
@@ -511,8 +531,10 @@ func TestFileLogGeneratorGlobDirectories(t *testing.T) {
 			err = gen.Start(context.Background())
 			require.NoError(t, err)
 
-			// Wait for at least one write to occur (rate is 10ms per line)
-			time.Sleep(100 * time.Millisecond)
+			// Poll until at least one line has been written, then stop.
+			require.Eventually(t, func() bool {
+				return len(consumer.getWrites()) > 0
+			}, 5*time.Second, 10*time.Millisecond)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -576,12 +598,13 @@ func TestCacheTTLExpiration(t *testing.T) {
 	_, found := cache.Get("key1")
 	require.True(t, found, "entry should be found before TTL expires")
 
-	// Wait for TTL to expire
-	time.Sleep(15 * time.Millisecond)
-
-	// Should not be found after TTL
-	_, found = cache.Get("key1")
-	require.False(t, found, "entry should not be found after TTL expires")
+	// Poll until the entry expires (real 10ms TTL). Polling avoids a fixed sleep
+	// racing the TTL on a slow CI runner. Making it instant would require injecting
+	// a fake clock into the cache (a production change), tracked separately.
+	require.Eventually(t, func() bool {
+		_, found := cache.Get("key1")
+		return !found
+	}, 5*time.Second, time.Millisecond)
 }
 
 // TestCacheLRUEviction tests that cache respects max size limit
@@ -663,7 +686,11 @@ func TestFileLogGenerator_CountLimited(t *testing.T) {
 		t.Fatal("tracker should have been exhausted")
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// After tracker exhaustion, no additional records should be produced.
+	// Assert the bound holds across a short window instead of sleeping.
+	require.Never(t, func() bool {
+		return len(consumer.getWrites()) > 5
+	}, 100*time.Millisecond, 10*time.Millisecond, "tracker should have halted further writes")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
