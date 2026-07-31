@@ -168,20 +168,43 @@ func TestStdoutOutput_FlushOnInterval(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = out.Stop(context.Background()) }()
 
+	// Drain the pipe concurrently into a mutex-guarded buffer so we can poll
+	// for the flushed data without blocking on ReadFrom (which only returns at
+	// EOF). The ticker fires on its own goroutine, so we wait for its effect
+	// rather than sleeping a fixed duration.
+	var (
+		mu  sync.Mutex
+		got []byte
+	)
+	readerDone := make(chan struct{})
+	go func() {
+		defer close(readerDone)
+		b := make([]byte, 1024)
+		for {
+			n, readErr := r.Read(b)
+			if n > 0 {
+				mu.Lock()
+				got = append(got, b[:n]...)
+				mu.Unlock()
+			}
+			if readErr != nil {
+				return
+			}
+		}
+	}()
+
 	err = out.Write(context.Background(), output.LogRecord{Message: "interval flush message"})
 	require.NoError(t, err)
 
-	// Wait long enough for the ticker to fire without calling Stop.
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return bytes.Contains(got, []byte("interval flush message"))
+	}, 5*time.Second, 10*time.Millisecond)
 
 	w.Close()
 	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	_, err = buf.ReadFrom(r)
-	require.NoError(t, err)
-
-	assert.Contains(t, buf.String(), "interval flush message")
+	<-readerDone
 }
 
 func TestStdoutOutput_FlushOnStop(t *testing.T) {
