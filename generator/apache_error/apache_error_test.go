@@ -145,8 +145,10 @@ func TestApacheErrorGenerator_Start(t *testing.T) {
 	err = generator.Start(context.Background())
 	assert.NoError(t, err)
 
-	// Wait for some logs to be generated
-	time.Sleep(200 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.writes()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -174,8 +176,10 @@ func TestApacheErrorGenerator_Stop_GracefulShutdown(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let it run briefly
-	time.Sleep(50 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.writes()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop with context
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -203,8 +207,10 @@ func TestApacheErrorGenerator_WriteErrors_Backoff(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let it run briefly to trigger write errors and backoff
-	time.Sleep(200 * time.Millisecond)
+	// Poll until write errors have been recorded, then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.getErrors()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -226,8 +232,10 @@ func TestApacheErrorGenerator_ConcurrentWorkers(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	// Let multiple workers run
-	time.Sleep(200 * time.Millisecond)
+	// Poll until many logs have been written by the workers, then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.writes()) > 10
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -249,7 +257,10 @@ func TestFormatAsApacheError_Structure(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.writes()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -289,7 +300,10 @@ func TestFormatAsApacheError_ParseFunc(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.writes()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -337,7 +351,11 @@ func TestApacheErrorLogGenerator_CountLimited(t *testing.T) {
 		t.Fatal("tracker should have been exhausted")
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// Poll until all 5 writes have landed (the tracker caps at 5, so it will not
+	// exceed), then stop.
+	require.Eventually(t, func() bool {
+		return len(consumer.writes()) == 5
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
