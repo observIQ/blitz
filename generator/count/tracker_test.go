@@ -125,9 +125,9 @@ func TestReset_UnblocksResumeC(t *testing.T) {
 	default:
 	}
 
-	// Reset in a goroutine
+	// Reset from a goroutine. The "not closed yet" check above already ran, so there
+	// is no need to delay before resetting.
 	go func() {
-		time.Sleep(10 * time.Millisecond)
 		tracker.Reset()
 	}()
 
@@ -257,7 +257,9 @@ func TestReset_ConcurrentWithAcquire(t *testing.T) {
 		}
 	}()
 
-	// Goroutine that resets periodically
+	// Goroutine that resets periodically. The 1ms spacing is intentional: it spreads
+	// the resets so they interleave with the concurrent Acquire calls, which is the
+	// concurrency this test exercises. It is not a wait-for-state sleep.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
