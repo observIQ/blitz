@@ -114,8 +114,10 @@ func TestOktaGenerator_Start(t *testing.T) {
 	err = generator.Start(context.Background())
 	assert.NoError(t, err)
 
-	// Wait for some logs to be generated
-	time.Sleep(200 * time.Millisecond)
+	// Poll until logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Stop the generator
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -159,7 +161,11 @@ func TestOktaGenerator_Stop_GracefulShutdown(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
+	// Poll until at least one record has landed so Stop is exercised against
+	// actively-running workers, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -185,7 +191,10 @@ func TestOktaGenerator_WriteErrors_Backoff(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// Poll until write errors have been recorded, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getErrors()) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -205,7 +214,10 @@ func TestOktaGenerator_ConcurrentWorkers(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// Poll until the combined worker output exceeds 10 records, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 10
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -225,7 +237,10 @@ func TestOktaGenerator_EventTypeVariety(t *testing.T) {
 	err = generator.Start(context.Background())
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// Poll until many logs have been generated, then stop.
+	require.Eventually(t, func() bool {
+		return len(writer.getWrites()) > 10
+	}, 5*time.Second, 10*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -295,7 +310,11 @@ func TestOktaGenerator_MultipleStartStop(t *testing.T) {
 		err = generator.Start(context.Background())
 		assert.NoError(t, err)
 
-		time.Sleep(50 * time.Millisecond)
+		// Poll until this cycle has written at least one more log, then stop.
+		before := len(writer.getWrites())
+		require.Eventually(t, func() bool {
+			return len(writer.getWrites()) > before
+		}, 5*time.Second, 10*time.Millisecond)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		err = generator.Stop(ctx)
@@ -377,7 +396,11 @@ func TestGenerator_CountLimited(t *testing.T) {
 		t.Fatal("tracker should have been exhausted")
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// After tracker exhaustion, no additional records should be produced.
+	// Assert the bound holds across a short window instead of sleeping.
+	require.Never(t, func() bool {
+		return len(writer.getWrites()) > 5
+	}, 100*time.Millisecond, 10*time.Millisecond, "tracker should have halted further writes")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
