@@ -444,20 +444,24 @@ func (g *FileLogGenerator) worker(id int, files []string) {
 	backoffConfig.MaxInterval = 5 * time.Second
 	backoffConfig.MaxElapsedTime = 0 // Never stop retrying
 
-	backoffTicker := backoff.NewTicker(backoffConfig)
-	defer backoffTicker.Stop()
+	// Drive the timer from this goroutine only. backoff.ExponentialBackOff is
+	// not safe for concurrent use, so we never hand it to backoff.NewTicker's
+	// internal goroutine; instead we own every NextBackOff/Reset call here.
+	timer := time.NewTimer(backoffConfig.NextBackOff())
+	defer timer.Stop()
 
 	for {
 		select {
 		case <-g.stopCh:
 			g.logger.Debug("Worker received stop signal", zap.Int("id", id))
 			return
-		case <-backoffTicker.C:
+		case <-timer.C:
 			if g.tracker != nil && !g.tracker.Acquire() {
 				select {
 				case <-g.stopCh:
 					return
 				case <-g.tracker.ResumeC():
+					timer.Reset(backoffConfig.NextBackOff())
 					continue
 				}
 			}
@@ -472,11 +476,13 @@ func (g *FileLogGenerator) worker(id int, files []string) {
 				g.logger.Error("Error reading file", zap.String("file", file), zap.Error(err))
 				generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
 				// On error, backoff will automatically handle retry timing
+				timer.Reset(backoffConfig.NextBackOff())
 				continue
 			}
 
 			// On success, reset backoff to configured rate
 			backoffConfig.Reset()
+			timer.Reset(backoffConfig.NextBackOff())
 			fileIdx += g.workers
 		}
 	}
