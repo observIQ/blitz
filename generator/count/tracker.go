@@ -46,7 +46,13 @@ func (t *Tracker) Acquire() bool {
 		}
 		if t.remaining.CompareAndSwap(cur, cur-1) {
 			if cur-1 == 0 {
+				// Guard doneOnce/doneCh with mu so this terminal-permit close
+				// is ordered against Reset(), which reassigns them under mu.
+				// The lock is taken only on the last permit, so the common
+				// acquire path stays lock-free (atomic CAS only).
+				t.mu.Lock()
 				t.doneOnce.Do(func() { close(t.doneCh) })
+				t.mu.Unlock()
 			}
 			return true
 		}
