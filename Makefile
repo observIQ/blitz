@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: tools test lint security all man man-check release release-test generate-o11y generate-o11y-check test-embedded
+.PHONY: tools test lint lint-global-logger security all man man-check release release-test generate-o11y generate-o11y-check test-embedded
 
 WEAVER_IMAGE ?= otel/weaver:v0.19.0
 
@@ -30,6 +30,11 @@ test-race:
 
 lint:
 	go tool revive -config .revive.toml -formatter friendly ./...
+
+# lint-global-logger fails if any non-test Go file uses zap.L() / zap.S().
+# Components must log through an injected *zap.Logger (PIPE-1067).
+lint-global-logger:
+	bash ./scripts/check-no-global-logger.sh
 
 security:
 	go tool gosec ./...

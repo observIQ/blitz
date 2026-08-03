@@ -132,6 +132,10 @@ jobs:
         run: |
           make lint
 
+      - name: Check for global-logger usage
+        run: |
+          make lint-global-logger
+
   build:
     name: Build - ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
