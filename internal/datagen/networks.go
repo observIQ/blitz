@@ -113,22 +113,127 @@ type reservedIPv6Block struct {
 	cidrs  []*net.IPNet
 }
 
-// reservedIPv6Blocks is intentionally empty until blitz implements IPv6-aware
-// random-public emission (tracked in PIPE-1001). RFC 6890 is the umbrella
-// special-purpose registry for IPv6 just as for IPv4. Candidates to populate
-// when that work lands:
-//
-//   - RFC 4291 §2.5: ::/128 unspecified, ::1/128 loopback, ::ffff:0:0/96 IPv4-mapped, fe80::/10 link-local, ff00::/8 multicast
-//   - RFC 4193:      fc00::/7 unique local
-//   - RFC 3849:      2001:db8::/32 documentation
-//   - RFC 5180:      2001:2::/48 benchmarking
-//   - RFC 6052:      64:ff9b::/96 IPv4/IPv6 translation
-//   - RFC 6666:      100::/64 discard prefix
-//
-// NOTE (2026-05-08): NetworkIdentity has no IPv6 field yet — both
-// NetworkIdentity and the datagen utilities are IPv4-only. Adding IPv6 to
-// NetworkIdentity is part of PIPE-1001's scope.
-var reservedIPv6Blocks = []reservedIPv6Block{}
+// reservedIPv6Blocks lists IANA / IETF special-purpose IPv6 prefixes that
+// RandomPublicIPv6 will not emit. RFC 6890 is the umbrella special-purpose
+// registry; entries cite their originating RFC for traceability.
+var reservedIPv6Blocks = []reservedIPv6Block{
+	{
+		rfc:    "RFC 4291",
+		name:   "unspecified, loopback, IPv4-mapped, link-local, multicast",
+		docURL: "https://datatracker.ietf.org/doc/html/rfc4291",
+		cidrs:  mustParseCIDRs("::/128", "::1/128", "::ffff:0:0/96", "fe80::/10", "ff00::/8"),
+	},
+	{
+		rfc:    "RFC 4193",
+		name:   "unique local addresses",
+		docURL: "https://datatracker.ietf.org/doc/html/rfc4193",
+		cidrs:  mustParseCIDRs("fc00::/7"),
+	},
+	{
+		rfc:    "RFC 3849",
+		name:   "documentation",
+		docURL: "https://datatracker.ietf.org/doc/html/rfc3849",
+		cidrs:  mustParseCIDRs("2001:db8::/32"),
+	},
+	{
+		rfc:    "RFC 5180",
+		name:   "benchmarking",
+		docURL: "https://datatracker.ietf.org/doc/html/rfc5180",
+		cidrs:  mustParseCIDRs("2001:2::/48"),
+	},
+	{
+		rfc:    "RFC 6052",
+		name:   "IPv4/IPv6 translation",
+		docURL: "https://datatracker.ietf.org/doc/html/rfc6052",
+		cidrs:  mustParseCIDRs("64:ff9b::/96"),
+	},
+	{
+		rfc:    "RFC 6666",
+		name:   "discard-only prefix",
+		docURL: "https://datatracker.ietf.org/doc/html/rfc6666",
+		cidrs:  mustParseCIDRs("100::/64"),
+	},
+}
+
+// minNetworkPrefixIPv6 is the smallest IPv6 prefix length blitz treats as a
+// host-bearing subnet. Prefixes longer than /64 (e.g. /127 point-to-point
+// links, /128 host routes) are not modeled as subnets-with-hosts here.
+const minNetworkPrefixIPv6 = 64
+
+// isReservedIPv6 reports whether ip falls in any reservedIPv6Blocks entry.
+func isReservedIPv6(ip net.IP) bool {
+	for _, block := range reservedIPv6Blocks {
+		for _, cidr := range block.cidrs {
+			if cidr.Contains(ip) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ValidateIPv6CIDR returns nil if cidr is a parseable IPv6 CIDR with a prefix
+// of /64 or shorter. It errors on unparseable input, IPv4 input, and prefixes
+// longer than /64.
+func ValidateIPv6CIDR(cidr string) error {
+	ip, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return fmt.Errorf("invalid CIDR %q: %w", cidr, err)
+	}
+	if ip.To4() != nil {
+		return fmt.Errorf("CIDR %q is IPv4, not IPv6", cidr)
+	}
+	ones, _ := ipNet.Mask.Size()
+	if ones > minNetworkPrefixIPv6 {
+		return fmt.Errorf("CIDR %q has prefix /%d; blitz IPv6 networks require /%d or shorter", cidr, ones, minNetworkPrefixIPv6)
+	}
+	return nil
+}
+
+// RandomPublicIPv6 generates a random global-unicast (2000::/3) IPv6 address
+// that is not in any reserved block.
+func RandomPublicIPv6(r *rand.Rand) string {
+	return randomPublicIPv6(r, isReservedIPv6)
+}
+
+// randomPublicIPv6 is the testable core of RandomPublicIPv6: it takes the
+// reserved-check as a parameter so the reject-and-retry path can be exercised
+// deterministically (the reserved sub-blocks inside 2000::/3 are too sparse to
+// hit by chance).
+func randomPublicIPv6(r *rand.Rand, reserved func(net.IP) bool) string {
+	for {
+		var b [16]byte
+		for i := range b {
+			b[i] = byte(r.Intn(256)) // #nosec G404
+		}
+		// Force global-unicast 2000::/3: set the top 3 bits to 001.
+		b[0] = (b[0] & 0x1f) | 0x20
+		ip := net.IP(b[:])
+		if reserved(ip) {
+			continue
+		}
+		return ip.String()
+	}
+}
+
+// RandomIPInCIDRv6 returns a random address within the given IPv6 CIDR. For an
+// unparseable or non-IPv6 CIDR it falls back to RandomPublicIPv6.
+func RandomIPInCIDRv6(r *rand.Rand, cidr string) string {
+	ip, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return RandomPublicIPv6(r)
+	}
+	if ip.To4() != nil {
+		return RandomPublicIPv6(r)
+	}
+	base := ipNet.IP.To16()
+	mask := ipNet.Mask
+	result := make(net.IP, 16)
+	for i := 0; i < 16; i++ {
+		result[i] = (base[i] & mask[i]) | (byte(r.Intn(256)) &^ mask[i]) // #nosec G404
+	}
+	return result.String()
+}
 
 // mustParseCIDRs parses the given CIDR strings at package init time. Bad
 // input here means a typo in a hardcoded literal in this file, so panicking
