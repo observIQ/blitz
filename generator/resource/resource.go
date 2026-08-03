@@ -51,8 +51,16 @@ func Hostname() string {
 //	resource.Default("apache", "apache.format", "common")
 //	// → {"host.name": "<host>", "telemetry.source": "apache", "apache.format": "common"}
 func Default(source string, extras ...string) map[string]string {
+	return WithHost(Hostname(), source, extras...)
+}
+
+// WithHost returns a Resource map like Default but with an explicit host.name,
+// for generators whose hostname comes from a resolved datagen SystemIdentity
+// (PIPE-1036) rather than the process's os.Hostname(). extras follow the same
+// key/value convention as Default.
+func WithHost(hostname, source string, extras ...string) map[string]string {
 	r := map[string]string{
-		"host.name":        Hostname(),
+		"host.name":        hostname,
 		"telemetry.source": source,
 	}
 	for i := 0; i+1 < len(extras); i += 2 {
