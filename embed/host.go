@@ -1,6 +1,10 @@
 package embed
 
-import "go.uber.org/zap"
+import (
+	"go.uber.org/zap"
+
+	"github.com/observiq/blitz/internal/datagen"
+)
 
 // Host is the bundle of consumers and ambient resources a host process
 // supplies to an embedded blitz runner.
@@ -31,6 +35,18 @@ type Host struct {
 	// treat their own reference as frozen once they hand the Host off.
 	// See cloneResource in this package.
 	Resource map[string]string
+
+	// Environment is the simulated datagen.Environment that generators draw
+	// their host identities (host.name / OS) from (PIPE-1036). Nil means
+	// generators fall back to the running host's os.Hostname().
+	//
+	// Read-only after Host is passed to Runner.Start. It is immutable by
+	// construction — GenerateEnvironment never mutates it afterward — so
+	// concurrent workers share the pointer safely. Unlike Resource it is not
+	// cloned: a deep copy of the entire identity graph would be costly and
+	// serves no purpose given the immutability contract. Callers must treat
+	// their reference as frozen once they hand the Host off.
+	Environment *datagen.Environment
 }
 
 // cloneResource returns a defensive copy of m. Runner.Start uses it so
