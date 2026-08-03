@@ -236,19 +236,32 @@ func RandomIPInCIDRv6(r *rand.Rand, cidr string) string {
 	return result.String()
 }
 
-// mustParseCIDRs parses the given CIDR strings at package init time. Bad
-// input here means a typo in a hardcoded literal in this file, so panicking
-// is the right failure mode — it surfaces immediately on the first test run.
-func mustParseCIDRs(cidrs ...string) []*net.IPNet {
+// parseCIDRs parses CIDR strings into *net.IPNet, returning an error on the
+// first bad entry. Use this for any runtime- or host-supplied CIDRs so a bad
+// value surfaces as an error rather than a crash.
+func parseCIDRs(cidrs ...string) ([]*net.IPNet, error) {
 	out := make([]*net.IPNet, 0, len(cidrs))
 	for _, c := range cidrs {
 		_, ipNet, err := net.ParseCIDR(c)
 		if err != nil {
-			panic(fmt.Sprintf("datagen: invalid CIDR literal %q: %v", c, err))
+			return nil, fmt.Errorf("invalid CIDR %q: %w", c, err)
 		}
 		out = append(out, ipNet)
 	}
-	return out
+	return out, nil
+}
+
+// mustParseCIDRs parses the hardcoded, compile-time-constant CIDR literals in
+// this file's reserved-block tables. A bad literal is a programming error, so
+// it panics — the same fail-fast idiom as regexp.MustCompile, caught by tests
+// rather than by user input. Runtime- or host-supplied CIDRs must go through
+// parseCIDRs (or ValidateCIDR / ValidateIPv6CIDR) instead.
+func mustParseCIDRs(cidrs ...string) []*net.IPNet {
+	nets, err := parseCIDRs(cidrs...)
+	if err != nil {
+		panic(fmt.Sprintf("datagen: %v", err))
+	}
+	return nets
 }
 
 // isReservedIPv4 reports whether the given IPv4 address falls in any block
