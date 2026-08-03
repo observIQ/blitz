@@ -17,7 +17,10 @@ func TestGenerateEnvironment(t *testing.T) {
 		NetworkCount: 4,
 	}
 
-	env := GenerateEnvironment(seeds, opts)
+	env, err := GenerateEnvironment(seeds, opts)
+	if err != nil {
+		t.Fatalf("GenerateEnvironment: %v", err)
+	}
 
 	t.Run("domain set", func(t *testing.T) {
 		if env.Domain == nil {
@@ -86,7 +89,10 @@ func TestGenerateEnvironment(t *testing.T) {
 }
 
 func TestGenerateEnvironmentComposesAppliances(t *testing.T) {
-	env := GenerateEnvironment(&SeedConfig{Shared: 42}, &EnvironmentOpts{StorageSystemCount: 3, NetworkSystemCount: 5})
+	env, err := GenerateEnvironment(&SeedConfig{Shared: 42}, &EnvironmentOpts{StorageSystemCount: 3, NetworkSystemCount: 5})
+	if err != nil {
+		t.Fatalf("GenerateEnvironment: %v", err)
+	}
 
 	if len(env.StorageSystems) != 3 {
 		t.Fatalf("StorageSystems = %d, want 3", len(env.StorageSystems))
@@ -116,7 +122,11 @@ func TestGenerateEnvironmentDeterministicAppliances(t *testing.T) {
 	mk := func() *Environment {
 		s := NewSeedConfig()
 		s.Shared = 7
-		return GenerateEnvironment(s, &EnvironmentOpts{StorageSystemCount: 2, NetworkSystemCount: 2})
+		env, err := GenerateEnvironment(s, &EnvironmentOpts{StorageSystemCount: 2, NetworkSystemCount: 2})
+		if err != nil {
+			t.Fatalf("GenerateEnvironment: %v", err)
+		}
+		return env
 	}
 	a, b := mk(), mk()
 	if a.StorageSystems[0].Serial != b.StorageSystems[0].Serial {
@@ -162,7 +172,10 @@ func TestBindManagementInterface(t *testing.T) {
 func TestGenerateEnvironmentDefaults(t *testing.T) {
 	seeds := NewSeedConfig()
 	seeds.Shared = 42
-	env := GenerateEnvironment(seeds, nil)
+	env, err := GenerateEnvironment(seeds, nil)
+	if err != nil {
+		t.Fatalf("GenerateEnvironment: %v", err)
+	}
 
 	if env.Domain.Name != "blitz.local" {
 		t.Errorf("default domain should be 'blitz.local', got %q", env.Domain.Name)
@@ -190,8 +203,14 @@ func TestGenerateEnvironmentDeterministic(t *testing.T) {
 		Now:         now,
 	}
 
-	env1 := GenerateEnvironment(seeds1, opts)
-	env2 := GenerateEnvironment(seeds2, opts)
+	env1, err := GenerateEnvironment(seeds1, opts)
+	if err != nil {
+		t.Fatalf("GenerateEnvironment: %v", err)
+	}
+	env2, err := GenerateEnvironment(seeds2, opts)
+	if err != nil {
+		t.Fatalf("GenerateEnvironment: %v", err)
+	}
 
 	if env1.Domain.DomainSID != env2.Domain.DomainSID {
 		t.Error("same seed should produce same DomainSID")
@@ -227,7 +246,10 @@ func TestGenerateEnvironmentExtendsNetworks(t *testing.T) {
 		NetworkCount: 10,
 		Now:          time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
-	env := GenerateEnvironment(seeds, opts)
+	env, err := GenerateEnvironment(seeds, opts)
+	if err != nil {
+		t.Fatalf("GenerateEnvironment: %v", err)
+	}
 	if len(env.Networks) != 10 {
 		t.Errorf("expected 10 networks, got %d", len(env.Networks))
 	}
@@ -250,12 +272,18 @@ func TestGenerateEnvironmentPerTypeSeedsIndependent(t *testing.T) {
 	base.Shared = 42
 	opts := &EnvironmentOpts{SystemCount: 5, UserCount: 5, GroupCount: 5, NetworkCount: 4, Now: now}
 
-	envA := GenerateEnvironment(base, opts)
+	envA, err := GenerateEnvironment(base, opts)
+	if err != nil {
+		t.Fatalf("GenerateEnvironment: %v", err)
+	}
 
 	altered := NewSeedConfig()
 	altered.Shared = 42
 	altered.Services = 777 // override only services
-	envB := GenerateEnvironment(altered, opts)
+	envB, err := GenerateEnvironment(altered, opts)
+	if err != nil {
+		t.Fatalf("GenerateEnvironment: %v", err)
+	}
 
 	// Domain and hostnames must be identical — they don't depend on IdentityServices.
 	if envA.Domain.DomainSID != envB.Domain.DomainSID {
@@ -297,8 +325,14 @@ func TestGenerateEnvironmentCARelativeValidityWindow(t *testing.T) {
 	seeds := NewSeedConfig()
 	seeds.Shared = 42
 
-	envA := GenerateEnvironment(seeds, &EnvironmentOpts{SystemCount: 1, UserCount: 1, GroupCount: 5})
-	envB := GenerateEnvironment(seeds, &EnvironmentOpts{SystemCount: 1, UserCount: 1, GroupCount: 5})
+	envA, err := GenerateEnvironment(seeds, &EnvironmentOpts{SystemCount: 1, UserCount: 1, GroupCount: 5})
+	if err != nil {
+		t.Fatalf("GenerateEnvironment: %v", err)
+	}
+	envB, err := GenerateEnvironment(seeds, &EnvironmentOpts{SystemCount: 1, UserCount: 1, GroupCount: 5})
+	if err != nil {
+		t.Fatalf("GenerateEnvironment: %v", err)
+	}
 
 	// Same relative span (both should be 10 years total, within tolerance).
 	wantSpan := envA.Domain.CA.ValidTo.Sub(envA.Domain.CA.ValidFrom)

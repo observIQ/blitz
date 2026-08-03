@@ -112,7 +112,10 @@ func defaultDomainAdminsCount(userCount int) int {
 // User selection for Domain Admins is sampled without replacement (Fisher-Yates
 // partial shuffle), so no user appears twice in domainAdmins.MemberSIDs and
 // no user has duplicate Domain Admins references in their GroupSIDs.
-func GenerateGroups(seed int64, targetTotal int, adminCount int, domain *DomainIdentity, users []*UserIdentity) []*GroupIdentity {
+func GenerateGroups(seed int64, targetTotal int, adminCount int, domain *DomainIdentity, users []*UserIdentity) ([]*GroupIdentity, error) {
+	if domain == nil {
+		return nil, fmt.Errorf("datagen: GenerateGroups: domain must not be nil")
+	}
 	r := rand.New(rand.NewSource(seed)) // #nosec G404
 
 	dcSuffix := domainToDC(domain.Name)
@@ -152,7 +155,7 @@ func GenerateGroups(seed int64, targetTotal int, adminCount int, domain *DomainI
 	// Assign users to groups
 	assignUsersToGroups(r, groups, users, adminCount)
 
-	return groups
+	return groups, nil
 }
 
 // assignUsersToGroups distributes users across groups: every user joins

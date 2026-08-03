@@ -51,7 +51,10 @@ func TestGenerateSystemIdentity(t *testing.T) {
 	domain := GenerateDomainIdentity(42, "contoso.com", time.Now())
 
 	t.Run("linux server", func(t *testing.T) {
-		sys := GenerateSystemIdentity(r, OSLinux, RoleServer, domain, NorseNames)
+		sys, err := GenerateSystemIdentity(r, OSLinux, RoleServer, domain, NorseNames)
+		if err != nil {
+			t.Fatalf("GenerateSystemIdentity: %v", err)
+		}
 		if sys.OS != OSLinux {
 			t.Errorf("expected OS %q, got %q", OSLinux, sys.OS)
 		}
@@ -73,7 +76,10 @@ func TestGenerateSystemIdentity(t *testing.T) {
 	})
 
 	t.Run("windows workstation", func(t *testing.T) {
-		sys := GenerateSystemIdentity(r, OSWindows, RoleWorkstation, domain, RomanNames)
+		sys, err := GenerateSystemIdentity(r, OSWindows, RoleWorkstation, domain, RomanNames)
+		if err != nil {
+			t.Fatalf("GenerateSystemIdentity: %v", err)
+		}
 		if sys.OS != OSWindows {
 			t.Errorf("expected OS %q, got %q", OSWindows, sys.OS)
 		}
@@ -83,7 +89,10 @@ func TestGenerateSystemIdentity(t *testing.T) {
 	})
 
 	t.Run("domain controller", func(t *testing.T) {
-		sys := GenerateSystemIdentity(r, OSWindows, RoleDC, domain, GreekNames)
+		sys, err := GenerateSystemIdentity(r, OSWindows, RoleDC, domain, GreekNames)
+		if err != nil {
+			t.Fatalf("GenerateSystemIdentity: %v", err)
+		}
 		if sys.Role != RoleDC {
 			t.Errorf("expected Role %q, got %q", RoleDC, sys.Role)
 		}
@@ -93,7 +102,10 @@ func TestGenerateSystemIdentity(t *testing.T) {
 	})
 
 	t.Run("has cert", func(t *testing.T) {
-		sys := GenerateSystemIdentity(r, OSLinux, RoleServer, domain, NorseNames)
+		sys, err := GenerateSystemIdentity(r, OSLinux, RoleServer, domain, NorseNames)
+		if err != nil {
+			t.Fatalf("GenerateSystemIdentity: %v", err)
+		}
 		if sys.Cert == nil {
 			t.Fatal("expected system to have a cert")
 		}
@@ -106,7 +118,10 @@ func TestGenerateSystemIdentity(t *testing.T) {
 	})
 
 	t.Run("has OU path", func(t *testing.T) {
-		sys := GenerateSystemIdentity(r, OSWindows, RoleServer, domain, RomanNames)
+		sys, err := GenerateSystemIdentity(r, OSWindows, RoleServer, domain, RomanNames)
+		if err != nil {
+			t.Fatalf("GenerateSystemIdentity: %v", err)
+		}
 		if !strings.HasPrefix(sys.OUPath, "OU=") {
 			t.Errorf("OUPath %q should start with 'OU='", sys.OUPath)
 		}
@@ -116,27 +131,29 @@ func TestGenerateSystemIdentity(t *testing.T) {
 	})
 }
 
-func TestGenerateSystemIdentityPanicsOnNilInputs(t *testing.T) {
+func TestGenerateSystemIdentityErrorsOnNilInputs(t *testing.T) {
 	r := rand.New(rand.NewSource(1))
 	domain := GenerateDomainIdentity(1, "", time.Now())
 
-	t.Run("nil domain panics", func(t *testing.T) {
-		defer func() {
-			if recover() == nil {
-				t.Error("expected panic on nil domain, got none")
-			}
-		}()
-		GenerateSystemIdentity(r, OSLinux, RoleServer, nil, NorseNames)
+	t.Run("nil domain errors", func(t *testing.T) {
+		sys, err := GenerateSystemIdentity(r, OSLinux, RoleServer, nil, NorseNames)
+		if err == nil {
+			t.Error("expected error on nil domain, got none")
+		}
+		if sys != nil {
+			t.Errorf("expected nil identity on error, got %v", sys)
+		}
 	})
 
-	t.Run("domain with nil CA panics", func(t *testing.T) {
-		defer func() {
-			if recover() == nil {
-				t.Error("expected panic on nil domain.CA, got none")
-			}
-		}()
+	t.Run("domain with nil CA errors", func(t *testing.T) {
 		brokenDomain := &DomainIdentity{Name: domain.Name, DomainSID: domain.DomainSID, CA: nil}
-		GenerateSystemIdentity(r, OSLinux, RoleServer, brokenDomain, NorseNames)
+		sys, err := GenerateSystemIdentity(r, OSLinux, RoleServer, brokenDomain, NorseNames)
+		if err == nil {
+			t.Error("expected error on nil domain.CA, got none")
+		}
+		if sys != nil {
+			t.Errorf("expected nil identity on error, got %v", sys)
+		}
 	})
 }
 
@@ -157,7 +174,10 @@ func TestSystemResourceRanges(t *testing.T) {
 
 	for role, spec := range specs {
 		for i := 0; i < 50; i++ {
-			sys := GenerateSystemIdentity(r, OSLinux, role, domain, NorseNames)
+			sys, err := GenerateSystemIdentity(r, OSLinux, role, domain, NorseNames)
+			if err != nil {
+				t.Fatalf("GenerateSystemIdentity: %v", err)
+			}
 			if sys.CPUCores < spec.minCPU || sys.CPUCores > spec.maxCPU {
 				t.Errorf("role %s: CPUCores %d out of [%d,%d]", role, sys.CPUCores, spec.minCPU, spec.maxCPU)
 			}

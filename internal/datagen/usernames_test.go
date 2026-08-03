@@ -33,7 +33,10 @@ func TestGenerateUserIdentity(t *testing.T) {
 	domain := GenerateDomainIdentity(42, "contoso.com", time.Now())
 
 	t.Run("basic fields populated", func(t *testing.T) {
-		user := GenerateUserIdentity(r, domain)
+		user, err := GenerateUserIdentity(r, domain)
+		if err != nil {
+			t.Fatalf("GenerateUserIdentity: %v", err)
+		}
 		if user.FirstName == "" {
 			t.Error("FirstName should not be empty")
 		}
@@ -52,7 +55,10 @@ func TestGenerateUserIdentity(t *testing.T) {
 	})
 
 	t.Run("display name is title case", func(t *testing.T) {
-		user := GenerateUserIdentity(r, domain)
+		user, err := GenerateUserIdentity(r, domain)
+		if err != nil {
+			t.Fatalf("GenerateUserIdentity: %v", err)
+		}
 		parts := strings.Split(user.DisplayName, " ")
 		if len(parts) != 2 {
 			t.Errorf("DisplayName %q should be 'First Last'", user.DisplayName)
@@ -60,14 +66,20 @@ func TestGenerateUserIdentity(t *testing.T) {
 	})
 
 	t.Run("SID format", func(t *testing.T) {
-		user := GenerateUserIdentity(r, domain)
+		user, err := GenerateUserIdentity(r, domain)
+		if err != nil {
+			t.Fatalf("GenerateUserIdentity: %v", err)
+		}
 		if !strings.HasPrefix(user.SID, domain.DomainSID+"-") {
 			t.Errorf("user SID %q should start with domain SID %q", user.SID, domain.DomainSID)
 		}
 	})
 
 	t.Run("has department and title", func(t *testing.T) {
-		user := GenerateUserIdentity(r, domain)
+		user, err := GenerateUserIdentity(r, domain)
+		if err != nil {
+			t.Fatalf("GenerateUserIdentity: %v", err)
+		}
 		if user.Department == "" {
 			t.Error("Department should not be empty")
 		}
@@ -77,7 +89,10 @@ func TestGenerateUserIdentity(t *testing.T) {
 	})
 
 	t.Run("DN format", func(t *testing.T) {
-		user := GenerateUserIdentity(r, domain)
+		user, err := GenerateUserIdentity(r, domain)
+		if err != nil {
+			t.Fatalf("GenerateUserIdentity: %v", err)
+		}
 		if !strings.HasPrefix(user.DN, "CN=") {
 			t.Errorf("DN %q should start with 'CN='", user.DN)
 		}
@@ -89,8 +104,14 @@ func TestGenerateUserIdentity(t *testing.T) {
 	t.Run("deterministic", func(t *testing.T) {
 		r1 := rand.New(rand.NewSource(99))
 		r2 := rand.New(rand.NewSource(99))
-		u1 := GenerateUserIdentity(r1, domain)
-		u2 := GenerateUserIdentity(r2, domain)
+		u1, err := GenerateUserIdentity(r1, domain)
+		if err != nil {
+			t.Fatalf("GenerateUserIdentity: %v", err)
+		}
+		u2, err := GenerateUserIdentity(r2, domain)
+		if err != nil {
+			t.Fatalf("GenerateUserIdentity: %v", err)
+		}
 		if u1.Username != u2.Username {
 			t.Errorf("same seed should produce same username: %q vs %q", u1.Username, u2.Username)
 		}
@@ -99,7 +120,10 @@ func TestGenerateUserIdentity(t *testing.T) {
 
 func TestGenerateUsers(t *testing.T) {
 	domain := GenerateDomainIdentity(42, "contoso.com", time.Now())
-	users := GenerateUsers(42, 20, domain)
+	users, err := GenerateUsers(42, 20, domain)
+	if err != nil {
+		t.Fatalf("GenerateUsers: %v", err)
+	}
 	if len(users) != 20 {
 		t.Errorf("expected 20 users, got %d", len(users))
 	}
@@ -121,7 +145,10 @@ func TestGenerateUsersInternalConsistency(t *testing.T) {
 	// suffix on Username must show up in UPN/Email local-parts, and
 	// DisplayName must match the CN portion of DN.
 	domain := GenerateDomainIdentity(42, "contoso.com", time.Now())
-	users := GenerateUsers(42, 200, domain)
+	users, err := GenerateUsers(42, 200, domain)
+	if err != nil {
+		t.Fatalf("GenerateUsers: %v", err)
+	}
 
 	upns := make(map[string]bool)
 	emails := make(map[string]bool)

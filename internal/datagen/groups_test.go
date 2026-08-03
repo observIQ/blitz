@@ -26,8 +26,14 @@ func TestGroupTypes(t *testing.T) {
 
 func TestGenerateGroups(t *testing.T) {
 	domain := GenerateDomainIdentity(42, "contoso.com", time.Now())
-	users := GenerateUsers(42, 20, domain)
-	groups := GenerateGroups(42, 10, 0, domain, users)
+	users, err := GenerateUsers(42, 20, domain)
+	if err != nil {
+		t.Fatalf("GenerateUsers: %v", err)
+	}
+	groups, err := GenerateGroups(42, 10, 0, domain, users)
+	if err != nil {
+		t.Fatalf("GenerateGroups: %v", err)
+	}
 
 	t.Run("correct count", func(t *testing.T) {
 		if len(groups) < 10 {
@@ -89,8 +95,14 @@ func TestGenerateGroups(t *testing.T) {
 	})
 
 	t.Run("deterministic", func(t *testing.T) {
-		g1 := GenerateGroups(99, 5, 0, domain, users)
-		g2 := GenerateGroups(99, 5, 0, domain, users)
+		g1, err := GenerateGroups(99, 5, 0, domain, users)
+		if err != nil {
+			t.Fatalf("GenerateGroups: %v", err)
+		}
+		g2, err := GenerateGroups(99, 5, 0, domain, users)
+		if err != nil {
+			t.Fatalf("GenerateGroups: %v", err)
+		}
 		for i := range g1 {
 			if g1[i].Name != g2[i].Name {
 				t.Errorf("same seed should produce same groups: %q vs %q", g1[i].Name, g2[i].Name)
@@ -103,8 +115,14 @@ func TestGenerateGroupsBuiltinFloor(t *testing.T) {
 	// Built-in AD groups (n=9) are always included; targetTotal below the floor
 	// returns just the built-ins, not a truncated subset.
 	domain := GenerateDomainIdentity(42, "contoso.com", time.Now())
-	users := GenerateUsers(42, 5, domain)
-	groups := GenerateGroups(42, 3, 0, domain, users)
+	users, err := GenerateUsers(42, 5, domain)
+	if err != nil {
+		t.Fatalf("GenerateUsers: %v", err)
+	}
+	groups, err := GenerateGroups(42, 3, 0, domain, users)
+	if err != nil {
+		t.Fatalf("GenerateGroups: %v", err)
+	}
 	if len(groups) != len(builtinGroups) {
 		t.Errorf("targetTotal=3 with %d built-ins should return %d groups, got %d",
 			len(builtinGroups), len(builtinGroups), len(groups))
@@ -114,8 +132,14 @@ func TestGenerateGroupsBuiltinFloor(t *testing.T) {
 func TestGenerateGroupsCap(t *testing.T) {
 	// targetTotal beyond MaxGroupCount caps at MaxGroupCount.
 	domain := GenerateDomainIdentity(42, "contoso.com", time.Now())
-	users := GenerateUsers(42, 5, domain)
-	groups := GenerateGroups(42, 100, 0, domain, users)
+	users, err := GenerateUsers(42, 5, domain)
+	if err != nil {
+		t.Fatalf("GenerateUsers: %v", err)
+	}
+	groups, err := GenerateGroups(42, 100, 0, domain, users)
+	if err != nil {
+		t.Fatalf("GenerateGroups: %v", err)
+	}
 	if len(groups) != MaxGroupCount {
 		t.Errorf("targetTotal=100 should return MaxGroupCount=%d groups, got %d", MaxGroupCount, len(groups))
 	}
@@ -145,9 +169,15 @@ func TestDomainAdminsUniqueAndExact(t *testing.T) {
 	// Explicit adminCount: exactly that many unique users; no duplicates in
 	// either MemberSIDs or any user's GroupSIDs.
 	domain := GenerateDomainIdentity(42, "contoso.com", time.Now())
-	users := GenerateUsers(42, 100, domain)
+	users, err := GenerateUsers(42, 100, domain)
+	if err != nil {
+		t.Fatalf("GenerateUsers: %v", err)
+	}
 	const want = 10
-	groups := GenerateGroups(42, 12, want, domain, users)
+	groups, err := GenerateGroups(42, 12, want, domain, users)
+	if err != nil {
+		t.Fatalf("GenerateGroups: %v", err)
+	}
 
 	var adminGroup *GroupIdentity
 	for _, g := range groups {
@@ -188,8 +218,14 @@ func TestDomainAdminsCappedToUserCount(t *testing.T) {
 	// adminCount > len(users) caps at len(users) instead of looping forever
 	// or emitting duplicates.
 	domain := GenerateDomainIdentity(42, "contoso.com", time.Now())
-	users := GenerateUsers(42, 3, domain)
-	groups := GenerateGroups(42, 9, 100, domain, users)
+	users, err := GenerateUsers(42, 3, domain)
+	if err != nil {
+		t.Fatalf("GenerateUsers: %v", err)
+	}
+	groups, err := GenerateGroups(42, 9, 100, domain, users)
+	if err != nil {
+		t.Fatalf("GenerateGroups: %v", err)
+	}
 	for _, g := range groups {
 		if g.Name == "Domain Admins" {
 			if len(g.MemberSIDs) != len(users) {

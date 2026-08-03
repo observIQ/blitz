@@ -63,7 +63,10 @@ type UserIdentity struct {
 }
 
 // GenerateUserIdentity creates a random user identity within the given domain.
-func GenerateUserIdentity(r *rand.Rand, domain *DomainIdentity) *UserIdentity {
+func GenerateUserIdentity(r *rand.Rand, domain *DomainIdentity) (*UserIdentity, error) {
+	if domain == nil {
+		return nil, fmt.Errorf("datagen: GenerateUserIdentity: domain must not be nil")
+	}
 	first := FirstNames.Random(r)
 	last := Surnames.Random(r)
 
@@ -98,7 +101,7 @@ func GenerateUserIdentity(r *rand.Rand, domain *DomainIdentity) *UserIdentity {
 		Department:  dept,
 		Title:       title,
 		DN:          dn,
-	}
+	}, nil
 }
 
 // GenerateUsers produces a deterministic set of users from a seed.
@@ -109,19 +112,22 @@ func GenerateUserIdentity(r *rand.Rand, domain *DomainIdentity) *UserIdentity {
 // the CN component of DN — so the returned UserIdentity stays internally
 // consistent. In real AD, sAMAccountName, UPN, and mail must all be unique;
 // the suffix scheme mirrors that.
-func GenerateUsers(seed int64, count int, domain *DomainIdentity) []*UserIdentity {
+func GenerateUsers(seed int64, count int, domain *DomainIdentity) ([]*UserIdentity, error) {
 	r := rand.New(rand.NewSource(seed)) // #nosec G404
 	users := make([]*UserIdentity, count)
 	seen := make(map[string]int)
 	for i := range users {
-		u := GenerateUserIdentity(r, domain)
+		u, err := GenerateUserIdentity(r, domain)
+		if err != nil {
+			return nil, err
+		}
 		seen[u.Username]++
 		if seen[u.Username] > 1 {
 			disambiguateUser(u, seen[u.Username])
 		}
 		users[i] = u
 	}
-	return users
+	return users, nil
 }
 
 // disambiguateUser appends a numeric suffix to all identifier-bearing fields

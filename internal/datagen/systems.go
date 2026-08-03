@@ -112,16 +112,14 @@ type CertInfo struct {
 //
 // domain must be non-nil and have a populated CA — those fields are used
 // unconditionally to construct the system's FQDN, OU path, and TLS cert.
-// Passing a nil domain or a domain with a nil CA panics with a clear
-// message; this is a developer-error class of failure (the same input
-// would have been caught at the first test run). PIPE-1003 tracks
-// converting these panics to error returns ahead of the embed seam split.
-func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *DomainIdentity, names *Pool[string]) *SystemIdentity {
+// Passing a nil domain or a domain with a nil CA returns an error rather than
+// panicking, so an embedding host handles bad input without crashing.
+func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *DomainIdentity, names *Pool[string]) (*SystemIdentity, error) {
 	if domain == nil {
-		panic("datagen: GenerateSystemIdentity: domain must not be nil")
+		return nil, fmt.Errorf("datagen: GenerateSystemIdentity: domain must not be nil")
 	}
 	if domain.CA == nil {
-		panic("datagen: GenerateSystemIdentity: domain.CA must not be nil")
+		return nil, fmt.Errorf("datagen: GenerateSystemIdentity: domain.CA must not be nil")
 	}
 
 	// Pick hostname style based on OS
@@ -180,7 +178,7 @@ func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *Do
 		MemoryMB:  mem,
 		DiskGB:    disk,
 		Cert:      cert,
-	}
+	}, nil
 }
 
 // generateResourceSpecs returns CPU, memory, disk based on role.
