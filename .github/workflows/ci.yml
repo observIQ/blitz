@@ -84,9 +84,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run tests
+      - name: Run tests (race detector)
+        env:
+          CGO_ENABLED: "1"
         run: |
-          go test ./...
+          make test-race
 
       - name: Run embedded-library tests
         run: |
