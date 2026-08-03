@@ -9,7 +9,7 @@ import (
 func TestGenerateApplicationsForSystem(t *testing.T) {
 	t.Run("windows server apps", func(t *testing.T) {
 		r := rand.New(rand.NewSource(42))
-		apps := GenerateApplicationsForSystem(r, OSWindows, RoleServer, "SRV01")
+		apps := GenerateApplicationsForSystem(r, OSWindows, RoleServer, "SRV01", nil)
 		if len(apps) < 2 {
 			t.Errorf("expected at least 2 apps, got %d", len(apps))
 		}
@@ -31,7 +31,7 @@ func TestGenerateApplicationsForSystem(t *testing.T) {
 
 	t.Run("linux server apps", func(t *testing.T) {
 		r := rand.New(rand.NewSource(42))
-		apps := GenerateApplicationsForSystem(r, OSLinux, RoleServer, "srv01")
+		apps := GenerateApplicationsForSystem(r, OSLinux, RoleServer, "srv01", nil)
 		if len(apps) < 2 {
 			t.Errorf("expected at least 2 apps, got %d", len(apps))
 		}
@@ -39,7 +39,7 @@ func TestGenerateApplicationsForSystem(t *testing.T) {
 
 	t.Run("DC apps", func(t *testing.T) {
 		r := rand.New(rand.NewSource(42))
-		apps := GenerateApplicationsForSystem(r, OSWindows, RoleDC, "DC01")
+		apps := GenerateApplicationsForSystem(r, OSWindows, RoleDC, "DC01", nil)
 		if len(apps) < 2 {
 			t.Errorf("expected at least 2 apps, got %d", len(apps))
 		}
@@ -47,7 +47,7 @@ func TestGenerateApplicationsForSystem(t *testing.T) {
 
 	t.Run("windows workstation apps come from windows pool", func(t *testing.T) {
 		r := rand.New(rand.NewSource(42))
-		apps := GenerateApplicationsForSystem(r, OSWindows, RoleWorkstation, "WS01")
+		apps := GenerateApplicationsForSystem(r, OSWindows, RoleWorkstation, "WS01", nil)
 		if len(apps) < 2 {
 			t.Errorf("expected at least 2 apps, got %d", len(apps))
 		}
@@ -61,7 +61,7 @@ func TestGenerateApplicationsForSystem(t *testing.T) {
 
 	t.Run("linux workstation apps come from linux pool and have unix paths", func(t *testing.T) {
 		r := rand.New(rand.NewSource(42))
-		apps := GenerateApplicationsForSystem(r, OSLinux, RoleWorkstation, "tux01")
+		apps := GenerateApplicationsForSystem(r, OSLinux, RoleWorkstation, "tux01", nil)
 		if len(apps) < 2 {
 			t.Errorf("expected at least 2 apps, got %d", len(apps))
 		}
@@ -78,7 +78,7 @@ func TestGenerateApplicationsForSystem(t *testing.T) {
 
 	t.Run("macos workstation apps come from macos pool and have .app paths", func(t *testing.T) {
 		r := rand.New(rand.NewSource(42))
-		apps := GenerateApplicationsForSystem(r, OSMacOS, RoleWorkstation, "mac01")
+		apps := GenerateApplicationsForSystem(r, OSMacOS, RoleWorkstation, "mac01", nil)
 		if len(apps) < 2 {
 			t.Errorf("expected at least 2 apps, got %d", len(apps))
 		}
@@ -96,7 +96,7 @@ func TestGenerateApplicationsForSystem(t *testing.T) {
 	t.Run("unsupported combination returns empty slice", func(t *testing.T) {
 		r := rand.New(rand.NewSource(42))
 		// macOS + Server is not modeled (would warn in production).
-		apps := GenerateApplicationsForSystem(r, OSMacOS, RoleServer, "macsrv")
+		apps := GenerateApplicationsForSystem(r, OSMacOS, RoleServer, "macsrv", nil)
 		if len(apps) != 0 {
 			t.Errorf("unsupported os/role expected empty slice, got %d apps", len(apps))
 		}
@@ -105,8 +105,8 @@ func TestGenerateApplicationsForSystem(t *testing.T) {
 	t.Run("deterministic", func(t *testing.T) {
 		r1 := rand.New(rand.NewSource(99))
 		r2 := rand.New(rand.NewSource(99))
-		a1 := GenerateApplicationsForSystem(r1, OSWindows, RoleServer, "T")
-		a2 := GenerateApplicationsForSystem(r2, OSWindows, RoleServer, "T")
+		a1 := GenerateApplicationsForSystem(r1, OSWindows, RoleServer, "T", nil)
+		a2 := GenerateApplicationsForSystem(r2, OSWindows, RoleServer, "T", nil)
 		if len(a1) != len(a2) {
 			t.Fatalf("different lengths: %d vs %d", len(a1), len(a2))
 		}

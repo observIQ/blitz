@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // Environment is the top-level container for all generated identities.
@@ -35,15 +37,16 @@ func (e *Environment) AllNetworkSystems() []*NetworkSystemIdentity { return e.Ne
 
 // EnvironmentOpts controls the size and shape of the generated environment.
 type EnvironmentOpts struct {
-	DomainName         string    // e.g., "contoso.com". Default: "blitz.local"
-	SystemCount        int       // number of machines. Default: 20
-	UserCount          int       // number of users. Default: 50
-	GroupCount         int       // number of groups. Default: 10
-	NetworkCount       int       // number of subnets. Default: 4. Values beyond the built-in default catalog are synthesized using IdentityNetworks.
-	StorageSystemCount int       // number of storage arrays. Default: 2.
-	NetworkSystemCount int       // number of network devices. Default: 4.
-	DomainAdminsCount  int       // exact Domain Admins membership; 0 (or negative) = use the user-count-scaled default in the datagen package.
-	Now                time.Time // wall-clock anchor for time-dependent fields (e.g. CertAuthority validity window). Zero value = time.Now() at GenerateEnvironment call; see Environment docstring for determinism implications.
+	DomainName         string      // e.g., "contoso.com". Default: "blitz.local"
+	SystemCount        int         // number of machines. Default: 20
+	UserCount          int         // number of users. Default: 50
+	GroupCount         int         // number of groups. Default: 10
+	NetworkCount       int         // number of subnets. Default: 4. Values beyond the built-in default catalog are synthesized using IdentityNetworks.
+	StorageSystemCount int         // number of storage arrays. Default: 2.
+	NetworkSystemCount int         // number of network devices. Default: 4.
+	DomainAdminsCount  int         // exact Domain Admins membership; 0 (or negative) = use the user-count-scaled default in the datagen package.
+	Now                time.Time   // wall-clock anchor for time-dependent fields (e.g. CertAuthority validity window). Zero value = time.Now() at GenerateEnvironment call; see Environment docstring for determinism implications.
+	Logger             *zap.Logger // logger for datagen diagnostics; nil disables logging (no global-logger fallback).
 }
 
 // defaultOpts returns EnvironmentOpts with defaults applied.
@@ -138,7 +141,7 @@ func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) (*Environment
 	systemSeed := seeds.ResolveSeed(IdentitySystems)
 	servicesSeed := seeds.ResolveSeed(IdentityServices)
 	applicationsSeed := seeds.ResolveSeed(IdentityApplications)
-	systems, err := genSystems(systemSeed, servicesSeed, applicationsSeed, opts.SystemCount, domain, networks)
+	systems, err := genSystems(systemSeed, servicesSeed, applicationsSeed, opts.SystemCount, domain, networks, opts.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +258,7 @@ func generateNetworksList(seed int64, count int) []*NetworkIdentity {
 // resource specs). servicesSeed and applicationsSeed seed independent RNGs
 // for service and application generation so changes to either seed only
 // re-randomize that slice.
-func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int, domain *DomainIdentity, networks []*NetworkIdentity) ([]*SystemIdentity, error) {
+func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int, domain *DomainIdentity, networks []*NetworkIdentity, logger *zap.Logger) ([]*SystemIdentity, error) {
 	r := rand.New(rand.NewSource(systemSeed))                   // #nosec G404
 	rServices := rand.New(rand.NewSource(servicesSeed))         // #nosec G404
 	rApplications := rand.New(rand.NewSource(applicationsSeed)) // #nosec G404
@@ -282,7 +285,7 @@ func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int
 		// Services and applications use their own RNGs so the seeds in
 		// SeedConfig actually drive what's generated, per identity type.
 		sys.Services = GenerateServicesForSystem(rServices, sys.OS, sys.Role, sys.Hostname)
-		sys.Applications = GenerateApplicationsForSystem(rApplications, sys.OS, sys.Role, sys.Hostname)
+		sys.Applications = GenerateApplicationsForSystem(rApplications, sys.OS, sys.Role, sys.Hostname, logger)
 
 		// Assign network interface
 		if len(networks) > 0 {

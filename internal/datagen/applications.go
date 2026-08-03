@@ -105,9 +105,14 @@ var installDates = NewPool(
 //   - OSMacOS + RoleWorkstation → macOS workstation applications.
 //
 // Any other (os, role) combination is unsupported: the function returns an
-// empty slice and emits a `zap.L().Warn` so misconfigurations surface in
-// logs without panicking the caller.
-func GenerateApplicationsForSystem(r *rand.Rand, os OSType, role SystemRole, hostname string) []*ApplicationIdentity {
+// empty slice and emits a Warn on the injected logger so misconfigurations
+// surface in logs without panicking the caller. A nil logger disables the
+// warning (no global-logger fallback), per the embed-contract logging rules
+// (PIPE-1067).
+func GenerateApplicationsForSystem(r *rand.Rand, os OSType, role SystemRole, hostname string, logger *zap.Logger) []*ApplicationIdentity {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	var templates []appTemplate
 
 	switch {
@@ -124,7 +129,7 @@ func GenerateApplicationsForSystem(r *rand.Rand, os OSType, role SystemRole, hos
 	case os == OSMacOS && role == RoleWorkstation:
 		templates = macosWorkstationApps
 	default:
-		zap.L().Warn("GenerateApplicationsForSystem: unsupported os/role combination — returning empty application set",
+		logger.Warn("GenerateApplicationsForSystem: unsupported os/role combination — returning empty application set",
 			zap.String("os", string(os)),
 			zap.String("role", string(role)),
 			zap.String("hostname", hostname),
