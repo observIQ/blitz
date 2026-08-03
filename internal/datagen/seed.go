@@ -20,6 +20,9 @@ const (
 	IdentityApplications IdentityType = "applications"
 	IdentityNetworks     IdentityType = "networks"
 	IdentityDomains      IdentityType = "domains"
+
+	IdentityStorageSystems IdentityType = "storage_systems"
+	IdentityNetworkSystems IdentityType = "network_systems"
 )
 
 // SeedConfig controls deterministic generation across all identity types.
@@ -42,6 +45,10 @@ type SeedConfig struct {
 	Applications int64
 	Networks     int64
 	Domains      int64
+
+	// Appliance identity seeds (PIPE-1035). <0 = fall back to Shared.
+	StorageSystems int64
+	NetworkSystems int64
 }
 
 // NewSeedConfig returns a SeedConfig with every field set to -1 so that an
@@ -49,14 +56,16 @@ type SeedConfig struct {
 // SeedConfig from YAML/viper should set the same -1 default per field.
 func NewSeedConfig() *SeedConfig {
 	return &SeedConfig{
-		Shared:       -1,
-		Systems:      -1,
-		Users:        -1,
-		Groups:       -1,
-		Services:     -1,
-		Applications: -1,
-		Networks:     -1,
-		Domains:      -1,
+		Shared:         -1,
+		Systems:        -1,
+		Users:          -1,
+		Groups:         -1,
+		Services:       -1,
+		Applications:   -1,
+		Networks:       -1,
+		Domains:        -1,
+		StorageSystems: -1,
+		NetworkSystems: -1,
 	}
 }
 
@@ -81,6 +90,10 @@ func (s *SeedConfig) ResolveSeed(identityType IdentityType) int64 {
 		override = s.Networks
 	case IdentityDomains:
 		override = s.Domains
+	case IdentityStorageSystems:
+		override = s.StorageSystems
+	case IdentityNetworkSystems:
+		override = s.NetworkSystems
 	}
 	if override >= 0 {
 		return override
@@ -104,5 +117,7 @@ func (s *SeedConfig) Init(logger *zap.Logger) {
 		zap.Int64("applications", s.ResolveSeed(IdentityApplications)),
 		zap.Int64("networks", s.ResolveSeed(IdentityNetworks)),
 		zap.Int64("domains", s.ResolveSeed(IdentityDomains)),
+		zap.Int64("storage_systems", s.ResolveSeed(IdentityStorageSystems)),
+		zap.Int64("network_systems", s.ResolveSeed(IdentityNetworkSystems)),
 	)
 }

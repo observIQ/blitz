@@ -18,22 +18,32 @@ import (
 // For fully reproducible tests/snapshots, set opts.Now to a fixed
 // timestamp; the rest of the Environment derives from the seeds.
 type Environment struct {
-	Domain   *DomainIdentity
-	Networks []*NetworkIdentity
-	Users    []*UserIdentity
-	Groups   []*GroupIdentity
-	Systems  []*SystemIdentity
+	Domain         *DomainIdentity
+	Networks       []*NetworkIdentity
+	Users          []*UserIdentity
+	Groups         []*GroupIdentity
+	Systems        []*SystemIdentity
+	StorageSystems []*StorageSystemIdentity
+	NetworkSystems []*NetworkSystemIdentity
 }
+
+// AllStorageSystems returns the environment's storage-array identities.
+func (e *Environment) AllStorageSystems() []*StorageSystemIdentity { return e.StorageSystems }
+
+// AllNetworkSystems returns the environment's network-hardware identities.
+func (e *Environment) AllNetworkSystems() []*NetworkSystemIdentity { return e.NetworkSystems }
 
 // EnvironmentOpts controls the size and shape of the generated environment.
 type EnvironmentOpts struct {
-	DomainName        string    // e.g., "contoso.com". Default: "blitz.local"
-	SystemCount       int       // number of machines. Default: 20
-	UserCount         int       // number of users. Default: 50
-	GroupCount        int       // number of groups. Default: 10
-	NetworkCount      int       // number of subnets. Default: 4. Values beyond the built-in default catalog are synthesized using IdentityNetworks.
-	DomainAdminsCount int       // exact Domain Admins membership; 0 (or negative) = use the user-count-scaled default in the datagen package.
-	Now               time.Time // wall-clock anchor for time-dependent fields (e.g. CertAuthority validity window). Zero value = time.Now() at GenerateEnvironment call; see Environment docstring for determinism implications.
+	DomainName         string    // e.g., "contoso.com". Default: "blitz.local"
+	SystemCount        int       // number of machines. Default: 20
+	UserCount          int       // number of users. Default: 50
+	GroupCount         int       // number of groups. Default: 10
+	NetworkCount       int       // number of subnets. Default: 4. Values beyond the built-in default catalog are synthesized using IdentityNetworks.
+	StorageSystemCount int       // number of storage arrays. Default: 2.
+	NetworkSystemCount int       // number of network devices. Default: 4.
+	DomainAdminsCount  int       // exact Domain Admins membership; 0 (or negative) = use the user-count-scaled default in the datagen package.
+	Now                time.Time // wall-clock anchor for time-dependent fields (e.g. CertAuthority validity window). Zero value = time.Now() at GenerateEnvironment call; see Environment docstring for determinism implications.
 }
 
 // defaultOpts returns EnvironmentOpts with defaults applied.
@@ -55,6 +65,12 @@ func defaultOpts(opts *EnvironmentOpts) *EnvironmentOpts {
 	}
 	if opts.NetworkCount <= 0 {
 		opts.NetworkCount = 4
+	}
+	if opts.StorageSystemCount <= 0 {
+		opts.StorageSystemCount = 2
+	}
+	if opts.NetworkSystemCount <= 0 {
+		opts.NetworkSystemCount = 4
 	}
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
@@ -106,13 +122,76 @@ func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) *Environment 
 	applicationsSeed := seeds.ResolveSeed(IdentityApplications)
 	systems := generateSystems(systemSeed, servicesSeed, applicationsSeed, opts.SystemCount, domain, networks)
 
+	// Appliance identities (PIPE-1035): storage arrays and network hardware,
+	// each with its own seed and a management interface bound to a subnet.
+	storageSeed := seeds.ResolveSeed(IdentityStorageSystems)
+	storageSystems := generateStorageSystems(storageSeed, opts.StorageSystemCount, networks)
+
+	networkSystemSeed := seeds.ResolveSeed(IdentityNetworkSystems)
+	networkSystems := generateNetworkSystems(networkSystemSeed, opts.NetworkSystemCount, networks)
+
 	return &Environment{
-		Domain:   domain,
-		Networks: networks,
-		Users:    users,
-		Groups:   groups,
-		Systems:  systems,
+		Domain:         domain,
+		Networks:       networks,
+		Users:          users,
+		Groups:         groups,
+		Systems:        systems,
+		StorageSystems: storageSystems,
+		NetworkSystems: networkSystems,
 	}
+}
+
+// managementNetwork returns the subnet to bind appliance management interfaces
+// to: the "management" zone if present, else the first network, else nil.
+func managementNetwork(networks []*NetworkIdentity) *NetworkIdentity {
+	for _, n := range networks {
+		if n.Zone == "management" {
+			return n
+		}
+	}
+	if len(networks) > 0 {
+		return networks[0]
+	}
+	return nil
+}
+
+// bindManagementInterface points a management interface at a subnet, giving it
+// an in-CIDR address and the subnet ID. A nil interface or subnet is left
+// untouched.
+func bindManagementInterface(r *rand.Rand, iface *NetworkInterface, subnet *NetworkIdentity) {
+	if iface == nil || subnet == nil {
+		return
+	}
+	iface.IPv4 = RandomIPInCIDR(r, subnet.CIDR)
+	iface.SubnetID = subnet.ID
+}
+
+// generateStorageSystems builds count storage arrays from seed, binding each
+// management interface to a management subnet.
+func generateStorageSystems(seed int64, count int, networks []*NetworkIdentity) []*StorageSystemIdentity {
+	r := rand.New(rand.NewSource(seed)) // #nosec G404
+	mgmt := managementNetwork(networks)
+	out := make([]*StorageSystemIdentity, count)
+	for i := range out {
+		s := RandomStorageSystemIdentity(r)
+		bindManagementInterface(r, s.ManagementInterface, mgmt)
+		out[i] = s
+	}
+	return out
+}
+
+// generateNetworkSystems builds count network devices from seed, binding each
+// management interface to a management subnet.
+func generateNetworkSystems(seed int64, count int, networks []*NetworkIdentity) []*NetworkSystemIdentity {
+	r := rand.New(rand.NewSource(seed)) // #nosec G404
+	mgmt := managementNetwork(networks)
+	out := make([]*NetworkSystemIdentity, count)
+	for i := range out {
+		n := RandomNetworkSystemIdentity(r)
+		bindManagementInterface(r, n.ManagementInterface, mgmt)
+		out[i] = n
+	}
+	return out
 }
 
 // generateNetworksList returns the requested number of NetworkIdentity entries,
