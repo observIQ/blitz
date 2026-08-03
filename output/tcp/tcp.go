@@ -130,15 +130,17 @@ func (t *TCP) Stop(ctx context.Context) error {
 	// Record zero active workers
 	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
-	// Close the channel to ensure workers do not
-	// process new data.
-	close(t.dataChan)
-
-	// Signal the workers to stop.
+	// Reject any further writes and stop the workers (and their restart loop).
 	t.cancel()
-
-	// Stop the worker manager
 	t.workerManager.Stop()
+
+	// The workers have now exited, so this goroutine is the sole owner of
+	// dataChan. Close it and drain any records that were still buffered when
+	// shutdown began, delivering them instead of dropping them (PIPE-1230).
+	// Draining here, after the workers are joined, keeps delivery deterministic
+	// rather than racing a worker's channel-drain against context cancellation.
+	close(t.dataChan)
+	t.drainBuffered(ctx)
 
 	t.logger.Info("TCP output stopped successfully")
 	return nil
@@ -178,6 +180,48 @@ func (t *TCP) tcpWorker(id int) {
 
 		case <-t.ctx.Done():
 			t.logger.Info("TCP worker exiting - context cancelled", zap.Int("worker_id", id))
+			return
+		}
+	}
+}
+
+// drainBuffered sends any records still buffered in dataChan at shutdown. It runs
+// after the workers have stopped, so it is the sole consumer of the (now closed)
+// channel and delivery is deterministic. It is bounded by the connect/write
+// timeouts, DefaultTCPStopTimeout, and the caller's context so an unreachable
+// destination cannot hang shutdown.
+func (t *TCP) drainBuffered(ctx context.Context) {
+	if len(t.dataChan) == 0 {
+		return
+	}
+
+	conn, err := t.connect()
+	if err != nil {
+		t.logger.Error("Failed to connect while draining buffered records on shutdown",
+			zap.Int("dropped", len(t.dataChan)),
+			zap.Error(err))
+		return
+	}
+	defer conn.Close()
+
+	t.drainTo(ctx, conn, time.Now().Add(DefaultTCPStopTimeout))
+}
+
+// drainTo sends every record remaining in dataChan over conn until the channel
+// is closed and empty, a send fails, or ctx is done / the deadline passes. It is
+// split out from drainBuffered so the send-failure and deadline paths can be
+// exercised directly with a fake connection.
+func (t *TCP) drainTo(ctx context.Context, conn net.Conn, deadline time.Time) {
+	for data := range t.dataChan {
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			t.logger.Warn("Shutdown deadline reached while draining buffered records",
+				zap.Int("dropped", len(t.dataChan)+1))
+			return
+		}
+		if err := t.sendData(conn, data); err != nil {
+			t.logger.Error("Failed to send buffered record while draining on shutdown",
+				zap.Int("dropped", len(t.dataChan)+1),
+				zap.Error(err))
 			return
 		}
 	}

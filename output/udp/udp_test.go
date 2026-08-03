@@ -2,6 +2,8 @@ package udp
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net"
 	"strings"
 	"sync"
@@ -12,6 +14,63 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
+
+// fakeConn is a minimal net.Conn used to exercise drainTo's send-failure and
+// context/deadline branches without real network I/O.
+type fakeConn struct {
+	writeErr error
+	writes   int
+}
+
+func (f *fakeConn) Read([]byte) (int, error) { return 0, io.EOF }
+func (f *fakeConn) Write(b []byte) (int, error) {
+	f.writes++
+	if f.writeErr != nil {
+		return 0, f.writeErr
+	}
+	return len(b), nil
+}
+func (f *fakeConn) Close() error                     { return nil }
+func (f *fakeConn) LocalAddr() net.Addr              { return &net.UDPAddr{} }
+func (f *fakeConn) RemoteAddr() net.Addr             { return &net.UDPAddr{} }
+func (f *fakeConn) SetDeadline(time.Time) error      { return nil }
+func (f *fakeConn) SetReadDeadline(time.Time) error  { return nil }
+func (f *fakeConn) SetWriteDeadline(time.Time) error { return nil }
+
+func TestUDP_drainBuffered_emptyChannelReturnsEarly(t *testing.T) {
+	u := &UDP{logger: zap.NewNop(), dataChan: make(chan string, 1)}
+	u.drainBuffered(context.Background())
+}
+
+func TestUDP_drainBuffered_connectErrorReturns(t *testing.T) {
+	u := &UDP{logger: zap.NewNop(), host: "nonexistent.invalid", port: "1", dataChan: make(chan string, 1)}
+	u.dataChan <- "x"
+	u.drainBuffered(context.Background())
+}
+
+func TestUDP_drainTo_stopsOnSendError(t *testing.T) {
+	u := &UDP{logger: zap.NewNop(), dataChan: make(chan string, 2)}
+	u.dataChan <- "one"
+	u.dataChan <- "two"
+	close(u.dataChan)
+
+	conn := &fakeConn{writeErr: fmt.Errorf("write failed")}
+	u.drainTo(context.Background(), conn, time.Now().Add(time.Hour))
+	require.Equal(t, 1, conn.writes)
+}
+
+func TestUDP_drainTo_stopsWhenContextDone(t *testing.T) {
+	u := &UDP{logger: zap.NewNop(), dataChan: make(chan string, 1)}
+	u.dataChan <- "one"
+	close(u.dataChan)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	conn := &fakeConn{}
+	u.drainTo(ctx, conn, time.Now().Add(time.Hour))
+	require.Equal(t, 0, conn.writes)
+}
 
 func TestNew(t *testing.T) {
 	logger := zap.NewNop()
@@ -302,6 +361,37 @@ func TestUDP_StopTwice(t *testing.T) {
 	}()
 
 	udp.Stop(ctx)
+}
+
+func TestUDP_StopDrainsBufferedRecords(t *testing.T) {
+	logger := zap.NewNop()
+	listener, serverAddr := startTestUDPServer(t)
+	defer listener.Close()
+	host, port, err := net.SplitHostPort(serverAddr)
+	require.NoError(t, err)
+	udp, err := New(logger, host, port, 1)
+	require.NoError(t, err)
+	const n = 100
+	ctx := context.Background()
+	for i := 0; i < n; i++ {
+		require.NoError(t, udp.Write(ctx, output.LogRecord{Message: fmt.Sprintf("drain-msg-%d", i)}))
+	}
+	require.NoError(t, udp.Stop(ctx))
+	require.Eventually(t, func() bool {
+		// UDP sends one datagram per record and does not append a newline, so each
+		// buffered record arrives as its own datagram. Match each expected message
+		// exactly to disambiguate e.g. drain-msg-1 from drain-msg-10.
+		received := make(map[string]bool)
+		for _, d := range getReceivedUDPData(t) {
+			received[string(d)] = true
+		}
+		for i := 0; i < n; i++ {
+			if !received[fmt.Sprintf("drain-msg-%d", i)] {
+				return false
+			}
+		}
+		return true
+	}, 3*time.Second, 10*time.Millisecond, "all buffered records should be delivered before Stop returns")
 }
 
 // Test UDP server implementation
