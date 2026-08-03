@@ -69,6 +69,22 @@ const (
 	StyleWindows
 	// StyleDC produces DC-style hostnames like "THOR-DC01".
 	StyleDC
+	// StyleAppliance produces appliance hostnames like "nimble-core-east-01",
+	// combining a vendor short-code (from the passed name pool) with a role and
+	// site. Callers pass a vendor short-code pool as the name pool.
+	StyleAppliance
+)
+
+// ApplianceRoles are role labels used in appliance hostname generation.
+var ApplianceRoles = NewPool(
+	"core", "dist", "access", "edge", "tor",
+	"spine", "leaf", "agg", "prod", "dr",
+)
+
+// ApplianceSites are site/location labels used in appliance hostname generation.
+var ApplianceSites = NewPool(
+	"east", "west", "north", "south", "dc1",
+	"dc2", "hq", "colo", "rack14", "row3",
 )
 
 // GenerateHostname produces a single random hostname using the given style and name pool.
@@ -89,6 +105,10 @@ func GenerateHostname(r *rand.Rand, style HostnameStyle, names *Pool[string]) st
 		return fmt.Sprintf("%s-%s%02d", strings.ToUpper(name), strings.ToUpper(role), num)
 	case StyleDC:
 		return fmt.Sprintf("%s-DC%02d", strings.ToUpper(name), num)
+	case StyleAppliance:
+		role := ApplianceRoles.Random(r)
+		site := ApplianceSites.Random(r)
+		return fmt.Sprintf("%s-%s-%s-%02d", strings.ToLower(name), role, site, num)
 	default:
 		role := Roles.Random(r)
 		return fmt.Sprintf("%s-%s-%02d", strings.ToLower(name), strings.ToLower(role), num)
