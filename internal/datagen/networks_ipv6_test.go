@@ -66,6 +66,36 @@ func TestRandomPublicIPv6(t *testing.T) {
 	}
 }
 
+func TestNetworkIdentity_ValidateIPv6(t *testing.T) {
+	// IPv4-only (empty IPv6CIDR) is still valid.
+	if err := (&NetworkIdentity{CIDR: "10.0.0.0/24"}).Validate(); err != nil {
+		t.Errorf("IPv4-only NetworkIdentity should validate: %v", err)
+	}
+	// Valid dual-stack.
+	if err := (&NetworkIdentity{CIDR: "10.0.0.0/24", IPv6CIDR: "fd00::/64"}).Validate(); err != nil {
+		t.Errorf("dual-stack NetworkIdentity should validate: %v", err)
+	}
+	// Bad IPv6 CIDR fails.
+	if err := (&NetworkIdentity{CIDR: "10.0.0.0/24", IPv6CIDR: "fd00::/120"}).Validate(); err == nil {
+		t.Error("NetworkIdentity with /120 IPv6CIDR should fail validation")
+	}
+	// Bad IPv4 CIDR still fails (regression guard).
+	if err := (&NetworkIdentity{CIDR: "10.0.0.0/32"}).Validate(); err == nil {
+		t.Error("NetworkIdentity with /32 IPv4 CIDR should fail validation")
+	}
+}
+
+func TestGenerateDefaultNetworks_DualStack(t *testing.T) {
+	for _, n := range GenerateDefaultNetworks() {
+		if n.IPv6CIDR == "" {
+			t.Errorf("default network %s has no IPv6CIDR", n.Name)
+		}
+		if err := n.Validate(); err != nil {
+			t.Errorf("default network %s failed validation: %v", n.Name, err)
+		}
+	}
+}
+
 func TestRandomPublicIPv6_RejectsReserved(t *testing.T) {
 	// Force the first candidate to be treated as reserved so the retry path runs.
 	calls := 0

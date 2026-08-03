@@ -12,6 +12,7 @@ type NetworkIdentity struct {
 	ID          string   // "net-01"
 	Name        string   // "Server-VLAN"
 	CIDR        string   // "10.10.1.0/24"
+	IPv6CIDR    string   // "fd00:10:10:1::/64"; empty for IPv4-only subnets
 	Gateway     string   // "10.10.1.1"
 	VLAN        int      // 100
 	DNSServers  []string // references DC system IPs
@@ -293,10 +294,19 @@ func ValidateCIDR(cidr string) error {
 	return nil
 }
 
-// Validate checks the NetworkIdentity for blitz-compatible configuration.
-// Currently validates CIDR; extend as additional invariants are added.
+// Validate checks the NetworkIdentity for blitz-compatible configuration. The
+// IPv4 CIDR is always validated; the IPv6 CIDR is validated when present, so
+// IPv4-only subnets stay valid.
 func (n *NetworkIdentity) Validate() error {
-	return ValidateCIDR(n.CIDR)
+	if err := ValidateCIDR(n.CIDR); err != nil {
+		return err
+	}
+	if n.IPv6CIDR != "" {
+		if err := ValidateIPv6CIDR(n.IPv6CIDR); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GenerateDefaultNetworks returns the standard set of network identities.
@@ -306,6 +316,7 @@ func GenerateDefaultNetworks() []*NetworkIdentity {
 			ID:          "net-01",
 			Name:        "Server-VLAN",
 			CIDR:        "10.10.1.0/24",
+			IPv6CIDR:    "fd00:10:10:1::/64",
 			Gateway:     "10.10.1.1",
 			VLAN:        100,
 			DHCPEnabled: false,
@@ -315,6 +326,7 @@ func GenerateDefaultNetworks() []*NetworkIdentity {
 			ID:          "net-02",
 			Name:        "Workstation-LAN",
 			CIDR:        "10.10.10.0/24",
+			IPv6CIDR:    "fd00:10:10:10::/64",
 			Gateway:     "10.10.10.1",
 			VLAN:        200,
 			DHCPEnabled: true,
@@ -324,6 +336,7 @@ func GenerateDefaultNetworks() []*NetworkIdentity {
 			ID:          "net-03",
 			Name:        "DMZ",
 			CIDR:        "10.10.20.0/24",
+			IPv6CIDR:    "fd00:10:10:20::/64",
 			Gateway:     "10.10.20.1",
 			VLAN:        300,
 			DHCPEnabled: false,
@@ -333,6 +346,7 @@ func GenerateDefaultNetworks() []*NetworkIdentity {
 			ID:          "net-04",
 			Name:        "Management",
 			CIDR:        "10.10.99.0/24",
+			IPv6CIDR:    "fd00:10:10:99::/64",
 			Gateway:     "10.10.99.1",
 			VLAN:        999,
 			DHCPEnabled: false,

@@ -102,18 +102,19 @@ This mapping is a convention, not enforced. Each caller explicitly passes the po
 
 ### Networks (`networks.go`)
 
-- `RandomIPv4(r)`, `RandomPrivateIPv4(r)`, `RandomPublicIPv4(r)`, `RandomIPv6(r)`
-- `RandomMAC(r)`, `RandomIPInCIDR(r, cidr)`
+- `RandomIPv4(r)`, `RandomPrivateIPv4(r)`, `RandomPublicIPv4(r)`, `RandomIPv6(r)`, `RandomPublicIPv6(r)`
+- `RandomMAC(r)`, `RandomIPInCIDR(r, cidr)`, `RandomIPInCIDRv6(r, cidr)`
 - `CommonPorts` — common network ports (22, 80, 443, 3306, etc.)
 - `TCPUDPProtocols` — tcp, udp, icmp
-- `ValidateCIDR(cidr) error`, `(*NetworkIdentity).Validate() error` — CIDR validation; see "NetworkIdentity CIDR contract" below.
+- `ValidateCIDR(cidr) error`, `ValidateIPv6CIDR(cidr) error`, `(*NetworkIdentity).Validate() error` — CIDR validation; see "NetworkIdentity CIDR contract" below.
 
 #### NetworkIdentity CIDR contract
 
 Blitz networks model "subnets with hosts" — broadcast domains where simulated systems live. The `CIDR` field on `NetworkIdentity` carries this constraint:
 
-- **IPv4 only.** IPv6 support is tracked in PIPE-1001 and is not yet wired through `NetworkIdentity` or any of the random-IP utilities.
-- **Prefix length must be /29 or shorter** (numerically smaller — i.e., the subnet must hold at least 8 total addresses / 6 usable hosts). `/30`, `/31`, and `/32` are explicitly **invalid** because they describe point-to-point router links (`/30` and `/31`) or single-host routes (`/32`), neither of which represents a host-bearing subnet in blitz's simulation.
+- **Dual-stack.** `NetworkIdentity` carries an IPv4 `CIDR` and an optional `IPv6CIDR`; an empty `IPv6CIDR` denotes an IPv4-only subnet. `GenerateDefaultNetworks()` emits dual-stack defaults, one ULA `fd00::/64` per subnet.
+- **IPv4 prefix length must be /29 or shorter** (numerically smaller, so the subnet holds at least 8 total addresses / 6 usable hosts). `/30`, `/31`, and `/32` are explicitly **invalid** because they describe point-to-point router links (`/30` and `/31`) or single-host routes (`/32`), neither of which represents a host-bearing subnet in blitz's simulation.
+- **IPv6 prefix length must be /64 or shorter.** `ValidateIPv6CIDR` rejects prefixes longer than /64 (e.g. /127 point-to-point links, /128 host routes), mirroring the IPv4 host-bearing-subnet rule.
 - **Validation is the gate, not a runtime fallback.** Config-loading code that accepts user-supplied CIDRs MUST call `ValidateCIDR(cidr)` (or `NetworkIdentity.Validate()`) and **fail the entire config load** on error — blitz refuses to start rather than silently substituting a default. PIPE-1002 tracks wiring this into the config-load path; until then, validation calls live wherever they're needed and the function is exported for that purpose.
 - **`RandomIPInCIDR` has a soft fallback as defense in depth.** If reached with an invalid CIDR (unparseable, non-IPv4, or prefix > /29), it returns a `RandomIPv4(r)` value rather than panicking. Reaching that fallback indicates a missing validation call upstream, not a behavior to depend on.
 
@@ -132,7 +133,22 @@ Blitz networks model "subnets with hosts" — broadcast domains where simulated 
 | [RFC 5737](https://datatracker.ietf.org/doc/html/rfc5737) | 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 | Documentation TEST-NET-1/2/3. |
 | [RFC 6598](https://datatracker.ietf.org/doc/html/rfc6598) | 100.64.0.0/10 | CGNAT shared address space. |
 
-[RFC 6890](https://datatracker.ietf.org/doc/html/rfc6890) is the umbrella special-purpose-address registry; the table above cites originating RFCs rather than 6890 directly. New reserved blocks are added by appending entries to `reservedIPv4Blocks` in `internal/datagen/networks.go`. The same paradigm will apply to IPv6 random-public emission once PIPE-1001 lands.
+[RFC 6890](https://datatracker.ietf.org/doc/html/rfc6890) is the umbrella special-purpose-address registry; the table above cites originating RFCs rather than 6890 directly. New reserved blocks are added by appending entries to `reservedIPv4Blocks` in `internal/datagen/networks.go`.
+
+#### `RandomPublicIPv6` reserved-block coverage
+
+`RandomPublicIPv6` generates a random global-unicast (`2000::/3`) address and rejects any candidate in a known IETF-reserved IPv6 block, attributed by RFC:
+
+| RFC | Range(s) | Purpose |
+|-----|----------|---------|
+| [RFC 4291](https://datatracker.ietf.org/doc/html/rfc4291) | ::/128, ::1/128, ::ffff:0:0/96, fe80::/10, ff00::/8 | Unspecified, loopback, IPv4-mapped, link-local, multicast. |
+| [RFC 4193](https://datatracker.ietf.org/doc/html/rfc4193) | fc00::/7 | Unique local addresses. |
+| [RFC 3849](https://datatracker.ietf.org/doc/html/rfc3849) | 2001:db8::/32 | Documentation. |
+| [RFC 5180](https://datatracker.ietf.org/doc/html/rfc5180) | 2001:2::/48 | Benchmarking. |
+| [RFC 6052](https://datatracker.ietf.org/doc/html/rfc6052) | 64:ff9b::/96 | IPv4/IPv6 translation. |
+| [RFC 6666](https://datatracker.ietf.org/doc/html/rfc6666) | 100::/64 | Discard-only prefix. |
+
+New reserved blocks are added by appending entries to `reservedIPv6Blocks`.
 
 ### Windows (`windows.go`)
 
