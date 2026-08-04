@@ -68,3 +68,50 @@ func WithHost(hostname, source string, extras ...string) map[string]string {
 	}
 	return r
 }
+
+// StaticResources is an immutable set of resource attributes that stay constant
+// for a generator worker's lifetime: the host-identity projection (host.name,
+// os.type, ...) plus per-generator constants (telemetry.source, format flavor,
+// version). Build it once at construction and reuse it for every record the
+// worker emits (PIPE-1036).
+//
+// The model is: Static + Dynamic (per record) = Record. Static carries the
+// fields that never change for the worker; Record merges in the few that do.
+type StaticResources struct {
+	attrs map[string]string
+}
+
+// NewStaticResources builds a StaticResources from a base attribute set. The
+// map is copied, so a caller that retains and later mutates attrs does not
+// affect the constructed value.
+func NewStaticResources(attrs map[string]string) *StaticResources {
+	cp := make(map[string]string, len(attrs))
+	for k, v := range attrs {
+		cp[k] = v
+	}
+	return &StaticResources{attrs: cp}
+}
+
+// Record returns the resource attributes for a single emitted record: the
+// static set merged with the given dynamic key/value pairs (same even-length
+// convention as Default's extras).
+//
+// When no dynamic pairs are supplied — the common case, since most generators
+// vary nothing per record — Record returns the shared static map with no
+// allocation. Callers MUST treat that returned map as read-only; mutating it
+// corrupts every other record and races concurrent workers. When dynamic pairs
+// are supplied, Record returns a fresh merged map that is safe to mutate and
+// leaves the static set untouched.
+func (s *StaticResources) Record(dynamicKV ...string) map[string]string {
+	if len(dynamicKV) < 2 {
+		return s.attrs
+	}
+	out := make(map[string]string, len(s.attrs)+len(dynamicKV)/2)
+	for k, v := range s.attrs {
+		out[k] = v
+	}
+	for i := 0; i+1 < len(dynamicKV); i += 2 {
+		out[dynamicKV[i]] = dynamicKV[i+1]
+	}
+	return out
+}
