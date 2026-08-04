@@ -293,6 +293,15 @@ func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int
 	}
 	weights := []float64{0.10, 0.40, 0.30, 0.15, 0.05}
 
+	// Prod-tier baseline OS release per family, chosen once so every prod host
+	// of a family is pinned to the same conservative release (real fleets keep
+	// prod uniform). Non-prod hosts roll newer and vary per host.
+	prodBaseline := map[OSType]OSInfo{
+		OSLinux:   osInfoForTier(r, OSLinux, true),
+		OSWindows: osInfoForTier(r, OSWindows, true),
+		OSMacOS:   osInfoForTier(r, OSMacOS, true),
+	}
+
 	systems := make([]*SystemIdentity, count)
 	for i := 0; i < count; i++ {
 		// Pick OS/role using weighted selection
@@ -300,6 +309,15 @@ func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int
 		sys, err := GenerateSystemIdentity(r, spec.os, spec.role, domain, spec.pool)
 		if err != nil {
 			return nil, err
+		}
+
+		// Assign a deployment tier and cluster the OS release by it: prod hosts
+		// share the pinned family baseline; non-prod hosts roll newer and vary.
+		sys.Tier = weightedSelect(r, DeploymentTiers, deploymentTierWeights)
+		if sys.Tier == TierProd {
+			sys.OSInfo = prodBaseline[spec.os]
+		} else {
+			sys.OSInfo = osInfoForTier(r, spec.os, false)
 		}
 
 		// Services and applications use their own RNGs so the seeds in

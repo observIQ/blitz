@@ -62,8 +62,9 @@ type SystemIdentity struct {
 	HostID   string // host.id (OS-appropriate machine identifier)
 	Arch     Arch
 	Role     SystemRole
-	Domain   string // back-reference to DomainIdentity.Name
-	OUPath   string // "OU=Servers,DC=contoso,DC=com"
+	Tier     DeploymentTier // deployment.environment.name
+	Domain   string         // back-reference to DomainIdentity.Name
+	OUPath   string         // "OU=Servers,DC=contoso,DC=com"
 
 	// Hardware
 	CPUCores int

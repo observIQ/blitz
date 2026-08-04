@@ -6,6 +6,26 @@ import (
 	"strings"
 )
 
+// DeploymentTier is a host's deployment environment, emitted as the OTel
+// deployment.environment.name resource attribute. The set is hardcoded for now;
+// making the tier vocabulary and fleet distribution user-configurable is a
+// future project (see stub-dynamic-deployment-tiers / round 16).
+type DeploymentTier string
+
+const (
+	TierProd    DeploymentTier = "production"
+	TierStaging DeploymentTier = "staging"
+	TierTest    DeploymentTier = "test"
+	TierDev     DeploymentTier = "development"
+)
+
+// DeploymentTiers is the hardcoded tier set; deploymentTierWeights is the
+// default prod-heavy fleet distribution (prod 55%, the rest 15% each).
+var (
+	DeploymentTiers       = []DeploymentTier{TierProd, TierStaging, TierTest, TierDev}
+	deploymentTierWeights = []float64{0.55, 0.15, 0.15, 0.15}
+)
+
 // OSInfo is the OpenTelemetry os.* projection source for a system: the fields
 // map 1:1 to os.type / os.name / os.version / os.build_id / os.description. The
 // values within one OSInfo are internally consistent (a real name/version/
@@ -67,34 +87,72 @@ var (
 func GenerateOSInfo(r *rand.Rand, os OSType) OSInfo {
 	switch os {
 	case OSWindows:
-		rel := windowsReleases[r.Intn(len(windowsReleases))] // #nosec G404
-		ubr := rel.ubrs[r.Intn(len(rel.ubrs))]               // #nosec G404
-		version := fmt.Sprintf("10.0.%s.%d", rel.build, ubr)
-		return OSInfo{
-			Type:        OSWindows,
-			Name:        rel.name,
-			Version:     version,
-			BuildID:     rel.build,
-			Description: fmt.Sprintf("Microsoft Windows [Version %s]", version),
-		}
+		rel := windowsReleases[r.Intn(len(windowsReleases))]            // #nosec G404
+		return buildWindowsOSInfo(rel, rel.ubrs[r.Intn(len(rel.ubrs))]) // #nosec G404
 	case OSMacOS:
-		rel := macReleases[r.Intn(len(macReleases))] // #nosec G404
-		return OSInfo{
-			Type:        OSMacOS,
-			Name:        "macOS",
-			Version:     rel.version,
-			BuildID:     rel.build,
-			Description: fmt.Sprintf("macOS %s (%s)", rel.version, rel.build),
-		}
+		return buildMacOSInfo(macReleases[r.Intn(len(macReleases))]) // #nosec G404
 	default:
-		rel := linuxReleases[r.Intn(len(linuxReleases))] // #nosec G404
-		return OSInfo{
-			Type:        OSLinux,
-			Name:        rel.name,
-			Version:     rel.version,
-			BuildID:     rel.kernel,
-			Description: rel.pretty,
+		return buildLinuxOSInfo(linuxReleases[r.Intn(len(linuxReleases))]) // #nosec G404
+	}
+}
+
+// osInfoForTier picks a release biased by patch currency: the pinned baseline
+// (older=true) draws from the conservative/older end of an ordered patch
+// timeline, non-prod (older=false) from the newer end. Linux has no
+// cross-distro age ordering, so it draws any release regardless.
+func osInfoForTier(r *rand.Rand, os OSType, older bool) OSInfo {
+	switch os {
+	case OSWindows:
+		rel := windowsReleases[r.Intn(len(windowsReleases))] // #nosec G404
+		return buildWindowsOSInfo(rel, rel.ubrs[pickHalfIndex(r, len(rel.ubrs), older)])
+	case OSMacOS:
+		return buildMacOSInfo(macReleases[pickHalfIndex(r, len(macReleases), older)])
+	default:
+		return buildLinuxOSInfo(linuxReleases[r.Intn(len(linuxReleases))]) // #nosec G404
+	}
+}
+
+// pickHalfIndex returns an index into an n-element, oldest-first pool: the older
+// half [0, n/2) when older is true, else the newer half [n/2, n).
+func pickHalfIndex(r *rand.Rand, n int, older bool) int {
+	half := n / 2
+	if older {
+		if half == 0 {
+			return 0
 		}
+		return r.Intn(half) // #nosec G404
+	}
+	return half + r.Intn(n-half) // #nosec G404
+}
+
+func buildWindowsOSInfo(rel windowsRelease, ubr int) OSInfo {
+	version := fmt.Sprintf("10.0.%s.%d", rel.build, ubr)
+	return OSInfo{
+		Type:        OSWindows,
+		Name:        rel.name,
+		Version:     version,
+		BuildID:     rel.build,
+		Description: fmt.Sprintf("Microsoft Windows [Version %s]", version),
+	}
+}
+
+func buildMacOSInfo(rel macRelease) OSInfo {
+	return OSInfo{
+		Type:        OSMacOS,
+		Name:        "macOS",
+		Version:     rel.version,
+		BuildID:     rel.build,
+		Description: fmt.Sprintf("macOS %s (%s)", rel.version, rel.build),
+	}
+}
+
+func buildLinuxOSInfo(rel linuxRelease) OSInfo {
+	return OSInfo{
+		Type:        OSLinux,
+		Name:        rel.name,
+		Version:     rel.version,
+		BuildID:     rel.kernel,
+		Description: rel.pretty,
 	}
 }
 

@@ -56,6 +56,25 @@ func TestGenerateOSInfo_MacOS(t *testing.T) {
 	}
 }
 
+func TestPickHalfIndex(t *testing.T) {
+	r := rand.New(rand.NewSource(1)) // #nosec G404
+	for i := 0; i < 30; i++ {
+		if idx := pickHalfIndex(r, 10, true); idx < 0 || idx >= 5 {
+			t.Fatalf("older index %d out of [0,5)", idx)
+		}
+		if idx := pickHalfIndex(r, 10, false); idx < 5 || idx >= 10 {
+			t.Fatalf("newer index %d out of [5,10)", idx)
+		}
+	}
+	// Single-element pool: the guard avoids Intn(0); both halves resolve to 0.
+	if pickHalfIndex(r, 1, true) != 0 {
+		t.Error("n=1 older should be 0")
+	}
+	if pickHalfIndex(r, 1, false) != 0 {
+		t.Error("n=1 newer should be 0")
+	}
+}
+
 func TestGenerateHostID(t *testing.T) {
 	linuxRE := regexp.MustCompile(`^[0-9a-f]{32}$`)
 	uuidLowerRE := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
