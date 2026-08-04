@@ -224,18 +224,13 @@ func hexByte(c byte) byte {
 }
 
 // buildMetricRequest builds an OTLP ExportMetricsServiceRequest from prepared metrics.
-func buildMetricRequest(metrics []*metricspb.Metric, resource map[string]string) *metricspb.ResourceMetrics {
+func buildMetricRequest(metrics []*metricspb.Metric, resource map[string]any) *metricspb.ResourceMetrics {
 	resourceAttrs := make([]*commonpb.KeyValue, 0, len(resource)+1)
 	resourceAttrs = append(resourceAttrs, &commonpb.KeyValue{
 		Key:   "service.name",
 		Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: "blitz"}},
 	})
-	for k, v := range resource {
-		resourceAttrs = append(resourceAttrs, &commonpb.KeyValue{
-			Key:   k,
-			Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: v}},
-		})
-	}
+	resourceAttrs = append(resourceAttrs, anyMapToKeyValues(resource)...)
 
 	return &metricspb.ResourceMetrics{
 		Resource: &resourcepb.Resource{

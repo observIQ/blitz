@@ -11,7 +11,7 @@ type cpuScraper struct{}
 
 func (s *cpuScraper) Name() string { return "cpu" }
 
-func (s *cpuScraper) Scrape(r *rand.Rand, hostname string, resource map[string]string) []output.MetricRecord {
+func (s *cpuScraper) Scrape(r *rand.Rand, hostname string, resource map[string]any) []output.MetricRecord {
 	now := time.Now()
 	numCPUs := r.Intn(16) + 1 // #nosec G404
 

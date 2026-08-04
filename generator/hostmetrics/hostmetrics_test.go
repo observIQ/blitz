@@ -200,7 +200,7 @@ func TestSeedDeterminism(t *testing.T) {
 // Test individual scrapers produce non-empty records.
 func TestScrapers(t *testing.T) {
 	r := rand.New(rand.NewSource(42)) // #nosec G404
-	resource := map[string]string{"host.name": "test", "os.type": "linux"}
+	resource := map[string]any{"host.name": "test", "os.type": "linux"}
 
 	scrapers := allScrapers()
 	for _, s := range scrapers {

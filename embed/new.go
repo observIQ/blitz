@@ -35,7 +35,7 @@ type runner struct {
 
 	mu       sync.Mutex
 	rt       *runtime.Runtime
-	resource map[string]string // cloned from host.Resource at Start
+	resource map[string]any // cloned from host.Resource at Start
 	started  bool
 }
 

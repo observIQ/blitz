@@ -11,7 +11,7 @@ type memoryScraper struct{}
 
 func (s *memoryScraper) Name() string { return "memory" }
 
-func (s *memoryScraper) Scrape(r *rand.Rand, _ string, resource map[string]string) []output.MetricRecord {
+func (s *memoryScraper) Scrape(r *rand.Rand, _ string, resource map[string]any) []output.MetricRecord {
 	now := time.Now()
 	totalGB := []int64{4, 8, 16, 32, 64}
 	total := totalGB[r.Intn(len(totalGB))] * 1024 * 1024 * 1024 // #nosec G404

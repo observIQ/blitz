@@ -38,7 +38,7 @@ type LogRecordMetadata struct {
 	Timestamp  time.Time
 	Severity   string
 	Attributes map[string]any
-	Resource   map[string]string
+	Resource   map[string]any
 }
 
 // MetricType represents the type of a metric data point.
@@ -101,7 +101,7 @@ type MetricPoint struct {
 type MetricPointMetadata struct {
 	Timestamp  time.Time
 	Attributes map[string]string
-	Resource   map[string]string
+	Resource   map[string]any
 }
 
 // SpanKind represents the kind of a trace span.
@@ -156,5 +156,5 @@ type Span struct {
 // arrays).
 type SpanMetadata struct {
 	Attributes map[string]any
-	Resource   map[string]string
+	Resource   map[string]any
 }

@@ -50,7 +50,7 @@ func Hostname() string {
 //
 //	resource.Default("apache", "apache.format", "common")
 //	// → {"host.name": "<host>", "telemetry.source": "apache", "apache.format": "common"}
-func Default(source string, extras ...string) map[string]string {
+func Default(source string, extras ...string) map[string]any {
 	return WithHost(Hostname(), source, extras...)
 }
 
@@ -58,8 +58,8 @@ func Default(source string, extras ...string) map[string]string {
 // for generators whose hostname comes from a resolved datagen SystemIdentity
 // (PIPE-1036) rather than the process's os.Hostname(). extras follow the same
 // key/value convention as Default.
-func WithHost(hostname, source string, extras ...string) map[string]string {
-	r := map[string]string{
+func WithHost(hostname, source string, extras ...string) map[string]any {
+	r := map[string]any{
 		"host.name":        hostname,
 		"telemetry.source": source,
 	}
@@ -78,14 +78,14 @@ func WithHost(hostname, source string, extras ...string) map[string]string {
 // The model is: Static + Dynamic (per record) = Record. Static carries the
 // fields that never change for the worker; Record merges in the few that do.
 type StaticResources struct {
-	attrs map[string]string
+	attrs map[string]any
 }
 
 // NewStaticResources builds a StaticResources from a base attribute set. The
 // map is copied, so a caller that retains and later mutates attrs does not
 // affect the constructed value.
-func NewStaticResources(attrs map[string]string) *StaticResources {
-	cp := make(map[string]string, len(attrs))
+func NewStaticResources(attrs map[string]any) *StaticResources {
+	cp := make(map[string]any, len(attrs))
 	for k, v := range attrs {
 		cp[k] = v
 	}
@@ -102,11 +102,11 @@ func NewStaticResources(attrs map[string]string) *StaticResources {
 // corrupts every other record and races concurrent workers. When dynamic pairs
 // are supplied, Record returns a fresh merged map that is safe to mutate and
 // leaves the static set untouched.
-func (s *StaticResources) Record(dynamicKV ...string) map[string]string {
+func (s *StaticResources) Record(dynamicKV ...string) map[string]any {
 	if len(dynamicKV) < 2 {
 		return s.attrs
 	}
-	out := make(map[string]string, len(s.attrs)+len(dynamicKV)/2)
+	out := make(map[string]any, len(s.attrs)+len(dynamicKV)/2)
 	for k, v := range s.attrs {
 		out[k] = v
 	}

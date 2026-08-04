@@ -28,7 +28,7 @@ func TestLogRecordMetadataCarriesResourceAndAttributes(t *testing.T) {
 		Message: "GET / 200",
 		Metadata: embed.LogRecordMetadata{
 			Severity: "INFO",
-			Resource: map[string]string{
+			Resource: map[string]any{
 				"host.name":        "web-01",
 				"telemetry.source": "apache",
 				"apache.format":    "common",
