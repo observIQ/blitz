@@ -9,6 +9,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -106,6 +107,66 @@ func TestNew(t *testing.T) {
 		_, err := New(cfg)
 		require.Error(t, err)
 	})
+}
+
+// TestNewProjectsIdentityResource confirms that when a resolved datagen
+// identity is supplied, the generator's static resource carries the full
+// host.* / os.* / deployment.* projection (os.type as the semconv value, so
+// macOS becomes darwin) rather than just host.name + os raw string.
+func TestNewProjectsIdentityResource(t *testing.T) {
+	cfg := baseCfg(t, &mockMetricConsumer{})
+	cfg.Hostname = ""
+	cfg.OS = ""
+	cfg.Identity = &datagen.SystemIdentity{
+		Hostname: "THOR-01",
+		HostID:   "abc123",
+		Arch:     datagen.ArchAMD64,
+		Tier:     datagen.TierProd,
+		OSInfo:   datagen.OSInfo{Type: datagen.OSMacOS, Name: "macOS", Version: "14.6.1"},
+	}
+
+	g, err := New(cfg)
+	require.NoError(t, err)
+
+	res := g.static.Record()
+	assert.Equal(t, "THOR-01", res["host.name"])
+	assert.Equal(t, "abc123", res["host.id"])
+	assert.Equal(t, "darwin", res["os.type"])
+	assert.Equal(t, "macOS", res["os.name"])
+	assert.Equal(t, "production", res["deployment.environment.name"])
+	assert.Equal(t, "hostmetrics", res["telemetry.source"])
+	assert.Equal(t, "THOR-01", g.hostname)
+}
+
+// TestSyntheticIdentityOSTypeProjection confirms the no-Identity path builds a
+// synthetic identity from the OS knob: an empty OS omits os.type entirely
+// (rather than emitting an empty string), and a set OS projects through
+// SemconvOSType.
+func TestSyntheticIdentityOSTypeProjection(t *testing.T) {
+	cfg := baseCfg(t, &mockMetricConsumer{})
+	cfg.OS = ""
+
+	g, err := New(cfg)
+	require.NoError(t, err)
+	_, ok := g.static.Record()["os.type"]
+	assert.False(t, ok, "empty OS must not emit an empty os.type")
+
+	cfg.OS = "windows"
+	g2, err := New(cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "windows", g2.static.Record()["os.type"])
+}
+
+// TestSyntheticIdentityRandomSeed exercises the randomize branch of the
+// synthetic-identity hostname generation (Seed < 0 → wall-clock seed).
+func TestSyntheticIdentityRandomSeed(t *testing.T) {
+	cfg := baseCfg(t, &mockMetricConsumer{})
+	cfg.Hostname = ""
+	cfg.Seed = -1
+
+	g, err := New(cfg)
+	require.NoError(t, err)
+	assert.NotEmpty(t, g.hostname)
 }
 
 func TestNameAndSupportedTelemetry(t *testing.T) {

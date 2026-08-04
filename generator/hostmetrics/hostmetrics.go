@@ -28,11 +28,18 @@ type Config struct {
 	Workers int
 	// Rate is the scrape interval per worker. Required, > 0.
 	Rate time.Duration
-	// OS is the simulated operating system ("linux" or "windows").
+	// OS is the simulated operating system ("linux" or "windows"). Ignored
+	// when Identity is set (the identity's own OS is used instead).
 	OS string
 	// Hostname is the simulated hostname. If empty, a random hostname is
-	// generated per the OS style.
+	// generated per the OS style. Ignored when Identity is set.
 	Hostname string
+	// Identity, when non-nil, is the resolved simulated host this generator's
+	// metrics describe (PIPE-1036). Its full host.* / os.* / deployment.*
+	// projection becomes the static resource on every emitted point. When nil,
+	// a minimal identity is synthesized from OS + Hostname, preserving the
+	// standalone-CLI behavior.
+	Identity *datagen.SystemIdentity
 	// ScraperNames restricts emission to a named subset. Empty = all.
 	ScraperNames []string
 	// Consumer receives every scraped batch. Required.
@@ -56,8 +63,9 @@ type Generator struct {
 	logger   *zap.Logger
 	workers  int
 	rate     time.Duration
-	os       string
+	osType   string
 	hostname string
+	static   *resource.StaticResources
 	scrapers []Scraper
 	consumer embed.MetricConsumer
 	seed     int64
@@ -87,12 +95,43 @@ func New(cfg Config) (*Generator, error) {
 		return nil, fmt.Errorf("rate must be greater than 0, got %s", cfg.Rate)
 	}
 
+	// Resolve the simulated host: an explicit Environment identity when
+	// supplied, otherwise a minimal identity synthesized from the OS/Hostname
+	// knobs. Either way the resource projection is built once here and reused
+	// for the generator's lifetime.
+	sys := cfg.Identity
+	if sys == nil {
+		sys = syntheticIdentity(cfg)
+	}
+
+	return &Generator{
+		logger:   cfg.Logger.Named("generator-hostmetrics"),
+		workers:  cfg.Workers,
+		rate:     cfg.Rate,
+		osType:   sys.OSInfo.Type.SemconvOSType(),
+		hostname: sys.Hostname,
+		static:   resource.FromIdentity(sys, generatorType),
+		scrapers: buildScrapers(cfg.ScraperNames),
+		consumer: cfg.Consumer,
+		seed:     cfg.Seed,
+		stopCh:   make(chan struct{}),
+	}, nil
+}
+
+// syntheticIdentity builds a minimal host identity from the generator's OS and
+// Hostname knobs, used when no simulated Environment identity is wired
+// (cfg.Identity == nil). The hostname is generated deterministically from Seed
+// in the OS-appropriate style when cfg.Hostname is empty, preserving the prior
+// standalone-CLI behavior. The style is derived from the datagen.OSType so an
+// empty or non-windows OS renders a Linux-style host.
+func syntheticIdentity(cfg Config) *datagen.SystemIdentity {
+	osType := datagen.OSType(cfg.OS)
 	hostname := cfg.Hostname
 	if hostname == "" {
 		// Hostname-only RNG; intentionally seeded once at construction
 		// since hostname is fixed for the lifetime of the generator.
 		style := datagen.StyleLinux
-		if cfg.OS == "windows" {
+		if osType == datagen.OSWindows {
 			style = datagen.StyleWindows
 		}
 		seed := cfg.Seed
@@ -105,18 +144,10 @@ func New(cfg Config) (*Generator, error) {
 			datagen.AllMythologyNames,
 		)
 	}
-
-	return &Generator{
-		logger:   cfg.Logger.Named("generator-hostmetrics"),
-		workers:  cfg.Workers,
-		rate:     cfg.Rate,
-		os:       cfg.OS,
-		hostname: hostname,
-		scrapers: buildScrapers(cfg.ScraperNames),
-		consumer: cfg.Consumer,
-		seed:     cfg.Seed,
-		stopCh:   make(chan struct{}),
-	}, nil
+	return &datagen.SystemIdentity{
+		Hostname: hostname,
+		OSInfo:   datagen.OSInfo{Type: osType},
+	}
 }
 
 // Name returns the module identifier for ProducerModule.
@@ -132,7 +163,7 @@ func (g *Generator) Start(_ context.Context) error {
 	g.logger.Info("Starting host metrics generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
-		zap.String("os", g.os),
+		zap.String("os.type", g.osType),
 		zap.String("hostname", g.hostname),
 		zap.Int("scrapers", len(g.scrapers)),
 	)
@@ -209,17 +240,12 @@ func (g *Generator) scrape(r *rand.Rand) {
 
 	ctx := context.Background()
 
-	// Build a fresh resource map per scrape. Future distributed-blitz
-	// simulation may derive resource from the simulated host's
-	// Environment record at scrape time — keep the allocation local so
-	// no scrape-to-scrape mutation can bleed state. resource.Default
-	// supplies telemetry.source + host.name (real process hostname); we
-	// override host.name with the datagen-generated simulated hostname
-	// because hostmetrics describes a simulated machine, not the host
-	// blitz is running on.
-	res := resource.Default(generatorType)
-	res["host.name"] = g.hostname
-	res["os.type"] = g.os
+	// The host-identity resource is fixed for this generator's lifetime, so it
+	// is built once (StaticResources in New) and shared read-only across every
+	// scrape and worker. Scrapers only attach it to the MetricRecords they
+	// return — they never mutate it — so handing out the zero-allocation shared
+	// map is safe under concurrent workers.
+	res := g.static.Record()
 
 	for _, scraper := range g.scrapers {
 		points := scraper.Scrape(r, g.hostname, res)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,6 +62,45 @@ func baseCfg(t *testing.T, cons embed.TraceConsumer) Config {
 		Rate:     time.Second,
 		Consumer: cons,
 	}
+}
+
+// TestNewProjectsIdentityResource confirms that when a resolved datagen
+// identity is supplied, the generator's static resource carries the full
+// host.* / os.* / deployment.* projection, so spans describe the simulated
+// host rather than just its name.
+func TestNewProjectsIdentityResource(t *testing.T) {
+	cfg := baseCfg(t, &mockTraceConsumer{})
+	cfg.Identity = &datagen.SystemIdentity{
+		Hostname: "odin-api-01",
+		HostID:   "def456",
+		Arch:     datagen.ArchARM64,
+		Tier:     datagen.TierStaging,
+		OSInfo:   datagen.OSInfo{Type: datagen.OSLinux, Name: "Ubuntu", Version: "22.04.5"},
+	}
+
+	g, err := New(cfg)
+	require.NoError(t, err)
+
+	res := g.static.Record()
+	assert.Equal(t, "odin-api-01", res["host.name"])
+	assert.Equal(t, "def456", res["host.id"])
+	assert.Equal(t, "arm64", res["host.arch"])
+	assert.Equal(t, "linux", res["os.type"])
+	assert.Equal(t, "staging", res["deployment.environment.name"])
+	assert.Equal(t, "traces", res["telemetry.source"])
+	assert.Equal(t, "odin-api-01", g.hostname)
+}
+
+// TestSyntheticIdentityRandomSeed exercises the randomize branch of the
+// synthetic-identity hostname generation (Seed < 0 → wall-clock seed).
+func TestSyntheticIdentityRandomSeed(t *testing.T) {
+	cfg := baseCfg(t, &mockTraceConsumer{})
+	cfg.Hostname = ""
+	cfg.Seed = -1
+
+	g, err := New(cfg)
+	require.NoError(t, err)
+	assert.NotEmpty(t, g.hostname)
 }
 
 func TestNew(t *testing.T) {
