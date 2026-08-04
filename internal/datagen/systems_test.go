@@ -131,6 +131,28 @@ func TestGenerateSystemIdentity(t *testing.T) {
 	})
 }
 
+func TestHostImageFrameworkHook(t *testing.T) {
+	// The Image hook exists so a future CloudIdentity source can populate
+	// host.image.* on a system, but it is unwired today: GenerateSystemIdentity
+	// must leave it nil so the projection emits no host.image.* attributes.
+	r := rand.New(rand.NewSource(7))
+	domain := GenerateDomainIdentity(7, "contoso.com", time.Now())
+
+	sys, err := GenerateSystemIdentity(r, OSLinux, RoleServer, domain, NorseNames)
+	if err != nil {
+		t.Fatalf("GenerateSystemIdentity: %v", err)
+	}
+	if sys.Image != nil {
+		t.Errorf("expected Image nil (unwired framework hook), got %+v", sys.Image)
+	}
+
+	// HostImage carries the OTel host.image.* semconv fields.
+	img := &HostImage{ID: "ami-0abc", Name: "ubuntu-22.04", Version: "20240115"}
+	if img.ID != "ami-0abc" || img.Name != "ubuntu-22.04" || img.Version != "20240115" {
+		t.Errorf("HostImage fields did not round-trip: %+v", img)
+	}
+}
+
 func TestGenerateSystemIdentityErrorsOnNilInputs(t *testing.T) {
 	r := rand.New(rand.NewSource(1))
 	domain := GenerateDomainIdentity(1, "", time.Now())

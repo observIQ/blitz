@@ -77,9 +77,24 @@ type SystemIdentity struct {
 	// TLS cert issued by the domain CA
 	Cert *CertInfo
 
+	// Image is the host's OS/VM image provenance (host.image.*). It is a
+	// framework hook for a future CloudIdentity source and is nil today; core
+	// system generation never populates it. A nil Image means the resource
+	// projection emits no host.image.* attributes.
+	Image *HostImage
+
 	// Sub-identities (populated by environment generation)
 	Services     []*ServiceIdentity
 	Applications []*ApplicationIdentity
+}
+
+// HostImage is the OpenTelemetry host.image.* projection source: the VM image
+// or OS install a host was instantiated from. It is not populated by core
+// system generation — a future CloudIdentity source will set it on cloud hosts.
+type HostImage struct {
+	ID      string // host.image.id
+	Name    string // host.image.name
+	Version string // host.image.version
 }
 
 // NetworkInterface represents a NIC bound to a network subnet.
