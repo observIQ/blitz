@@ -37,15 +37,18 @@ type Host struct {
 	Resource map[string]string
 
 	// Environment is the simulated datagen.Environment that generators draw
-	// their host identities (host.name / OS) from (PIPE-1036). Nil means
+	// their host identities (host.name / os.type) from (PIPE-1036). Nil means
 	// generators fall back to the running host's os.Hostname().
 	//
-	// Read-only after Host is passed to Runner.Start. It is immutable by
-	// construction — GenerateEnvironment never mutates it afterward — so
-	// concurrent workers share the pointer safely. Unlike Resource it is not
-	// cloned: a deep copy of the entire identity graph would be costly and
-	// serves no purpose given the immutability contract. Callers must treat
-	// their reference as frozen once they hand the Host off.
+	// Read-only for the lifetime of a single Runner.Start: workers only read
+	// it, so they share the pointer without synchronization. It is not
+	// deep-copied the way Resource is; copying the whole identity graph would
+	// be costly and buys nothing, since the Environment is never mutated in
+	// place. Reconfiguration swaps it by rebuilding the runner with a fresh
+	// Host (Stop, New, Start), not by mutating the live value, so a caller
+	// replaces Environments across a rebuild rather than underneath running
+	// workers. Callers must treat their reference as read-only once they hand
+	// the Host off.
 	Environment *datagen.Environment
 }
 
