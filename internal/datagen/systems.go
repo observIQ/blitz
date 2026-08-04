@@ -19,11 +19,30 @@ const (
 // Arch represents a CPU architecture.
 type Arch string
 
+// Arch values are the OpenTelemetry semconv host.arch value set. Random system
+// generation uses the common ones (amd64, arm64); the rest are selectable via
+// explicit configuration (e.g. an s390x mainframe or ppc64 host).
 const (
 	ArchAMD64 Arch = "amd64"
+	ArchARM32 Arch = "arm32"
 	ArchARM64 Arch = "arm64"
+	ArchIA64  Arch = "ia64"
+	ArchPPC32 Arch = "ppc32"
+	ArchPPC64 Arch = "ppc64"
+	ArchS390X Arch = "s390x"
 	ArchX86   Arch = "x86"
 )
+
+// ParseArch maps a user-supplied CPU architecture string to an Arch, accepting
+// the OpenTelemetry semconv host.arch value set. Unknown values return an error.
+func ParseArch(s string) (Arch, error) {
+	switch a := Arch(strings.ToLower(strings.TrimSpace(s))); a {
+	case ArchAMD64, ArchARM32, ArchARM64, ArchIA64, ArchPPC32, ArchPPC64, ArchS390X, ArchX86:
+		return a, nil
+	default:
+		return "", fmt.Errorf("datagen: unsupported architecture %q", s)
+	}
+}
 
 // SystemRole represents a machine's role in the environment.
 type SystemRole string
