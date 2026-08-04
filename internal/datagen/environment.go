@@ -304,14 +304,14 @@ func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int
 
 		// Services and applications use their own RNGs so the seeds in
 		// SeedConfig actually drive what's generated, per identity type.
-		sys.Services = GenerateServicesForSystem(rServices, sys.OS, sys.Role, sys.Hostname)
-		sys.Applications = GenerateApplicationsForSystem(rApplications, sys.OS, sys.Role, sys.Hostname, logger)
+		sys.Services = GenerateServicesForSystem(rServices, sys.OSInfo.Type, sys.Role, sys.Hostname)
+		sys.Applications = GenerateApplicationsForSystem(rApplications, sys.OSInfo.Type, sys.Role, sys.Hostname, logger)
 
 		// Assign network interface
 		if len(networks) > 0 {
 			net := pickNetworkForRole(r, sys.Role, networks)
 			iface := NetworkInterface{
-				Name:       interfaceName(sys.OS),
+				Name:       interfaceName(sys.OSInfo.Type),
 				IPv4:       RandomIPInCIDR(r, net.CIDR),
 				IPv6:       RandomIPv6(r),
 				MACAddress: RandomMAC(r),

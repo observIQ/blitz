@@ -54,41 +54,16 @@ const (
 	RoleRouter      SystemRole = "router"
 )
 
-// OS version pools.
-var (
-	LinuxVersions = NewPool(
-		"5.15.0-91-generic", // Ubuntu 22.04
-		"6.1.0-18-amd64",    // Debian 12
-		"5.14.0-362.el9",    // RHEL 9
-		"6.6.9-200.fc39",    // Fedora 39
-		"5.10.0-27-amd64",   // Debian 11
-	)
-
-	WindowsVersions = NewPool(
-		"10.0.20348", // Server 2022
-		"10.0.17763", // Server 2019
-		"10.0.14393", // Server 2016
-		"10.0.22631", // Windows 11 23H2
-		"10.0.19045", // Windows 10 22H2
-	)
-
-	MacOSVersions = NewPool(
-		"14.2.1", // Sonoma
-		"13.6.3", // Ventura
-		"12.7.2", // Monterey
-	)
-)
-
 // SystemIdentity represents a machine in the simulated environment.
 type SystemIdentity struct {
-	Hostname  string
-	FQDN      string // hostname + domain
-	OS        OSType
-	OSVersion string
-	Arch      Arch
-	Role      SystemRole
-	Domain    string // back-reference to DomainIdentity.Name
-	OUPath    string // "OU=Servers,DC=contoso,DC=com"
+	Hostname string
+	FQDN     string // hostname + domain
+	OSInfo   OSInfo // os.type / os.name / os.version / os.build_id / os.description
+	HostID   string // host.id (OS-appropriate machine identifier)
+	Arch     Arch
+	Role     SystemRole
+	Domain   string // back-reference to DomainIdentity.Name
+	OUPath   string // "OU=Servers,DC=contoso,DC=com"
 
 	// Hardware
 	CPUCores int
@@ -158,16 +133,9 @@ func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *Do
 		fqdn = strings.ToLower(hostname) + "." + domain.Name
 	}
 
-	// Pick OS version
-	var osVersion string
-	switch os {
-	case OSLinux:
-		osVersion = LinuxVersions.Random(r)
-	case OSWindows:
-		osVersion = WindowsVersions.Random(r)
-	case OSMacOS:
-		osVersion = MacOSVersions.Random(r)
-	}
+	// Coherent OS release + machine id, from authentic release data.
+	osInfo := GenerateOSInfo(r, os)
+	hostID := GenerateHostID(r, os)
 
 	// Pick arch
 	arch := ArchAMD64
@@ -185,18 +153,18 @@ func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *Do
 	cert := generateCertInfo(r, fqdn, hostname, domain.CA)
 
 	return &SystemIdentity{
-		Hostname:  hostname,
-		FQDN:      fqdn,
-		OS:        os,
-		OSVersion: osVersion,
-		Arch:      arch,
-		Role:      role,
-		Domain:    domain.Name,
-		OUPath:    ouPath,
-		CPUCores:  cpu,
-		MemoryMB:  mem,
-		DiskGB:    disk,
-		Cert:      cert,
+		Hostname: hostname,
+		FQDN:     fqdn,
+		OSInfo:   osInfo,
+		HostID:   hostID,
+		Arch:     arch,
+		Role:     role,
+		Domain:   domain.Name,
+		OUPath:   ouPath,
+		CPUCores: cpu,
+		MemoryMB: mem,
+		DiskGB:   disk,
+		Cert:     cert,
 	}, nil
 }
 

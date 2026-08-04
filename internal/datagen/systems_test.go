@@ -34,15 +34,15 @@ func TestSystemRoles(t *testing.T) {
 	}
 }
 
-func TestVersionPools(t *testing.T) {
-	if LinuxVersions.Len() < 3 {
-		t.Errorf("LinuxVersions has %d items, want at least 3", LinuxVersions.Len())
+func TestReleasePools(t *testing.T) {
+	if len(linuxReleases) < 3 {
+		t.Errorf("linuxReleases has %d items, want at least 3", len(linuxReleases))
 	}
-	if WindowsVersions.Len() < 3 {
-		t.Errorf("WindowsVersions has %d items, want at least 3", WindowsVersions.Len())
+	if len(windowsReleases) < 3 {
+		t.Errorf("windowsReleases has %d items, want at least 3", len(windowsReleases))
 	}
-	if MacOSVersions.Len() < 3 {
-		t.Errorf("MacOSVersions has %d items, want at least 3", MacOSVersions.Len())
+	if len(macReleases) < 3 {
+		t.Errorf("macReleases has %d items, want at least 3", len(macReleases))
 	}
 }
 
@@ -55,8 +55,8 @@ func TestGenerateSystemIdentity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GenerateSystemIdentity: %v", err)
 		}
-		if sys.OS != OSLinux {
-			t.Errorf("expected OS %q, got %q", OSLinux, sys.OS)
+		if sys.OSInfo.Type != OSLinux {
+			t.Errorf("expected OS %q, got %q", OSLinux, sys.OSInfo.Type)
 		}
 		if sys.Role != RoleServer {
 			t.Errorf("expected Role %q, got %q", RoleServer, sys.Role)
@@ -80,8 +80,8 @@ func TestGenerateSystemIdentity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GenerateSystemIdentity: %v", err)
 		}
-		if sys.OS != OSWindows {
-			t.Errorf("expected OS %q, got %q", OSWindows, sys.OS)
+		if sys.OSInfo.Type != OSWindows {
+			t.Errorf("expected OS %q, got %q", OSWindows, sys.OSInfo.Type)
 		}
 		if sys.Hostname != strings.ToUpper(sys.Hostname) {
 			t.Errorf("windows hostname %q should be uppercase", sys.Hostname)
