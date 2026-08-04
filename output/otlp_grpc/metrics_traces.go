@@ -195,6 +195,13 @@ func toAnyValueSimple(v any) *commonpb.AnyValue {
 		return &commonpb.AnyValue{Value: &commonpb.AnyValue_DoubleValue{DoubleValue: x}}
 	case bool:
 		return &commonpb.AnyValue{Value: &commonpb.AnyValue_BoolValue{BoolValue: x}}
+	case []string:
+		// Homogeneous string array (e.g. host.ip / host.mac) → OTLP ArrayValue.
+		values := make([]*commonpb.AnyValue, 0, len(x))
+		for _, s := range x {
+			values = append(values, &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: s}})
+		}
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_ArrayValue{ArrayValue: &commonpb.ArrayValue{Values: values}}}
 	default:
 		return &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: fmt.Sprintf("%v", x)}}
 	}
