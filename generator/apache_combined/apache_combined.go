@@ -45,6 +45,7 @@ type ApacheCombinedLogGenerator struct {
 	workers  int
 	rate     time.Duration
 	consumer embed.LogConsumer
+	static   *resource.StaticResources
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
@@ -70,12 +71,21 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
+		static:   resource.FromIdentity(nil, "apache", "apache.format", "combined"),
 		stopCh:   make(chan struct{}),
 	}, nil
 }
 
 // Name returns the module identifier.
 func (g *ApacheCombinedLogGenerator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *ApacheCombinedLogGenerator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, "apache", "apache.format", "combined")
+}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer.
@@ -177,7 +187,7 @@ func (g *ApacheCombinedLogGenerator) generateAndWriteLog(_ int) error {
 	}
 
 	// Format log data as Apache Combined Log Format
-	logRecord, err := formatAsApacheCombined(logData)
+	logRecord, err := formatAsApacheCombined(logData, g.static)
 	if err != nil {
 		g.recordWriteError("unknown", err)
 		return fmt.Errorf("format log as Apache Combined: %w", err)
@@ -275,7 +285,7 @@ func generateReferer(r *rand.Rand) string {
 // formatAsApacheCombined converts apacheCombinedLogData to Apache Combined Log Format
 // Format: remotehost rfc931 authuser [date] "request" status bytes "referer" "user-agent"
 // Example: 127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"
-func formatAsApacheCombined(data *apacheCombinedLogData) (embed.LogRecord, error) {
+func formatAsApacheCombined(data *apacheCombinedLogData, static *resource.StaticResources) (embed.LogRecord, error) {
 	// Format timestamp as [dd/MMM/yyyy:HH:mm:ss -TZ]
 	// Use local timezone offset
 	loc := time.Now().Location()
@@ -343,7 +353,7 @@ func formatAsApacheCombined(data *apacheCombinedLogData) (embed.LogRecord, error
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: data.timestamp,
 			Severity:  data.severity,
-			Resource:  resource.Default("apache", "apache.format", "combined"),
+			Resource:  static.Record(),
 		},
 	}, nil
 }

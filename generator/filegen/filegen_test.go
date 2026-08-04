@@ -12,6 +12,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -764,4 +765,25 @@ func TestFileLogGenerator_CountLimited(t *testing.T) {
 
 	writes := consumer.getWrites()
 	assert.Equal(t, 5, len(writes), "Expected exactly 5 logs with count tracker")
+}
+
+func TestSetHostIdentity(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+
+	tmpfile, err := os.CreateTemp("", "filegen-identity-*.log")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+	tmpfile.Close()
+
+	gen, err := New(logger, 1, 100*time.Millisecond, tmpfile.Name(), true, 0, newMockConsumer(), nil)
+	require.NoError(t, err)
+
+	gen.SetHostIdentity(&datagen.SystemIdentity{
+		Hostname: "IDENTITY-HOST",
+		OSInfo:   datagen.OSInfo{Type: datagen.OSLinux},
+	})
+	assert.Equal(t, "IDENTITY-HOST", gen.static.Record()["host.name"])
+
+	gen.SetHostIdentity(nil)
+	assert.NotEmpty(t, gen.static.Record()["host.name"])
 }

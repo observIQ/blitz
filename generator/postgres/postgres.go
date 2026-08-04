@@ -13,6 +13,7 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -61,6 +62,7 @@ type Generator struct {
 	workers  int
 	rate     time.Duration
 	consumer embed.LogConsumer
+	static   *resource.StaticResources
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
@@ -246,12 +248,21 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
+		static:   resource.FromIdentity(nil, componentName),
 		stopCh:   make(chan struct{}),
 	}, nil
 }
 
 // Name returns the module identifier.
 func (g *Generator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, componentName)
+}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer.
@@ -350,7 +361,7 @@ func (g *Generator) generateAndWriteLog(_ int) error {
 		return fmt.Errorf("generate PostgreSQL log data: %w", err)
 	}
 
-	logRecord, err := formatAsPostgres(logData)
+	logRecord, err := formatAsPostgres(logData, g.static)
 	if err != nil {
 		g.recordWriteError(errorTypeUnknown, err)
 		return fmt.Errorf("format log as PostgreSQL: %w", err)
@@ -410,7 +421,7 @@ func generateRandomIP(r *rand.Rand) string {
 // formatAsPostgres converts postgresLogData to PostgreSQL log format
 // Format: %t [%p]: user=%u,db=%d,app=%a,client=%h <severity>: <message>
 // Example: 2024-01-15 10:23:45.123 UTC [12345]: user=postgres,db=mydb,app=psql,client=127.0.0.1 LOG:  statement: SELECT * FROM users;
-func formatAsPostgres(data *postgresLogData) (embed.LogRecord, error) {
+func formatAsPostgres(data *postgresLogData, static *resource.StaticResources) (embed.LogRecord, error) {
 	// Format timestamp as PostgreSQL does: YYYY-MM-DD HH:MM:SS.mmm UTC
 	timestampStr := data.timestamp.UTC().Format("2006-01-02 15:04:05.000 MST")
 
@@ -503,7 +514,7 @@ func formatAsPostgres(data *postgresLogData) (embed.LogRecord, error) {
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: data.timestamp,
 			Severity:  data.severity,
-			Resource:  resource.Default(componentName),
+			Resource:  static.Record(),
 		},
 	}, nil
 }

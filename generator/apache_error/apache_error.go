@@ -42,6 +42,7 @@ type ApacheErrorLogGenerator struct {
 	workers  int
 	rate     time.Duration
 	consumer embed.LogConsumer
+	static   *resource.StaticResources
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
@@ -67,12 +68,21 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
+		static:   resource.FromIdentity(nil, "apache", "apache.format", "error"),
 		stopCh:   make(chan struct{}),
 	}, nil
 }
 
 // Name returns the module identifier.
 func (g *ApacheErrorLogGenerator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *ApacheErrorLogGenerator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, "apache", "apache.format", "error")
+}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer.
@@ -174,7 +184,7 @@ func (g *ApacheErrorLogGenerator) generateAndWriteLog(_ int) error {
 	}
 
 	// Format log data as Apache Error Log Format
-	logRecord, err := formatAsApacheError(logData)
+	logRecord, err := formatAsApacheError(logData, g.static)
 	if err != nil {
 		g.recordWriteError("unknown", err)
 		return fmt.Errorf("format log as Apache Error: %w", err)
@@ -360,7 +370,7 @@ func generateErrorMessage(r *rand.Rand, level string) string {
 // formatAsApacheError converts apacheErrorLogData to Apache Error Log Format
 // Format: [timestamp] [level] [pid:tid] [client] message
 // Example: [Wed Oct 11 14:32:52 2000] [error] [client 127.0.0.1] client denied by server configuration: /export/home/live/ap/htdocs/test
-func formatAsApacheError(data *apacheErrorLogData) (embed.LogRecord, error) {
+func formatAsApacheError(data *apacheErrorLogData, static *resource.StaticResources) (embed.LogRecord, error) {
 	// Format timestamp as [Day Mon DD HH:MM:SS YYYY]
 	timestampStr := data.timestamp.Format("[Mon Jan 02 15:04:05 2006]")
 
@@ -449,7 +459,7 @@ func formatAsApacheError(data *apacheErrorLogData) (embed.LogRecord, error) {
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: data.timestamp,
 			Severity:  data.severity,
-			Resource:  resource.Default("apache", "apache.format", "error"),
+			Resource:  static.Record(),
 		},
 	}, nil
 }

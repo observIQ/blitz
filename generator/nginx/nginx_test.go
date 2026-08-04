@@ -11,10 +11,24 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+// TestSetHostIdentity confirms the setter projects the given host onto the
+// static resource, and that a nil identity keeps the process-hostname fallback.
+func TestSetHostIdentity(t *testing.T) {
+	g, err := New(zaptest.NewLogger(t), 1, time.Second, newMockWriter())
+	require.NoError(t, err)
+
+	g.SetHostIdentity(&datagen.SystemIdentity{Hostname: "IDENTITY-HOST", OSInfo: datagen.OSInfo{Type: datagen.OSLinux}})
+	assert.Equal(t, "IDENTITY-HOST", g.static.Record()["host.name"])
+
+	g.SetHostIdentity(nil)
+	assert.NotEmpty(t, g.static.Record()["host.name"])
+}
 
 // Compile-time assertion: the migrated generator satisfies embed.ProducerModule.
 var _ embed.ProducerModule = (*Generator)(nil)

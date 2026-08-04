@@ -10,6 +10,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -388,4 +389,19 @@ func BenchmarkApacheErrorGenerator(b *testing.B) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = generator.Stop(ctx)
+}
+
+func TestSetHostIdentity(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	gen, err := New(logger, 1, 100*time.Millisecond, newMockConsumer())
+	require.NoError(t, err)
+
+	gen.SetHostIdentity(&datagen.SystemIdentity{
+		Hostname: "IDENTITY-HOST",
+		OSInfo:   datagen.OSInfo{Type: datagen.OSLinux},
+	})
+	assert.Equal(t, "IDENTITY-HOST", gen.static.Record()["host.name"])
+
+	gen.SetHostIdentity(nil)
+	assert.NotEmpty(t, gen.static.Record()["host.name"])
 }

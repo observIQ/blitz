@@ -55,6 +55,68 @@ func (c *capturingMetricConsumer) snapshot() []embed.MetricPoint {
 	return out
 }
 
+// capturingLogConsumer records emitted log records for resource assertions.
+type capturingLogConsumer struct {
+	mu      sync.Mutex
+	records []embed.LogRecord
+}
+
+func (c *capturingLogConsumer) ConsumeLogs(_ context.Context, batch []embed.LogRecord) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.records = append(c.records, batch...)
+	return nil
+}
+
+func (c *capturingLogConsumer) snapshot() []embed.LogRecord {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]embed.LogRecord, len(c.records))
+	copy(out, c.records)
+	return out
+}
+
+// TestForEmbedLogGeneratorWiresEnvironmentIdentity proves the setter path: a log
+// generator built through ForEmbed with an environment has its host identity
+// applied (via SetHostIdentity), so emitted records carry the simulated host.
+func TestForEmbedLogGeneratorWiresEnvironmentIdentity(t *testing.T) {
+	env := &datagen.Environment{
+		Systems: []*datagen.SystemIdentity{{
+			Hostname: "PANTHEON-LOG-01",
+			OSInfo:   datagen.OSInfo{Type: datagen.OSLinux, Name: "Ubuntu"},
+		}},
+	}
+	cons := &capturingLogConsumer{}
+	cfg := config.Generator{
+		Type:  config.GeneratorTypeNginx,
+		Nginx: config.NginxGeneratorConfig{Workers: 1, Rate: 20 * time.Millisecond},
+	}
+
+	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{LogConsumer: cons}, nil, env)
+	require.NoError(t, err)
+	require.NoError(t, mod.Start(context.Background()))
+	require.Eventually(t, func() bool { return len(cons.snapshot()) > 0 }, 2*time.Second, 10*time.Millisecond)
+	require.NoError(t, mod.Stop(context.Background()))
+
+	recs := cons.snapshot()
+	require.NotEmpty(t, recs)
+	assert.Equal(t, "PANTHEON-LOG-01", recs[0].Metadata.Resource["host.name"])
+	assert.Equal(t, "nginx", recs[0].Metadata.Resource["telemetry.source"])
+}
+
+// TestForEmbedPropagatesConstructorError confirms applyHostIdentity forwards a
+// constructor error (here nginx.New rejecting Workers=0) rather than trying to
+// apply an identity to a nil module.
+func TestForEmbedPropagatesConstructorError(t *testing.T) {
+	cfg := config.Generator{
+		Type:  config.GeneratorTypeNginx,
+		Nginx: config.NginxGeneratorConfig{Workers: 0, Rate: time.Second},
+	}
+	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{LogConsumer: noopConsumer{}}, nil, nil)
+	require.Error(t, err)
+	require.Nil(t, mod)
+}
+
 // TestHostIdentityResolvesFromEnvironment covers the component-keyed identity
 // resolution: a nil environment yields nil (process-hostname fallback), and a
 // populated environment returns a deterministic SystemForKey selection.

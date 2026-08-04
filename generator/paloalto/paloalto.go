@@ -33,6 +33,7 @@ type Generator struct {
 	workers  int
 	rate     time.Duration
 	consumer embed.LogConsumer
+	static   *resource.StaticResources
 
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
@@ -57,12 +58,21 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
+		static:   resource.FromIdentity(nil, componentName),
 		stopCh:   make(chan struct{}),
 	}, nil
 }
 
 // Name returns the module identifier.
 func (g *Generator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, componentName)
+}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer.
@@ -162,7 +172,7 @@ func (g *Generator) generateAndWrite(_ int) error {
 		Message: line,
 		Metadata: embed.LogRecordMetadata{
 			Severity: "INFO",
-			Resource: resource.Default(componentName),
+			Resource: g.static.Record(),
 		},
 	}
 
