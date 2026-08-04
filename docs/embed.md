@@ -156,9 +156,14 @@ Consumer errors are best-effort: blitz logs the error, increments a `consumer_er
 
 Every blitz record carries a per-record `Metadata.Resource` map describing the entity that emitted it (host, module, format, version). The three signal types are structured identically:
 
-- `LogRecord.Metadata.Resource`: `map[string]string`
-- `MetricPoint.Metadata.Resource`: `map[string]string`
-- `Span.Metadata.Resource`: `map[string]string`
+- `LogRecord.Metadata.Resource`: `map[string]any`
+- `MetricPoint.Metadata.Resource`: `map[string]any`
+- `Span.Metadata.Resource`: `map[string]any`
+
+Resource values are `any` so an attribute can be a scalar (`host.name`) or a list
+(`host.ip`, `host.mac` are `[]string`, serialized as OTLP array values). Only the
+OTLP metrics builder and the stdout JSON output serialize Resource today; other
+outputs drop it.
 
 Similarly for `Metadata.Attributes`:
 
@@ -182,6 +187,13 @@ Every shipped Producer populates at least:
 - `host.name`: the hostname the record semantically describes (defaults to `os.Hostname()`, falls back to `blitz`).
 - `telemetry.source`: the module identifier (`apache`, `nginx`, `paloalto`, `fix`, `wel`, …).
 
+When a simulated identity environment is configured, every Producer additionally
+projects the resolved host's identity onto each record: `host.id`, `host.arch`,
+the `os.*` set (`os.type`, `os.name`, `os.version`, `os.build_id`,
+`os.description`), `host.ip`/`host.mac` (from the host's interfaces), and
+`deployment.environment.name`. See [environment.md](environment.md) for how the
+environment is configured and how each generator is mapped to a simulated host.
+
 Some Producers populate additional dimensions:
 
 | Source                | Extra Resource keys                                                  |
@@ -191,7 +203,7 @@ Some Producers populate additional dimensions:
 | `kubernetes`          | `kubernetes.format`: currently `cri-o` (only supported format today) |
 | `filegen`             | `filegen.source`: the file / package / glob the line came from       |
 | `wel`                 | `wel.channel`, `wel.computer`, `wel.domain`, `wel.role`              |
-| `fix` (when it lands) | `fix.version`: `FIX.4.2` / `FIX.4.4` / `FIX.5.0SP2`                  |
+| `fix`                 | `fix.version`: `FIX.4.2` / `FIX.4.4` / `FIX.5.0SP2`                  |
 
 Generators MUST NOT carry secret or per-deployment-specific values they don't already legitimately know. That remains the host's concern via `embed.Host.Resource`.
 
@@ -213,6 +225,24 @@ Metadata: embed.LogRecordMetadata{
 ```
 
 `resource.Default(source, extras...)` returns a fresh map per call (so consumers can mutate safely without affecting subsequent emissions) and memoizes `os.Hostname()` once per process.
+
+To describe a **simulated** host rather than the running process, build the
+resource once at worker construction from a resolved `datagen.SystemIdentity`:
+
+```go
+// At construction — projects host.* / os.* / deployment.* from the identity,
+// stamps telemetry.source, and appends any per-generator constants:
+g.static = resource.FromIdentity(identity, "my-module", "my-module.format", formatName)
+
+// Per record — the shared static set, plus any per-record dynamic pairs:
+Resource: g.static.Record("my-module.channel", channel)
+```
+
+`FromIdentity(nil, source, extras...)` falls back to the process hostname, so a
+generator has one uniform construction path whether or not an environment is
+wired. `Record()` with no dynamic pairs returns a shared, read-only map
+(zero-allocation) that callers MUST NOT mutate; with dynamic pairs it returns a
+fresh merged map. See [environment.md](environment.md).
 
 ## Configuration
 
