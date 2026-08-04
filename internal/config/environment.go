@@ -120,5 +120,37 @@ func (e EnvironmentConfig) Build(logger *zap.Logger) (*datagen.Environment, erro
 		DomainAdminsCount:  e.Counts.DomainAdmins,
 		Logger:             logger,
 	}
-	return datagen.GenerateEnvironment(seeds, opts)
+
+	env, err := genEnvironment(seeds, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Gate the resolved environment on the network CIDR contract: an invalid
+	// CIDR fails the whole load rather than silently defaulting (PIPE-1002).
+	// Generated networks are always valid today; this is the enforcement point
+	// for when user-supplied CIDRs flow through.
+	if err := validateNetworks(env.Networks); err != nil {
+		return nil, fmt.Errorf("environment: %w", err)
+	}
+	return env, nil
+}
+
+// genEnvironment is the environment-composition seam. Build calls through it so
+// tests can inject an environment (e.g. one carrying an invalid network CIDR)
+// and assert Build's validation behavior; production always uses the real
+// datagen.GenerateEnvironment.
+var genEnvironment = datagen.GenerateEnvironment
+
+// validateNetworks rejects any network whose CIDR fails datagen's blitz-network
+// contract (see datagen.ValidateCIDR): unparseable, non-IPv4, or a prefix
+// longer than /29. The first failure fails the entire environment load — the
+// contract is "refuse to start", not "fall back to a default".
+func validateNetworks(networks []*datagen.NetworkIdentity) error {
+	for _, n := range networks {
+		if err := n.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
