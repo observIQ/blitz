@@ -27,6 +27,7 @@ import (
 	"github.com/observiq/blitz/generator/wel"
 	welcatalog "github.com/observiq/blitz/generator/wel/catalog"
 	"github.com/observiq/blitz/internal/config"
+	"github.com/observiq/blitz/internal/datagen"
 	"go.uber.org/zap"
 )
 
@@ -71,11 +72,16 @@ func (c EmbedConsumers) requireTrace(typ config.GeneratorType) error {
 // the snapshot shipped in the blitz module, or nil to fall back to
 // reading ./data_library/ from the process cwd.
 //
+// env is the simulated identity environment (PIPE-1036). When non-nil, the
+// generator's host identity is resolved from it (see hostIdentity) so emitted
+// records carry the simulated host's host.* / os.* / deployment.* attributes;
+// when nil, generators fall back to the running process's hostname.
+//
 // Returns an error when the configured generator type requires a
 // consumer that is nil in `consumers` (e.g. hostmetrics without a
 // MetricConsumer, traces without a TraceConsumer), and for generator
 // types that are not embed-eligible at all (nop, winevt — see PIPE-1032).
-func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsumers, fileGenLibrary fs.FS) (embed.ProducerModule, error) {
+func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsumers, fileGenLibrary fs.FS, env *datagen.Environment) (embed.ProducerModule, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -166,6 +172,7 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			ScraperNames: genCfg.HostMetrics.Scrapers,
 			Consumer:     consumers.MetricConsumer,
 			Seed:         yamlSeedDefault(genCfg.HostMetrics.Seed),
+			Identity:     hostIdentity(env, genCfg.Type),
 		})
 	case config.GeneratorTypeTraces:
 		if err := consumers.requireTrace(genCfg.Type); err != nil {
@@ -178,6 +185,7 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			Hostname: genCfg.Traces.Hostname,
 			Consumer: consumers.TraceConsumer,
 			Seed:     yamlSeedDefault(genCfg.Traces.Seed),
+			Identity: hostIdentity(env, genCfg.Type),
 		})
 	case config.GeneratorTypeNop:
 		return nil, fmt.Errorf("generator type %q does not produce records; not embed-eligible", genCfg.Type)
@@ -186,6 +194,22 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 	default:
 		return nil, fmt.Errorf("unknown generator type %q", genCfg.Type)
 	}
+}
+
+// hostIdentity resolves the simulated host a generator component's records
+// describe: the environment's deterministic SystemForKey selection keyed by the
+// generator type, so the same component always maps to the same host and
+// distinct components spread across the fleet. Returns nil when no environment
+// is configured, leaving the generator on its process-hostname fallback.
+//
+// Keying by component gives one host per generator (the default granularity).
+// Finer per-worker granularity — one host per worker — is a future opt-in that
+// would key SystemForKey by component plus worker index.
+func hostIdentity(env *datagen.Environment, component config.GeneratorType) *datagen.SystemIdentity {
+	if env == nil {
+		return nil
+	}
+	return env.SystemForKey(string(component))
 }
 
 // yamlSeedDefault translates a YAML-loaded Seed value into the

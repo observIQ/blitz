@@ -21,6 +21,7 @@ import (
 	"github.com/observiq/blitz/generator/winevt"
 	"github.com/observiq/blitz/internal/build"
 	"github.com/observiq/blitz/internal/config"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/dispatch"
 	"github.com/observiq/blitz/internal/logging"
 	"github.com/observiq/blitz/internal/service"
@@ -314,13 +315,22 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid output type: %s", cfg.Output.Type)
 	}
 
+	// Build the simulated identity environment once, up front, so every
+	// generator resolves its host identity from the same fleet (PIPE-1036). A
+	// live-reconfigure path (deferred) would rebuild this and swap it in.
+	env, err := cfg.Environment.Build(logger)
+	if err != nil {
+		logger.Error("Failed to build simulated environment", zap.Error(err))
+		return err
+	}
+
 	// Configure generators
 	effectiveGens := cfg.EffectiveGenerators()
 	var generators []any
 	var tracker *count.Tracker
 
 	for _, genCfg := range effectiveGens {
-		gen, genErr := createGenerator(logger, genCfg, outputInstance)
+		gen, genErr := createGenerator(logger, genCfg, outputInstance, env)
 		if genErr != nil {
 			logger.Error("Failed to create generator",
 				zap.String("type", string(genCfg.Type)),
@@ -399,7 +409,7 @@ shutdown:
 	return nil
 }
 
-func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Output) (any, error) {
+func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Output, env *datagen.Environment) (any, error) {
 	// Standalone-CLI-only generator types that dispatch.ForEmbed does not
 	// construct (winevt is deprecated for embed; nop yields no records).
 	// All other generators delegate to dispatch.ForEmbed so the
@@ -429,7 +439,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	}
 	// Pass the embedded library so an embed_library build resolves package
 	// sources; without the tag FS() is empty and resolution uses disk (PIPE-1445).
-	mod, err := dispatch.ForEmbed(logger, genCfg, consumers, embeddedlibrary.FS())
+	mod, err := dispatch.ForEmbed(logger, genCfg, consumers, embeddedlibrary.FS(), env)
 	if err != nil {
 		return nil, err
 	}
