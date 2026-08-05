@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/wel/catalog"
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/require"
@@ -154,6 +155,79 @@ func TestGeneratorStartStop(t *testing.T) {
 			t.Errorf("expected XML event output, got: %s", msg[:min(len(msg), 100)])
 		}
 	}
+}
+
+// TestGeneratorHonorsFiniteCount confirms the WEL generator stops at the
+// configured record budget: with a count tracker set, generation completes the
+// tracker (Done fires) rather than running unbounded (PIPE-1111).
+func TestGeneratorHonorsFiniteCount(t *testing.T) {
+	logger := zap.NewNop()
+	consumer := &mockConsumer{}
+	gen, err := New(Config{
+		Logger:   logger,
+		Workers:  2,
+		Rate:     5 * time.Millisecond,
+		Computer: "TESTPC",
+		Domain:   "CONTOSO",
+		Role:     catalog.RoleWorkstation,
+		Consumer: consumer,
+	})
+	require.NoError(t, err)
+
+	tracker := count.NewTracker(5)
+	gen.SetCountTracker(tracker)
+
+	require.NoError(t, gen.Start(context.Background()))
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("WEL generator should honor the finite count and complete the tracker")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, gen.Stop(ctx))
+
+	require.GreaterOrEqual(t, tracker.Emitted(), int64(5), "tracker should record at least the requested count")
+	require.Positive(t, consumer.Count(), "consumer should have received records")
+}
+
+// TestGeneratorResumesAfterCountReset covers the idle-and-resume path: once the
+// budget is exhausted the worker idles (emitting nothing), and a tracker Reset
+// unblocks it via ResumeC so generation continues (PIPE-1111).
+func TestGeneratorResumesAfterCountReset(t *testing.T) {
+	logger := zap.NewNop()
+	consumer := &mockConsumer{}
+	gen, err := New(Config{
+		Logger:   logger,
+		Workers:  1,
+		Rate:     5 * time.Millisecond,
+		Computer: "TESTPC",
+		Domain:   "CONTOSO",
+		Role:     catalog.RoleWorkstation,
+		Consumer: consumer,
+	})
+	require.NoError(t, err)
+
+	tracker := count.NewTracker(3)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+
+	// The budget completes, then generation holds at the budget: the worker is
+	// idle in the ResumeC select for the whole window.
+	require.Eventually(t, func() bool { return consumer.Count() >= 3 }, 5*time.Second, 5*time.Millisecond)
+	require.Never(t, func() bool { return consumer.Count() > 3 }, 150*time.Millisecond, 10*time.Millisecond,
+		"generation must not exceed the budget while idle")
+
+	// Reset re-opens the budget and unblocks the idle worker via ResumeC.
+	tracker.Reset()
+	require.Eventually(t, func() bool { return consumer.Count() > 3 }, 5*time.Second, 10*time.Millisecond,
+		"generation should resume after the tracker is reset")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, gen.Stop(ctx))
 }
 
 func TestGeneratorSupportedTelemetry(t *testing.T) {

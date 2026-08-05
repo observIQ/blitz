@@ -11,6 +11,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/generator/wel/catalog"
 	"github.com/observiq/blitz/telemetry"
@@ -42,8 +43,9 @@ type Generator struct {
 	state    *catalog.StateTracker
 	opts     *catalog.GenerateOpts
 
-	wg     sync.WaitGroup
-	stopCh chan struct{}
+	wg      sync.WaitGroup
+	stopCh  chan struct{}
+	tracker *count.Tracker
 
 	recordID atomic.Int64
 }
@@ -182,6 +184,13 @@ func (g *Generator) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Logs}
 }
 
+// SetCountTracker wires the finite-generation count tracker. With it set, each
+// worker acquires from the tracker before emitting, so the generator honors the
+// configured record budget instead of running unbounded (PIPE-1111).
+func (g *Generator) SetCountTracker(t *count.Tracker) {
+	g.tracker = t
+}
+
 func (g *Generator) worker(workerID int) {
 	defer g.wg.Done()
 	g.logger.Debug("Starting WEL worker", zap.Int("worker_id", workerID))
@@ -205,6 +214,17 @@ func (g *Generator) worker(workerID int) {
 			g.logger.Debug("WEL worker stopping", zap.Int("worker_id", workerID))
 			return
 		case <-timer.C:
+			// Honor the finite-count budget: when the tracker is exhausted,
+			// idle until a restart (ResumeC) or shutdown rather than emitting.
+			if g.tracker != nil && !g.tracker.Acquire() {
+				select {
+				case <-g.stopCh:
+					return
+				case <-g.tracker.ResumeC():
+					timer.Reset(backoffConfig.NextBackOff())
+					continue
+				}
+			}
 			if err := g.generateAndWrite(rng); err != nil {
 				g.logger.Error("Failed to write WEL event",
 					zap.Int("worker_id", workerID),
