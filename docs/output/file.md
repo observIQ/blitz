@@ -1,6 +1,6 @@
 # File Output
 
-The File output writes logs to files with automatic rotation and compression. This is useful for local log storage and testing file-based log processing systems.
+The File output writes telemetry to files with automatic rotation and compression. This is useful for local storage and testing file-based processing systems.
 
 ## Data Mutation
 

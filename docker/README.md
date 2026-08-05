@@ -60,13 +60,13 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BLITZ_RATE` | `1s` | Log generation rate per generator |
+| `BLITZ_RATE` | `1s` | Telemetry generation rate per generator |
 | `BLITZ_WORKERS` | `1` | Number of workers per generator |
 | `BLITZ_PII_WORKERS` | `1` | Number of workers for PII generator |
 
 ### Examples
 
-**Increase log generation rate:**
+**Increase telemetry generation rate:**
 ```bash
 OPAMP_ENDPOINT=wss://your-bindplane.com/v1/opamp \
 OPAMP_SECRET_KEY=your-secret-key \

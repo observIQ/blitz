@@ -1,10 +1,10 @@
 # Blitz Architecture
 
-This document provides a comprehensive overview of the blitz application architecture, covering the main components, their responsibilities, and how they interact to create a robust log generation and forwarding system.
+This document provides a comprehensive overview of the blitz application architecture, covering the main components, their responsibilities, and how they interact to create a robust telemetry generation and forwarding system.
 
 ## Overview
 
-Blitz is a high-performance log generation and forwarding application designed to simulate realistic log traffic for testing and benchmarking purposes. The application follows a modular architecture with clear separation of concerns, making it extensible and maintainable.
+Blitz is a high-performance telemetry generation and forwarding application designed to simulate realistic telemetry traffic for testing and benchmarking purposes. The application follows a modular architecture with clear separation of concerns, making it extensible and maintainable.
 
 ## Architecture Diagram
 
@@ -58,7 +58,7 @@ The main.go file serves as the application entry point and manages the entire ap
 3. **Initialize Logger**: Set up structured logging with appropriate levels
 4. **Create Signal Context**: Set up graceful shutdown handling
 5. **Initialize Components**: Create generator and output instances
-6. **Start Service**: Begin log generation and forwarding
+6. **Start Service**: Begin telemetry generation and forwarding
 7. **Wait for Shutdown**: Block until shutdown signal received
 8. **Graceful Shutdown**: Stop all components cleanly
 
@@ -124,14 +124,14 @@ type Service struct {
 - **Graceful Shutdown**: Coordinates shutdown with timeout handling
 
 #### Lifecycle Methods:
-- **Start()**: Initiates the generator, which begins producing logs
+- **Start()**: Initiates the generator, which begins producing telemetry
 - **Stop()**: Stops both generator and output with 30-second timeout
 
-### 4. generator Package - Log Data Generation
+### 4. generator Package - Telemetry Data Generation
 
 **Location:** `generator/`
 
-The generator package creates realistic log data with configurable patterns and rates.
+The generator package creates realistic telemetry data with configurable patterns and rates.
 
 #### Generator Interface:
 ```go
@@ -145,7 +145,7 @@ type Generator interface {
 
 ##### Key Features:
 - **No Operation**: Performs no work and generates no data
-- **Testing Utility**: Useful for testing application infrastructure without generating actual logs
+- **Testing Utility**: Useful for testing application infrastructure without generating actual telemetry
 - **Minimal Resource Usage**: Consumes minimal CPU and memory resources
 - **No Configuration**: Requires no additional configuration options
 
@@ -184,7 +184,7 @@ type Generator interface {
 
 **Location:** `output/`
 
-The output package handles forwarding generated logs to external destinations via TCP or UDP.
+The output package handles forwarding generated telemetry to external destinations.
 
 #### Output Interface:
 ```go
@@ -214,7 +214,7 @@ type Output interface {
 - **Worker Management**: Multiple worker goroutines handle concurrent connections
 - **Automatic Reconnection**: Failed connections are automatically re-established
 - **Timeout Handling**: Configurable timeouts for connection and write operations
-- **Data Formatting**: Appends newlines to log data for proper line separation
+- **Data Formatting**: Appends newlines to telemetry data for proper line separation
 
 ##### Connection Management:
 - **Connection Pool**: Each worker maintains its own TCP connection
@@ -271,9 +271,9 @@ Command Line → Environment Variables → Config File → Defaults
 main.go → Service → Generator + Output → WorkerManager
 ```
 
-### 3. Log Generation and Forwarding
+### 3. Telemetry Generation and Forwarding
 ```
-Generator Workers → JSON Log Creation → Output Channel → Output Workers → Network
+Generator Workers → Telemetry Creation → Output Channel → Output Workers → Network
 ```
 
 ### 4. Error Handling and Recovery
@@ -284,7 +284,7 @@ Worker Failure → Exponential Backoff → Worker Restart → Continued Operatio
 ## Concurrency Model
 
 ### Worker Architecture:
-- **Generator Workers**: Multiple goroutines generate logs concurrently
+- **Generator Workers**: Multiple goroutines generate telemetry concurrently
 - **Output Workers**: Multiple goroutines handle network I/O concurrently
 - **Channel Communication**: Buffered channels coordinate between components
 - **Context Propagation**: Context cancellation propagates through all workers
@@ -349,4 +349,4 @@ Worker Failure → Exponential Backoff → Worker Restart → Continued Operatio
 3. Add validation rules
 4. Update documentation
 
-This architecture provides a solid foundation for a high-performance, reliable log generation and forwarding system that can be easily extended and maintained.
+This architecture provides a solid foundation for a high-performance, reliable telemetry generation and forwarding system that can be easily extended and maintained.

@@ -43,8 +43,8 @@ var (
 	configFile string
 	rootCmd    = &cobra.Command{
 		Use:   "blitz",
-		Short: "A load generation tool for Bindplane managed collectors",
-		Long:  "Blitz is a load generation tool for Bindplane managed collectors.",
+		Short: "The last, best, most magnificent telemetry generation/simulation tool anyone will ever need",
+		Long:  "Blitz is the last, best, most magnificent telemetry generation/simulation tool anyone will ever need.",
 		RunE:  run,
 	}
 )

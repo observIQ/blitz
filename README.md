@@ -4,10 +4,11 @@
 
 # Blitz
 
-A load generation tool for Bindplane managed collectors.
+The last, best, most magnificent telemetry generation/simulation tool anyone will ever need.
 
 ## Documentation
 
+- [Roadmap](/ROADMAP.md) - Where blitz is headed and the direction of current work
 - [Configuration Guide](/docs/configuration.md) - Complete guide to configuring blitz with YAML files, environment variables, and command-line flags
 - [Architecture Overview](/docs/architecture.md) - Detailed explanation of the application architecture, components, and data flow
 - [Metrics Documentation](/docs/metrics.md) - Comprehensive guide to monitoring and metrics exposed by blitz
@@ -17,7 +18,7 @@ A load generation tool for Bindplane managed collectors.
 
 ## Components
 
-Blitz consists of generators that create log data and outputs that send data to destinations.
+Blitz consists of generators that create telemetry data and outputs that send data to destinations.
 
 ### Generators
 
@@ -25,7 +26,7 @@ Blitz consists of generators that create log data and outputs that send data to 
 - **[apache-common](https://github.com/observiq/blitz/blob/main/docs/generator/apache-common.md)** - Generates Apache Common Log Format (CLF) entries
 - **[apache-combined](https://github.com/observiq/blitz/blob/main/docs/generator/apache-combined.md)** - Generates Apache Combined Log Format entries with referer and user-agent
 - **[apache-error](https://github.com/observiq/blitz/blob/main/docs/generator/apache-error.md)** - Generates Apache Error Log Format entries for server diagnostics
-- **[filegen](https://github.com/observiq/blitz/blob/main/docs/generator/filegen.md)** - Generates logs by reading lines from files with configurable rate and random line selection
+- **[filegen](https://github.com/observiq/blitz/blob/main/docs/generator/filegen.md)** - Generates telemetry by reading lines from files with configurable rate and random line selection
 - **[json](https://github.com/observiq/blitz/blob/main/docs/generator/json.md)** - Generates structured JSON logs
 - **[kubernetes](https://github.com/observiq/blitz/blob/main/docs/generator/kubernetes.md)** - Generates Kubernetes container log format entries in CRI-O format with various application log types
 - **[nginx](https://github.com/observiq/blitz/blob/main/docs/generator/nginx.md)** - Generates NGINX Combined Log Format entries matching NGINX's default log format
@@ -36,12 +37,12 @@ Blitz consists of generators that create log data and outputs that send data to 
 ### Outputs
 
 - **[nop](https://github.com/observiq/blitz/blob/main/docs/output/nop.md)** - No operation output for testing infrastructure without sending data
-- **[file](https://github.com/observiq/blitz/blob/main/docs/output/file.md)** - Writes logs to files with automatic rotation and compression
-- **[otlp-grpc](https://github.com/observiq/blitz/blob/main/docs/output/otlp-grpc.md)** - Sends logs via OpenTelemetry Protocol (OTLP) over gRPC
-- **[stdout](https://github.com/observiq/blitz/blob/main/docs/output/stdout.md)** - Writes logs to standard output for debugging and testing
+- **[file](https://github.com/observiq/blitz/blob/main/docs/output/file.md)** - Writes telemetry to files with automatic rotation and compression
+- **[otlp-grpc](https://github.com/observiq/blitz/blob/main/docs/output/otlp-grpc.md)** - Sends telemetry via OpenTelemetry Protocol (OTLP) over gRPC
+- **[stdout](https://github.com/observiq/blitz/blob/main/docs/output/stdout.md)** - Writes telemetry to standard output for debugging and testing
 - **[syslog](https://github.com/observiq/blitz/blob/main/docs/output/syslog.md)** - Formats and sends logs via syslog (RFC 3164 or 5424) over UDP or TCP
-- **[tcp](https://github.com/observiq/blitz/blob/main/docs/output/tcp.md)** - Sends logs over TCP connections with optional TLS encryption
-- **[udp](https://github.com/observiq/blitz/blob/main/docs/output/udp.md)** - Sends logs over UDP connections
+- **[tcp](https://github.com/observiq/blitz/blob/main/docs/output/tcp.md)** - Sends telemetry over TCP connections with optional TLS encryption
+- **[udp](https://github.com/observiq/blitz/blob/main/docs/output/udp.md)** - Sends telemetry over UDP connections
 
 ## Installation
 

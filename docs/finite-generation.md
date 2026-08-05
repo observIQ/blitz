@@ -1,12 +1,12 @@
 # Finite Generation
 
-Blitz supports generating a finite number of log entries instead of running indefinitely. This is useful for testing scenarios where a specific volume of data is needed, benchmarking, or scripted test workflows.
+Blitz supports generating a finite number of telemetry entries instead of running indefinitely. This is useful for testing scenarios where a specific volume of data is needed, benchmarking, or scripted test workflows.
 
 ## Configuration
 
 ### Count
 
-The `generator.count` setting controls how many total log entries to generate across all workers. When set to `0` (the default), generation runs indefinitely.
+The `generator.count` setting controls how many total telemetry entries to generate across all workers. When set to `0` (the default), generation runs indefinitely.
 
 **YAML:**
 
@@ -31,7 +31,7 @@ blitz --generator-type json --generator-count 10000
 BLITZ_GENERATOR_COUNT=10000
 ```
 
-The count is shared across all workers. For example, with 4 workers and a count of 10000, each worker competes to acquire permits from the shared pool. The total number of logs generated will be exactly 10000.
+The count is shared across all workers. For example, with 4 workers and a count of 10000, each worker competes to acquire permits from the shared pool. The total number of entries generated will be exactly 10000.
 
 ### On Finish
 
@@ -77,7 +77,7 @@ This resets the count tracker to the original count value, allowing another roun
 
 ## Per-Telemetry-Type Semantics
 
-The count represents the total number of individual log entries generated, regardless of generator type. Each call to the generator's write function that produces a log entry consumes one permit from the shared count tracker.
+The count represents the total number of individual telemetry entries generated, regardless of generator type. Each call to the generator's write function that produces an entry consumes one permit from the shared count tracker.
 
 For generators with multiple workers, the permits are distributed on a first-come, first-served basis using atomic operations. This means the distribution across workers is not guaranteed to be even, but the total count will always be exact.
 

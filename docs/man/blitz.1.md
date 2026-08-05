@@ -4,7 +4,7 @@
 
 # NAME
 
-blitz - load generator for Bindplane managed collectors.
+blitz - telemetry generation and simulation tool.
 
 # SYNOPSIS
 
@@ -12,5 +12,5 @@ blitz [--config <file>] [flags...]
 
 # DESCRIPTION
 
-Blitz generates log traffic using configurable generators and outputs.
+Blitz generates telemetry traffic using configurable generators and outputs.
 Configuration can be supplied via a YAML file, flags, or environment variables.
