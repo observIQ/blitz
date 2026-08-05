@@ -1,6 +1,6 @@
 # TCP Output
 
-The TCP output sends logs over TCP connections to a specified host and port. TLS encryption can be enabled for secure transmission.
+The TCP output sends telemetry over TCP connections to a specified host and port. TLS encryption can be enabled for secure transmission.
 
 ## Data Mutation
 

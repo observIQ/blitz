@@ -1,6 +1,6 @@
 # UDP Output
 
-The UDP output sends logs over UDP connections to a specified host and port.
+The UDP output sends telemetry over UDP connections to a specified host and port.
 
 ## Data Mutation
 

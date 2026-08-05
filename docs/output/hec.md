@@ -1,6 +1,6 @@
 # HEC Output
 
-The HEC output sends logs to Splunk via the HTTP Event Collector (HEC) protocol. It supports batching, TLS encryption, and Splunk's indexer acknowledgement (ACK) paradigm for at-least-once delivery.
+The HEC output sends telemetry to Splunk via the HTTP Event Collector (HEC) protocol. It supports batching, TLS encryption, and Splunk's indexer acknowledgement (ACK) paradigm for at-least-once delivery.
 
 ## Data Mutation
 

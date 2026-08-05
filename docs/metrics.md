@@ -4,7 +4,7 @@ This document describes the metrics exposed by the Blitz application.
 
 ## Overview
 
-Blitz exposes OpenTelemetry-compatible metrics via a Prometheus HTTP endpoint. The metrics provide insights into the application's performance, including log generation rates, output throughput, error rates, worker activity, and channel utilization.
+Blitz exposes OpenTelemetry-compatible metrics via a Prometheus HTTP endpoint. The metrics provide insights into the application's performance, including telemetry generation rates, output throughput, error rates, worker activity, and channel utilization.
 
 All metrics are defined declaratively in YAML registry files and code is generated using [OTel Weaver](https://github.com/open-telemetry/weaver). This ensures consistent naming, descriptions, units, and type-safe wrappers across all components.
 
@@ -52,9 +52,9 @@ For detailed generator metric documentation, see [`generator/monitoring.md`](../
 
 | Metric | Type | Unit | Description |
 |--------|------|------|-------------|
-| `blitz.output.entries_received` | Counter | `{entry}` | Total number of log entries received by the output |
+| `blitz.output.entries_received` | Counter | `{entry}` | Total number of telemetry entries received by the output |
 | `blitz.output.active_workers` | Gauge | `{worker}` | Number of active output worker goroutines |
-| `blitz.output.entry_rate` | Float64 Counter | `{entry}/s` | Rate of log entries processed per second |
+| `blitz.output.entry_rate` | Float64 Counter | `{entry}/s` | Rate of telemetry entries processed per second |
 | `blitz.output.request_size` | Histogram | `By` | Size of output requests in bytes |
 | `blitz.output.request_latency` | Float64 Histogram | `s` | Latency of output requests |
 | `blitz.output.send_errors` | Counter | `{error}` | Total number of send errors |
@@ -112,21 +112,32 @@ Metrics are defined in YAML registry files and generated using OTel Weaver. To a
 
 ### Registry YAML Format
 
-Each metric is defined in the `metric.yaml` file within the component's `monitoring/` directory. Example:
+Each metric is defined in the `metric.yaml` file within the component's `monitoring/` directory. One
+group defines one metric. The instrument, unit, and brief sit directly on the group. This is the
+`blitz.output.entries_received` definition from `output/monitoring/metric.yaml`:
 
 ```yaml
 groups:
-  - id: output.metrics
-    type: metric
-    prefix: blitz.output
-    attributes:
-      - id: output_type
-        type: string
-        requirement_level: required
-        brief: "type of output"
-    metrics:
-      - id: entries_received
-        instrument: counter
-        unit: "{entry}"
-        brief: "total number of log entries received by the output"
+- id: output.entries_received
+  type: metric
+  metric_name: "blitz.output.entries_received"
+  stability: stable
+  brief: "total number of telemetry entries received by the output"
+  instrument: counter
+  unit: "{entry}"
+  annotations:
+    exported: true
+  attributes:
+    - id: output_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of output"
+      examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+    - id: telemetry_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "telemetry signal type"
+      examples: ["logs", "metrics", "traces"]
 ```

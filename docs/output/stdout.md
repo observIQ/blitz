@@ -1,8 +1,8 @@
 # Stdout Output
 
-The stdout output writes all generated logs to standard output (stdout). This is useful for debugging and testing.
+The stdout output writes all generated telemetry to standard output (stdout). This is useful for debugging and testing.
 
-**Note:** The stdout output may not be suitable for piping to another process, as stdout is shared with the main blitz logger. Both application logs and generated log data will be written to stdout, which can make it difficult to separate them when piping.
+**Note:** The stdout output may not be suitable for piping to another process, as stdout is shared with the main blitz logger. Both application logs and generated telemetry data will be written to stdout, which can make it difficult to separate them when piping.
 
 ## Buffering
 
