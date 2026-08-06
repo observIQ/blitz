@@ -81,38 +81,55 @@ import (
 func main() {
     logger := zap.NewNop()
 
-    // 1. Host owns the consumers and ambient resources.
+    // 1. Build ONE self-telemetry bundle. Every field is optional and nil-safe.
+    //    blitz builds its own metrics, spans, and log bridge from these. See
+    //    "Self-telemetry" below.
+    tel := embed.TelemetrySettings{
+        Logger:         logger,           // blitz's internal zap logger (nil -> nop)
+        MeterProvider:  myMeterProvider,  // nil -> process-global provider
+        TracerProvider: myTracerProvider, // nil -> process-global provider
+        LoggerProvider: myLoggerProvider, // nil -> logs stay zap-only (no bridge)
+    }
+
+    // 2. Host owns the consumers, ambient resources, and the SAME bundle.
     host := embed.Host{
-        Logs:    myLogConsumer,
-        Metrics: myMetricConsumer, // optional, required when a metric generator is wired
-        Traces:  myTraceConsumer,  // optional, required when a trace generator is wired
-        Logger:  logger,
+        Logs:      myLogConsumer,
+        Metrics:   myMetricConsumer, // optional, required when a metric generator is wired
+        Traces:    myTraceConsumer,  // optional, required when a trace generator is wired
+        Telemetry: tel,
         // Resource also available.
     }
 
-    // 2. Construct modules, passing the appropriate consumer from host.
-    apacheGen, _ := apache.New(logger, /*workers*/ 1, /*rate*/ time.Second, host.Logs)
+    // 3. Bridge the logger once, then construct modules. Components do NOT
+    //    re-bridge: a bridged zap logger propagates to the child loggers they
+    //    derive, so one bridge here covers them all. config.LoadModules does
+    //    this for you on the YAML path. Each component builds its metrics and
+    //    tracer from tel.
+    logger = tel.BridgedLogger(logger)
+    apacheGen, _ := apache.New(logger, /*workers*/ 1, /*rate*/ time.Second, host.Logs, tel)
     hmGen, _ := hostmetrics.New(hostmetrics.Config{
-        Logger:   logger,
-        Workers:  1,
-        Rate:     10 * time.Second,
-        OS:       "linux",
-        Consumer: host.Metrics,
+        Logger:    logger,
+        Workers:   1,
+        Rate:      10 * time.Second,
+        OS:        "linux",
+        Consumer:  host.Metrics,
+        Telemetry: tel,
     })
     tracesGen, _ := traces.New(traces.Config{
-        Logger:   logger,
-        Workers:  1,
-        Rate:     time.Second,
-        Consumer: host.Traces,
+        Logger:    logger,
+        Workers:   1,
+        Rate:      time.Second,
+        Consumer:  host.Traces,
+        Telemetry: tel,
     })
 
-    // 3. Build the runner.
+    // 4. Build the runner.
     runner, err := embed.New(embed.Config{
         Modules: []embed.ProducerModule{apacheGen, hmGen, tracesGen},
     })
     if err != nil { /* ... */ }
 
-    // 4. Start, run, stop.
+    // 5. Start, run, stop.
     ctx := context.Background()
     if err := runner.Start(ctx, host); err != nil { /* ... */ }
 
@@ -151,6 +168,32 @@ embed.Config{
 ## Error semantics
 
 Consumer errors are best-effort: blitz logs the error, increments a `consumer_errors` counter, and continues producing. A consumer that wants stricter semantics can return errors and observe them on the metric.
+
+## Self-telemetry (logs, metrics, traces)
+
+Blitz emits its **own** operational telemetry (distinct from the data it generates), and an embedding host can route all three signals through host-supplied OTel providers. This is separate from the consumers above: consumers receive the generated data; the providers below receive blitz's internal observability.
+
+One `embed.TelemetrySettings` bundle carries everything:
+
+```go
+type TelemetrySettings struct {
+    Logger         *zap.Logger          // blitz's internal diagnostic logger
+    MeterProvider  metric.MeterProvider // source of blitz's metric instruments
+    TracerProvider trace.TracerProvider // source of blitz's spans
+    LoggerProvider log.LoggerProvider   // receives blitz's logs as OTel records
+    PerBatchSpans  bool                 // opt-in higher-volume per-emit-cycle spans
+}
+```
+
+**One bundle, three signals.** The host builds a single bundle and supplies the *same value* in two places: as `embed.Host.Telemetry` (used by the runner for the session-level runtime) and at generator construction (the `Telemetry` field on config-struct constructors, or the trailing `tel` argument on positional ones, and `EmbedOpts.Telemetry` when using `config.LoadModules`). Metrics and traces are built per component from that bundle at construction; the logger is bridged once and shared:
+
+- **Metrics**: `output.NewMetrics(tel.MeterProvider)` / `generator.NewMetrics(...)`, per component.
+- **Traces**: `tel.Tracer(scope)`, per component (plus the runtime's session spans).
+- **Logs**: `tel.BridgedLogger(logger)` tees zap logging into `tel.LoggerProvider` as OTel records, done **once** at the entry point (`main` for standalone; `config.LoadModules` and the runner for embed) and shared. Components receive the already-bridged logger and do not re-bridge, since a bridged zap logger propagates to the child loggers they derive. A caller constructing a generator directly, bypassing `config.LoadModules`, bridges the logger itself. This is the OTel-idiomatic path: zap stays the logging API, the OTel Logs SDK is the bridge backend.
+
+**Nil-safe fallbacks.** Every field is optional. A nil `MeterProvider` or `TracerProvider` falls back to the process-global provider; a nil `LoggerProvider` leaves logs zap-only (no bridge). A zero-value bundle therefore behaves exactly as blitz did before providers were injectable, and `embed.NopTelemetry()` returns an all-no-op bundle for hosts that route nothing.
+
+**What blitz emits:** a `blitz.session` root span covering Start to Stop with a `blitz.generator.run` child span per module; per-generator and per-output metric instruments (`blitz.generator.entries`, and the rest); and blitz's internal zap logs, bridged to OTel when a `LoggerProvider` is set.
 
 ## Resource attributes
 
@@ -263,6 +306,7 @@ Two supported paths:
       Logger:        logger,
       LogConsumer:   myLogConsumer,
       TraceConsumer: myTraceConsumer,
+      Telemetry:     tel, // same bundle as embed.Host.Telemetry; see "Self-telemetry"
       // MetricConsumer also available.
       // FileGenLibrary: embeddedlibrary.FS(), // optional; nil = ./data_library/ on disk
   })

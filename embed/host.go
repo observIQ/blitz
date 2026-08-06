@@ -1,10 +1,6 @@
 package embed
 
 import (
-	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
-
 	"github.com/observiq/blitz/internal/datagen"
 )
 
@@ -24,10 +20,6 @@ type Host struct {
 	// Traces is the destination for spans. Nil means spans are dropped.
 	Traces TraceConsumer
 
-	// Logger is the zap logger blitz uses for internal diagnostics. Nil
-	// means blitz constructs a no-op logger.
-	Logger *zap.Logger
-
 	// Resource is the per-session base resource attributes blitz applies
 	// to every emitted record before module-level overrides merge on top.
 	//
@@ -38,20 +30,17 @@ type Host struct {
 	// See cloneResource in this package.
 	Resource map[string]any
 
-	// MeterProvider is the OTel MeterProvider blitz routes its own internal
-	// metrics through (generator and output self-telemetry). Nil falls back
-	// to the process-global provider, matching standalone behavior.
-	MeterProvider metric.MeterProvider
-
-	// TracerProvider is the OTel TracerProvider blitz routes its own internal
-	// spans through. Nil falls back to the process-global provider. Reserved
-	// for the self-tracing phase; blitz emits no internal spans yet.
-	TracerProvider trace.TracerProvider
-
-	// PerBatchSpans enables the higher-volume per-emit-cycle spans once
-	// self-tracing lands. Off by default; the coarse spans do not depend on
-	// it.
-	PerBatchSpans bool
+	// Telemetry carries the OTel providers and logger blitz routes its own
+	// self-telemetry through: the zap Logger for internal diagnostics, and the
+	// Meter, Tracer, and Logger providers blitz builds its metrics, spans, and
+	// log bridge from. It is the single source for all three signals.
+	//
+	// The host builds one bundle and supplies the same value here (used by the
+	// runner for the session-level runtime) and as EmbedOpts.Telemetry (used at
+	// generator construction). Every field is optional with a nil-safe
+	// fallback, so a zero-value bundle behaves as blitz did before providers
+	// were injectable. See TelemetrySettings.
+	Telemetry TelemetrySettings
 
 	// Environment is the simulated datagen.Environment that generators draw
 	// their host identities (host.name / os.type) from (PIPE-1036). Nil means

@@ -143,6 +143,8 @@ func getTestOverrideFlagsArgs() []string {
 		"--telemetry-traces-otlpendpoint", "traces.example:4317",
 		"--telemetry-traces-insecure", "true",
 		"--telemetry-traces-perbatchspans", "true",
+		"--telemetry-logs-otlpendpoint", "logs.example:4317",
+		"--telemetry-logs-insecure", "true",
 	}
 }
 
@@ -278,6 +280,8 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_TELEMETRY_TRACES_OTLPENDPOINT":       "traces.env.example:4317",
 		"BLITZ_TELEMETRY_TRACES_INSECURE":           "true",
 		"BLITZ_TELEMETRY_TRACES_PERBATCHSPANS":      "true",
+		"BLITZ_TELEMETRY_LOGS_OTLPENDPOINT":         "logs.env.example:4317",
+		"BLITZ_TELEMETRY_LOGS_INSECURE":             "true",
 	}
 }
 
@@ -689,6 +693,10 @@ func TestOverrideFlags(t *testing.T) {
 				Insecure:      true,
 				PerBatchSpans: true,
 			},
+			Logs: LogsTelemetry{
+				OTLPEndpoint: "logs.example:4317",
+				Insecure:     true,
+			},
 		},
 	}
 	require.Equal(t, expectedCfg, cfg)
@@ -904,6 +912,10 @@ func TestOverrideEnvs(t *testing.T) {
 				OTLPEndpoint:  "traces.env.example:4317",
 				Insecure:      true,
 				PerBatchSpans: true,
+			},
+			Logs: LogsTelemetry{
+				OTLPEndpoint: "logs.env.example:4317",
+				Insecure:     true,
 			},
 		},
 	}

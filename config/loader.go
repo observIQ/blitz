@@ -149,6 +149,11 @@ func LoadModules(yamlBytes []byte, opts EmbedOpts) ([]embed.ProducerModule, erro
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	// Bridge the logger once here, at the embed construction entry point, and
+	// share the bridged logger with every generator. Components do not
+	// re-bridge: a bridged zap logger propagates to the child loggers they
+	// derive. A nil LoggerProvider leaves the logger zap-only.
+	logger = opts.Telemetry.BridgedLogger(logger)
 	cfg, err := Load(yamlBytes, LoadOpts{EnvOverrides: opts.EnvOverrides})
 	if err != nil {
 		return nil, err

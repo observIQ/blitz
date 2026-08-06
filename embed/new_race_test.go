@@ -30,7 +30,7 @@ func TestRunner_ConcurrentStartIsSerialized(t *testing.T) {
 	runner, err := embed.New(embed.Config{Modules: []embed.ProducerModule{gen}})
 	require.NoError(t, err)
 
-	host := embed.Host{Logs: consumer, Logger: logger}
+	host := embed.Host{Logs: consumer, Telemetry: embed.TelemetrySettings{Logger: logger}}
 
 	const goroutines = 8
 	var wg sync.WaitGroup
@@ -78,7 +78,7 @@ func TestRunner_ConcurrentStopIsIdempotent(t *testing.T) {
 	runner, err := embed.New(embed.Config{Modules: []embed.ProducerModule{gen}})
 	require.NoError(t, err)
 
-	host := embed.Host{Logs: consumer, Logger: logger}
+	host := embed.Host{Logs: consumer, Telemetry: embed.TelemetrySettings{Logger: logger}}
 	require.NoError(t, runner.Start(context.Background(), host))
 
 	const goroutines = 8
