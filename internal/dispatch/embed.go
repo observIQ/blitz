@@ -170,7 +170,7 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := newFIX(logger, genCfg.FIX, consumers.LogConsumer)
+		mod, err := newFIX(logger, genCfg.FIX, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeHostMetrics:
 		if err := consumers.requireMetric(genCfg.Type); err != nil {
@@ -272,7 +272,7 @@ func yamlSeedDefault(yamlSeed int64) int64 {
 // catalog-typed fix.Config and constructs a FIX generator. Version and
 // EnabledCategories strings are validated; an empty version defaults to
 // FIX 4.4 and an empty EnabledCategories means "all 10 categories".
-func newFIX(logger *zap.Logger, cfg config.FIXGeneratorConfig, consumer embed.LogConsumer) (embed.ProducerModule, error) {
+func newFIX(logger *zap.Logger, cfg config.FIXGeneratorConfig, consumer embed.LogConsumer, tel embed.TelemetrySettings) (embed.ProducerModule, error) {
 	fc := fixgen.Config{
 		Workers:      cfg.Workers,
 		Rate:         cfg.Rate,
@@ -294,5 +294,5 @@ func newFIX(logger *zap.Logger, cfg config.FIXGeneratorConfig, consumer embed.Lo
 		}
 		fc.EnabledCategories = append(fc.EnabledCategories, c)
 	}
-	return fixgen.New(logger, fc, consumer)
+	return fixgen.New(logger, fc, consumer, tel)
 }
