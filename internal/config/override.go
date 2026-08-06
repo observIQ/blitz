@@ -341,6 +341,8 @@ func DefaultOverrides() []*Override {
 		NewOverride("telemetry.traces.otlpEndpoint", "OTLP gRPC endpoint (host:port) for exporting blitz's own spans (empty = disabled)", ""),
 		NewOverride("telemetry.traces.insecure", "send blitz's own spans over plaintext gRPC (no TLS)", false),
 		NewOverride("telemetry.traces.perBatchSpans", "enable higher-volume per-emit-cycle spans (off by default)", false),
+		NewOverride("telemetry.logs.otlpEndpoint", "OTLP gRPC endpoint (host:port) for exporting blitz's own logs (empty = disabled)", ""),
+		NewOverride("telemetry.logs.insecure", "send blitz's own logs over plaintext gRPC (no TLS)", false),
 	}
 
 	overrides = append(overrides, tcpTLSOverrides()...)

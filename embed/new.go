@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/observiq/blitz/internal/runtime"
-	"go.uber.org/zap"
 )
 
 // New constructs a Runner that operates the configured ProducerModules.
@@ -46,15 +45,16 @@ func (r *runner) Start(ctx context.Context, host Host) error {
 	if r.started {
 		return errors.New("embed runner already started")
 	}
-	logger := host.Logger
-	if logger == nil {
-		logger = zap.NewNop()
-	}
+	// Bridge the runtime logger into the host's LoggerProvider the same way
+	// every generator does at construction, so session-level logs reach the
+	// host as OTel records too. A nil provider yields a plain zap logger.
+	tel := host.Telemetry
+	logger := tel.BridgedLogger(tel.Logger)
 	rtModules := make([]runtime.Module, len(r.cfg.Modules))
 	for i, m := range r.cfg.Modules {
 		rtModules[i] = m
 	}
-	rt := runtime.New(logger, rtModules, host.TracerProvider)
+	rt := runtime.New(logger, rtModules, tel.TracerProvider)
 	if err := rt.Start(ctx); err != nil {
 		return err
 	}

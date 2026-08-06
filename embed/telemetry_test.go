@@ -53,3 +53,13 @@ func TestTelemetrySettings_Tracer_nilFallsBackToGlobal(t *testing.T) {
 		span.End()
 	})
 }
+
+func TestTelemetrySettings_BridgedLogger_nilBase(t *testing.T) {
+	// A nil base logger yields a usable nop logger, and a nil LoggerProvider
+	// leaves it zap-only. The result is always safe to use.
+	var tel TelemetrySettings
+
+	l := tel.BridgedLogger(nil)
+	require.NotNil(t, l)
+	require.NotPanics(t, func() { l.Info("safe") })
+}
