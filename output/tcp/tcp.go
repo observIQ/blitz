@@ -35,14 +35,22 @@ const (
 // outputType is the output_type attribute value for TCP metrics.
 const outputType = "tcp"
 
+// tcpItem is one queued message plus the emit-span context it was written
+// under, so the worker can parent its send span to the emit span.
+type tcpItem struct {
+	ctx context.Context
+	msg string
+}
+
 // TCP implements the Output interface for TCP connections
 type TCP struct {
 	logger        *zap.Logger
+	tel           embed.TelemetrySettings
 	host          string
 	port          string
 	workers       int
 	tlsConfig     *tls.Config
-	dataChan      chan string
+	dataChan      chan tcpItem
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
@@ -73,11 +81,12 @@ func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Conf
 
 	tcp := &TCP{
 		logger:    logger.Named("output-tcp"),
+		tel:       tel,
 		host:      host,
 		port:      port,
 		workers:   workers,
 		tlsConfig: tlsConfig,
-		dataChan:  make(chan string, DefaultTCPChannelSize),
+		dataChan:  make(chan tcpItem, DefaultTCPChannelSize),
 		ctx:       ctx,
 		cancel:    cancel,
 		metrics:   m,
@@ -120,7 +129,7 @@ func (t *TCP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 // even if the data is not written to the channel.
 func (t *TCP) Write(ctx context.Context, data output.LogRecord) error {
 	select {
-	case t.dataChan <- data.Message:
+	case t.dataChan <- tcpItem{ctx: ctx, msg: data.Message}:
 		t.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
@@ -175,13 +184,19 @@ func (t *TCP) tcpWorker(id int) {
 
 	for {
 		select {
-		case data, ok := <-t.dataChan:
+		case item, ok := <-t.dataChan:
 			if !ok {
 				t.logger.Info("TCP worker exiting - channel closed", zap.Int("worker_id", id))
 				return
 			}
 
-			if err := t.sendData(conn, data); err != nil {
+			_, span := output.StartSendSpan(item.ctx, t.tel, "blitz.output.tcp.send")
+			err := t.sendData(conn, item.msg)
+			if err != nil {
+				span.RecordError(err)
+			}
+			span.End()
+			if err != nil {
 				t.logger.Error("Failed to send TCP data",
 					zap.Int("worker_id", id),
 					zap.Error(err))

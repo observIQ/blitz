@@ -31,13 +31,21 @@ const (
 // outputType is the output_type attribute value for UDP metrics.
 const outputType = "udp"
 
+// udpItem is one queued message plus the emit-span context it was written
+// under, so the worker can parent its send span to the emit span.
+type udpItem struct {
+	ctx context.Context
+	msg string
+}
+
 // UDP implements the Output interface for UDP connections
 type UDP struct {
 	logger        *zap.Logger
+	tel           embed.TelemetrySettings
 	host          string
 	port          string
 	workers       int
-	dataChan      chan string
+	dataChan      chan udpItem
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
@@ -68,10 +76,11 @@ func New(logger *zap.Logger, host, port string, workers int, tel embed.Telemetry
 
 	udp := &UDP{
 		logger:   logger.Named("output-udp"),
+		tel:      tel,
 		host:     host,
 		port:     port,
 		workers:  workers,
-		dataChan: make(chan string, DefaultUDPChannelSize),
+		dataChan: make(chan udpItem, DefaultUDPChannelSize),
 		ctx:      ctx,
 		cancel:   cancel,
 		metrics:  m,
@@ -113,7 +122,7 @@ func (u *UDP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 // even if the data is not written to the channel.
 func (u *UDP) Write(ctx context.Context, data output.LogRecord) error {
 	select {
-	case u.dataChan <- data.Message:
+	case u.dataChan <- udpItem{ctx: ctx, msg: data.Message}:
 		u.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
@@ -210,13 +219,19 @@ func (u *UDP) udpWorker(id int) {
 
 	for {
 		select {
-		case data, ok := <-u.dataChan:
+		case item, ok := <-u.dataChan:
 			if !ok {
 				u.logger.Info("UDP worker exiting - channel closed", zap.Int("worker_id", id))
 				return
 			}
 
-			if err := u.sendData(conn, data); err != nil {
+			_, span := output.StartSendSpan(item.ctx, u.tel, "blitz.output.udp.send")
+			err := u.sendData(conn, item.msg)
+			if err != nil {
+				span.RecordError(err)
+			}
+			span.End()
+			if err != nil {
 				u.logger.Error("Failed to send UDP data",
 					zap.Int("worker_id", id),
 					zap.Error(err))
