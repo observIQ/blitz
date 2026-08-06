@@ -54,7 +54,10 @@ func (r *runner) Start(ctx context.Context, host Host) error {
 	for i, m := range r.cfg.Modules {
 		rtModules[i] = m
 	}
-	rt := runtime.New(logger, rtModules, tel.TracerProvider)
+	rt, err := runtime.New(logger, rtModules, tel.TracerProvider, tel.MeterProvider)
+	if err != nil {
+		return err
+	}
 	if err := rt.Start(ctx); err != nil {
 		return err
 	}

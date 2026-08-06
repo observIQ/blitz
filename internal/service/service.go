@@ -50,11 +50,16 @@ func New(logger *zap.Logger, generators []any, output output.Output, tel embed.T
 		}
 	}
 
+	rt, err := runtime.New(logger, modules, tel.TracerProvider, tel.MeterProvider)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Service{
 		Logger:     logger,
 		Generators: generators,
 		Output:     output,
-		runtime:    runtime.New(logger, modules, tel.TracerProvider),
+		runtime:    rt,
 		legacy:     legacy,
 	}, nil
 }
