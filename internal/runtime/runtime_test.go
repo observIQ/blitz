@@ -7,8 +7,61 @@ import (
 	"testing"
 
 	"github.com/observiq/blitz/internal/runtime"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric"
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/zap/zaptest"
 )
+
+// failingMeter overrides the first instrument the runtime registry builds (a
+// Float64Histogram) to error, so NewMetrics fails.
+type failingMeter struct{ metric.Meter }
+
+func (failingMeter) Float64Histogram(string, ...metric.Float64HistogramOption) (metric.Float64Histogram, error) {
+	return nil, errors.New("instrument error")
+}
+
+type failingMeterProvider struct{ metric.MeterProvider }
+
+func (failingMeterProvider) Meter(string, ...metric.MeterOption) metric.Meter {
+	return failingMeter{Meter: metricnoop.NewMeterProvider().Meter("test")}
+}
+
+func TestRuntime_NewMetricsError(t *testing.T) {
+	_, err := runtime.New(nil, nil, nil, failingMeterProvider{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "build runtime metrics")
+}
+
+// TestRuntime_recordsStartupLatency confirms the runtime records per-module and
+// session startup-duration histograms through the injected MeterProvider.
+func TestRuntime_recordsStartupLatency(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+
+	rt, err := runtime.New(zaptest.NewLogger(t),
+		[]runtime.Module{&recordingModule{name: "a"}, &recordingModule{name: "b"}}, nil, mp)
+	require.NoError(t, err)
+	require.NoError(t, rt.Start(context.Background()))
+	require.NoError(t, rt.Stop(context.Background()))
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	units := map[string]string{}
+	found := map[string]bool{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			found[m.Name] = true
+			units[m.Name] = m.Unit
+		}
+	}
+	require.True(t, found["blitz.module.startup.duration"], "module startup histogram")
+	require.True(t, found["blitz.session.startup.duration"], "session startup histogram")
+	require.Equal(t, "ms", units["blitz.module.startup.duration"], "module startup unit")
+	require.Equal(t, "ms", units["blitz.session.startup.duration"], "session startup unit")
+}
 
 type recordingModule struct {
 	name      string
@@ -46,7 +99,10 @@ func TestRuntime_StartCallsEveryModuleInOrder(t *testing.T) {
 	b := &recordingModule{name: "b", startCall: startOrder}
 	c := &recordingModule{name: "c", startCall: startOrder}
 
-	rt := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, c}, nil)
+	rt, err := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, c}, nil, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
 	if err := rt.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -67,8 +123,11 @@ func TestRuntime_StartRollsBackOnFailure(t *testing.T) {
 	b := &recordingModule{name: "b", stopCall: stopOrder}
 	failing := &recordingModule{name: "failing", startErr: errors.New("boom")}
 
-	rt := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, failing}, nil)
-	err := rt.Start(context.Background())
+	rt, err := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, failing}, nil, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	err = rt.Start(context.Background())
 	if err == nil {
 		t.Fatal("expected error from Start")
 	}
@@ -95,7 +154,10 @@ func TestRuntime_StopCallsEveryModuleInReverseOrder(t *testing.T) {
 	b := &recordingModule{name: "b", stopCall: stopOrder}
 	c := &recordingModule{name: "c", stopCall: stopOrder}
 
-	rt := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, c}, nil)
+	rt, err := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, c}, nil, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
 	if err := rt.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -114,11 +176,14 @@ func TestRuntime_StopContinuesOnError(t *testing.T) {
 	b := &recordingModule{name: "b", stopErr: errors.New("b-stop-fail")}
 	c := &recordingModule{name: "c"}
 
-	rt := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, c}, nil)
+	rt, err := runtime.New(zaptest.NewLogger(t), []runtime.Module{a, b, c}, nil, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
 	if err := rt.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	err := rt.Stop(context.Background())
+	err = rt.Stop(context.Background())
 	if err == nil {
 		t.Fatal("expected error from Stop")
 	}
@@ -130,7 +195,10 @@ func TestRuntime_StopContinuesOnError(t *testing.T) {
 }
 
 func TestRuntime_NewWithNilLoggerUsesNop(t *testing.T) {
-	rt := runtime.New(nil, nil, nil)
+	rt, err := runtime.New(nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
 	// Should not panic with empty modules.
 	if err := rt.Start(context.Background()); err != nil {
 		t.Errorf("Start with empty modules and nil logger: %v", err)
