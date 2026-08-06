@@ -1,9 +1,12 @@
 package embed
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func TestNopTelemetry(t *testing.T) {
@@ -27,4 +30,26 @@ func TestTelemetrySettings_zeroValueFieldsAreNil(t *testing.T) {
 	require.Nil(t, tel.Logger)
 	require.Nil(t, tel.MeterProvider)
 	require.Nil(t, tel.TracerProvider)
+}
+
+func TestTelemetrySettings_Tracer_usesProvidedProvider(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	tel := TelemetrySettings{TracerProvider: tp}
+
+	_, span := tel.Tracer("test").Start(context.Background(), "op")
+	span.End()
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+	require.Equal(t, "op", spans[0].Name)
+}
+
+func TestTelemetrySettings_Tracer_nilFallsBackToGlobal(t *testing.T) {
+	var tel TelemetrySettings
+
+	require.NotPanics(t, func() {
+		_, span := tel.Tracer("test").Start(context.Background(), "op")
+		span.End()
+	})
 }

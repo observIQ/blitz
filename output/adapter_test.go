@@ -8,6 +8,8 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 type recordingWriter struct {
@@ -28,7 +30,7 @@ func (w *recordingWriter) Write(_ context.Context, rec output.LogRecord) error {
 
 func TestWriterAsLogConsumerPushesEachRecord(t *testing.T) {
 	w := &recordingWriter{}
-	c := output.WriterAsLogConsumer(w)
+	c := output.WriterAsLogConsumer(w, embed.NopTelemetry())
 
 	batch := []embed.LogRecord{
 		{Message: "one"},
@@ -48,10 +50,54 @@ func TestWriterAsLogConsumerPushesEachRecord(t *testing.T) {
 	}
 }
 
+func TestWriterAsLogConsumerPerBatchSpanWhenEnabled(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+
+	w := &recordingWriter{}
+	c := output.WriterAsLogConsumer(w, embed.TelemetrySettings{TracerProvider: tp, PerBatchSpans: true})
+
+	batch := []embed.LogRecord{
+		{Message: "one"},
+		{Message: "two"},
+	}
+	if err := c.ConsumeLogs(context.Background(), batch); err != nil {
+		t.Fatalf("ConsumeLogs: %v", err)
+	}
+
+	spans := exporter.GetSpans()
+	if got, want := len(spans), 1; got != want {
+		t.Fatalf("exported %d spans, want %d", got, want)
+	}
+	if got, want := spans[0].Name, "blitz.emit.logs"; got != want {
+		t.Errorf("span name %q, want %q", got, want)
+	}
+}
+
+func TestWriterAsLogConsumerNoSpanWhenDisabled(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+
+	w := &recordingWriter{}
+	c := output.WriterAsLogConsumer(w, embed.TelemetrySettings{TracerProvider: tp})
+
+	batch := []embed.LogRecord{
+		{Message: "one"},
+		{Message: "two"},
+	}
+	if err := c.ConsumeLogs(context.Background(), batch); err != nil {
+		t.Fatalf("ConsumeLogs: %v", err)
+	}
+
+	if got := exporter.GetSpans(); len(got) != 0 {
+		t.Fatalf("exported %d spans, want 0", len(got))
+	}
+}
+
 func TestWriterAsLogConsumerStopsOnFirstError(t *testing.T) {
 	wantErr := errors.New("boom")
 	w := &recordingWriter{err: wantErr}
-	c := output.WriterAsLogConsumer(w)
+	c := output.WriterAsLogConsumer(w, embed.NopTelemetry())
 
 	err := c.ConsumeLogs(context.Background(), []embed.LogRecord{
 		{Message: "one"},
@@ -80,7 +126,7 @@ func (w *recordingMetricWriter) WriteMetric(_ context.Context, rec output.Metric
 
 func TestWriterAsMetricConsumerPushesEachPoint(t *testing.T) {
 	w := &recordingMetricWriter{}
-	c := output.WriterAsMetricConsumer(w)
+	c := output.WriterAsMetricConsumer(w, embed.NopTelemetry())
 
 	batch := []embed.MetricPoint{
 		{Name: "one"},
@@ -103,7 +149,7 @@ func TestWriterAsMetricConsumerPushesEachPoint(t *testing.T) {
 func TestWriterAsMetricConsumerStopsOnFirstError(t *testing.T) {
 	wantErr := errors.New("metric boom")
 	w := &recordingMetricWriter{err: wantErr}
-	c := output.WriterAsMetricConsumer(w)
+	c := output.WriterAsMetricConsumer(w, embed.NopTelemetry())
 
 	err := c.ConsumeMetrics(context.Background(), []embed.MetricPoint{
 		{Name: "one"},
@@ -132,7 +178,7 @@ func (w *recordingTraceWriter) WriteTrace(_ context.Context, rec output.TraceRec
 
 func TestWriterAsTraceConsumerPushesEachSpan(t *testing.T) {
 	w := &recordingTraceWriter{}
-	c := output.WriterAsTraceConsumer(w)
+	c := output.WriterAsTraceConsumer(w, embed.NopTelemetry())
 
 	batch := []embed.Span{
 		{Name: "one"},
@@ -155,7 +201,7 @@ func TestWriterAsTraceConsumerPushesEachSpan(t *testing.T) {
 func TestWriterAsTraceConsumerStopsOnFirstError(t *testing.T) {
 	wantErr := errors.New("trace boom")
 	w := &recordingTraceWriter{err: wantErr}
-	c := output.WriterAsTraceConsumer(w)
+	c := output.WriterAsTraceConsumer(w, embed.NopTelemetry())
 
 	err := c.ConsumeTraces(context.Background(), []embed.Span{
 		{Name: "one"},
@@ -172,7 +218,7 @@ func TestWriterAsTraceConsumerPanicsOnNilWriter(t *testing.T) {
 			t.Fatal("expected panic on nil writer, got none")
 		}
 	}()
-	_ = output.WriterAsTraceConsumer(nil)
+	_ = output.WriterAsTraceConsumer(nil, embed.NopTelemetry())
 }
 
 func TestWriterAsLogConsumerPanicsOnNilWriter(t *testing.T) {
@@ -181,7 +227,7 @@ func TestWriterAsLogConsumerPanicsOnNilWriter(t *testing.T) {
 			t.Fatal("expected panic on nil writer, got none")
 		}
 	}()
-	_ = output.WriterAsLogConsumer(nil)
+	_ = output.WriterAsLogConsumer(nil, embed.NopTelemetry())
 }
 
 func TestWriterAsMetricConsumerPanicsOnNilWriter(t *testing.T) {
@@ -190,5 +236,5 @@ func TestWriterAsMetricConsumerPanicsOnNilWriter(t *testing.T) {
 			t.Fatal("expected panic on nil writer, got none")
 		}
 	}()
-	_ = output.WriterAsMetricConsumer(nil)
+	_ = output.WriterAsMetricConsumer(nil, embed.NopTelemetry())
 }

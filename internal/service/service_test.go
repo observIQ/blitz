@@ -48,34 +48,34 @@ func TestNew(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	t.Run("nil logger", func(t *testing.T) {
-		_, err := New(nil, []any{&stubLogGen{}}, &stubOutput{})
+		_, err := New(nil, []any{&stubLogGen{}}, &stubOutput{}, embed.NopTelemetry())
 		require.Error(t, err)
 	})
 
 	t.Run("nil generators", func(t *testing.T) {
-		_, err := New(logger, nil, &stubOutput{})
+		_, err := New(logger, nil, &stubOutput{}, embed.NopTelemetry())
 		require.Error(t, err)
 	})
 
 	t.Run("empty generators", func(t *testing.T) {
-		_, err := New(logger, []any{}, &stubOutput{})
+		_, err := New(logger, []any{}, &stubOutput{}, embed.NopTelemetry())
 		require.Error(t, err)
 	})
 
 	t.Run("nil output", func(t *testing.T) {
-		_, err := New(logger, []any{&stubLogGen{}}, nil)
+		_, err := New(logger, []any{&stubLogGen{}}, nil, embed.NopTelemetry())
 		require.Error(t, err)
 	})
 
 	t.Run("valid single log generator", func(t *testing.T) {
-		svc, err := New(logger, []any{&stubLogGen{}}, &stubOutput{})
+		svc, err := New(logger, []any{&stubLogGen{}}, &stubOutput{}, embed.NopTelemetry())
 		require.NoError(t, err)
 		assert.NotNil(t, svc)
 	})
 
 	t.Run("valid multi generator", func(t *testing.T) {
 		gens := []any{&stubLogGen{}, &stubLogGen{}}
-		svc, err := New(logger, gens, &stubOutput{})
+		svc, err := New(logger, gens, &stubOutput{}, embed.NopTelemetry())
 		require.NoError(t, err)
 		assert.NotNil(t, svc)
 	})
@@ -87,7 +87,7 @@ func TestStartStop(t *testing.T) {
 	logGen := &stubLogGen{}
 	logGen2 := &stubLogGen{}
 
-	svc, err := New(logger, []any{logGen, logGen2}, &stubOutput{})
+	svc, err := New(logger, []any{logGen, logGen2}, &stubOutput{}, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	require.NoError(t, svc.Start())
