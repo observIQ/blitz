@@ -3,12 +3,18 @@ package fix
 import (
 	"bytes"
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/log/logtest"
+	"go.opentelemetry.io/otel/metric"
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/zap"
 
 	"github.com/observiq/blitz/embed"
@@ -58,6 +64,105 @@ func (c *captureConsumer) Count() int {
 	return len(c.got)
 }
 
+// failingConsumer always returns an error, to exercise the write-error path.
+type failingConsumer struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (c *failingConsumer) ConsumeLogs(context.Context, []embed.LogRecord) error {
+	c.mu.Lock()
+	c.calls++
+	c.mu.Unlock()
+	return errors.New("consume failed")
+}
+
+func (c *failingConsumer) Count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls
+}
+
+func hasMetric(rm metricdata.ResourceMetrics, name string) bool {
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestFIX_SelfTelemetry confirms the FIX generator routes its own metrics
+// through the injected MeterProvider and bridges its logs into the injected
+// LoggerProvider, matching every other embed-eligible generator. The failing
+// consumer also exercises the write-error metric path.
+func TestFIX_SelfTelemetry(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	logRec := logtest.NewRecorder()
+	tel := embed.TelemetrySettings{
+		Logger:         zap.NewNop(),
+		MeterProvider:  mp,
+		LoggerProvider: logRec,
+	}
+
+	cons := &failingConsumer{}
+	// A caller constructing a generator directly bridges the logger itself,
+	// as config.LoadModules does; blitz no longer re-bridges per component.
+	g, err := New(tel.BridgedLogger(zap.NewNop()), Config{Workers: 1, Rate: 5 * time.Millisecond}, cons, tel)
+	require.NoError(t, err)
+	require.NoError(t, g.Start(context.Background()))
+
+	require.Eventually(t,
+		func() bool { return cons.Count() >= 1 },
+		2*time.Second, 10*time.Millisecond,
+		"expected the generator to attempt at least one emit",
+	)
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, g.Stop(stopCtx))
+
+	// Self-metrics reached the injected provider.
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	require.True(t, hasMetric(rm, "blitz.generator.active_workers"), "active_workers gauge")
+	require.True(t, hasMetric(rm, "blitz.generator.entries"), "entries counter")
+	require.True(t, hasMetric(rm, "blitz.generator.write_errors"), "write_errors counter")
+
+	// Internal logs bridged into the injected LoggerProvider.
+	require.NotEmpty(t, logRec.Result(), "expected bridged log records")
+}
+
+// failingMeter embeds a no-op Meter and overrides one instrument constructor to
+// return an error, so generator.NewMetrics fails.
+type failingMeter struct {
+	metric.Meter
+}
+
+func (failingMeter) Int64Gauge(string, ...metric.Int64GaugeOption) (metric.Int64Gauge, error) {
+	return nil, errors.New("instrument error")
+}
+
+// failingMeterProvider hands out a failingMeter.
+type failingMeterProvider struct {
+	metric.MeterProvider
+}
+
+func (failingMeterProvider) Meter(string, ...metric.MeterOption) metric.Meter {
+	return failingMeter{Meter: metricnoop.NewMeterProvider().Meter("test")}
+}
+
+// TestNew_MetricsBuildError covers the metric-construction error path in New.
+func TestNew_MetricsBuildError(t *testing.T) {
+	_, err := New(zap.NewNop(), DefaultConfig(), &captureConsumer{},
+		embed.TelemetrySettings{MeterProvider: failingMeterProvider{}})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "build generator metrics")
+}
+
 func TestDefaultConfig(t *testing.T) {
 	c := DefaultConfig()
 	assert.Equal(t, 1, c.Workers)
@@ -66,32 +171,32 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestNewRejectsNilLogger(t *testing.T) {
-	_, err := New(nil, DefaultConfig(), &captureConsumer{})
+	_, err := New(nil, DefaultConfig(), &captureConsumer{}, embed.NopTelemetry())
 	require.Error(t, err)
 }
 
 func TestNewRejectsNilConsumer(t *testing.T) {
-	_, err := New(zap.NewNop(), DefaultConfig(), nil)
+	_, err := New(zap.NewNop(), DefaultConfig(), nil, embed.NopTelemetry())
 	require.Error(t, err)
 }
 
 func TestNewRejectsZeroWorkers(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Workers = 0
-	_, err := New(zap.NewNop(), cfg, &captureConsumer{})
+	_, err := New(zap.NewNop(), cfg, &captureConsumer{}, embed.NopTelemetry())
 	require.Error(t, err)
 }
 
 func TestNewRejectsNonPositiveRate(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Rate = 0
-	_, err := New(zap.NewNop(), cfg, &captureConsumer{})
+	_, err := New(zap.NewNop(), cfg, &captureConsumer{}, embed.NopTelemetry())
 	require.Error(t, err)
 }
 
 func TestNewDefaultsVersionAndCompIDs(t *testing.T) {
 	cfg := Config{Workers: 1, Rate: time.Second}
-	g, err := New(zap.NewNop(), cfg, &captureConsumer{})
+	g, err := New(zap.NewNop(), cfg, &captureConsumer{}, embed.NopTelemetry())
 	require.NoError(t, err)
 	assert.Equal(t, catalog.V44, g.cfg.Version)
 	assert.Equal(t, "BLITZ", g.cfg.SenderCompID)
@@ -106,7 +211,7 @@ func TestEmitsMessagesAtRate(t *testing.T) {
 		Rate:    20 * time.Millisecond,
 		Version: catalog.V44,
 		Seed:    42,
-	}, cons)
+	}, cons, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	require.NoError(t, g.Start(context.Background()))
@@ -130,7 +235,7 @@ func TestGoldenOutputDeterministicFromSeed(t *testing.T) {
 
 	runOnce := func() [][]byte {
 		cons := &captureConsumer{}
-		g, err := New(zap.NewNop(), cfg, cons)
+		g, err := New(zap.NewNop(), cfg, cons, embed.NopTelemetry())
 		require.NoError(t, err)
 		require.NoError(t, g.Start(context.Background()))
 		require.Eventually(t, func() bool { return cons.Count() >= 5 }, 2*time.Second, 5*time.Millisecond)
@@ -161,7 +266,7 @@ func TestV50SP2EmitsFIXTBeginString(t *testing.T) {
 		Rate:    20 * time.Millisecond,
 		Version: catalog.V50SP2,
 		Seed:    42,
-	}, cons)
+	}, cons, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	require.NoError(t, g.Start(context.Background()))
@@ -183,7 +288,7 @@ func TestV42EmitsFIX42BeginString(t *testing.T) {
 		Rate:    20 * time.Millisecond,
 		Version: catalog.V42,
 		Seed:    42,
-	}, cons)
+	}, cons, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	require.NoError(t, g.Start(context.Background()))
@@ -220,7 +325,7 @@ func TestEmitsResourceWithHostNameAndFixVersion(t *testing.T) {
 				Rate:    20 * time.Millisecond,
 				Version: tc.version,
 				Seed:    42,
-			}, cons)
+			}, cons, embed.NopTelemetry())
 			require.NoError(t, err)
 
 			require.NoError(t, g.Start(context.Background()))
@@ -242,13 +347,13 @@ func TestEmitsResourceWithHostNameAndFixVersion(t *testing.T) {
 // *Generator is embed-eligible. If embed.ProducerMarker is removed or
 // the Module interface changes, this fails to compile.
 func TestGeneratorSatisfiesProducerModule(t *testing.T) {
-	g, err := New(zap.NewNop(), DefaultConfig(), &captureConsumer{})
+	g, err := New(zap.NewNop(), DefaultConfig(), &captureConsumer{}, embed.NopTelemetry())
 	require.NoError(t, err)
 	var _ embed.ProducerModule = g
 }
 
 func TestSetHostIdentity(t *testing.T) {
-	g, err := New(zap.NewNop(), DefaultConfig(), &captureConsumer{})
+	g, err := New(zap.NewNop(), DefaultConfig(), &captureConsumer{}, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	g.SetHostIdentity(&datagen.SystemIdentity{

@@ -29,9 +29,12 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
 	"github.com/observiq/blitz/generator/fix/state"
@@ -98,6 +101,7 @@ type Generator struct {
 	cfg      Config
 	consumer embed.LogConsumer
 	static   *resource.StaticResources
+	metrics  *generator.Metrics
 
 	wg     sync.WaitGroup
 	stopCh chan struct{}
@@ -107,7 +111,7 @@ type Generator struct {
 // FIX message as a size-1 batch via ConsumeLogs. Returns an error for
 // invalid inputs (nil logger, nil consumer, workers < 1, non-positive
 // rate).
-func New(logger *zap.Logger, cfg Config, consumer embed.LogConsumer) (*Generator, error) {
+func New(logger *zap.Logger, cfg Config, consumer embed.LogConsumer, tel embed.TelemetrySettings) (*Generator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -132,11 +136,16 @@ func New(logger *zap.Logger, cfg Config, consumer embed.LogConsumer) (*Generator
 	if len(cfg.EnabledCategories) == 0 {
 		cfg.EnabledCategories = catalog.AllAssetCategories()
 	}
+	metrics, err := generator.NewMetrics(tel.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build generator metrics: %w", err)
+	}
 	return &Generator{
 		logger:   logger,
 		cfg:      cfg,
 		consumer: consumer,
 		static:   resource.FromIdentity(nil, componentName, "fix.version", cfg.Version.String()),
+		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
 }
@@ -159,6 +168,7 @@ func (g *Generator) Start(_ context.Context) error {
 		zap.Duration("rate", g.cfg.Rate),
 		zap.String("version", g.cfg.Version.String()),
 	)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.cfg.Workers), componentName)
 	for i := 0; i < g.cfg.Workers; i++ {
 		g.wg.Add(1)
 		go g.runWorker(i) // #nosec G118 -- workers are bounded by Stop() and the WaitGroup, not the Start context
@@ -170,6 +180,7 @@ func (g *Generator) Start(_ context.Context) error {
 // when all workers have stopped or ctx is canceled.
 func (g *Generator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping FIX generator")
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 0, componentName)
 	close(g.stopCh)
 
 	done := make(chan struct{})
@@ -223,7 +234,11 @@ func (g *Generator) runWorker(workerIdx int) {
 			}
 			if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{rec}); err != nil {
 				g.logger.Debug("FIX emit failed", zap.Error(err))
+				g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+					metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", "consume"))),
+				)
 			}
+			g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 			cancel()
 		}
 	}
