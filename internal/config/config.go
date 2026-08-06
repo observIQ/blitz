@@ -17,11 +17,14 @@ type Config struct {
 	Generators []Generator `yaml:"generators,omitempty" mapstructure:"generators,omitempty"`
 	// Output configuration
 	Output Output `yaml:"output,omitempty" mapstructure:"output,omitempty"`
-	// Metrics configuration
+	// Metrics configuration (Prometheus scrape endpoint for self-metrics)
 	Metrics Metrics `yaml:"metrics,omitempty" mapstructure:"metrics,omitempty"`
 	// Environment configures the simulated datagen.Environment identities
 	// that generators draw their host.name/OS from (PIPE-1036).
 	Environment EnvironmentConfig `yaml:"environment,omitempty" mapstructure:"environment,omitempty"`
+	// Telemetry configures export of blitz's own self-telemetry (self-traces,
+	// and later self-logs) via OTLP.
+	Telemetry Telemetry `yaml:"telemetry,omitempty" mapstructure:"telemetry,omitempty"`
 	// OnFinish controls behavior when finite generation completes.
 	// One of: "exit" (default), "idle"
 	OnFinish string `yaml:"onFinish,omitempty" mapstructure:"onFinish,omitempty"`
@@ -42,6 +45,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Environment.Validate(); err != nil {
+		return err
+	}
+	if err := c.Telemetry.Validate(); err != nil {
 		return err
 	}
 	if c.OnFinish != "" && c.OnFinish != "exit" && c.OnFinish != "idle" {

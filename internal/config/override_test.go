@@ -140,6 +140,9 @@ func getTestOverrideFlagsArgs() []string {
 		"--output-hec-tls-min-version", "1.3",
 		"--output-stdout-flushinterval", "50ms",
 		"--metrics-port", "8080",
+		"--telemetry-traces-otlpendpoint", "traces.example:4317",
+		"--telemetry-traces-insecure", "true",
+		"--telemetry-traces-perbatchspans", "true",
 	}
 }
 
@@ -272,6 +275,9 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_OUTPUT_HEC_TLS_MIN_VERSION":          "1.2",
 		"BLITZ_OUTPUT_STDOUT_FLUSHINTERVAL":         "75ms",
 		"BLITZ_METRICS_PORT":                        "9100",
+		"BLITZ_TELEMETRY_TRACES_OTLPENDPOINT":       "traces.env.example:4317",
+		"BLITZ_TELEMETRY_TRACES_INSECURE":           "true",
+		"BLITZ_TELEMETRY_TRACES_PERBATCHSPANS":      "true",
 	}
 }
 
@@ -677,6 +683,13 @@ func TestOverrideFlags(t *testing.T) {
 		Metrics: Metrics{
 			Port: 8080,
 		},
+		Telemetry: Telemetry{
+			Traces: TracesTelemetry{
+				OTLPEndpoint:  "traces.example:4317",
+				Insecure:      true,
+				PerBatchSpans: true,
+			},
+		},
 	}
 	require.Equal(t, expectedCfg, cfg)
 }
@@ -885,6 +898,13 @@ func TestOverrideEnvs(t *testing.T) {
 		},
 		Metrics: Metrics{
 			Port: 9100,
+		},
+		Telemetry: Telemetry{
+			Traces: TracesTelemetry{
+				OTLPEndpoint:  "traces.env.example:4317",
+				Insecure:      true,
+				PerBatchSpans: true,
+			},
 		},
 	}
 	require.Equal(t, expectedCfg, cfg)

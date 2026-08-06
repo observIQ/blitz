@@ -25,7 +25,7 @@ type Service struct {
 }
 
 // New creates a new service with multiple generators and a single output.
-func New(logger *zap.Logger, generators []any, output output.Output) (*Service, error) {
+func New(logger *zap.Logger, generators []any, output output.Output, tel embed.TelemetrySettings) (*Service, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -54,7 +54,7 @@ func New(logger *zap.Logger, generators []any, output output.Output) (*Service, 
 		Logger:     logger,
 		Generators: generators,
 		Output:     output,
-		runtime:    runtime.New(logger, modules),
+		runtime:    runtime.New(logger, modules, tel.TracerProvider),
 		legacy:     legacy,
 	}, nil
 }
