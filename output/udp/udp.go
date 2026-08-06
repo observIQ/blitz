@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -40,10 +41,11 @@ type UDP struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
+	metrics       *output.Metrics
 }
 
 // New creates a new UDP output instance
-func New(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
+func New(logger *zap.Logger, host, port string, workers int, tel embed.TelemetrySettings) (*UDP, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -57,6 +59,11 @@ func New(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 		workers = DefaultUDPWorkers
 	}
 
+	m, err := output.NewMetrics(tel.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build output metrics: %w", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	udp := &UDP{
@@ -67,6 +74,7 @@ func New(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 		dataChan: make(chan string, DefaultUDPChannelSize),
 		ctx:      ctx,
 		cancel:   cancel,
+		metrics:  m,
 	}
 
 	udp.logger.Info("Starting UDP output",
@@ -77,13 +85,15 @@ func New(logger *zap.Logger, host, port string, workers int) (*UDP, error) {
 	)
 
 	// Register observable metrics (queue_size)
-	output.InitObservableMetrics(udp)
+	if err := udp.metrics.InitObservable(udp); err != nil {
+		return nil, fmt.Errorf("init observable metrics: %w", err)
+	}
 
 	// Create worker manager
 	udp.workerManager = workermanager.NewWorkerManager(udp.logger, workers, udp.udpWorker)
 
 	// Record initial active workers count
-	output.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(workers), outputType)
+	udp.metrics.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(workers), outputType)
 
 	// Start the workers
 	udp.workerManager.Start()
@@ -104,7 +114,7 @@ func (u *UDP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 func (u *UDP) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case u.dataChan <- data.Message:
-		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
+		u.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -121,7 +131,7 @@ func (u *UDP) Stop(ctx context.Context) error {
 	u.logger.Info("Stopping UDP output")
 
 	// Record zero active workers
-	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
+	u.metrics.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
 	// Reject any further writes and stop the workers (and their restart loop).
 	u.cancel()
@@ -253,15 +263,15 @@ func (u *UDP) sendData(conn net.Conn, data string) error {
 	}
 
 	// Record successful send metrics
-	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType, "logs")
-	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType, "logs")
+	u.metrics.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType, "logs")
+	u.metrics.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType, "logs")
 
 	return nil
 }
 
 // recordSendError records metrics for send errors
 func (u *UDP) recordSendError(_ string, _ error) {
-	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
+	u.metrics.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
 }
 
 // SupportedTelemetry returns the telemetry types this output can consume.

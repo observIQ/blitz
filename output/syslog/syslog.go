@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/output/syslog/ident"
 	"github.com/observiq/blitz/output/tcp"
@@ -61,6 +62,11 @@ type Config struct {
 
 	// TCP-only TLS configuration. If nil, TLS is disabled.
 	TLSConfig *tls.Config
+
+	// Telemetry carries the OTel providers blitz routes its self-telemetry
+	// through, forwarded to the underlying TCP/UDP transport. The zero value
+	// falls back to the process-global providers.
+	Telemetry embed.TelemetrySettings
 }
 
 // Syslog implements output.Output by formatting records as syslog and delegating transport.
@@ -107,6 +113,7 @@ func New(logger *zap.Logger, cfg Config) (*Syslog, error) {
 			strconv.Itoa(cfg.Port),
 			cfg.Workers,
 			cfg.TLSConfig,
+			cfg.Telemetry,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("create tcp transport: %w", err)
@@ -117,6 +124,7 @@ func New(logger *zap.Logger, cfg Config) (*Syslog, error) {
 			cfg.Host,
 			strconv.Itoa(cfg.Port),
 			cfg.Workers,
+			cfg.Telemetry,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("create udp transport: %w", err)

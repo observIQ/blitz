@@ -45,9 +45,11 @@ type Generator struct {
 	state    *catalog.StateTracker
 	opts     *catalog.GenerateOpts
 
-	wg      sync.WaitGroup
-	stopCh  chan struct{}
+	metrics *generator.Metrics
 	tracker *count.Tracker
+
+	wg     sync.WaitGroup
+	stopCh chan struct{}
 
 	recordID atomic.Int64
 }
@@ -64,6 +66,11 @@ type Config struct {
 	Role     catalog.MachineRole
 	Channels []string
 	Consumer embed.LogConsumer
+
+	// Telemetry supplies the OTel providers blitz routes its own
+	// self-telemetry through. The zero value falls back to the process
+	// global providers.
+	Telemetry embed.TelemetrySettings
 
 	// Environment data — caller-owned slices. The generator stores the
 	// reference; callers must not mutate the underlying arrays after
@@ -105,6 +112,11 @@ func New(cfg Config) (*Generator, error) {
 		return nil, fmt.Errorf("no events available for role %q with channels %v", cfg.Role, cfg.Channels)
 	}
 
+	metrics, err := generator.NewMetrics(cfg.Telemetry.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build generator metrics: %w", err)
+	}
+
 	state := catalog.NewStateTracker(1000)
 
 	// Defensive clone of the caller-supplied slices. Workers read from
@@ -137,6 +149,7 @@ func New(cfg Config) (*Generator, error) {
 		registry: reg,
 		state:    state,
 		opts:     opts,
+		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
 }
@@ -166,7 +179,7 @@ func (g *Generator) Start(_ context.Context) error {
 		zap.Strings("channels", g.channels),
 	)
 
-	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
@@ -179,7 +192,7 @@ func (g *Generator) Start(_ context.Context) error {
 func (g *Generator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping WEL generator")
 
-	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
 
 	close(g.stopCh)
 
@@ -272,7 +285,7 @@ func (g *Generator) generateAndWrite(rng *rand.Rand) error {
 	// Render as XML for the consumer
 	xml := record.ToXML()
 
-	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName,
+	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName,
 		metric.WithAttributeSet(attribute.NewSet(attribute.String("channel", record.Channel))),
 	)
 
@@ -292,7 +305,7 @@ func (g *Generator) generateAndWrite(rng *rand.Rand) error {
 		if ctx.Err() == context.DeadlineExceeded {
 			errorType = "timeout"
 		}
-		generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+		g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
 			metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 		)
 		return err

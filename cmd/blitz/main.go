@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/filegen/embeddedlibrary"
 	gennop "github.com/observiq/blitz/generator/nop"
@@ -147,6 +148,11 @@ func run(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
+	// Blitz routes its own self-telemetry through this bundle. Standalone
+	// leaves the providers nil so they fall back to the process-global
+	// provider configured by setupMetrics (Prometheus).
+	tel := embed.TelemetrySettings{Logger: logger}
+
 	// Configure output first
 	var outputInstance output.Output
 	switch cfg.Output.Type {
@@ -180,6 +186,7 @@ func run(cmd *cobra.Command, args []string) error {
 			strconv.Itoa(cfg.Output.TCP.Port),
 			cfg.Output.TCP.Workers,
 			tlsConfig,
+			tel,
 		)
 		if err != nil {
 			logger.Error("Failed to create TCP output", zap.Error(err))
@@ -191,6 +198,7 @@ func run(cmd *cobra.Command, args []string) error {
 			cfg.Output.UDP.Host,
 			strconv.Itoa(cfg.Output.UDP.Port),
 			cfg.Output.UDP.Workers,
+			tel,
 		)
 		if err != nil {
 			logger.Error("Failed to create UDP output", zap.Error(err))
@@ -219,6 +227,7 @@ func run(cmd *cobra.Command, args []string) error {
 			MsgID:            cfg.Output.Syslog.MsgID,
 			MaxDatagramBytes: cfg.Output.Syslog.MaxDatagramBytes,
 			TLSConfig:        tlsConfig,
+			Telemetry:        tel,
 		}
 		outputInstance, err = syslogout.New(logger, sysCfg)
 		if err != nil {
@@ -245,6 +254,7 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		// Set insecure flag
 		opts = append(opts, otlpgrpc.WithInsecure(cfg.Output.OTLPGrpc.Insecure))
+		opts = append(opts, otlpgrpc.WithTelemetry(tel))
 		// If TLS is enabled and not insecure, set up TLS
 		if cfg.Output.OTLPGrpc.EnableTLS && !cfg.Output.OTLPGrpc.Insecure {
 			var tlsConfig *tls.Config
@@ -273,6 +283,7 @@ func run(cmd *cobra.Command, args []string) error {
 			cfg.Output.File.Path,
 			cfg.Output.File.Workers,
 			rot,
+			tel,
 		)
 		if err != nil {
 			logger.Error("Failed to create File output", zap.Error(err))
@@ -295,6 +306,7 @@ func run(cmd *cobra.Command, args []string) error {
 			hecout.WithSourceType(cfg.Output.HEC.SourceType),
 			hecout.WithIndex(cfg.Output.HEC.Index),
 			hecout.WithEnableTLS(cfg.Output.HEC.EnableTLS),
+			hecout.WithTelemetry(tel),
 		}
 		if cfg.Output.HEC.EnableTLS {
 			var tlsConfig *tls.Config
@@ -330,7 +342,7 @@ func run(cmd *cobra.Command, args []string) error {
 	var tracker *count.Tracker
 
 	for _, genCfg := range effectiveGens {
-		gen, genErr := createGenerator(logger, genCfg, outputInstance, env)
+		gen, genErr := createGenerator(logger, genCfg, outputInstance, env, tel)
 		if genErr != nil {
 			logger.Error("Failed to create generator",
 				zap.String("type", string(genCfg.Type)),
@@ -409,7 +421,7 @@ shutdown:
 	return nil
 }
 
-func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Output, env *datagen.Environment) (any, error) {
+func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Output, env *datagen.Environment, tel embed.TelemetrySettings) (any, error) {
 	// Standalone-CLI-only generator types that dispatch.ForEmbed does not
 	// construct (winevt is deprecated for embed; nop yields no records).
 	// All other generators delegate to dispatch.ForEmbed so the
@@ -418,7 +430,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	case config.GeneratorTypeNop:
 		return gennop.New(logger)
 	case config.GeneratorTypeWinevt:
-		return winevt.New(logger, genCfg.Winevt.Workers, genCfg.Winevt.Rate)
+		return winevt.New(logger, genCfg.Winevt.Workers, genCfg.Winevt.Rate, tel)
 	}
 
 	// All remaining (embed-eligible) types go through the canonical
@@ -439,7 +451,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	}
 	// Pass the embedded library so an embed_library build resolves package
 	// sources; without the tag FS() is empty and resolution uses disk (PIPE-1445).
-	mod, err := dispatch.ForEmbed(logger, genCfg, consumers, embeddedlibrary.FS(), env)
+	mod, err := dispatch.ForEmbed(logger, genCfg, consumers, embeddedlibrary.FS(), env, tel)
 	if err != nil {
 		return nil, err
 	}

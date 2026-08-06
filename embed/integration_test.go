@@ -67,7 +67,7 @@ func TestEmbed_ApacheRecordsFlowToMemoryConsumer(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := &memoryLogConsumer{}
 
-	gen, err := apache.New(logger, 1, 10*time.Millisecond, consumer)
+	gen, err := apache.New(logger, 1, 10*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	runner, err := embed.New(embed.Config{
@@ -232,7 +232,7 @@ func TestEmbed_HostMetricsPointsFlowToMemoryConsumer(t *testing.T) {
 func TestEmbed_RunnerRejectsDoubleStart(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := &memoryLogConsumer{}
-	gen, err := apache.New(logger, 1, 10*time.Millisecond, consumer)
+	gen, err := apache.New(logger, 1, 10*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	runner, err := embed.New(embed.Config{Modules: []embed.ProducerModule{gen}})

@@ -124,7 +124,7 @@ func New(logger *zap.Logger, opts ...Option) (*HEC, error) {
 		hostname = "unknown"
 	}
 
-	m, err := newHECMetrics()
+	m, err := newHECMetrics(cfg.tel)
 	if err != nil {
 		return nil, fmt.Errorf("create metrics: %w", err)
 	}

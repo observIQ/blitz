@@ -1,6 +1,8 @@
 package embed
 
 import (
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
 	"github.com/observiq/blitz/internal/datagen"
@@ -35,6 +37,21 @@ type Host struct {
 	// treat their own reference as frozen once they hand the Host off.
 	// See cloneResource in this package.
 	Resource map[string]any
+
+	// MeterProvider is the OTel MeterProvider blitz routes its own internal
+	// metrics through (generator and output self-telemetry). Nil falls back
+	// to the process-global provider, matching standalone behavior.
+	MeterProvider metric.MeterProvider
+
+	// TracerProvider is the OTel TracerProvider blitz routes its own internal
+	// spans through. Nil falls back to the process-global provider. Reserved
+	// for the self-tracing phase; blitz emits no internal spans yet.
+	TracerProvider trace.TracerProvider
+
+	// PerBatchSpans enables the higher-volume per-emit-cycle spans once
+	// self-tracing lands. Off by default; the coarse spans do not depend on
+	// it.
+	PerBatchSpans bool
 
 	// Environment is the simulated datagen.Environment that generators draw
 	// their host identities (host.name / os.type) from (PIPE-1036). Nil means

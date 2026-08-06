@@ -88,7 +88,7 @@ func TestNew(t *testing.T) {
 	workers := 5
 	rate := 100 * time.Millisecond
 
-	generator, err := New(logger, workers, rate, newMockWriter())
+	generator, err := New(logger, workers, rate, newMockWriter(), embed.NopTelemetry())
 
 	assert.NoError(t, err)
 	assert.NotNil(t, generator)
@@ -99,7 +99,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNew_NilLogger(t *testing.T) {
-	generator, err := New(nil, 5, 100*time.Millisecond, newMockWriter())
+	generator, err := New(nil, 5, 100*time.Millisecond, newMockWriter(), embed.NopTelemetry())
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
@@ -110,13 +110,13 @@ func TestNew_InvalidWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Test zero workers
-	generator, err := New(logger, 0, 100*time.Millisecond, newMockWriter())
+	generator, err := New(logger, 0, 100*time.Millisecond, newMockWriter(), embed.NopTelemetry())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
 
 	// Test negative workers
-	generator, err = New(logger, -1, 100*time.Millisecond, newMockWriter())
+	generator, err = New(logger, -1, 100*time.Millisecond, newMockWriter(), embed.NopTelemetry())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
@@ -125,7 +125,7 @@ func TestNew_InvalidWorkers(t *testing.T) {
 func TestGenerator_Start(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 2, 50*time.Millisecond, writer)
+	generator, err := New(logger, 2, 50*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -146,7 +146,7 @@ func TestGenerator_Start(t *testing.T) {
 func TestGenerator_Stop_GracefulShutdown(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 3, 10*time.Millisecond, writer)
+	generator, err := New(logger, 3, 10*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -176,7 +176,7 @@ func TestGenerator_WriteErrors_Backoff(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 	writer.setWriteError(errors.New("write failed"))
-	generator, err := New(logger, 1, 10*time.Millisecond, writer)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -198,7 +198,7 @@ func TestGenerator_WriteErrors_Backoff(t *testing.T) {
 func TestGenerator_ConcurrentWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 5, 20*time.Millisecond, writer)
+	generator, err := New(logger, 5, 20*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -297,7 +297,7 @@ func TestGenerator_MultipleStartStop(t *testing.T) {
 	// cycle must produce at least one additional record before the
 	// generator is stopped — otherwise the cycle proved nothing.
 	for range 3 {
-		generator, err := New(logger, 2, 20*time.Millisecond, writer)
+		generator, err := New(logger, 2, 20*time.Millisecond, writer, embed.NopTelemetry())
 		require.NoError(t, err)
 
 		err = generator.Start(context.Background())
@@ -318,7 +318,7 @@ func TestGenerator_MultipleStartStop(t *testing.T) {
 func TestGenerator_VeryFastRate(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 1*time.Millisecond, writer)
+	generator, err := New(logger, 1, 1*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -339,7 +339,7 @@ func TestGenerator_VeryFastRate(t *testing.T) {
 
 func TestGenerator_SetCountTracker(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond, newMockWriter())
+	gen, err := New(logger, 1, 50*time.Millisecond, newMockWriter(), embed.NopTelemetry())
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -353,7 +353,7 @@ func TestGenerator_CountLimited(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 
-	gen, err := New(logger, 2, 10*time.Millisecond, writer)
+	gen, err := New(logger, 2, 10*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)
@@ -387,7 +387,7 @@ func TestGenerator_CountLimited(t *testing.T) {
 
 func TestSetHostIdentity(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 100*time.Millisecond, newMockWriter())
+	gen, err := New(logger, 1, 100*time.Millisecond, newMockWriter(), embed.NopTelemetry())
 	require.NoError(t, err)
 
 	gen.SetHostIdentity(&datagen.SystemIdentity{

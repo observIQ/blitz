@@ -3,6 +3,8 @@ package hec
 import (
 	"crypto/tls"
 	"time"
+
+	"github.com/observiq/blitz/embed"
 )
 
 // Option is a functional option for configuring the HEC output
@@ -26,6 +28,16 @@ type Config struct {
 	index           string
 	enableTLS       bool
 	tlsConfig       *tls.Config
+	tel             embed.TelemetrySettings
+}
+
+// WithTelemetry sets the OTel providers blitz routes its self-telemetry
+// through. The zero value falls back to the process-global providers.
+func WithTelemetry(tel embed.TelemetrySettings) Option {
+	return func(cfg *Config) error {
+		cfg.tel = tel
+		return nil
+	}
 }
 
 // WithHost sets the target host for HEC connections

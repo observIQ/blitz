@@ -31,10 +31,11 @@ type WinevtGenerator struct {
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
 	tracker *count.Tracker
+	metrics *generator.Metrics
 }
 
 // New creates a new Windows Event generator.
-func New(logger *zap.Logger, workers int, rate time.Duration) (*WinevtGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, tel embed.TelemetrySettings) (*WinevtGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -42,10 +43,16 @@ func New(logger *zap.Logger, workers int, rate time.Duration) (*WinevtGenerator,
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", workers)
 	}
 
+	metrics, err := generator.NewMetrics(tel.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build generator metrics: %w", err)
+	}
+
 	return &WinevtGenerator{
 		logger:  logger,
 		workers: workers,
 		rate:    rate,
+		metrics: metrics,
 		stopCh:  make(chan struct{}),
 	}, nil
 }
@@ -57,7 +64,7 @@ func (g *WinevtGenerator) Start(writer output.Writer) error {
 		zap.Duration("rate", g.rate),
 	)
 
-	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
@@ -70,7 +77,7 @@ func (g *WinevtGenerator) Start(writer output.Writer) error {
 func (g *WinevtGenerator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping Windows Event generator")
 
-	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
 
 	close(g.stopCh)
 
@@ -142,7 +149,7 @@ func (g *WinevtGenerator) generateAndWrite(writer output.Writer, workerID int) e
 		return fmt.Errorf("render template: %w", err)
 	}
 
-	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
+	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -166,7 +173,7 @@ func (g *WinevtGenerator) generateAndWrite(writer output.Writer, workerID int) e
 }
 
 func (g *WinevtGenerator) recordWriteError(errorType string, _ error) {
-	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+	g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
 		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 }

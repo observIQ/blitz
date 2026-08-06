@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -71,6 +72,7 @@ type OTLPGrpcConfig struct {
 	maxExportBatchSize int
 	insecure           bool
 	tlsConfig          *tls.Config
+	tel                embed.TelemetrySettings
 }
 
 // WithHost sets the host for OTLP gRPC connections
@@ -145,6 +147,14 @@ func WithTLSConfig(tlsConfig *tls.Config) OTLPGrpcOption {
 	}
 }
 
+// WithTelemetry sets the OTel providers blitz routes its self-telemetry through.
+func WithTelemetry(tel embed.TelemetrySettings) OTLPGrpcOption {
+	return func(cfg *OTLPGrpcConfig) error {
+		cfg.tel = tel
+		return nil
+	}
+}
+
 // outputType is the output_type attribute value for OTLP gRPC metrics.
 const outputType = "otlp-grpc"
 
@@ -162,6 +172,7 @@ type OTLPGrpc struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
+	metrics       *output.Metrics
 
 	// Configuration
 	batchTimeout       time.Duration
@@ -214,6 +225,12 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	m, err := output.NewMetrics(cfg.tel.MeterProvider)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("build output metrics: %w", err)
+	}
+
 	otlp := &OTLPGrpc{
 		logger:             logger.Named("output-otlp-grpc"),
 		host:               cfg.host,
@@ -230,6 +247,7 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 		requestTimeout:     cfg.requestTimeout,
 		maxQueueSize:       cfg.maxQueueSize,
 		maxExportBatchSize: cfg.maxExportBatchSize,
+		metrics:            m,
 	}
 
 	otlp.logger.Info("Starting OTLP gRPC output",
@@ -246,13 +264,16 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 	)
 
 	// Register observable metrics (queue_size)
-	output.InitObservableMetrics(otlp)
+	if err := otlp.metrics.InitObservable(otlp); err != nil {
+		cancel()
+		return nil, fmt.Errorf("init observable metrics: %w", err)
+	}
 
 	// Create worker manager
 	otlp.workerManager = workermanager.NewWorkerManager(otlp.logger, cfg.workers, otlp.otlpWorker)
 
 	// Record initial active workers count
-	output.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(cfg.workers), outputType)
+	otlp.metrics.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(cfg.workers), outputType)
 
 	// Start the workers
 	otlp.workerManager.Start()
@@ -328,7 +349,7 @@ func (o *OTLPGrpc) Write(ctx context.Context, data output.LogRecord) error {
 
 	select {
 	case o.dataChan <- record:
-		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
+		o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -345,7 +366,7 @@ func (o *OTLPGrpc) Stop(ctx context.Context) error {
 	o.logger.Info("Stopping OTLP gRPC output")
 
 	// Record zero active workers
-	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
+	o.metrics.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
 	// Close the channels to ensure workers do not
 	// process new data.
@@ -526,15 +547,15 @@ func (o *OTLPGrpc) sendMetricBatch(client collectormetrics.MetricsServiceClient,
 	startTime := time.Now()
 	_, err := client.Export(ctx, request)
 	if err != nil {
-		output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "metrics")
+		o.metrics.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "metrics")
 		return fmt.Errorf("failed to export metrics: %w", err)
 	}
 
 	latency := time.Since(startTime).Seconds()
 	requestSize := int64(proto.Size(request))
-	output.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(metrics)), outputType, "metrics")
-	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "metrics")
-	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "metrics")
+	o.metrics.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(metrics)), outputType, "metrics")
+	o.metrics.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "metrics")
+	o.metrics.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "metrics")
 
 	return nil
 }
@@ -557,15 +578,15 @@ func (o *OTLPGrpc) sendTraceBatch(client collectortrace.TraceServiceClient, batc
 	startTime := time.Now()
 	_, err := client.Export(ctx, request)
 	if err != nil {
-		output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "traces")
+		o.metrics.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "traces")
 		return fmt.Errorf("failed to export traces: %w", err)
 	}
 
 	latency := time.Since(startTime).Seconds()
 	requestSize := int64(proto.Size(request))
-	output.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(spans)), outputType, "traces")
-	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "traces")
-	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "traces")
+	o.metrics.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(spans)), outputType, "traces")
+	o.metrics.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "traces")
+	o.metrics.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "traces")
 
 	return nil
 }
@@ -669,9 +690,9 @@ func (o *OTLPGrpc) sendBatch(client collectorlogs.LogsServiceClient, batch *logB
 	// Record successful send metrics
 	latency := time.Since(startTime).Seconds()
 	requestSize := int64(proto.Size(request))
-	output.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(logs)), outputType, "logs")
-	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "logs")
-	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "logs")
+	o.metrics.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(logs)), outputType, "logs")
+	o.metrics.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "logs")
+	o.metrics.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "logs")
 
 	return nil
 }
@@ -800,7 +821,7 @@ func (o *OTLPGrpc) toAnyValue(v any) *commonpb.AnyValue {
 
 // recordSendError records metrics for send errors
 func (o *OTLPGrpc) recordSendError(_ string, _ error) {
-	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
+	o.metrics.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
 }
 
 // SupportedTelemetry returns the telemetry types this output can consume.

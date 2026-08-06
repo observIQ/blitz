@@ -7,7 +7,6 @@ package generator
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -20,44 +19,25 @@ const (
 	attrGeneratorType = "generator_type"
 )
 
-// ErrorTypeValue is the type of the error_type enum attribute
-type ErrorTypeValue string
+// error_typeValue is the type of the error_type enum attribute
+type errorTypeValue string
 
 // Constants for enum members
 
 const (
-	ErrorTypeUnknown ErrorTypeValue = "unknown"
-	ErrorTypeTimeout ErrorTypeValue = "timeout"
+	errorTypeUnknown errorTypeValue = "unknown"
+	errorTypeTimeout errorTypeValue = "timeout"
 )
 
 // Wrapper types for metrics with required attributes
 
-// BlitzGeneratorEntriesCounterType wraps the blitz.generator.entries metric with type-safe required attributes
-type BlitzGeneratorEntriesCounterType struct {
-	counter metric.Int64Counter
-}
-
-// Add records a value for blitz.generator.entries with required attributes
-func (m BlitzGeneratorEntriesCounterType) Add(ctx context.Context, value int64, generatorType string, opts ...metric.AddOption) {
-	attrs := metric.WithAttributeSet(attribute.NewSet(
-		attribute.String(attrGeneratorType, generatorType),
-	))
-
-	if len(opts) == 0 {
-		m.counter.Add(ctx, value, attrs)
-	} else {
-		allOpts := append([]metric.AddOption{attrs}, opts...)
-		m.counter.Add(ctx, value, allOpts...)
-	}
-}
-
-// BlitzGeneratorActiveWorkersGaugeType wraps the blitz.generator.active_workers metric with type-safe required attributes
-type BlitzGeneratorActiveWorkersGaugeType struct {
+// blitzGeneratorActiveWorkersGaugeType wraps the blitz.generator.active_workers metric with type-safe required attributes
+type blitzGeneratorActiveWorkersGaugeType struct {
 	gauge metric.Int64Gauge
 }
 
 // Record records a value for blitz.generator.active_workers with required attributes
-func (m BlitzGeneratorActiveWorkersGaugeType) Record(ctx context.Context, value int64, generatorType string, opts ...metric.RecordOption) {
+func (m blitzGeneratorActiveWorkersGaugeType) Record(ctx context.Context, value int64, generatorType string, opts ...metric.RecordOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrGeneratorType, generatorType),
 	))
@@ -70,13 +50,13 @@ func (m BlitzGeneratorActiveWorkersGaugeType) Record(ctx context.Context, value 
 	}
 }
 
-// BlitzGeneratorWriteErrorsCounterType wraps the blitz.generator.write_errors metric with type-safe required attributes
-type BlitzGeneratorWriteErrorsCounterType struct {
+// blitzGeneratorEntriesCounterType wraps the blitz.generator.entries metric with type-safe required attributes
+type blitzGeneratorEntriesCounterType struct {
 	counter metric.Int64Counter
 }
 
-// Add records a value for blitz.generator.write_errors with required attributes
-func (m BlitzGeneratorWriteErrorsCounterType) Add(ctx context.Context, value int64, generatorType string, opts ...metric.AddOption) {
+// Add records a value for blitz.generator.entries with required attributes
+func (m blitzGeneratorEntriesCounterType) Add(ctx context.Context, value int64, generatorType string, opts ...metric.AddOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrGeneratorType, generatorType),
 	))
@@ -89,51 +69,79 @@ func (m BlitzGeneratorWriteErrorsCounterType) Add(ctx context.Context, value int
 	}
 }
 
+// blitzGeneratorWriteErrorsCounterType wraps the blitz.generator.write_errors metric with type-safe required attributes
+type blitzGeneratorWriteErrorsCounterType struct {
+	counter metric.Int64Counter
+}
+
+// Add records a value for blitz.generator.write_errors with required attributes
+func (m blitzGeneratorWriteErrorsCounterType) Add(ctx context.Context, value int64, generatorType string, opts ...metric.AddOption) {
+	attrs := metric.WithAttributeSet(attribute.NewSet(
+		attribute.String(attrGeneratorType, generatorType),
+	))
+
+	if len(opts) == 0 {
+		m.counter.Add(ctx, value, attrs)
+	} else {
+		allOpts := append([]metric.AddOption{attrs}, opts...)
+		m.counter.Add(ctx, value, allOpts...)
+	}
+}
+
+// Attribute value options (provider-independent)
 var (
-	generatorMeter = otel.Meter("generator")
-
-	// BlitzGeneratorEntriesCounter tracks the total number of telemetry entries generated
-	BlitzGeneratorEntriesCounter BlitzGeneratorEntriesCounterType
-
-	// BlitzGeneratorActiveWorkersGauge tracks the number of active worker goroutines
-	BlitzGeneratorActiveWorkersGauge BlitzGeneratorActiveWorkersGaugeType
-
-	// BlitzGeneratorWriteErrorsCounter tracks the total number of write errors
-	BlitzGeneratorWriteErrorsCounter BlitzGeneratorWriteErrorsCounterType
-
-	// error_type
-	AttrErrorTypeUnknown = attribute.String(attrErrorType, string(ErrorTypeUnknown))
-	AttrErrorTypeTimeout = attribute.String(attrErrorType, string(ErrorTypeTimeout))
+	attrErrorTypeUnknown = attribute.String(attrErrorType, string(errorTypeUnknown))
+	attrErrorTypeTimeout = attribute.String(attrErrorType, string(errorTypeTimeout))
 )
 
-func init() {
-	var err, errs error
+// Metrics holds blitz's generator self-telemetry instruments. Build one
+// with NewMetrics from a caller-supplied MeterProvider so metrics can be routed
+// to any provider (an embedding host's, or the process global).
+type Metrics struct {
+	generatorMeter metric.Meter
 
-	blitzGeneratorEntriesCounterRaw, err := generatorMeter.Int64Counter(
-		"blitz.generator.entries",
-		metric.WithDescription("total number of telemetry entries generated"),
-		metric.WithUnit("{entry}"),
-	)
-	errs = errors.Join(errs, err)
-	BlitzGeneratorEntriesCounter = BlitzGeneratorEntriesCounterType{counter: blitzGeneratorEntriesCounterRaw}
+	// number of active worker goroutines
+	BlitzGeneratorActiveWorkersGauge blitzGeneratorActiveWorkersGaugeType
+	// total number of telemetry entries generated
+	BlitzGeneratorEntriesCounter blitzGeneratorEntriesCounterType
+	// total number of write errors
+	BlitzGeneratorWriteErrorsCounter blitzGeneratorWriteErrorsCounterType
+}
 
-	blitzGeneratorActiveWorkersGaugeRaw, err := generatorMeter.Int64Gauge(
+// NewMetrics builds the generator instruments from mp. A nil mp falls
+// back to the process-global MeterProvider, preserving standalone behavior.
+func NewMetrics(mp metric.MeterProvider) (*Metrics, error) {
+	if mp == nil {
+		mp = otel.GetMeterProvider()
+	}
+	m := &Metrics{}
+	var errs error
+
+	m.generatorMeter = mp.Meter("generator")
+
+	BlitzGeneratorActiveWorkersGaugeRaw, err := m.generatorMeter.Int64Gauge(
 		"blitz.generator.active_workers",
 		metric.WithDescription("number of active worker goroutines"),
 		metric.WithUnit("{worker}"),
 	)
 	errs = errors.Join(errs, err)
-	BlitzGeneratorActiveWorkersGauge = BlitzGeneratorActiveWorkersGaugeType{gauge: blitzGeneratorActiveWorkersGaugeRaw}
+	m.BlitzGeneratorActiveWorkersGauge = blitzGeneratorActiveWorkersGaugeType{gauge: BlitzGeneratorActiveWorkersGaugeRaw}
 
-	blitzGeneratorWriteErrorsCounterRaw, err := generatorMeter.Int64Counter(
+	BlitzGeneratorEntriesCounterRaw, err := m.generatorMeter.Int64Counter(
+		"blitz.generator.entries",
+		metric.WithDescription("total number of telemetry entries generated"),
+		metric.WithUnit("{entry}"),
+	)
+	errs = errors.Join(errs, err)
+	m.BlitzGeneratorEntriesCounter = blitzGeneratorEntriesCounterType{counter: BlitzGeneratorEntriesCounterRaw}
+
+	BlitzGeneratorWriteErrorsCounterRaw, err := m.generatorMeter.Int64Counter(
 		"blitz.generator.write_errors",
 		metric.WithDescription("total number of write errors"),
 		metric.WithUnit("{error}"),
 	)
 	errs = errors.Join(errs, err)
-	BlitzGeneratorWriteErrorsCounter = BlitzGeneratorWriteErrorsCounterType{counter: blitzGeneratorWriteErrorsCounterRaw}
+	m.BlitzGeneratorWriteErrorsCounter = blitzGeneratorWriteErrorsCounterType{counter: BlitzGeneratorWriteErrorsCounterRaw}
 
-	if errs != nil {
-		panic(fmt.Sprintf("Initialize generator metrics: %s", errs))
-	}
+	return m, errs
 }

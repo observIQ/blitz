@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -49,7 +50,9 @@ func TestUDP_drainBuffered_connectErrorReturns(t *testing.T) {
 }
 
 func TestUDP_drainTo_stopsOnSendError(t *testing.T) {
-	u := &UDP{logger: zap.NewNop(), dataChan: make(chan string, 2)}
+	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
+	require.NoError(t, err)
+	u := &UDP{logger: zap.NewNop(), dataChan: make(chan string, 2), metrics: m}
 	u.dataChan <- "one"
 	u.dataChan <- "two"
 	close(u.dataChan)
@@ -144,9 +147,9 @@ func TestNew(t *testing.T) {
 			var err error
 
 			if tt.name == "nil logger" {
-				udp, err = New(nil, tt.host, tt.port, tt.workers)
+				udp, err = New(nil, tt.host, tt.port, tt.workers, embed.NopTelemetry())
 			} else {
-				udp, err = New(logger, tt.host, tt.port, tt.workers)
+				udp, err = New(logger, tt.host, tt.port, tt.workers, embed.NopTelemetry())
 			}
 
 			if tt.wantErr {
@@ -220,7 +223,7 @@ func TestUDP_Integration(t *testing.T) {
 	}
 
 	// Create UDP client
-	udp, err := New(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1, embed.NopTelemetry())
 	if err != nil {
 		t.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -299,7 +302,7 @@ func TestUDP_WriteAfterStop(t *testing.T) {
 	}
 
 	// Create UDP client
-	udp, err := New(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1, embed.NopTelemetry())
 	if err != nil {
 		t.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -341,7 +344,7 @@ func TestUDP_StopTwice(t *testing.T) {
 	}
 
 	// Create UDP client
-	udp, err := New(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1, embed.NopTelemetry())
 	if err != nil {
 		t.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -369,7 +372,7 @@ func TestUDP_StopDrainsBufferedRecords(t *testing.T) {
 	defer listener.Close()
 	host, port, err := net.SplitHostPort(serverAddr)
 	require.NoError(t, err)
-	udp, err := New(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1, embed.NopTelemetry())
 	require.NoError(t, err)
 	const n = 100
 	ctx := context.Background()

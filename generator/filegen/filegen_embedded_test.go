@@ -59,6 +59,7 @@ func TestFilegen_EmbeddedLibrarySource(t *testing.T) {
 		0,    // cache TTL
 		consumer,
 		embeddedlibrary.FS(),
+		embed.NopTelemetry(),
 	)
 	require.NoError(t, err)
 
@@ -107,6 +108,7 @@ func TestFilegen_BareNameFallsBackToLibrary(t *testing.T) {
 		0,
 		consumer,
 		libFS,
+		embed.NopTelemetry(),
 	)
 	require.NoError(t, err)
 
@@ -149,6 +151,7 @@ func TestFilegen_PackagePrefixSkipsDiskFallback(t *testing.T) {
 		0,
 		consumer,
 		libFS,
+		embed.NopTelemetry(),
 	)
 	require.NoError(t, err)
 

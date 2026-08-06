@@ -81,7 +81,7 @@ func (c EmbedConsumers) requireTrace(typ config.GeneratorType) error {
 // consumer that is nil in `consumers` (e.g. hostmetrics without a
 // MetricConsumer, traces without a TraceConsumer), and for generator
 // types that are not embed-eligible at all (nop, winevt — see PIPE-1032).
-func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsumers, fileGenLibrary fs.FS, env *datagen.Environment) (embed.ProducerModule, error) {
+func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsumers, fileGenLibrary fs.FS, env *datagen.Environment, tel embed.TelemetrySettings) (embed.ProducerModule, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -90,61 +90,61 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := jsongen.New(logger, genCfg.JSON.Workers, genCfg.JSON.Rate, genCfg.JSON.Type, consumers.LogConsumer)
+		mod, err := jsongen.New(logger, genCfg.JSON.Workers, genCfg.JSON.Rate, genCfg.JSON.Type, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypePaloAlto:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate, consumers.LogConsumer)
+		mod, err := paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeApache:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate, consumers.LogConsumer)
+		mod, err := apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeApacheCombined:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate, consumers.LogConsumer)
+		mod, err := apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeApacheError:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := apacheerrorgen.New(logger, genCfg.ApacheError.Workers, genCfg.ApacheError.Rate, consumers.LogConsumer)
+		mod, err := apacheerrorgen.New(logger, genCfg.ApacheError.Workers, genCfg.ApacheError.Rate, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeNginx:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := nginx.New(logger, genCfg.Nginx.Workers, genCfg.Nginx.Rate, consumers.LogConsumer)
+		mod, err := nginx.New(logger, genCfg.Nginx.Workers, genCfg.Nginx.Rate, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypePostgres:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := postgres.New(logger, genCfg.Postgres.Workers, genCfg.Postgres.Rate, consumers.LogConsumer)
+		mod, err := postgres.New(logger, genCfg.Postgres.Workers, genCfg.Postgres.Rate, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeKubernetes:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format, consumers.LogConsumer)
+		mod, err := kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeFile:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, consumers.LogConsumer, fileGenLibrary)
+		mod, err := filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, consumers.LogConsumer, fileGenLibrary, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeOkta:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate, consumers.LogConsumer)
+		mod, err := okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeWel:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
@@ -155,14 +155,15 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			role = welcatalog.RoleMember
 		}
 		mod, err := wel.New(wel.Config{
-			Logger:   logger,
-			Workers:  genCfg.Wel.Workers,
-			Rate:     genCfg.Wel.Rate,
-			Computer: genCfg.Wel.Computer,
-			Domain:   genCfg.Wel.Domain,
-			Role:     role,
-			Channels: genCfg.Wel.Channels,
-			Consumer: consumers.LogConsumer,
+			Logger:    logger,
+			Workers:   genCfg.Wel.Workers,
+			Rate:      genCfg.Wel.Rate,
+			Computer:  genCfg.Wel.Computer,
+			Domain:    genCfg.Wel.Domain,
+			Role:      role,
+			Channels:  genCfg.Wel.Channels,
+			Consumer:  consumers.LogConsumer,
+			Telemetry: tel,
 		})
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeFIX:
@@ -185,19 +186,21 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			Consumer:     consumers.MetricConsumer,
 			Seed:         yamlSeedDefault(genCfg.HostMetrics.Seed),
 			Identity:     hostIdentity(env, genCfg.Type),
+			Telemetry:    tel,
 		})
 	case config.GeneratorTypeTraces:
 		if err := consumers.requireTrace(genCfg.Type); err != nil {
 			return nil, err
 		}
 		return tracesgen.New(tracesgen.Config{
-			Logger:   logger,
-			Workers:  genCfg.Traces.Workers,
-			Rate:     genCfg.Traces.Rate,
-			Hostname: genCfg.Traces.Hostname,
-			Consumer: consumers.TraceConsumer,
-			Seed:     yamlSeedDefault(genCfg.Traces.Seed),
-			Identity: hostIdentity(env, genCfg.Type),
+			Logger:    logger,
+			Workers:   genCfg.Traces.Workers,
+			Rate:      genCfg.Traces.Rate,
+			Hostname:  genCfg.Traces.Hostname,
+			Consumer:  consumers.TraceConsumer,
+			Seed:      yamlSeedDefault(genCfg.Traces.Seed),
+			Identity:  hostIdentity(env, genCfg.Type),
+			Telemetry: tel,
 		})
 	case config.GeneratorTypeNop:
 		return nil, fmt.Errorf("generator type %q does not produce records; not embed-eligible", genCfg.Type)

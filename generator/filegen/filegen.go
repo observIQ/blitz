@@ -110,6 +110,8 @@ type FileLogGenerator struct {
 
 	// File cache
 	cache *Cache
+
+	metrics *generator.Metrics
 }
 
 // New creates a new File log generator. The consumer receives each
@@ -121,7 +123,7 @@ type FileLogGenerator struct {
 // when running blitz embedded inside another binary). When nil, those
 // sources resolve against the on-disk ./data_library/ directory, which
 // is the standalone CLI behavior.
-func New(logger *zap.Logger, workers int, rate time.Duration, source string, cacheEnabled bool, cacheTTL time.Duration, consumer embed.LogConsumer, dataLibrary fs.FS) (*FileLogGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, source string, cacheEnabled bool, cacheTTL time.Duration, consumer embed.LogConsumer, dataLibrary fs.FS, tel embed.TelemetrySettings) (*FileLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -147,6 +149,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string, cac
 		return nil, fmt.Errorf("create cache: %w", err)
 	}
 
+	metrics, err := generator.NewMetrics(tel.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build generator metrics: %w", err)
+	}
+
 	return &FileLogGenerator{
 		logger:      logger,
 		workers:     workers,
@@ -157,6 +164,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string, cac
 		dataLibrary: dataLibrary,
 		stopCh:      make(chan struct{}),
 		cache:       cache,
+		metrics:     metrics,
 	}, nil
 }
 
@@ -180,7 +188,7 @@ func (g *FileLogGenerator) Start(_ context.Context) error {
 		zap.Duration("rate", g.rate))
 
 	// Record initial active workers count
-	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 
 	// Get list of files to read
 	files, err := g.getFiles()
@@ -207,7 +215,7 @@ func (g *FileLogGenerator) Start(_ context.Context) error {
 func (g *FileLogGenerator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping File log generator")
 
-	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
 
 	close(g.stopCh)
 
@@ -451,7 +459,7 @@ func (g *FileLogGenerator) worker(id int, files []string) {
 			err := g.readAndWriteFile(file)
 			if err != nil {
 				g.logger.Error("Error reading file", zap.String("file", file), zap.Error(err))
-				generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
+				g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
 				// On error, backoff will automatically handle retry timing
 				timer.Reset(backoffConfig.NextBackOff())
 				continue
@@ -515,11 +523,11 @@ func (g *FileLogGenerator) readAndWriteFile(filename string) error {
 	cancel()
 
 	if err != nil {
-		generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
+		g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
 		return fmt.Errorf("write: %w", err)
 	}
 
-	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
+	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	return nil
 }

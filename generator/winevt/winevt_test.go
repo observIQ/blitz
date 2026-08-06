@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generators/winevt/templates"
 	"github.com/observiq/blitz/output"
@@ -42,7 +43,7 @@ func (m *mockWriter) getWrites() [][]byte {
 
 func TestNew(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	g, err := New(logger, 2, 50*time.Millisecond)
+	g, err := New(logger, 2, 50*time.Millisecond, embed.NopTelemetry())
 	assert.NoError(t, err)
 	assert.NotNil(t, g)
 }
@@ -50,7 +51,7 @@ func TestNew(t *testing.T) {
 func TestWinevtGenerator_GeneratesAndWrites(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	g, err := New(logger, 2, 20*time.Millisecond)
+	g, err := New(logger, 2, 20*time.Millisecond, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = g.Start(writer)
@@ -124,7 +125,7 @@ func TestRenderTemplate_RandomSelection(t *testing.T) {
 
 func TestWinevtGenerator_SetCountTracker(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond)
+	gen, err := New(logger, 1, 50*time.Millisecond, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -138,7 +139,7 @@ func TestWinevtGenerator_CountLimited(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 
-	gen, err := New(logger, 2, 10*time.Millisecond)
+	gen, err := New(logger, 2, 10*time.Millisecond, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)

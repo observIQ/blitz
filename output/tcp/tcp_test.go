@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -92,9 +93,9 @@ func TestNew(t *testing.T) {
 			var err error
 
 			if tt.name == "nil logger" {
-				tcp, err = New(nil, tt.host, tt.port, tt.workers, nil)
+				tcp, err = New(nil, tt.host, tt.port, tt.workers, nil, embed.NopTelemetry())
 			} else {
-				tcp, err = New(logger, tt.host, tt.port, tt.workers, nil)
+				tcp, err = New(logger, tt.host, tt.port, tt.workers, nil, embed.NopTelemetry())
 			}
 
 			if tt.wantErr {
@@ -168,7 +169,7 @@ func TestTCP_Integration(t *testing.T) {
 	}
 
 	// Create TCP client
-	tcp, err := New(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil, embed.NopTelemetry())
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -250,7 +251,7 @@ func TestTCP_WriteAfterStop(t *testing.T) {
 	}
 
 	// Create TCP client
-	tcp, err := New(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil, embed.NopTelemetry())
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -292,7 +293,7 @@ func TestTCP_StopTwice(t *testing.T) {
 	}
 
 	// Create TCP client
-	tcp, err := New(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil, embed.NopTelemetry())
 	if err != nil {
 		t.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -408,7 +409,7 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 	}
 
 	// Create TCP client with TLS
-	tcp, err := New(logger, host, port, 1, clientTLSConfig)
+	tcp, err := New(logger, host, port, 1, clientTLSConfig, embed.NopTelemetry())
 	if err != nil {
 		t.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
@@ -490,7 +491,7 @@ func TestTCP_StopWithUnreachableDestinationDoesNotHang(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, l.Close())
 
-	tcp, err := New(logger, "127.0.0.1", port, 1, nil)
+	tcp, err := New(logger, "127.0.0.1", port, 1, nil, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	// The worker cannot connect, so these stay buffered (well under channel cap).
@@ -607,7 +608,9 @@ func TestTCP_drainBuffered_emptyChannelReturnsEarly(t *testing.T) {
 
 // drainTo stops at the first send failure, leaving the rest undrained.
 func TestTCP_drainTo_stopsOnSendError(t *testing.T) {
-	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan string, 4)}
+	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
+	require.NoError(t, err)
+	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan string, 4), metrics: m}
 	tcp.dataChan <- "one"
 	tcp.dataChan <- "two"
 	close(tcp.dataChan)
@@ -646,7 +649,7 @@ func TestTCP_StopDrainsBufferedRecords(t *testing.T) {
 	host, port, err := net.SplitHostPort(serverAddr)
 	require.NoError(t, err)
 
-	tcp, err := New(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	// Queue a backlog of uniquely-identifiable records as fast as possible, so a

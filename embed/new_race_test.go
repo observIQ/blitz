@@ -24,7 +24,7 @@ func TestRunner_ConcurrentStartIsSerialized(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := &memoryLogConsumer{}
 
-	gen, err := apache.New(logger, 1, 10*time.Millisecond, consumer)
+	gen, err := apache.New(logger, 1, 10*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	runner, err := embed.New(embed.Config{Modules: []embed.ProducerModule{gen}})
@@ -72,7 +72,7 @@ func TestRunner_ConcurrentStopIsIdempotent(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := &memoryLogConsumer{}
 
-	gen, err := apache.New(logger, 1, 10*time.Millisecond, consumer)
+	gen, err := apache.New(logger, 1, 10*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	runner, err := embed.New(embed.Config{Modules: []embed.ProducerModule{gen}})
