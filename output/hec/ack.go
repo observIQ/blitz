@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/output"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 )
 
@@ -133,6 +136,7 @@ type ackPoller struct {
 	maxRetries int
 	resendCh   chan resendItem // channel to send payloads back for resend
 	metrics    *hecMetrics
+	tel        embed.TelemetrySettings
 	done       chan struct{}
 }
 
@@ -148,6 +152,7 @@ func newACKPoller(
 	maxRetries int,
 	resendCh chan resendItem,
 	metrics *hecMetrics,
+	tel embed.TelemetrySettings,
 ) *ackPoller {
 	return &ackPoller{
 		logger:     logger,
@@ -161,6 +166,7 @@ func newACKPoller(
 		maxRetries: maxRetries,
 		resendCh:   resendCh,
 		metrics:    metrics,
+		tel:        tel,
 		done:       make(chan struct{}),
 	}
 }
@@ -191,6 +197,12 @@ func (p *ackPoller) poll() {
 		return
 	}
 
+	// The ACK poll is where HEC send latency really lives (indexing
+	// confirmation), so it gets its own span carrying the pending count.
+	_, span := output.StartSendSpan(ctx, p.tel, "blitz.output.hec.ack_poll")
+	span.SetAttributes(attribute.Int("blitz.ack.pending", len(ids)))
+	defer span.End()
+
 	p.metrics.recordACKPending(ctx, int64(len(ids)))
 
 	// Query ACK status
@@ -199,6 +211,7 @@ func (p *ackPoller) poll() {
 	p.metrics.recordACKPollLatency(ctx, time.Since(startTime).Seconds())
 
 	if err != nil {
+		span.RecordError(err)
 		p.logger.Error("Failed to query ACK status", zap.Error(err))
 		// Don't remove anything on query failure — will retry next cycle
 		return
