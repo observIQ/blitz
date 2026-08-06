@@ -9,16 +9,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
+
+// outputType is the output_type attribute value for stdout metrics.
+const outputType = "stdout"
 
 // StdoutOutput writes log records to standard output via a buffered writer.
 // Records are batched in memory and flushed to os.Stdout periodically, reducing
 // per-record syscall overhead under high worker counts.
 type StdoutOutput struct {
 	logger        *zap.Logger
+	tel           embed.TelemetrySettings
+	metrics       *output.Metrics
 	writer        *bufio.Writer
 	mu            sync.Mutex
 	flushInterval time.Duration
@@ -43,8 +49,15 @@ func New(logger *zap.Logger, opts ...Option) (*StdoutOutput, error) {
 		}
 	}
 
+	m, err := output.NewMetrics(cfg.tel.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build output metrics: %w", err)
+	}
+
 	o := &StdoutOutput{
 		logger:        logger.Named("output-stdout"),
+		tel:           cfg.tel,
+		metrics:       m,
 		writer:        bufio.NewWriter(os.Stdout),
 		flushInterval: cfg.flushInterval,
 		stopCh:        make(chan struct{}),
@@ -57,7 +70,9 @@ func New(logger *zap.Logger, opts ...Option) (*StdoutOutput, error) {
 }
 
 // Write buffers the log record for the next flush.
-func (o *StdoutOutput) Write(_ context.Context, data output.LogRecord) error {
+func (o *StdoutOutput) Write(ctx context.Context, data output.LogRecord) error {
+	o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
+
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -93,9 +108,13 @@ func (o *StdoutOutput) flushLoop() {
 	for {
 		select {
 		case <-ticker.C:
+			// The flush is the actual stdout I/O, batching many buffered
+			// records, so it gets a standalone gated span.
+			_, span := output.StartSendSpan(context.Background(), o.tel, "blitz.output.stdout.flush")
 			o.mu.Lock()
 			_ = o.writer.Flush()
 			o.mu.Unlock()
+			span.End()
 		case <-o.stopCh:
 			return
 		}
