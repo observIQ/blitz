@@ -205,7 +205,7 @@ func NewMetrics(mp metric.MeterProvider) (*Metrics, error) {
 	BlitzOutputRequestLatencyHistogramRaw, err := m.outputMeter.Float64Histogram(
 		"blitz.output.request_latency",
 		metric.WithDescription("latency of output requests"),
-		metric.WithUnit("s"),
+		metric.WithUnit("ms"),
 	)
 	errs = errors.Join(errs, err)
 	m.BlitzOutputRequestLatencyHistogram = blitzOutputRequestLatencyHistogramType{histogram: BlitzOutputRequestLatencyHistogramRaw}

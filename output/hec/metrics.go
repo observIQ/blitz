@@ -47,8 +47,8 @@ func (m *hecMetrics) recordRequestSize(ctx context.Context, bytes int64) {
 	m.out.BlitzOutputRequestSizeHistogram.Record(ctx, bytes, outputType, "logs")
 }
 
-func (m *hecMetrics) recordRequestLatency(ctx context.Context, seconds float64) {
-	m.out.BlitzOutputRequestLatencyHistogram.Record(ctx, seconds, outputType, "logs")
+func (m *hecMetrics) recordRequestLatency(ctx context.Context, millis float64) {
+	m.out.BlitzOutputRequestLatencyHistogram.Record(ctx, millis, outputType, "logs")
 }
 
 func (m *hecMetrics) recordSendError(ctx context.Context, _ string) {
@@ -79,6 +79,6 @@ func (m *hecMetrics) recordACKDropped(ctx context.Context, count int64) {
 	m.hec.blitzOutputHecAckDroppedCounter.Add(ctx, count)
 }
 
-func (m *hecMetrics) recordACKPollLatency(ctx context.Context, seconds float64) {
-	m.hec.blitzOutputHecAckPollLatencyHistogram.Record(ctx, seconds)
+func (m *hecMetrics) recordACKPollLatency(ctx context.Context, millis float64) {
+	m.hec.blitzOutputHecAckPollLatencyHistogram.Record(ctx, millis)
 }
