@@ -208,7 +208,7 @@ func (p *ackPoller) poll() {
 	// Query ACK status
 	startTime := time.Now()
 	confirmed, err := p.queryACK(ids)
-	p.metrics.recordACKPollLatency(ctx, time.Since(startTime).Seconds())
+	p.metrics.recordACKPollLatency(ctx, output.DurationMillis(time.Since(startTime)))
 
 	if err != nil {
 		span.RecordError(err)
