@@ -68,6 +68,10 @@ The File generator automatically processes timestamp directives in log files, re
 | `%b %e %T` | BSD format | `Jan 13 15:30:45` |
 | `%b %d %H:%M:%S` | Syslog format | `Jan 13 15:30:45` |
 | `%Y/%m/%d %H:%M:%S` | Common log format | `2026/01/13 15:30:45` |
+| `%EPOCH_S` | Unix epoch seconds | `1768318245` |
+| `%EPOCH_MS` | Unix epoch milliseconds | `1768318245123` |
+| `%EPOCH_US` | Unix epoch microseconds | `1768318245123456` |
+| `%EPOCH_NS` | Unix epoch nanoseconds | `1768318245123456789` |
 
 ## Configuration
 
