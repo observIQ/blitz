@@ -386,6 +386,12 @@ func TestTimestampProcessing(t *testing.T) {
 			contains:    []string{"<134>", "hostname", "20", "event"},
 			notContains: []string{"%c", "%Y-%m-%d", "%H:%M:%S"},
 		},
+		{
+			name:        "epoch directives",
+			input:       `s=%EPOCH_S ms=%EPOCH_MS us=%EPOCH_US ns=%EPOCH_NS`,
+			contains:    []string{"s=", "ms=", "us=", "ns="},
+			notContains: []string{"%EPOCH_S", "%EPOCH_MS", "%EPOCH_US", "%EPOCH_NS"},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -401,6 +407,65 @@ func TestTimestampProcessing(t *testing.T) {
 			for _, shouldNotContain := range tc.notContains {
 				assert.NotContains(t, output, shouldNotContain, "output should not contain %q", shouldNotContain)
 			}
+		})
+	}
+}
+
+func TestReplaceEpochDirectives(t *testing.T) {
+	ts := time.Unix(1723556400, 123456789)
+	cases := []struct {
+		name      string
+		directive string
+		want      string
+	}{
+		{"epoch seconds", "%EPOCH_S", "1723556400"},
+		{"epoch milliseconds", "%EPOCH_MS", "1723556400123"},
+		{"epoch microseconds", "%EPOCH_US", "1723556400123456"},
+		{"epoch nanoseconds", "%EPOCH_NS", "1723556400123456789"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := replaceEpochDirectives(tc.directive, ts)
+			require.Equal(t, tc.want, got)
+			require.Regexp(t, `^\d+$`, got, "integer form: digits only, no fractional part or separators")
+		})
+	}
+}
+
+// TestReplaceEpochDirectives_LeavesSubSecondUntouched guards that the epoch
+// short-circuit does not touch the sub-second %s token (or %S), so their
+// existing ctime behavior is unchanged.
+func TestReplaceEpochDirectives_LeavesSubSecondUntouched(t *testing.T) {
+	ts := time.Unix(1723556400, 123456789)
+	require.Equal(t, "%H:%M:%S.%s", replaceEpochDirectives("%H:%M:%S.%s", ts))
+}
+
+// TestReplaceEpochDirectives_NegativeCases asserts the epoch pass leaves
+// everything that is not an exact %EPOCH_<unit> token untouched: near-miss
+// spellings, unknown units, the sub-second sibling tokens, and a valid unit
+// followed by more letters (which is not a token boundary).
+func TestReplaceEpochDirectives_NegativeCases(t *testing.T) {
+	ts := time.Unix(1723556400, 123456789)
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{"no unit", "%EPOCH"},
+		{"trailing underscore only", "%EPOCH_"},
+		{"unknown unit", "%EPOCH_X"},
+		{"lowercase is not our token", "%epoch_s"},
+		{"sub-second %s", "%s"},
+		{"seconds-of-minute %S", "%S"},
+		{"millis-of-second %L", "%L"},
+		{"micros-of-second %f", "%f"},
+		{"percent literal", "100%% done"},
+		{"unit followed by letters is not a token", "%EPOCH_SOMETHING"},
+		{"ms unit followed by a letter", "%EPOCH_MSX"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.in, replaceEpochDirectives(tc.in, ts),
+				"epoch pass must leave non-token input untouched")
 		})
 	}
 }

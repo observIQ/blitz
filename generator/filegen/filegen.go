@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -577,9 +578,39 @@ func (g *FileLogGenerator) readFileLines(filename string) ([]string, error) {
 	return lines, nil
 }
 
+// epochDirectiveRegexp matches the Unix-epoch time directives. Their integer
+// epoch values cannot be expressed as ctime layout tokens, so they are
+// substituted before the line reaches the ctime package. The trailing \b keeps
+// a valid unit followed by more letters (e.g. %EPOCH_SOMETHING) from being
+// partially matched.
+var epochDirectiveRegexp = regexp.MustCompile(`%EPOCH_(NS|US|MS|S)\b`)
+
+// replaceEpochDirectives substitutes the %EPOCH_* directives with the integer
+// Unix epoch of t in the requested unit, emitted as a plain integer (no
+// fractional part, no separators). Other directives, including the sub-second
+// %s token, are left untouched for the ctime formatter downstream.
+func replaceEpochDirectives(line string, t time.Time) string {
+	return epochDirectiveRegexp.ReplaceAllStringFunc(line, func(directive string) string {
+		switch directive {
+		case "%EPOCH_NS":
+			return strconv.FormatInt(t.UnixNano(), 10)
+		case "%EPOCH_US":
+			return strconv.FormatInt(t.UnixMicro(), 10)
+		case "%EPOCH_MS":
+			return strconv.FormatInt(t.UnixMilli(), 10)
+		default: // %EPOCH_S
+			return strconv.FormatInt(t.Unix(), 10)
+		}
+	})
+}
+
 // processTimestamps replaces timestamp directives in the line with actual formatted timestamps
 func (g *FileLogGenerator) processTimestamps(line string) string {
 	now := time.Now()
+
+	// Short-circuit the Unix-epoch directives before the ctime passes, since
+	// their integer values cannot be expressed as ctime layout tokens.
+	line = replaceEpochDirectives(line, now)
 
 	// Process common multi-directive patterns first for performance
 	// These are the most frequently used patterns that should be optimized
