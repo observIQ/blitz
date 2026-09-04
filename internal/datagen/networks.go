@@ -205,7 +205,7 @@ func randomPublicIPv6(r *rand.Rand, reserved func(net.IP) bool) string {
 	for {
 		var b [16]byte
 		for i := range b {
-			b[i] = byte(r.Intn(256)) // #nosec G404
+			b[i] = byte(r.Intn(256)) // #nosec G404,G115 -- bounded to 0..255
 		}
 		// Force global-unicast 2000::/3: set the top 3 bits to 001.
 		b[0] = (b[0] & 0x1f) | 0x20
@@ -231,7 +231,7 @@ func RandomIPInCIDRv6(r *rand.Rand, cidr string) string {
 	mask := ipNet.Mask
 	result := make(net.IP, 16)
 	for i := 0; i < 16; i++ {
-		result[i] = (base[i] & mask[i]) | (byte(r.Intn(256)) &^ mask[i]) // #nosec G404
+		result[i] = (base[i] & mask[i]) | (byte(r.Intn(256)) &^ mask[i]) // #nosec G404,G115 -- bounded to 0..255
 	}
 	return result.String()
 }
