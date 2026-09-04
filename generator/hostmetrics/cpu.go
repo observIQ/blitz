@@ -2,6 +2,7 @@ package hostmetrics
 
 import (
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/observiq/blitz/output"
@@ -68,14 +69,7 @@ func (s *cpuScraper) Scrape(r *rand.Rand, hostname string, resource map[string]a
 }
 
 func cpuID(n int) string {
-	return "cpu" + itoa(n)
-}
-
-func itoa(n int) string {
-	if n < 10 {
-		return string(rune('0' + n))
-	}
-	return itoa(n/10) + string(rune('0'+n%10))
+	return "cpu" + strconv.Itoa(n)
 }
 
 func float64Ptr(v float64) *float64 { return &v }

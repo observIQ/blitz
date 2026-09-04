@@ -224,7 +224,7 @@ func (g *Generator) Start(_ context.Context) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i)
+		go g.worker(i) // #nosec G118 -- workers are bounded by Stop() and the WaitGroup, not the Start context
 	}
 
 	return nil
@@ -400,7 +400,7 @@ func (g *Generator) generateOktaLog(r *rand.Rand) (embed.LogRecord, error) {
 				"url":             fmt.Sprintf("/api/v1/authn?%s", requestID),
 			},
 		},
-		"authenticationContext": map[string]any{
+		"authenticationContext": map[string]any{ // #nosec G101 -- static sample-event field labels, not real credentials
 			"authenticationProvider": "OKTA_AUTHENTICATION_PROVIDER",
 			"credentialProvider":     "OKTA_CREDENTIAL_PROVIDER",
 			"credentialType":         "PASSWORD",

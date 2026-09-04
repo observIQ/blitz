@@ -84,7 +84,7 @@ func (g *ApacheErrorLogGenerator) Start(_ context.Context) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i)
+		go g.worker(i) // #nosec G118 -- workers are bounded by Stop() and the WaitGroup, not the Start context
 	}
 
 	return nil

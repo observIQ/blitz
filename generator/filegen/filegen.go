@@ -186,7 +186,7 @@ func (g *FileLogGenerator) Start(_ context.Context) error {
 	// Start workers
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i, files)
+		go g.worker(i, files) // #nosec G118 -- workers are bounded by Stop() and the WaitGroup, not the Start context
 	}
 
 	return nil

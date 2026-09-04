@@ -130,7 +130,7 @@ var storageIQNDomain = map[StorageVendor]string{
 func randomWWNLike(r *rand.Rand, first byte) string {
 	b := make([]byte, 8)
 	for i := range b {
-		b[i] = byte(r.Intn(256)) // #nosec G404
+		b[i] = byte(r.Intn(256)) // #nosec G404,G115 -- bounded to 0..255
 	}
 	b[0] = first
 	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
