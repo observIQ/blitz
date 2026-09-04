@@ -79,6 +79,9 @@ func init() {
 
 	// Add completion command
 	rootCmd.AddCommand(newCompletionCommand())
+
+	// Add library command group
+	rootCmd.AddCommand(newLibraryCommand())
 }
 
 func main() {
