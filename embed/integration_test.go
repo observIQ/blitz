@@ -12,6 +12,11 @@ import (
 	"github.com/observiq/blitz/generator/traces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/log/logtest"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -76,8 +81,8 @@ func TestEmbed_ApacheRecordsFlowToMemoryConsumer(t *testing.T) {
 	require.NoError(t, err)
 
 	host := embed.Host{
-		Logs:   consumer,
-		Logger: logger,
+		Logs:      consumer,
+		Telemetry: embed.TelemetrySettings{Logger: logger},
 	}
 	require.NoError(t, runner.Start(context.Background(), host))
 
@@ -121,8 +126,8 @@ func TestEmbed_TracesSpansFlowToMemoryConsumer(t *testing.T) {
 	require.NoError(t, err)
 
 	host := embed.Host{
-		Traces: traceConsumer,
-		Logger: logger,
+		Traces:    traceConsumer,
+		Telemetry: embed.TelemetrySettings{Logger: logger},
 	}
 	require.NoError(t, runner.Start(context.Background(), host))
 
@@ -206,8 +211,8 @@ func TestEmbed_HostMetricsPointsFlowToMemoryConsumer(t *testing.T) {
 	require.NoError(t, err)
 
 	host := embed.Host{
-		Metrics: consumer,
-		Logger:  logger,
+		Metrics:   consumer,
+		Telemetry: embed.TelemetrySettings{Logger: logger},
 	}
 	require.NoError(t, runner.Start(context.Background(), host))
 
@@ -238,7 +243,7 @@ func TestEmbed_RunnerRejectsDoubleStart(t *testing.T) {
 	runner, err := embed.New(embed.Config{Modules: []embed.ProducerModule{gen}})
 	require.NoError(t, err)
 
-	host := embed.Host{Logs: consumer, Logger: logger}
+	host := embed.Host{Logs: consumer, Telemetry: embed.TelemetrySettings{Logger: logger}}
 	require.NoError(t, runner.Start(context.Background(), host))
 	defer func() {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -249,4 +254,101 @@ func TestEmbed_RunnerRejectsDoubleStart(t *testing.T) {
 	err = runner.Start(context.Background(), host)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already started")
+}
+
+// hasMetric reports whether rm contains a metric with the given name in any
+// scope.
+func hasMetric(rm metricdata.ResourceMetrics, name string) bool {
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestEmbed_HostBundleReceivesAllThreeSelfSignals is the C1 capstone: a host
+// supplies one TelemetrySettings bundle with in-memory Meter, Tracer, and
+// Logger providers, and blitz's own self-telemetry for all three signals lands
+// in those providers in-process. It proves the uniform spine — every component
+// builds metrics, spans, and its log bridge from the same bundle. The existing
+// tests above, which run with a bundle whose providers are nil (only Logger
+// set), are the paired "nil behaves as standalone" case: records still flow and
+// nothing is emitted to OTel.
+func TestEmbed_HostBundleReceivesAllThreeSelfSignals(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	spanRec := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRec))
+	logRec := logtest.NewRecorder()
+
+	base := zaptest.NewLogger(t)
+	// One bundle, supplied to both construction and the runner.
+	tel := embed.TelemetrySettings{
+		Logger:         base,
+		MeterProvider:  mp,
+		TracerProvider: tp,
+		LoggerProvider: logRec,
+	}
+
+	consumer := &memoryLogConsumer{}
+	// The generator builds its metrics from tel.MeterProvider. A caller that
+	// constructs a generator directly (rather than via config.LoadModules)
+	// bridges the logger itself, exactly as LoadModules does; blitz shares one
+	// bridged logger rather than re-bridging per component.
+	gen, err := apache.New(tel.BridgedLogger(base), 1, 10*time.Millisecond, consumer, tel)
+	require.NoError(t, err)
+
+	runner, err := embed.New(embed.Config{Modules: []embed.ProducerModule{gen}})
+	require.NoError(t, err)
+
+	// Host carries the same bundle: the runner emits the blitz.session span
+	// through tel.TracerProvider and bridges the runtime logger into
+	// tel.LoggerProvider.
+	host := embed.Host{Logs: consumer, Telemetry: tel}
+	require.NoError(t, runner.Start(context.Background(), host))
+
+	require.Eventually(t,
+		func() bool { return len(consumer.snapshot()) >= 3 },
+		2*time.Second, 20*time.Millisecond,
+		"expected records to flow through the embed seam",
+	)
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, runner.Stop(stopCtx))
+
+	// Traces: the runtime emitted its session and generator-run spans through
+	// the host's TracerProvider.
+	var sessionSpans, genSpans int
+	for _, s := range spanRec.Ended() {
+		switch s.Name() {
+		case "blitz.session":
+			sessionSpans++
+		case "blitz.generator.run":
+			genSpans++
+		}
+	}
+	assert.GreaterOrEqual(t, sessionSpans, 1, "expected a blitz.session span in the host TracerProvider")
+	assert.GreaterOrEqual(t, genSpans, 1, "expected a blitz.generator.run span in the host TracerProvider")
+
+	// Metrics: the generator recorded its self-metrics through the host's
+	// MeterProvider.
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	assert.True(t, hasMetric(rm, "blitz.generator.entries"),
+		"expected blitz.generator.entries in the host MeterProvider")
+
+	// Logs: the generator's internal zap logging was bridged into the host's
+	// LoggerProvider as OTel records.
+	var logBodies []string
+	for _, records := range logRec.Result() {
+		for _, r := range records {
+			logBodies = append(logBodies, r.Body.AsString())
+		}
+	}
+	assert.Contains(t, logBodies, "Starting Apache log generator",
+		"expected blitz's internal log bridged into the host LoggerProvider")
 }

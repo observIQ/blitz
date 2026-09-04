@@ -26,6 +26,7 @@ import (
 	"github.com/observiq/blitz/internal/dispatch"
 	"github.com/observiq/blitz/internal/logging"
 	"github.com/observiq/blitz/internal/service"
+	"github.com/observiq/blitz/internal/telemetry/logs"
 	"github.com/observiq/blitz/internal/telemetry/metrics"
 	"github.com/observiq/blitz/internal/telemetry/traces"
 	"github.com/observiq/blitz/output"
@@ -125,15 +126,41 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = logger.Sync() }()
 
+	// Create signal context for graceful shutdown.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Build blitz's self-telemetry bundle. The log provider is constructed and
+	// the logger bridged FIRST, before any startup logging, so every line from
+	// here on is exported when log export is enabled. blitz bridges the logger
+	// once, here at the process entry point, and shares the bridged logger with
+	// every component; components do not re-bridge, since a bridged zap logger
+	// propagates to the child loggers they derive. Metrics leave the provider
+	// nil so they fall back to the process-global Prometheus provider that
+	// setupMetrics installs.
+	tel := embed.TelemetrySettings{PerBatchSpans: cfg.Telemetry.Traces.PerBatchSpans}
+	logExportEnabled := cfg.Telemetry.Logs.OTLPEndpoint != ""
+	if logExportEnabled {
+		otlpLogs, lerr := logs.NewOTLP(ctx, cfg.Telemetry.Logs.OTLPEndpoint, cfg.Telemetry.Logs.Insecure)
+		if lerr != nil {
+			logger.Error("Failed to enable self-telemetry log export", zap.Error(lerr))
+			return lerr
+		}
+		defer func() { _ = otlpLogs.Shutdown(context.Background()) }()
+		tel.LoggerProvider = otlpLogs.Provider()
+	}
+	logger = tel.BridgedLogger(logger)
+	tel.Logger = logger
+
 	logger.Info("blitz started")
+	if logExportEnabled {
+		logger.Info("self-telemetry log export enabled",
+			zap.String("endpoint", cfg.Telemetry.Logs.OTLPEndpoint))
+	}
 
 	// Emit Warn-level banners for any deprecated generator types
 	// configured by the user. Fires once per startup, not per record.
 	config.LogGeneratorDeprecations(logger, cfg)
-
-	// Create signal context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	if err := setupMetrics(ctx, cfg, logger); err != nil {
 		logger.Error("Failed to setup metrics", zap.Error(err))
@@ -149,16 +176,9 @@ func run(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
-	// Blitz routes its own self-telemetry through this bundle. Metrics leave
-	// the provider nil so they fall back to the process-global provider
-	// configured by setupMetrics (Prometheus). Trace export is opt-in via the
-	// telemetry.traces config: when an OTLP endpoint is set, spans export
-	// there; otherwise the nil TracerProvider means spans are created but
-	// dropped by the global no-op provider.
-	tel := embed.TelemetrySettings{
-		Logger:        logger,
-		PerBatchSpans: cfg.Telemetry.Traces.PerBatchSpans,
-	}
+	// Trace export is opt-in via the telemetry.traces config: when an OTLP
+	// endpoint is set, spans export there; otherwise the nil TracerProvider
+	// means spans are created but dropped by the global no-op provider.
 	if cfg.Telemetry.Traces.OTLPEndpoint != "" {
 		otlpTraces, terr := traces.NewOTLP(ctx, cfg.Telemetry.Traces.OTLPEndpoint, cfg.Telemetry.Traces.Insecure)
 		if terr != nil {

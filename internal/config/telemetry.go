@@ -8,6 +8,22 @@ package config
 type Telemetry struct {
 	// Traces configures OTLP export of blitz's internal spans.
 	Traces TracesTelemetry `yaml:"traces,omitempty" mapstructure:"traces,omitempty"`
+
+	// Logs configures OTLP export of blitz's internal logs.
+	Logs LogsTelemetry `yaml:"logs,omitempty" mapstructure:"logs,omitempty"`
+}
+
+// LogsTelemetry configures OTLP gRPC export of blitz's internal logs. When an
+// endpoint is set, blitz's internal zap logging is bridged into an OTel
+// LoggerProvider and exported alongside the usual zap output.
+type LogsTelemetry struct {
+	// OTLPEndpoint is the OTLP gRPC endpoint (host:port). Empty disables log
+	// export: blitz logs stay zap-only, matching the behavior before OTel logs
+	// were supported.
+	OTLPEndpoint string `yaml:"otlpEndpoint,omitempty" mapstructure:"otlpEndpoint,omitempty"`
+
+	// Insecure sends logs over plaintext gRPC (no TLS). Defaults to false.
+	Insecure bool `yaml:"insecure,omitempty" mapstructure:"insecure,omitempty"`
 }
 
 // TracesTelemetry configures OTLP gRPC export of blitz's internal spans.
