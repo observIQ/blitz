@@ -191,7 +191,13 @@ func (u *UDP) drainTo(ctx context.Context, conn net.Conn, deadline time.Time) {
 				zap.Int("dropped", len(u.dataChan)+1))
 			return
 		}
-		if err := u.sendData(conn, data); err != nil {
+		_, span := output.StartSendSpan(data.ctx, u.tel, "blitz.output.udp.send")
+		err := u.sendData(conn, data.msg)
+		if err != nil {
+			span.RecordError(err)
+		}
+		span.End()
+		if err != nil {
 			u.logger.Error("Failed to send buffered record while draining on shutdown",
 				zap.Int("dropped", len(u.dataChan)+1),
 				zap.Error(err))
