@@ -4,6 +4,8 @@ import (
 	"errors"
 	"math/rand"
 	"testing"
+
+	"go.uber.org/zap"
 )
 
 // These tests exercise the developer-error paths converted from panics to error
@@ -33,7 +35,7 @@ func TestGenerateGroups_NilDomain(t *testing.T) {
 }
 
 func TestGenerateSystems_NilDomainPropagates(t *testing.T) {
-	systems, err := generateSystems(1, 1, 1, 3, nil, GenerateDefaultNetworks())
+	systems, err := generateSystems(1, 1, 1, 3, nil, GenerateDefaultNetworks(), nil)
 	if err == nil || systems != nil {
 		t.Errorf("generateSystems(nil) = (%v, %v), want (nil, error)", systems, err)
 	}
@@ -63,7 +65,7 @@ func TestGenerateEnvironment_PropagatesStageErrors(t *testing.T) {
 
 	t.Run("systems stage error", func(t *testing.T) {
 		orig := genSystems
-		genSystems = func(_, _, _ int64, _ int, _ *DomainIdentity, _ []*NetworkIdentity) ([]*SystemIdentity, error) {
+		genSystems = func(_, _, _ int64, _ int, _ *DomainIdentity, _ []*NetworkIdentity, _ *zap.Logger) ([]*SystemIdentity, error) {
 			return nil, boom
 		}
 		defer func() { genSystems = orig }()
