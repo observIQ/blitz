@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/generator/filegen/embeddedlibrary"
 	gennop "github.com/observiq/blitz/generator/nop"
 	"github.com/observiq/blitz/generator/winevt"
 	"github.com/observiq/blitz/internal/build"
@@ -423,7 +424,9 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	if tw, ok := out.(output.TraceWriter); ok {
 		consumers.TraceConsumer = output.WriterAsTraceConsumer(tw)
 	}
-	mod, err := dispatch.ForEmbed(logger, genCfg, consumers, nil)
+	// Pass the embedded library so an embed_library build resolves package
+	// sources; without the tag FS() is empty and resolution uses disk (PIPE-1445).
+	mod, err := dispatch.ForEmbed(logger, genCfg, consumers, embeddedlibrary.FS())
 	if err != nil {
 		return nil, err
 	}

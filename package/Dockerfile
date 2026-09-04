@@ -23,6 +23,9 @@ COPY --from=basefs /etc/passwd /etc/passwd
 
 COPY blitz /blitz
 
+# Data library on disk (staged via goreleaser extra_files); not embedded (PIPE-1445).
+COPY generator/filegen/embeddedlibrary/data_library /usr/share/blitz/data_library
+
 ENV BLITZ_LOGGING_TYPE=stdout
 
 USER 10001
