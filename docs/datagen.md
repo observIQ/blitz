@@ -190,3 +190,84 @@ For generators that need the full identity hierarchy (e.g., Windows Event Log ge
 user := env.Users[r.Intn(len(env.Users))]
 system := env.Systems[r.Intn(len(env.Systems))]
 ```
+
+## Appliance Identities
+
+Alongside the general-purpose `SystemIdentity`, datagen models purpose-built
+appliances that run an embedded `ApplianceOS` rather than a general-purpose OS.
+The classes modeled so far are storage arrays (`StorageSystemIdentity`) and
+network hardware (`NetworkSystemIdentity`); further appliance classes follow the
+same pattern (identity struct, vendor pools, `Validate()`, and Environment
+composition).
+
+### `ApplianceOS` taxonomy (`appliance.go`)
+
+Appliances ship closed-source embedded OSes (NimbleOS, PAN-OS, NX-OS, …) that
+are not "Linux" from any consumer's perspective — different kernel, management
+plane, lifecycle, and telemetry. They are tracked separately from the
+general-purpose `OSType` enum via an `ApplianceOS{Vendor, Family, Version}`
+triple.
+
+The family and version strings, and the OS self-report rendered by
+`ApplianceOS.String()`, are the **real forms a device reports**, so generated
+records parse the way genuine device output does:
+
+| Family | `String()` self-report |
+|--------|------------------------|
+| NimbleOS | `NimbleOS 6.1.2.0` |
+| HPE 3PAR OS | `HPE 3PAR OS 3.3.1.410` |
+| BIG-IP | `BIG-IP 17.1.0.3` |
+| Cisco IOS XE | `Cisco IOS XE Software, Version 17.12.3` |
+| Cisco NX-OS | `Cisco Nexus Operating System (NX-OS) Software, Version 10.3(4a)` |
+| Arista EOS | `Arista EOS 4.31.2F` |
+| Junos | `Junos: 23.4R1` |
+| PAN-OS | `PAN-OS 11.1.3` |
+| FortiOS | `FortiOS v7.4.3` |
+
+Each family maps to exactly one vendor, so vendor/family coherence is
+structural: a NimbleOS is always HPE and can never carry another vendor's
+family.
+
+### `StorageSystemIdentity` (`storage.go`)
+
+A first-class storage array: vendor/model/serial, an `ApplianceOS`, storage
+fabric identifiers (`WWN`, `WWPN[]`, `NAA`, `IQN`), a capacity model
+(raw/usable/effective plus data-reduction ratio), and hardware inventory
+(controllers, shelves, drives). The first vendor pool covers HPE Nimble, 3PAR,
+Alletra, and StoreOnce. `Validate()` checks fabric-ID formats and capacity
+sanity.
+
+### `NetworkSystemIdentity` (`network_appliance.go`)
+
+A first-class network device composed from capability facets — any of
+`L2SwitchingCapability`, `L3RoutingCapability`, `FirewallCapability`,
+`LoadBalancingCapability`, `WirelessCapability` (a nil facet means the device
+lacks that capability). Real products compose facets: a Catalyst 9300 is L2 +
+L3, a BIG-IP is load-balancing + firewall + L3, a PA-3220 is firewall + L3. The
+first vendor pool spans F5, Cisco (IOS-XE and NX-OS), Arista, Juniper, Palo
+Alto, and Fortinet. `Validate()` requires vendor/OS coherence and at least one
+facet.
+
+### Appliance hostnames
+
+`StyleAppliance` produces hostnames like `nimble-core-east-01`, combining a
+vendor short-code with a role (`ApplianceRoles`) and site (`ApplianceSites`).
+
+### Environment composition
+
+`GenerateEnvironment` composes `StorageSystems` and `NetworkSystems` alongside
+the general-purpose `Systems`, each driven by its own seed
+(`SeedConfig.StorageSystems` / `SeedConfig.NetworkSystems`, both falling back to
+`Shared` when negative). Counts come from `EnvironmentOpts.StorageSystemCount`
+(default 2) and `NetworkSystemCount` (default 4). Each appliance's management
+interface is bound to the environment's management subnet.
+
+```go
+env := datagen.GenerateEnvironment(seeds, &datagen.EnvironmentOpts{
+    StorageSystemCount: 3,
+    NetworkSystemCount: 5,
+})
+for _, array := range env.AllStorageSystems() {
+    fmt.Println(array.Model, array.OS) // e.g. "Nimble AF40 NimbleOS 6.1.2.0"
+}
+```

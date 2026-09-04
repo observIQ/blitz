@@ -57,6 +57,16 @@ func TestSeedConfigResolveSeed(t *testing.T) {
 		}
 	})
 
+	t.Run("appliance seeds resolve", func(t *testing.T) {
+		sc := &SeedConfig{Shared: 100, StorageSystems: 7, NetworkSystems: -1}
+		if got := sc.ResolveSeed(IdentityStorageSystems); got != 7 {
+			t.Errorf("ResolveSeed(IdentityStorageSystems) = %d, want 7", got)
+		}
+		if got := sc.ResolveSeed(IdentityNetworkSystems); got != 100 {
+			t.Errorf("ResolveSeed(IdentityNetworkSystems) fallback = %d, want 100", got)
+		}
+	})
+
 	t.Run("unknown type returns shared", func(t *testing.T) {
 		sc := &SeedConfig{Shared: 42}
 		if got := sc.ResolveSeed(IdentityType("unknown_type")); got != 42 {

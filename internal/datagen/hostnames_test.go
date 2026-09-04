@@ -2,6 +2,7 @@ package datagen
 
 import (
 	"math/rand"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -78,6 +79,31 @@ func TestGenerateHostname(t *testing.T) {
 			t.Error("hostname should not be empty with nil names pool")
 		}
 	})
+}
+
+func TestGenerateHostname_Appliance(t *testing.T) {
+	r := rand.New(rand.NewSource(42))
+	shorts := NewPool("nimble", "bigip", "cat9k")
+	re := regexp.MustCompile(`^(nimble|bigip|cat9k)-[a-z0-9]+-[a-z0-9]+-\d{2}$`)
+	for i := 0; i < 25; i++ {
+		h := GenerateHostname(r, StyleAppliance, shorts)
+		if !re.MatchString(h) {
+			t.Errorf("appliance hostname %q does not match {short}-{role}-{site}-{NN}", h)
+		}
+	}
+}
+
+func TestGenerateHostname_UnknownStyleDefaults(t *testing.T) {
+	// An unrecognized style falls back to the linux-style format rather than
+	// panicking or returning empty.
+	r := rand.New(rand.NewSource(7))
+	h := GenerateHostname(r, HostnameStyle(99), NorseNames)
+	if h == "" {
+		t.Error("unknown style should still produce a non-empty hostname")
+	}
+	if h != strings.ToLower(h) {
+		t.Errorf("default-style hostname %q should be lowercase", h)
+	}
 }
 
 func TestGenerateHostnames(t *testing.T) {

@@ -1,6 +1,7 @@
 package datagen
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -82,6 +83,80 @@ func TestGenerateEnvironment(t *testing.T) {
 			t.Error("at least one system should have network interfaces")
 		}
 	})
+}
+
+func TestGenerateEnvironmentComposesAppliances(t *testing.T) {
+	env := GenerateEnvironment(&SeedConfig{Shared: 42}, &EnvironmentOpts{StorageSystemCount: 3, NetworkSystemCount: 5})
+
+	if len(env.StorageSystems) != 3 {
+		t.Fatalf("StorageSystems = %d, want 3", len(env.StorageSystems))
+	}
+	if len(env.NetworkSystems) != 5 {
+		t.Fatalf("NetworkSystems = %d, want 5", len(env.NetworkSystems))
+	}
+	for _, s := range env.AllStorageSystems() {
+		if err := s.Validate(); err != nil {
+			t.Errorf("storage %s invalid: %v", s.Model, err)
+		}
+		if s.ManagementInterface.SubnetID == "" {
+			t.Errorf("storage %s management interface not bound to a subnet", s.Model)
+		}
+	}
+	for _, n := range env.AllNetworkSystems() {
+		if err := n.Validate(); err != nil {
+			t.Errorf("network %s invalid: %v", n.Model, err)
+		}
+		if n.ManagementInterface.SubnetID == "" {
+			t.Errorf("network %s management interface not bound to a subnet", n.Model)
+		}
+	}
+}
+
+func TestGenerateEnvironmentDeterministicAppliances(t *testing.T) {
+	mk := func() *Environment {
+		s := NewSeedConfig()
+		s.Shared = 7
+		return GenerateEnvironment(s, &EnvironmentOpts{StorageSystemCount: 2, NetworkSystemCount: 2})
+	}
+	a, b := mk(), mk()
+	if a.StorageSystems[0].Serial != b.StorageSystems[0].Serial {
+		t.Error("storage systems not deterministic across runs")
+	}
+	if a.NetworkSystems[0].Serial != b.NetworkSystems[0].Serial {
+		t.Error("network systems not deterministic across runs")
+	}
+}
+
+func TestManagementNetwork(t *testing.T) {
+	mgmt := &NetworkIdentity{ID: "net-mgmt", Zone: "management", CIDR: "10.0.0.0/24"}
+	trust := &NetworkIdentity{ID: "net-trust", Zone: "trust", CIDR: "10.1.0.0/24"}
+	if got := managementNetwork([]*NetworkIdentity{trust, mgmt}); got != mgmt {
+		t.Errorf("want the management-zone network, got %v", got)
+	}
+	if got := managementNetwork([]*NetworkIdentity{trust}); got != trust {
+		t.Errorf("want the first network as fallback, got %v", got)
+	}
+	if got := managementNetwork(nil); got != nil {
+		t.Errorf("want nil for empty networks, got %v", got)
+	}
+}
+
+func TestBindManagementInterface(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
+	iface := &NetworkInterface{Name: "mgmt0", IPv4: "192.168.1.5"}
+
+	// A nil subnet leaves the interface untouched.
+	bindManagementInterface(r, iface, nil)
+	if iface.SubnetID != "" {
+		t.Errorf("nil subnet should leave SubnetID empty, got %q", iface.SubnetID)
+	}
+	// A nil interface is a no-op and must not panic.
+	bindManagementInterface(r, nil, &NetworkIdentity{ID: "x", CIDR: "10.0.0.0/24"})
+	// Binding to a subnet sets the subnet ID and an in-CIDR address.
+	bindManagementInterface(r, iface, &NetworkIdentity{ID: "net-9", CIDR: "10.9.0.0/24"})
+	if iface.SubnetID != "net-9" {
+		t.Errorf("SubnetID = %q, want net-9", iface.SubnetID)
+	}
 }
 
 func TestGenerateEnvironmentDefaults(t *testing.T) {
