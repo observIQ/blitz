@@ -126,11 +126,11 @@ nfpms:
           mode: 0644
           owner: root
           group: root
-      - src: generator/filegen/embeddedlibrary/data_library
+      # Data library on disk; the release binary does not embed it (PIPE-1445).
+      - src: generator/filegen/embeddedlibrary/data_library/**/*
         dst: /usr/share/blitz/data_library
-        type: dir
         file_info:
-          mode: 0755
+          mode: 0644
           owner: root
           group: root
       - dst: /var/log/blitz
@@ -156,6 +156,8 @@ dockers:
       - --build-arg=PROJECT_NAME={{ .ProjectName }}
       - --build-arg=VERSION={{ .Version }}
       - --build-arg=COMMIT_SHA={{ .FullCommit }}
+    extra_files:
+      - generator/filegen/embeddedlibrary/data_library
   - id: docker-arm64
     ids:
       - blitz
@@ -171,6 +173,8 @@ dockers:
       - --build-arg=PROJECT_NAME={{ .ProjectName }}
       - --build-arg=VERSION={{ .Version }}
       - --build-arg=COMMIT_SHA={{ .FullCommit }}
+    extra_files:
+      - generator/filegen/embeddedlibrary/data_library
 
 docker_manifests:
   - name_template: ghcr.io/observiq/blitz:{{ .Version }}

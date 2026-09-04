@@ -233,7 +233,10 @@ func (g *FileLogGenerator) getFiles() ([]string, error) {
 		name := strings.TrimPrefix(g.source, packageSourcePrefix)
 		files, err := g.libraryFiles(name)
 		if err != nil {
-			return nil, fmt.Errorf("resolve package source %q: %w", name, err)
+			if g.libraryMissing() {
+				return nil, g.errLibraryNotFound()
+			}
+			return nil, fmt.Errorf("package %q not found in the data library: %w", name, err)
 		}
 		g.mode = sourceModeLibrary
 		return files, nil
@@ -253,45 +256,38 @@ func (g *FileLogGenerator) getFiles() ([]string, error) {
 			g.mode = sourceModeLibrary
 			return libFiles, nil
 		}
-		// Wrap both error sources so the user can see why each backend
-		// rejected the bare name — typos otherwise present only the
-		// disk error and hide the library miss.
-		return nil, fmt.Errorf("source %q not found: disk: %v; library: %v", g.source, diskErr, libErr)
+		if g.libraryMissing() {
+			return nil, g.errLibraryNotFound()
+		}
+		return nil, fmt.Errorf("source %q not found: not a file, directory, or glob on disk, and not a package in the data library", g.source)
 	}
 
 	return nil, diskErr
 }
 
-// libraryFS returns the data library backend to use: the supplied fs.FS
-// when present, otherwise an on-disk directory wrapped as an fs.FS so
-// the two backends share one walk/read code path.
-//
-// Disk-lookup probe order:
-//  1. $BLITZ_DATA_LIBRARY_DIR — explicit override for unusual install
-//     layouts (containers, custom prefixes). Always wins if set.
-//  2. ./data_library/ relative to cwd — where release tarballs unpack
-//     and where most users naturally cd before running the binary.
-//  3. ./generator/filegen/embeddedlibrary/data_library/ — the in-repo
-//     canonical location, so `./blitz` from a fresh clone Just Works
-//     without a pre-build staging step.
-//  4. /usr/share/blitz/data_library/ — the nfpm-package install path
-//     (deb/rpm). Lets a system-installed `blitz` find its library
-//     regardless of which cwd the user invoked it from.
-//
-// The first directory that exists wins; if none exist, the final probe
-// (nfpm path) is returned and subsequent reads will surface a useful
-// "file does not exist" error pointing at the missing canonical path.
+// libraryFS returns the data library backend: the on-disk library layered
+// over the embedded one, disk winning per path (PIPE-1445). Either layer
+// may be absent; with neither, it returns the nfpm path so a read surfaces
+// a clear not-found error.
 func (g *FileLogGenerator) libraryFS() fs.FS {
-	if g.dataLibrary != nil {
-		return g.dataLibrary
+	disk := g.diskLibraryFS()
+	base := g.dataLibrary
+	switch {
+	case disk != nil && base != nil:
+		return overlayFS{disk: disk, base: base}
+	case disk != nil:
+		return disk
+	case base != nil:
+		return base
+	default:
+		return os.DirFS("/usr/share/blitz/data_library")
 	}
-	candidates := []string{
-		os.Getenv("BLITZ_DATA_LIBRARY_DIR"),
-		"data_library",
-		"generator/filegen/embeddedlibrary/data_library",
-		"/usr/share/blitz/data_library",
-	}
-	for _, p := range candidates {
+}
+
+// diskLibraryFS returns the first existing directory from libraryProbePaths
+// as an fs.FS, or nil when none exist.
+func (g *FileLogGenerator) diskLibraryFS() fs.FS {
+	for _, p := range g.libraryProbePaths() {
 		if p == "" {
 			continue
 		}
@@ -299,9 +295,35 @@ func (g *FileLogGenerator) libraryFS() fs.FS {
 			return os.DirFS(p)
 		}
 	}
-	// None of the probes resolved; surface that with a clear path in
-	// the eventual read error rather than silently returning an empty FS.
-	return os.DirFS("/usr/share/blitz/data_library")
+	return nil
+}
+
+// libraryProbePaths lists the on-disk locations checked for the library, in
+// priority order: env override, cwd, in-repo, install path.
+func (g *FileLogGenerator) libraryProbePaths() []string {
+	return []string{
+		os.Getenv("BLITZ_DATA_LIBRARY_DIR"),
+		"data_library",
+		"generator/filegen/embeddedlibrary/data_library",
+		"/usr/share/blitz/data_library",
+	}
+}
+
+// libraryMissing reports whether no library is resolvable: no probe dir and
+// an empty or absent embedded FS.
+func (g *FileLogGenerator) libraryMissing() bool {
+	entries, err := fs.ReadDir(g.libraryFS(), ".")
+	return err != nil || len(entries) == 0
+}
+
+// errLibraryNotFound is the explicit "no library anywhere" error, naming
+// where it looked and how to supply one.
+func (g *FileLogGenerator) errLibraryNotFound() error {
+	return fmt.Errorf("filegen data library not found: checked $BLITZ_DATA_LIBRARY_DIR, " +
+		"./data_library, generator/filegen/embeddedlibrary/data_library, and " +
+		"/usr/share/blitz/data_library, and no embedded library is compiled in; " +
+		"install the blitz package, run from a repo checkout, or set " +
+		"BLITZ_DATA_LIBRARY_DIR to a data_library directory")
 }
 
 // libraryFiles walks the named entry inside the library FS and returns
@@ -395,30 +417,6 @@ func (g *FileLogGenerator) getFilesFromDirectory() ([]string, error) {
 	files, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("glob directory: %w", err)
-	}
-
-	return files, nil
-}
-
-// getFilesFromPackage returns all files from the data library directory
-func (g *FileLogGenerator) getFilesFromPackage() ([]string, error) {
-	// Data library files are in data_library/<packagename>/ (relative path)
-	packagesDir := filepath.Join("data_library", g.source)
-
-	var files []string
-	err := filepath.Walk(packagesDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		files = append(files, path)
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("walk package directory: %w", err)
 	}
 
 	return files, nil
