@@ -338,6 +338,9 @@ func DefaultOverrides() []*Override {
 		NewOverride("output.hec.source", "HEC event source metadata", DefaultHECSource),
 		NewOverride("output.hec.sourceType", "HEC event sourcetype metadata", DefaultHECSourceType),
 		NewOverride("output.hec.index", "HEC target index (empty = token default)", ""),
+		NewOverride("telemetry.traces.otlpEndpoint", "OTLP gRPC endpoint (host:port) for exporting blitz's own spans (empty = disabled)", ""),
+		NewOverride("telemetry.traces.insecure", "send blitz's own spans over plaintext gRPC (no TLS)", false),
+		NewOverride("telemetry.traces.perBatchSpans", "enable higher-volume per-emit-cycle spans (off by default)", false),
 	}
 
 	overrides = append(overrides, tcpTLSOverrides()...)

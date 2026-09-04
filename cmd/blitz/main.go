@@ -27,6 +27,7 @@ import (
 	"github.com/observiq/blitz/internal/logging"
 	"github.com/observiq/blitz/internal/service"
 	"github.com/observiq/blitz/internal/telemetry/metrics"
+	"github.com/observiq/blitz/internal/telemetry/traces"
 	"github.com/observiq/blitz/output"
 	fileout "github.com/observiq/blitz/output/file"
 	hecout "github.com/observiq/blitz/output/hec"
@@ -148,10 +149,27 @@ func run(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
-	// Blitz routes its own self-telemetry through this bundle. Standalone
-	// leaves the providers nil so they fall back to the process-global
-	// provider configured by setupMetrics (Prometheus).
-	tel := embed.TelemetrySettings{Logger: logger}
+	// Blitz routes its own self-telemetry through this bundle. Metrics leave
+	// the provider nil so they fall back to the process-global provider
+	// configured by setupMetrics (Prometheus). Trace export is opt-in via the
+	// telemetry.traces config: when an OTLP endpoint is set, spans export
+	// there; otherwise the nil TracerProvider means spans are created but
+	// dropped by the global no-op provider.
+	tel := embed.TelemetrySettings{
+		Logger:        logger,
+		PerBatchSpans: cfg.Telemetry.Traces.PerBatchSpans,
+	}
+	if cfg.Telemetry.Traces.OTLPEndpoint != "" {
+		otlpTraces, terr := traces.NewOTLP(ctx, cfg.Telemetry.Traces.OTLPEndpoint, cfg.Telemetry.Traces.Insecure)
+		if terr != nil {
+			logger.Error("Failed to enable self-telemetry trace export", zap.Error(terr))
+			return terr
+		}
+		defer func() { _ = otlpTraces.Shutdown(context.Background()) }()
+		tel.TracerProvider = otlpTraces.Provider()
+		logger.Info("self-telemetry trace export enabled",
+			zap.String("endpoint", cfg.Telemetry.Traces.OTLPEndpoint))
+	}
 
 	// Configure output first
 	var outputInstance output.Output
@@ -369,7 +387,7 @@ func run(cmd *cobra.Command, args []string) error {
 	// Set up SIGUSR1 restart signal handler
 	setupRestartSignal(ctx, logger, tracker)
 
-	svc, err := service.New(logger, generators, outputInstance)
+	svc, err := service.New(logger, generators, outputInstance, tel)
 	if err != nil {
 		logger.Error("Failed to create service", zap.Error(err))
 		return err
@@ -441,13 +459,13 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	// when an output doesn't support a signal the configured generator
 	// needs.
 	consumers := dispatch.EmbedConsumers{
-		LogConsumer: output.WriterAsLogConsumer(out),
+		LogConsumer: output.WriterAsLogConsumer(out, tel),
 	}
 	if mw, ok := out.(output.MetricWriter); ok {
-		consumers.MetricConsumer = output.WriterAsMetricConsumer(mw)
+		consumers.MetricConsumer = output.WriterAsMetricConsumer(mw, tel)
 	}
 	if tw, ok := out.(output.TraceWriter); ok {
-		consumers.TraceConsumer = output.WriterAsTraceConsumer(tw)
+		consumers.TraceConsumer = output.WriterAsTraceConsumer(tw, tel)
 	}
 	// Pass the embedded library so an embed_library build resolves package
 	// sources; without the tag FS() is empty and resolution uses disk (PIPE-1445).

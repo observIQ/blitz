@@ -1,6 +1,7 @@
 package embed
 
 import (
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/trace"
@@ -33,6 +34,17 @@ type TelemetrySettings struct {
 	// PerBatchSpans enables the higher-volume per-emit-cycle spans. Off by
 	// default; the always-on coarse spans do not depend on it.
 	PerBatchSpans bool
+}
+
+// Tracer returns a tracer for the given instrumentation scope from the bundle's
+// TracerProvider. A nil TracerProvider falls back to the process global, so the
+// result is always safe to use.
+func (t TelemetrySettings) Tracer(scope string) trace.Tracer {
+	tp := t.TracerProvider
+	if tp == nil {
+		tp = otel.GetTracerProvider()
+	}
+	return tp.Tracer(scope)
 }
 
 // NopTelemetry returns a TelemetrySettings wired to no-op providers and a nop

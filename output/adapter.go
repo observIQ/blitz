@@ -4,7 +4,12 @@ import (
 	"context"
 
 	"github.com/observiq/blitz/embed"
+	"go.opentelemetry.io/otel/trace"
 )
+
+// adapterTracerScope is the instrumentation scope for the per-emit-cycle spans
+// the consumer adapters create when TelemetrySettings.PerBatchSpans is on.
+const adapterTracerScope = "github.com/observiq/blitz/output"
 
 // WriterAsLogConsumer wraps a Writer so it can be used in contexts that
 // expect an embed.LogConsumer. The adapter pushes each record in the
@@ -13,23 +18,30 @@ import (
 //
 // CLI generator wiring uses this adapter to bridge migrated modules
 // (which talk to embed.LogConsumer) with the existing Output instances
-// (which implement Writer).
+// (which implement Writer). tel carries blitz's self-telemetry providers;
+// when tel.PerBatchSpans is set, each ConsumeLogs call is wrapped in a span.
 //
 // Panics on nil writer — a nil writer is a programming bug, not a
 // runtime condition, and catching it at construction surfaces the
 // failure at the boundary rather than deep in ConsumeLogs.
-func WriterAsLogConsumer(w Writer) embed.LogConsumer {
+func WriterAsLogConsumer(w Writer, tel embed.TelemetrySettings) embed.LogConsumer {
 	if w == nil {
 		panic("output.WriterAsLogConsumer: writer cannot be nil")
 	}
-	return &writerAsLogConsumer{w: w}
+	return &writerAsLogConsumer{w: w, tel: tel}
 }
 
 type writerAsLogConsumer struct {
-	w Writer
+	w   Writer
+	tel embed.TelemetrySettings
 }
 
 func (a *writerAsLogConsumer) ConsumeLogs(ctx context.Context, records []embed.LogRecord) error {
+	if a.tel.PerBatchSpans {
+		var span trace.Span
+		ctx, span = a.tel.Tracer(adapterTracerScope).Start(ctx, "blitz.emit.logs")
+		defer span.End()
+	}
 	for i := range records {
 		if err := a.w.Write(ctx, records[i]); err != nil {
 			return err
@@ -45,21 +57,27 @@ func (a *writerAsLogConsumer) ConsumeLogs(ctx context.Context, records []embed.L
 //
 // Standalone CLI metric-generator wiring uses this adapter to bridge
 // modules that talk to embed.MetricConsumer with existing outputs that
-// implement MetricWriter.
+// implement MetricWriter. tel.PerBatchSpans wraps each call in a span.
 //
 // Panics on nil writer; see WriterAsLogConsumer for the rationale.
-func WriterAsMetricConsumer(w MetricWriter) embed.MetricConsumer {
+func WriterAsMetricConsumer(w MetricWriter, tel embed.TelemetrySettings) embed.MetricConsumer {
 	if w == nil {
 		panic("output.WriterAsMetricConsumer: writer cannot be nil")
 	}
-	return &writerAsMetricConsumer{w: w}
+	return &writerAsMetricConsumer{w: w, tel: tel}
 }
 
 type writerAsMetricConsumer struct {
-	w MetricWriter
+	w   MetricWriter
+	tel embed.TelemetrySettings
 }
 
 func (a *writerAsMetricConsumer) ConsumeMetrics(ctx context.Context, points []embed.MetricPoint) error {
+	if a.tel.PerBatchSpans {
+		var span trace.Span
+		ctx, span = a.tel.Tracer(adapterTracerScope).Start(ctx, "blitz.emit.metrics")
+		defer span.End()
+	}
 	for i := range points {
 		if err := a.w.WriteMetric(ctx, points[i]); err != nil {
 			return err
@@ -75,23 +93,29 @@ func (a *writerAsMetricConsumer) ConsumeMetrics(ctx context.Context, points []em
 //
 // Standalone CLI trace-generator wiring uses this adapter to bridge
 // modules that talk to embed.TraceConsumer with existing outputs that
-// implement TraceWriter.
+// implement TraceWriter. tel.PerBatchSpans wraps each call in a span.
 //
 // Panics on nil writer — a nil writer is a programming bug, not a
 // runtime condition, and catching it at construction surfaces the
 // failure at the boundary rather than deep in ConsumeTraces.
-func WriterAsTraceConsumer(w TraceWriter) embed.TraceConsumer {
+func WriterAsTraceConsumer(w TraceWriter, tel embed.TelemetrySettings) embed.TraceConsumer {
 	if w == nil {
 		panic("output.WriterAsTraceConsumer: writer cannot be nil")
 	}
-	return &writerAsTraceConsumer{w: w}
+	return &writerAsTraceConsumer{w: w, tel: tel}
 }
 
 type writerAsTraceConsumer struct {
-	w TraceWriter
+	w   TraceWriter
+	tel embed.TelemetrySettings
 }
 
 func (a *writerAsTraceConsumer) ConsumeTraces(ctx context.Context, spans []embed.Span) error {
+	if a.tel.PerBatchSpans {
+		var span trace.Span
+		ctx, span = a.tel.Tracer(adapterTracerScope).Start(ctx, "blitz.emit.traces")
+		defer span.End()
+	}
 	for i := range spans {
 		if err := a.w.WriteTrace(ctx, spans[i]); err != nil {
 			return err
