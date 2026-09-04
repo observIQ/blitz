@@ -85,6 +85,18 @@ type osRoleSpec struct {
 	pool *Pool[string]
 }
 
+// Stage seams. GenerateEnvironment calls its identity-generation stages
+// through these package-level variables so tests can force a stage to fail and
+// assert that GenerateEnvironment propagates the error. Production always uses
+// the real implementations; the stages cannot fail today (GenerateEnvironment
+// builds a valid domain), but the propagation is kept as a regression guard for
+// when a stage gains a real failure mode.
+var (
+	genUsers   = GenerateUsers
+	genGroups  = GenerateGroups
+	genSystems = generateSystems
+)
+
 // GenerateEnvironment produces a fully cross-referenced environment from seeds and options.
 //
 // Per-identity-type seeds drive each independent stage of generation:
@@ -95,7 +107,7 @@ type osRoleSpec struct {
 // IdentityApplications for applications attached to each system. Each stage
 // uses a fresh RNG seeded from its own field, so changing one seed only
 // re-randomizes that slice of the output.
-func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) *Environment {
+func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) (*Environment, error) {
 	opts = defaultOpts(opts)
 
 	// Generate domain
@@ -108,11 +120,17 @@ func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) *Environment 
 
 	// Generate users
 	userSeed := seeds.ResolveSeed(IdentityUsers)
-	users := GenerateUsers(userSeed, opts.UserCount, domain)
+	users, err := genUsers(userSeed, opts.UserCount, domain)
+	if err != nil {
+		return nil, err
+	}
 
 	// Generate groups
 	groupSeed := seeds.ResolveSeed(IdentityGroups)
-	groups := GenerateGroups(groupSeed, opts.GroupCount, opts.DomainAdminsCount, domain, users)
+	groups, err := genGroups(groupSeed, opts.GroupCount, opts.DomainAdminsCount, domain, users)
+	if err != nil {
+		return nil, err
+	}
 
 	// Generate systems with a mix of OS/roles. Services and applications
 	// have their own seeded RNGs so changing IdentityServices or
@@ -120,7 +138,10 @@ func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) *Environment 
 	systemSeed := seeds.ResolveSeed(IdentitySystems)
 	servicesSeed := seeds.ResolveSeed(IdentityServices)
 	applicationsSeed := seeds.ResolveSeed(IdentityApplications)
-	systems := generateSystems(systemSeed, servicesSeed, applicationsSeed, opts.SystemCount, domain, networks)
+	systems, err := genSystems(systemSeed, servicesSeed, applicationsSeed, opts.SystemCount, domain, networks)
+	if err != nil {
+		return nil, err
+	}
 
 	// Appliance identities (PIPE-1035): storage arrays and network hardware,
 	// each with its own seed and a management interface bound to a subnet.
@@ -138,7 +159,7 @@ func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) *Environment 
 		Systems:        systems,
 		StorageSystems: storageSystems,
 		NetworkSystems: networkSystems,
-	}
+	}, nil
 }
 
 // managementNetwork returns the subnet to bind appliance management interfaces
@@ -234,7 +255,7 @@ func generateNetworksList(seed int64, count int) []*NetworkIdentity {
 // resource specs). servicesSeed and applicationsSeed seed independent RNGs
 // for service and application generation so changes to either seed only
 // re-randomize that slice.
-func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int, domain *DomainIdentity, networks []*NetworkIdentity) []*SystemIdentity {
+func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int, domain *DomainIdentity, networks []*NetworkIdentity) ([]*SystemIdentity, error) {
 	r := rand.New(rand.NewSource(systemSeed))                   // #nosec G404
 	rServices := rand.New(rand.NewSource(servicesSeed))         // #nosec G404
 	rApplications := rand.New(rand.NewSource(applicationsSeed)) // #nosec G404
@@ -253,7 +274,10 @@ func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int
 	for i := 0; i < count; i++ {
 		// Pick OS/role using weighted selection
 		spec := weightedSelect(r, specs, weights)
-		sys := GenerateSystemIdentity(r, spec.os, spec.role, domain, spec.pool)
+		sys, err := GenerateSystemIdentity(r, spec.os, spec.role, domain, spec.pool)
+		if err != nil {
+			return nil, err
+		}
 
 		// Services and applications use their own RNGs so the seeds in
 		// SeedConfig actually drive what's generated, per identity type.
@@ -277,7 +301,7 @@ func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int
 		systems[i] = sys
 	}
 
-	return systems
+	return systems, nil
 }
 
 // weightedSelect picks an item using weighted random selection.
