@@ -11,7 +11,7 @@ type processesScraper struct{}
 
 func (s *processesScraper) Name() string { return "processes" }
 
-func (s *processesScraper) Scrape(r *rand.Rand, _ string, resource map[string]string) []output.MetricRecord {
+func (s *processesScraper) Scrape(r *rand.Rand, _ string, resource map[string]any) []output.MetricRecord {
 	now := time.Now()
 
 	running := int64(r.Intn(20)) + 1    // #nosec G404

@@ -11,7 +11,7 @@ type networkScraper struct{}
 
 func (s *networkScraper) Name() string { return "network" }
 
-func (s *networkScraper) Scrape(r *rand.Rand, _ string, resource map[string]string) []output.MetricRecord {
+func (s *networkScraper) Scrape(r *rand.Rand, _ string, resource map[string]any) []output.MetricRecord {
 	now := time.Now()
 	ifaces := []string{"eth0", "eth1", "lo", "ens192", "bond0"}
 	iface := ifaces[r.Intn(len(ifaces))] // #nosec G404

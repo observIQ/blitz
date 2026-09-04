@@ -340,7 +340,7 @@ func (g *Generator) startTrace(r *mathrand.Rand) {
 	}
 }
 
-func (g *Generator) buildChildSpan(r *mathrand.Rand, kind childKind, traceID, parentID string, earliestStart time.Time, res map[string]string) embed.Span {
+func (g *Generator) buildChildSpan(r *mathrand.Rand, kind childKind, traceID, parentID string, earliestStart time.Time, res map[string]any) embed.Span {
 	spanID := generateSpanID()
 	startOffset := time.Duration(r.Intn(50)) * time.Millisecond // #nosec G404
 	start := earliestStart.Add(startOffset)
@@ -447,8 +447,8 @@ func (g *Generator) emitSpan(sp embed.Span) {
 
 // cloneResource returns a defensive copy so per-span mutations (e.g. a
 // future host-base merge in the runner) can't bleed across spans.
-func cloneResource(src map[string]string) map[string]string {
-	out := make(map[string]string, len(src))
+func cloneResource(src map[string]any) map[string]any {
+	out := make(map[string]any, len(src))
 	for k, v := range src {
 		out[k] = v
 	}

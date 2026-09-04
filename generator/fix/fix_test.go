@@ -19,7 +19,7 @@ import (
 type captureConsumer struct {
 	mu        sync.Mutex
 	got       [][]byte
-	resources []map[string]string
+	resources []map[string]any
 }
 
 func (c *captureConsumer) ConsumeLogs(_ context.Context, records []embed.LogRecord) error {
@@ -42,7 +42,7 @@ func (c *captureConsumer) Snapshot() [][]byte {
 	return out
 }
 
-func (c *captureConsumer) ResourceAt(i int) map[string]string {
+func (c *captureConsumer) ResourceAt(i int) map[string]any {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if i < 0 || i >= len(c.resources) {

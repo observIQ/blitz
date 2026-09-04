@@ -11,7 +11,7 @@ type loadScraper struct{}
 
 func (s *loadScraper) Name() string { return "load" }
 
-func (s *loadScraper) Scrape(r *rand.Rand, _ string, resource map[string]string) []output.MetricRecord {
+func (s *loadScraper) Scrape(r *rand.Rand, _ string, resource map[string]any) []output.MetricRecord {
 	now := time.Now()
 
 	// Load averages: 1m > 5m > 15m (typical pattern)

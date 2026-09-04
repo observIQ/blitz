@@ -11,7 +11,7 @@ type filesystemScraper struct{}
 
 func (s *filesystemScraper) Name() string { return "filesystem" }
 
-func (s *filesystemScraper) Scrape(r *rand.Rand, _ string, resource map[string]string) []output.MetricRecord {
+func (s *filesystemScraper) Scrape(r *rand.Rand, _ string, resource map[string]any) []output.MetricRecord {
 	now := time.Now()
 
 	type mount struct {

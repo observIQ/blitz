@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-func mapPtr(m map[string]string) uintptr { return reflect.ValueOf(m).Pointer() }
+func mapPtr(m map[string]any) uintptr { return reflect.ValueOf(m).Pointer() }
 
 func TestStaticResourcesConstructorCopies(t *testing.T) {
-	base := map[string]string{"host.name": "thor-web-01", "telemetry.source": "apache"}
+	base := map[string]any{"host.name": "thor-web-01", "telemetry.source": "apache"}
 	s := NewStaticResources(base)
 
 	// Mutating the input after construction must not leak into the static set.
@@ -25,7 +25,7 @@ func TestStaticResourcesConstructorCopies(t *testing.T) {
 }
 
 func TestStaticResourcesRecordNoDynamicIsSharedAndReadOnly(t *testing.T) {
-	s := NewStaticResources(map[string]string{"host.name": "thor-web-01", "telemetry.source": "apache"})
+	s := NewStaticResources(map[string]any{"host.name": "thor-web-01", "telemetry.source": "apache"})
 
 	a := s.Record()
 	b := s.Record()
@@ -40,7 +40,7 @@ func TestStaticResourcesRecordNoDynamicIsSharedAndReadOnly(t *testing.T) {
 }
 
 func TestStaticResourcesRecordWithDynamicMergesWithoutMutatingStatic(t *testing.T) {
-	s := NewStaticResources(map[string]string{"host.name": "thor-web-01", "telemetry.source": "wel"})
+	s := NewStaticResources(map[string]any{"host.name": "thor-web-01", "telemetry.source": "wel"})
 
 	rec := s.Record("wel.channel", "Security", "wel.role", "dc")
 
@@ -59,7 +59,7 @@ func TestStaticResourcesRecordWithDynamicMergesWithoutMutatingStatic(t *testing.
 }
 
 func TestStaticResourcesRecordOddArgsIgnoresTrailing(t *testing.T) {
-	s := NewStaticResources(map[string]string{"telemetry.source": "json"})
+	s := NewStaticResources(map[string]any{"telemetry.source": "json"})
 
 	// A single unpaired arg is treated as "no complete dynamic pair": shared static.
 	if mapPtr(s.Record("dangling")) != mapPtr(s.Record()) {

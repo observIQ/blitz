@@ -11,7 +11,7 @@ type diskScraper struct{}
 
 func (s *diskScraper) Name() string { return "disk" }
 
-func (s *diskScraper) Scrape(r *rand.Rand, _ string, resource map[string]string) []output.MetricRecord {
+func (s *diskScraper) Scrape(r *rand.Rand, _ string, resource map[string]any) []output.MetricRecord {
 	now := time.Now()
 	devices := []string{"sda", "sdb", "nvme0n1"}
 	device := devices[r.Intn(len(devices))] // #nosec G404

@@ -11,7 +11,7 @@ type pagingScraper struct{}
 
 func (s *pagingScraper) Name() string { return "paging" }
 
-func (s *pagingScraper) Scrape(r *rand.Rand, _ string, resource map[string]string) []output.MetricRecord {
+func (s *pagingScraper) Scrape(r *rand.Rand, _ string, resource map[string]any) []output.MetricRecord {
 	now := time.Now()
 
 	swapTotal := int64(r.Intn(8)+1) * 1024 * 1024 * 1024 // 1-8 GB #nosec G404
