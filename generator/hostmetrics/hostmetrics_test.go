@@ -59,7 +59,7 @@ func TestNew(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, g)
 		assert.Equal(t, "test-host", g.hostname)
-		assert.Len(t, g.scrapers, 8)
+		assert.Len(t, g.scrapers, 9)
 	})
 
 	t.Run("auto hostname linux", func(t *testing.T) {
@@ -221,7 +221,7 @@ func TestScrapers(t *testing.T) {
 func TestBuildScrapers(t *testing.T) {
 	t.Run("empty returns all", func(t *testing.T) {
 		scrapers := buildScrapers(nil)
-		assert.Len(t, scrapers, 8)
+		assert.Len(t, scrapers, 9)
 	})
 
 	t.Run("specific names", func(t *testing.T) {

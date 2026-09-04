@@ -36,7 +36,7 @@ type HostMetricsGeneratorConfig struct {
 
 // ValidScrapers is the list of valid scraper names.
 var ValidScrapers = []string{
-	"cpu", "memory", "disk", "network", "filesystem", "load", "paging", "processes",
+	"cpu", "memory", "disk", "network", "filesystem", "load", "paging", "processes", "process",
 }
 
 // Validate validates the host metrics generator configuration
