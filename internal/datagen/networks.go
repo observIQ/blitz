@@ -401,6 +401,7 @@ func RandomPublicIPv4(r *rand.Rand) string {
 		c := r.Intn(256)     // #nosec G404
 		d := r.Intn(254) + 1 // #nosec G404
 
+		// #nosec G115 -- a,b,c,d are bounded to 0..255 by the Intn caps above
 		ip := net.IPv4(byte(a), byte(b), byte(c), byte(d))
 		if isReservedIPv4(ip) {
 			continue
@@ -429,7 +430,7 @@ func RandomIPv6(r *rand.Rand) string {
 func RandomMAC(r *rand.Rand) string {
 	var mac [6]byte
 	for i := range mac {
-		mac[i] = byte(r.Intn(256)) // #nosec G404
+		mac[i] = byte(r.Intn(256)) // #nosec G404,G115 -- bounded to 0..255
 	}
 	// Set locally administered bit, clear multicast bit
 	mac[0] = (mac[0] | 0x02) & 0xfe
