@@ -11,6 +11,28 @@ import (
 // the consumer adapters create when TelemetrySettings.PerBatchSpans is on.
 const adapterTracerScope = "github.com/observiq/blitz/output"
 
+// noopSendSpan is a non-recording span returned by StartSendSpan when per-batch
+// spans are off, so callers can always defer span.End() without a nil check.
+var noopSendSpan = trace.SpanFromContext(context.Background())
+
+// StartSendSpan starts a gated per-batch send span from ctx, so an output's
+// worker can trace the actual (async) send parented to the emit span the
+// consumer adapter opened. When tel.PerBatchSpans is off it returns ctx
+// unchanged and a non-recording span, so the caller always defers span.End().
+//
+// The send runs in a worker goroutine after Write enqueued the batch, so the
+// emit span has usually already ended by the time this fires. That is expected:
+// OTel permits a child of an ended span, and the trace then reads as a brief
+// enqueue (emit) with a later, longer send child, which is the correct picture
+// of an asynchronous output. Callers carry the emit ctx through their internal
+// channel to reach here.
+func StartSendSpan(ctx context.Context, tel embed.TelemetrySettings, name string) (context.Context, trace.Span) {
+	if !tel.PerBatchSpans {
+		return ctx, noopSendSpan
+	}
+	return tel.Tracer(adapterTracerScope).Start(ctx, name)
+}
+
 // WriterAsLogConsumer wraps a Writer so it can be used in contexts that
 // expect an embed.LogConsumer. The adapter pushes each record in the
 // batch through Writer.Write in order, returning the first error it

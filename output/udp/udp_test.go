@@ -39,22 +39,22 @@ func (f *fakeConn) SetReadDeadline(time.Time) error  { return nil }
 func (f *fakeConn) SetWriteDeadline(time.Time) error { return nil }
 
 func TestUDP_drainBuffered_emptyChannelReturnsEarly(t *testing.T) {
-	u := &UDP{logger: zap.NewNop(), dataChan: make(chan string, 1)}
+	u := &UDP{logger: zap.NewNop(), dataChan: make(chan udpItem, 1)}
 	u.drainBuffered(context.Background())
 }
 
 func TestUDP_drainBuffered_connectErrorReturns(t *testing.T) {
-	u := &UDP{logger: zap.NewNop(), host: "nonexistent.invalid", port: "1", dataChan: make(chan string, 1)}
-	u.dataChan <- "x"
+	u := &UDP{logger: zap.NewNop(), host: "nonexistent.invalid", port: "1", dataChan: make(chan udpItem, 1)}
+	u.dataChan <- udpItem{ctx: context.Background(), msg: "x"}
 	u.drainBuffered(context.Background())
 }
 
 func TestUDP_drainTo_stopsOnSendError(t *testing.T) {
 	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
 	require.NoError(t, err)
-	u := &UDP{logger: zap.NewNop(), dataChan: make(chan string, 2), metrics: m}
-	u.dataChan <- "one"
-	u.dataChan <- "two"
+	u := &UDP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m, dataChan: make(chan udpItem, 2)}
+	u.dataChan <- udpItem{ctx: context.Background(), msg: "one"}
+	u.dataChan <- udpItem{ctx: context.Background(), msg: "two"}
 	close(u.dataChan)
 
 	conn := &fakeConn{writeErr: fmt.Errorf("write failed")}
@@ -63,8 +63,8 @@ func TestUDP_drainTo_stopsOnSendError(t *testing.T) {
 }
 
 func TestUDP_drainTo_stopsWhenContextDone(t *testing.T) {
-	u := &UDP{logger: zap.NewNop(), dataChan: make(chan string, 1)}
-	u.dataChan <- "one"
+	u := &UDP{logger: zap.NewNop(), dataChan: make(chan udpItem, 1)}
+	u.dataChan <- udpItem{ctx: context.Background(), msg: "one"}
 	close(u.dataChan)
 
 	ctx, cancel := context.WithCancel(context.Background())
