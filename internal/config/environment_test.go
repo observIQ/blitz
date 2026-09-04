@@ -1,12 +1,83 @@
 package config
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
+	"github.com/observiq/blitz/internal/datagen"
 	"go.uber.org/zap"
 )
 
 func i64(v int64) *int64 { return &v }
+
+// TestValidateNetworks covers the config-load CIDR gate directly: valid IPv4
+// networks pass, while a network whose CIDR is unparseable, non-IPv4, or has a
+// prefix longer than /29 fails and the error names the offending CIDR.
+func TestValidateNetworks(t *testing.T) {
+	valid := []*datagen.NetworkIdentity{
+		{ID: "n1", CIDR: "10.10.1.0/24"},
+		{ID: "n2", CIDR: "192.168.0.0/29"},
+		{ID: "n3", CIDR: "10.0.0.0/8"},
+	}
+	if err := validateNetworks(valid); err != nil {
+		t.Errorf("validateNetworks(valid) = %v, want nil", err)
+	}
+
+	for _, bad := range []string{"10.10.1.0/30", "10.10.1.0/31", "10.10.1.0/32", "not-a-cidr", "2001:db8::/64"} {
+		nets := []*datagen.NetworkIdentity{
+			{ID: "ok", CIDR: "10.10.1.0/24"},
+			{ID: "bad", CIDR: bad},
+		}
+		err := validateNetworks(nets)
+		if err == nil {
+			t.Errorf("validateNetworks with CIDR %q = nil, want error", bad)
+			continue
+		}
+		if !strings.Contains(err.Error(), bad) {
+			t.Errorf("error for CIDR %q = %q, want it to name the offending CIDR", bad, err.Error())
+		}
+	}
+}
+
+// TestEnvironmentConfig_Build_RejectsInvalidNetworkCIDR confirms the gate is
+// wired into the config-load path: when the environment resolves a network with
+// an invalid CIDR, Build fails (rather than silently defaulting) and surfaces
+// the offending CIDR. The genEnvironment seam injects the invalid network,
+// since normal generation only ever produces valid CIDRs.
+func TestEnvironmentConfig_Build_RejectsInvalidNetworkCIDR(t *testing.T) {
+	orig := genEnvironment
+	defer func() { genEnvironment = orig }()
+	genEnvironment = func(_ *datagen.SeedConfig, _ *datagen.EnvironmentOpts) (*datagen.Environment, error) {
+		return &datagen.Environment{
+			Networks: []*datagen.NetworkIdentity{{ID: "bad", Name: "Bad", CIDR: "10.10.1.0/30"}},
+		}, nil
+	}
+
+	_, err := EnvironmentConfig{}.Build(zap.NewNop())
+	if err == nil {
+		t.Fatal("Build with an invalid network CIDR should fail, got nil")
+	}
+	if !strings.Contains(err.Error(), "10.10.1.0/30") {
+		t.Errorf("Build error = %q, want it to name the offending CIDR", err.Error())
+	}
+}
+
+// TestEnvironmentConfig_Build_PropagatesGenerateError confirms Build forwards an
+// environment-composition error unchanged (before it reaches the network gate).
+func TestEnvironmentConfig_Build_PropagatesGenerateError(t *testing.T) {
+	orig := genEnvironment
+	defer func() { genEnvironment = orig }()
+	sentinel := errors.New("boom")
+	genEnvironment = func(_ *datagen.SeedConfig, _ *datagen.EnvironmentOpts) (*datagen.Environment, error) {
+		return nil, sentinel
+	}
+
+	_, err := EnvironmentConfig{}.Build(zap.NewNop())
+	if !errors.Is(err, sentinel) {
+		t.Errorf("Build error = %v, want the sentinel generation error", err)
+	}
+}
 
 func TestEnvironmentConfig_Build_Counts(t *testing.T) {
 	cfg := EnvironmentConfig{
