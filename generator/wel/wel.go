@@ -193,23 +193,28 @@ func (g *Generator) worker(workerID int) {
 	backoffConfig.MaxInterval = 5 * time.Second
 	backoffConfig.MaxElapsedTime = 0
 
-	backoffTicker := backoff.NewTicker(backoffConfig)
-	defer backoffTicker.Stop()
+	// Drive the timer from this goroutine only. backoff.ExponentialBackOff is
+	// not safe for concurrent use, so we never hand it to backoff.NewTicker's
+	// internal goroutine; instead we own every NextBackOff/Reset call here.
+	timer := time.NewTimer(backoffConfig.NextBackOff())
+	defer timer.Stop()
 
 	for {
 		select {
 		case <-g.stopCh:
 			g.logger.Debug("WEL worker stopping", zap.Int("worker_id", workerID))
 			return
-		case <-backoffTicker.C:
+		case <-timer.C:
 			if err := g.generateAndWrite(rng); err != nil {
 				g.logger.Error("Failed to write WEL event",
 					zap.Int("worker_id", workerID),
 					zap.Error(err),
 				)
+				timer.Reset(backoffConfig.NextBackOff())
 				continue
 			}
 			backoffConfig.Reset()
+			timer.Reset(backoffConfig.NextBackOff())
 		}
 	}
 }
