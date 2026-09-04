@@ -54,7 +54,7 @@ groups:
   stability: stable
   brief: "latency of ACK polling requests"
   instrument: histogram
-  unit: "s"
+  unit: "ms"
   annotations:
     histogram:
       type: Float64Histogram

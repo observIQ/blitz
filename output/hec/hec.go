@@ -374,7 +374,7 @@ func (w *worker) sendBatch(batch []output.LogRecord) {
 
 	startTime := time.Now()
 	resp, err := w.postEvents(payload)
-	latency := time.Since(startTime).Seconds()
+	latency := output.DurationMillis(time.Since(startTime))
 
 	if err != nil {
 		span.RecordError(err)

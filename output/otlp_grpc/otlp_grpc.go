@@ -559,7 +559,7 @@ func (o *OTLPGrpc) sendMetricBatch(client collectormetrics.MetricsServiceClient,
 		return fmt.Errorf("failed to export metrics: %w", err)
 	}
 
-	latency := time.Since(startTime).Seconds()
+	latency := output.DurationMillis(time.Since(startTime))
 	requestSize := int64(proto.Size(request))
 	o.metrics.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(metrics)), outputType, "metrics")
 	o.metrics.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "metrics")
@@ -594,7 +594,7 @@ func (o *OTLPGrpc) sendTraceBatch(client collectortrace.TraceServiceClient, batc
 		return fmt.Errorf("failed to export traces: %w", err)
 	}
 
-	latency := time.Since(startTime).Seconds()
+	latency := output.DurationMillis(time.Since(startTime))
 	requestSize := int64(proto.Size(request))
 	o.metrics.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(spans)), outputType, "traces")
 	o.metrics.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "traces")
@@ -708,7 +708,7 @@ func (o *OTLPGrpc) sendBatch(client collectorlogs.LogsServiceClient, batch *logB
 	}
 
 	// Record successful send metrics
-	latency := time.Since(startTime).Seconds()
+	latency := output.DurationMillis(time.Since(startTime))
 	requestSize := int64(proto.Size(request))
 	o.metrics.BlitzOutputEntryRateCounter.Add(context.Background(), float64(len(logs)), outputType, "logs")
 	o.metrics.BlitzOutputRequestSizeHistogram.Record(context.Background(), requestSize, outputType, "logs")

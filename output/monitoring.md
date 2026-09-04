@@ -8,7 +8,7 @@
 | [`blitz.output.entries_received`](#blitzoutputentries-received) | Counter | `{entry}` | total number of telemetry entries received by the output |
 | [`blitz.output.entry_rate`](#blitzoutputentry-rate) | Counter | `{entry}/s` | rate of telemetry entries processed per second |
 | [`blitz.output.queue_size`](#blitzoutputqueue-size) | Gauge | `{entry}` | current number of entries in the output queue |
-| [`blitz.output.request_latency`](#blitzoutputrequest-latency) | Histogram | `s` | latency of output requests |
+| [`blitz.output.request_latency`](#blitzoutputrequest-latency) | Histogram | `ms` | latency of output requests |
 | [`blitz.output.request_size`](#blitzoutputrequest-size) | Histogram | `By` | size of output requests in bytes |
 | [`blitz.output.send_errors`](#blitzoutputsend-errors) | Counter | `{error}` | total number of send errors |
 
@@ -117,7 +117,7 @@ blitzOutputEntryRateCounter.Add(ctx, 1, outputTypeValue, telemetryTypeValue)
 | Property | Value |
 |----------|-------|
 | **Type** | Histogram |
-| **Unit** | `s` |
+| **Unit** | `ms` |
 | **Meter** | `output` |
 | **Stability** | Stable |
 | **Description** | latency of output requests |

@@ -313,7 +313,7 @@ func (t *TCP) sendData(conn net.Conn, data string) error {
 	}
 
 	// Record successful send metrics
-	latency := time.Since(startTime).Seconds()
+	latency := output.DurationMillis(time.Since(startTime))
 	t.metrics.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType, "logs")
 	t.metrics.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType, "logs")
 	t.metrics.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "logs")
