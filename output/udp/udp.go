@@ -123,18 +123,62 @@ func (u *UDP) Stop(ctx context.Context) error {
 	// Record zero active workers
 	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
-	// Close the channel to ensure workers do not
-	// process new data.
-	close(u.dataChan)
-
-	// Signal the workers to stop.
+	// Reject any further writes and stop the workers (and their restart loop).
 	u.cancel()
-
-	// Stop the worker manager
 	u.workerManager.Stop()
+
+	// The workers have now exited, so this goroutine is the sole owner of
+	// dataChan. Close it and drain any records that were still buffered when
+	// shutdown began, delivering them instead of dropping them (PIPE-1230).
+	// Draining here, after the workers are joined, keeps delivery deterministic
+	// rather than racing a worker's channel-drain against context cancellation.
+	close(u.dataChan)
+	u.drainBuffered(ctx)
 
 	u.logger.Info("UDP output stopped successfully")
 	return nil
+}
+
+// drainBuffered sends any records still buffered in dataChan at shutdown. It runs
+// after the workers have stopped, so it is the sole consumer of the (now closed)
+// channel and delivery is deterministic. It is bounded by the connect/write
+// timeouts, DefaultUDPStopTimeout, and the caller's context so an unreachable
+// destination cannot hang shutdown.
+func (u *UDP) drainBuffered(ctx context.Context) {
+	if len(u.dataChan) == 0 {
+		return
+	}
+
+	conn, err := u.connect()
+	if err != nil {
+		u.logger.Error("Failed to connect while draining buffered records on shutdown",
+			zap.Int("dropped", len(u.dataChan)),
+			zap.Error(err))
+		return
+	}
+	defer conn.Close()
+
+	u.drainTo(ctx, conn, time.Now().Add(DefaultUDPStopTimeout))
+}
+
+// drainTo sends every record remaining in dataChan over conn until the channel
+// is closed and empty, a send fails, or ctx is done / the deadline passes. It is
+// split out from drainBuffered so the send-failure and deadline paths can be
+// exercised directly with a fake connection.
+func (u *UDP) drainTo(ctx context.Context, conn net.Conn, deadline time.Time) {
+	for data := range u.dataChan {
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			u.logger.Warn("Shutdown deadline reached while draining buffered records",
+				zap.Int("dropped", len(u.dataChan)+1))
+			return
+		}
+		if err := u.sendData(conn, data); err != nil {
+			u.logger.Error("Failed to send buffered record while draining on shutdown",
+				zap.Int("dropped", len(u.dataChan)+1),
+				zap.Error(err))
+			return
+		}
+	}
 }
 
 // udpWorker processes UDP data from the channel and sends it to the configured host and port.

@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -473,6 +475,40 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 	}
 }
 
+// TestTCP_StopWithUnreachableDestinationDoesNotHang verifies that Stop completes
+// (without hanging) when buffered records cannot be drained because the
+// destination is unreachable. Pointing at a closed port means the worker never
+// connects, so the records stay buffered until Stop, and the drain's connect
+// attempt fails fast rather than blocking shutdown.
+func TestTCP_StopWithUnreachableDestinationDoesNotHang(t *testing.T) {
+	logger := zap.NewNop()
+
+	// Reserve a port, then close the listener so nothing is listening on it.
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	_, port, err := net.SplitHostPort(l.Addr().String())
+	require.NoError(t, err)
+	require.NoError(t, l.Close())
+
+	tcp, err := New(logger, "127.0.0.1", port, 1, nil)
+	require.NoError(t, err)
+
+	// The worker cannot connect, so these stay buffered (well under channel cap).
+	ctx := context.Background()
+	for i := 0; i < 10; i++ {
+		require.NoError(t, tcp.Write(ctx, output.LogRecord{Message: fmt.Sprintf("unreachable-%d", i)}))
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- tcp.Stop(ctx) }()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(15 * time.Second):
+		t.Fatal("Stop hung when draining to an unreachable destination")
+	}
+}
+
 // Test server implementation
 var (
 	receivedData [][]byte
@@ -539,4 +575,109 @@ func getReceivedData(t *testing.T) [][]byte {
 	}
 
 	return result
+}
+
+// fakeConn is a minimal net.Conn used to exercise drainTo's send-failure and
+// context/deadline branches without real network I/O.
+type fakeConn struct {
+	writeErr error
+	writes   int
+}
+
+func (f *fakeConn) Read([]byte) (int, error) { return 0, io.EOF }
+func (f *fakeConn) Write(b []byte) (int, error) {
+	f.writes++
+	if f.writeErr != nil {
+		return 0, f.writeErr
+	}
+	return len(b), nil
+}
+func (f *fakeConn) Close() error                     { return nil }
+func (f *fakeConn) LocalAddr() net.Addr              { return &net.TCPAddr{} }
+func (f *fakeConn) RemoteAddr() net.Addr             { return &net.TCPAddr{} }
+func (f *fakeConn) SetDeadline(time.Time) error      { return nil }
+func (f *fakeConn) SetReadDeadline(time.Time) error  { return nil }
+func (f *fakeConn) SetWriteDeadline(time.Time) error { return nil }
+
+// drainBuffered with an empty channel must return before attempting to connect.
+func TestTCP_drainBuffered_emptyChannelReturnsEarly(t *testing.T) {
+	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan string, 1)}
+	tcp.drainBuffered(context.Background())
+}
+
+// drainTo stops at the first send failure, leaving the rest undrained.
+func TestTCP_drainTo_stopsOnSendError(t *testing.T) {
+	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan string, 4)}
+	tcp.dataChan <- "one"
+	tcp.dataChan <- "two"
+	close(tcp.dataChan)
+
+	conn := &fakeConn{writeErr: fmt.Errorf("write failed")}
+	tcp.drainTo(context.Background(), conn, time.Now().Add(time.Hour))
+
+	require.Equal(t, 1, conn.writes, "drainTo should stop after the first failed send")
+}
+
+// drainTo returns without sending when the context is already done.
+func TestTCP_drainTo_stopsWhenContextDone(t *testing.T) {
+	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan string, 4)}
+	tcp.dataChan <- "one"
+	close(tcp.dataChan)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	conn := &fakeConn{}
+	tcp.drainTo(ctx, conn, time.Now().Add(time.Hour))
+
+	require.Equal(t, 0, conn.writes, "drainTo should not send once the context is done")
+}
+
+// TestTCP_StopDrainsBufferedRecords verifies Stop() drains everything already
+// buffered before returning, instead of dropping records that are still queued
+// when shutdown begins. Unlike the other delivery tests, this one does NOT poll
+// for delivery before calling Stop — draining is Stop()'s responsibility.
+func TestTCP_StopDrainsBufferedRecords(t *testing.T) {
+	logger := zap.NewNop()
+
+	listener, serverAddr := startTestTCPServer(t)
+	defer listener.Close()
+
+	host, port, err := net.SplitHostPort(serverAddr)
+	require.NoError(t, err)
+
+	tcp, err := New(logger, host, port, 1, nil)
+	require.NoError(t, err)
+
+	// Queue a backlog of uniquely-identifiable records as fast as possible, so a
+	// large number are still buffered when Stop is called, then stop immediately.
+	const n = 100
+	ctx := context.Background()
+	for i := 0; i < n; i++ {
+		require.NoError(t, tcp.Write(ctx, output.LogRecord{Message: fmt.Sprintf("drain-msg-%d", i)}))
+	}
+
+	require.NoError(t, tcp.Stop(ctx))
+
+	// Once Stop has returned, every record must have been delivered. Poll only to
+	// let the test server goroutine finish reading bytes already on the wire; no
+	// new records can be sent after Stop returns, so a missing record means it was
+	// dropped rather than drained.
+	// Once Stop has returned, every record must have been delivered. Poll only to
+	// let the test server goroutine finish reading bytes already on the wire; no
+	// new records can be sent after Stop returns, so a missing record means it was
+	// dropped rather than drained.
+	require.Eventually(t, func() bool {
+		var all []byte
+		for _, d := range getReceivedData(t) {
+			all = append(all, d...)
+		}
+		s := string(all)
+		for i := 0; i < n; i++ {
+			if !strings.Contains(s, fmt.Sprintf("drain-msg-%d\n", i)) {
+				return false
+			}
+		}
+		return true
+	}, 3*time.Second, 10*time.Millisecond, "all buffered records should be delivered before Stop returns")
 }
