@@ -6,7 +6,9 @@ partial:
 
 before:
   hooks:
-    - make install-tools
+    # Retry the tool install so a transient Go module-proxy blip during the
+    # GoReleaser pre-build hook doesn't fail the build leg (PIPE-1058).
+    - bash .github/scripts/retry.sh make install-tools
     - make man
 
 builds:

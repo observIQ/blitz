@@ -63,11 +63,11 @@ jobs:
       - name: Download dependencies
         run: |
           go env
-          go mod download
+          bash .github/scripts/retry.sh go mod download
 
       - name: Install tools
         run: |
-          make install-tools
+          bash .github/scripts/retry.sh make install-tools
 
   test:
     name: Test
@@ -159,12 +159,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Only the linux legs build container images (the goreleaser dockers are
+      # linux/amd64 and linux/arm64), so QEMU/buildx are set up only there. The
+      # freebsd/darwin/windows legs cross-compile binaries only, so they no
+      # longer pull from Docker Hub at all, which removes the transient-pull
+      # failure they used to hit (PIPE-1092). On the linux legs the QEMU and
+      # buildkit images are pre-pulled with retry and pinned, so a transient
+      # Docker Hub blip during setup no longer fails the build.
+      - name: Pre-pull buildx base images (retry transient Docker Hub pulls)
+        if: matrix.goos == 'linux'
+        run: |
+          bash .github/scripts/retry.sh docker pull tonistiigi/binfmt:latest
+          bash .github/scripts/retry.sh docker pull moby/buildkit:buildx-stable-1
+
       - name: Set up Docker Buildx
+        if: matrix.goos == 'linux'
         id: buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: image=moby/buildkit:buildx-stable-1
 
       - name: Set up QEMU
+        if: matrix.goos == 'linux'
         uses: docker/setup-qemu-action@v4
+        with:
+          image: tonistiigi/binfmt:latest
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -208,12 +227,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Pre-pull the QEMU/buildkit images with retry so a transient Docker Hub
+      # blip during buildx/QEMU setup doesn't fail the merge build (PIPE-1092).
+      # The images are pinned to match what the setup actions request below.
+      - name: Pre-pull buildx base images (retry transient Docker Hub pulls)
+        run: |
+          bash .github/scripts/retry.sh docker pull tonistiigi/binfmt:latest
+          bash .github/scripts/retry.sh docker pull moby/buildkit:buildx-stable-1
+
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: image=moby/buildkit:buildx-stable-1
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
+        with:
+          image: tonistiigi/binfmt:latest
 
       - name: Setup Go
         uses: actions/setup-go@v7
