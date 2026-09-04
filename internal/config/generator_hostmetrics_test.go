@@ -57,14 +57,30 @@ func TestHostMetricsGeneratorConfig_Validate(t *testing.T) {
 			errMsg:  "rate must be positive",
 		},
 		{
-			name: "invalid OS",
+			name: "valid OS macos",
 			config: HostMetricsGeneratorConfig{
 				Workers: 1,
 				Rate:    time.Second,
 				OS:      "macos",
 			},
+		},
+		{
+			name: "valid OS darwin alias",
+			config: HostMetricsGeneratorConfig{
+				Workers: 1,
+				Rate:    time.Second,
+				OS:      "darwin",
+			},
+		},
+		{
+			name: "invalid OS",
+			config: HostMetricsGeneratorConfig{
+				Workers: 1,
+				Rate:    time.Second,
+				OS:      "solaris",
+			},
 			wantErr: true,
-			errMsg:  "OS must be one of",
+			errMsg:  "unsupported OS",
 		},
 		{
 			name: "invalid scraper",

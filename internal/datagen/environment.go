@@ -2,6 +2,7 @@ package datagen
 
 import (
 	"fmt"
+	"hash/fnv"
 	"math/rand"
 	"time"
 
@@ -34,6 +35,25 @@ func (e *Environment) AllStorageSystems() []*StorageSystemIdentity { return e.St
 
 // AllNetworkSystems returns the environment's network-hardware identities.
 func (e *Environment) AllNetworkSystems() []*NetworkSystemIdentity { return e.NetworkSystems }
+
+// SystemForKey deterministically selects one of the environment's Systems by a
+// caller-supplied key (typically a generator component name, or a component
+// plus worker index for per-worker host granularity). The same key always maps
+// to the same system for a given Environment, so a generator resolves its host
+// identity once and attributes every record it emits consistently. Returns nil
+// when the environment has no systems.
+func (e *Environment) SystemForKey(key string) *SystemIdentity {
+	if len(e.Systems) == 0 {
+		return nil
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key))
+	// int64 throughout: uint32->int64 and int->int64 are widening (never
+	// negative, never truncating), so this is correct on 32-bit targets and
+	// avoids an int->uint32 narrowing conversion.
+	idx := int64(h.Sum32()) % int64(len(e.Systems))
+	return e.Systems[idx]
+}
 
 // EnvironmentOpts controls the size and shape of the generated environment.
 type EnvironmentOpts struct {

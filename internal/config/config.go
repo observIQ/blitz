@@ -19,6 +19,9 @@ type Config struct {
 	Output Output `yaml:"output,omitempty" mapstructure:"output,omitempty"`
 	// Metrics configuration
 	Metrics Metrics `yaml:"metrics,omitempty" mapstructure:"metrics,omitempty"`
+	// Environment configures the simulated datagen.Environment identities
+	// that generators draw their host.name/OS from (PIPE-1036).
+	Environment EnvironmentConfig `yaml:"environment,omitempty" mapstructure:"environment,omitempty"`
 	// OnFinish controls behavior when finite generation completes.
 	// One of: "exit" (default), "idle"
 	OnFinish string `yaml:"onFinish,omitempty" mapstructure:"onFinish,omitempty"`
@@ -36,6 +39,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Metrics.Validate(); err != nil {
+		return err
+	}
+	if err := c.Environment.Validate(); err != nil {
 		return err
 	}
 	if c.OnFinish != "" && c.OnFinish != "exit" && c.OnFinish != "idle" {

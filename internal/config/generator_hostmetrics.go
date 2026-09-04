@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"time"
+
+	"github.com/observiq/blitz/internal/datagen"
 )
 
 // HostMetricsGeneratorConfig contains configuration for host metrics generator
@@ -11,7 +13,9 @@ type HostMetricsGeneratorConfig struct {
 	Workers int `yaml:"workers,omitempty" mapstructure:"workers,omitempty"`
 	// Rate is the scrape interval for host metrics
 	Rate time.Duration `yaml:"rate,omitempty" mapstructure:"rate,omitempty"`
-	// OS is the simulated operating system. One of: linux, windows
+	// OS is the simulated operating system. One of: linux, windows, macos
+	// ("darwin" is accepted as an alias for macos). Empty selects the
+	// default at construction.
 	OS string `yaml:"os,omitempty" mapstructure:"os,omitempty"`
 	// Hostname is the simulated hostname. If empty, a random hostname is generated.
 	Hostname string `yaml:"hostname,omitempty" mapstructure:"hostname,omitempty"`
@@ -49,8 +53,10 @@ func (c *HostMetricsGeneratorConfig) Validate() error {
 		return fmt.Errorf("hostmetrics generator rate must be positive, got %v", c.Rate)
 	}
 
-	if c.OS != "" && c.OS != "linux" && c.OS != "windows" {
-		return fmt.Errorf("hostmetrics generator OS must be one of: linux, windows, got %q", c.OS)
+	if c.OS != "" {
+		if _, err := datagen.ParseOSType(c.OS); err != nil {
+			return fmt.Errorf("hostmetrics generator OS invalid: %w", err)
+		}
 	}
 
 	for _, s := range c.Scrapers {
