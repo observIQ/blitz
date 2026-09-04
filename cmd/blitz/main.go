@@ -195,7 +195,7 @@ func run(cmd *cobra.Command, args []string) error {
 	var outputInstance output.Output
 	switch cfg.Output.Type {
 	case config.OutputTypeNop:
-		outputInstance, err = nop.New(logger)
+		outputInstance, err = nop.New(logger, tel)
 		if err != nil {
 			logger.Error("Failed to create NOP output", zap.Error(err))
 			return err
@@ -203,6 +203,7 @@ func run(cmd *cobra.Command, args []string) error {
 	case config.OutputTypeStdout:
 		outputInstance, err = stdoutout.New(logger,
 			stdoutout.WithFlushInterval(cfg.Output.Stdout.FlushInterval),
+			stdoutout.WithTelemetry(tel),
 		)
 		if err != nil {
 			logger.Error("Failed to create stdout output", zap.Error(err))
