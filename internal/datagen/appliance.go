@@ -79,10 +79,9 @@ func (a ApplianceOS) String() string {
 	return fmt.Sprintf("%s %s", a.Family, a.Version)
 }
 
-// Validate reports whether the ApplianceOS is well-formed: non-empty vendor,
-// family, and a dotted version in one of the real appliance formats. Returns an
-// error rather than panicking, per the datagen error-return convention
-// (PIPE-1003).
+// Validate reports whether the ApplianceOS is well-formed: non-empty vendor and
+// family, a recognized version, and a vendor coherent with the family (NimbleOS
+// is HPE). It does not constrain the OS against the device vendor.
 func (a ApplianceOS) Validate() error {
 	if a.Vendor == "" {
 		return fmt.Errorf("appliance OS vendor must not be empty")
@@ -95,6 +94,9 @@ func (a ApplianceOS) Validate() error {
 	}
 	if !applianceVersionRE.MatchString(a.Version) {
 		return fmt.Errorf("appliance OS version %q is not a recognized version format", a.Version)
+	}
+	if want, ok := applianceOSVendor[a.Family]; ok && a.Vendor != want {
+		return fmt.Errorf("appliance OS family %q must have vendor %q, got %q", a.Family, want, a.Vendor)
 	}
 	return nil
 }

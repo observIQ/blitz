@@ -79,6 +79,9 @@ func TestStorageSystemIdentity_Validate(t *testing.T) {
 		wantErr bool
 	}{
 		{"valid", good, false},
+		{"OS vendor incoherent with family", mutate(func(s *StorageSystemIdentity) {
+			s.OS = &ApplianceOS{Vendor: VendorFortinet, Family: FamilyNimbleOS, Version: "6.1.2.0"}
+		}), true},
 		{"empty vendor", mutate(func(s *StorageSystemIdentity) { s.Vendor = "" }), true},
 		{"nil OS", mutate(func(s *StorageSystemIdentity) { s.OS = nil }), true},
 		{"bad WWN", mutate(func(s *StorageSystemIdentity) { s.WWN = "zz:zz" }), true},

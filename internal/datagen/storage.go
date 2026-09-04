@@ -178,9 +178,10 @@ func driveTypeAndCapacity(r *rand.Rand, driveType string) (string, float64) {
 	}
 }
 
-// Validate reports whether the StorageSystemIdentity is well-formed: coherent
-// vendor/OS, well-formed WWN/IQN/NAA/WWPN, and a sane capacity model. Returns
-// an error rather than panicking, per the datagen error-return convention.
+// Validate reports whether the StorageSystemIdentity is well-formed: a
+// family-coherent OS vendor, well-formed WWN/IQN/NAA/WWPN, and a sane capacity
+// model. Returns an error rather than panicking, per the datagen error-return
+// convention.
 func (s *StorageSystemIdentity) Validate() error {
 	if s.Vendor == "" {
 		return fmt.Errorf("storage system vendor must not be empty")

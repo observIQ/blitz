@@ -69,8 +69,11 @@ func TestNetworkSystemIdentity_Validate(t *testing.T) {
 		{"empty serial", mutate(func(n *NetworkSystemIdentity) { n.Serial = "" }), true},
 		{"nil OS", mutate(func(n *NetworkSystemIdentity) { n.OS = nil }), true},
 		{"invalid OS", mutate(func(n *NetworkSystemIdentity) { n.OS = &ApplianceOS{} }), true},
-		{"vendor/OS mismatch", mutate(func(n *NetworkSystemIdentity) {
-			n.OS = &ApplianceOS{Vendor: VendorFortinet, Family: FamilyFortiOS, Version: "7.4.3"}
+		// Device vendor need not equal OS vendor: appliances run base/third-party
+		// OSes (an Arista box can report its underlying Fedora layer).
+		{"device vendor differs from OS vendor", mutate(func(n *NetworkSystemIdentity) { n.Vendor = VendorArista }), false},
+		{"OS vendor incoherent with family", mutate(func(n *NetworkSystemIdentity) {
+			n.OS = &ApplianceOS{Vendor: VendorFortinet, Family: FamilyNimbleOS, Version: "6.1.2.0"}
 		}), true},
 		{"no facets", mutate(func(n *NetworkSystemIdentity) {
 			n.L2Switching, n.L3Routing, n.Firewall, n.LoadBalancing, n.Wireless = nil, nil, nil, nil, nil

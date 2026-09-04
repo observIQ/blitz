@@ -114,9 +114,10 @@ var networkModels = []networkModelSpec{
 	{VendorFortinet, "FortiGate 100F", FamilyFortiOS, facetFirewall | facetL3, 22, 22},
 }
 
-// Validate reports whether the NetworkSystemIdentity is well-formed: coherent
-// vendor/OS, at least one capability facet, and coherent interfaces. Returns an
-// error rather than panicking, per the datagen error-return convention.
+// Validate reports whether the NetworkSystemIdentity is well-formed: a
+// family-coherent OS vendor, at least one capability facet, and coherent
+// interfaces. Returns an error rather than panicking, per the datagen
+// error-return convention.
 func (n *NetworkSystemIdentity) Validate() error {
 	if n.Vendor == "" {
 		return fmt.Errorf("network system vendor must not be empty")
@@ -132,9 +133,6 @@ func (n *NetworkSystemIdentity) Validate() error {
 	}
 	if err := n.OS.Validate(); err != nil {
 		return fmt.Errorf("network system %q OS: %w", n.Model, err)
-	}
-	if n.OS.Vendor != n.Vendor {
-		return fmt.Errorf("network system %q vendor %q does not match OS vendor %q", n.Model, n.Vendor, n.OS.Vendor)
 	}
 	if n.L2Switching == nil && n.L3Routing == nil && n.Firewall == nil && n.LoadBalancing == nil && n.Wireless == nil {
 		return fmt.Errorf("network system %q has no capability facets", n.Model)

@@ -35,6 +35,7 @@ func TestApplianceOS_Validate(t *testing.T) {
 		{"valid", ApplianceOS{VendorHPE, FamilyNimbleOS, "6.1.2.0"}, false},
 		{"valid three-segment", ApplianceOS{VendorCisco, FamilyIOSXE, "17.12.3"}, false},
 		{"valid vendor-suffixed", ApplianceOS{VendorJuniper, FamilyJunos, "23.4R1"}, false},
+		{"vendor incoherent with family", ApplianceOS{VendorFortinet, FamilyNimbleOS, "6.1.2.0"}, true},
 		{"missing vendor", ApplianceOS{"", FamilyNimbleOS, "6.1.2.0"}, true},
 		{"missing family", ApplianceOS{VendorHPE, "", "6.1.2.0"}, true},
 		{"missing version", ApplianceOS{VendorHPE, FamilyNimbleOS, ""}, true},
