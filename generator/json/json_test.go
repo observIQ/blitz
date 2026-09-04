@@ -10,6 +10,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/generator/logtypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -468,4 +469,19 @@ func BenchmarkGenerateDefaultLog(b *testing.B) {
 		// Prevent compiler optimization
 		_ = err
 	}
+}
+
+func TestSetHostIdentity(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	gen, err := New(logger, 1, 100*time.Millisecond, "default", newMockWriter())
+	require.NoError(t, err)
+
+	gen.SetHostIdentity(&datagen.SystemIdentity{
+		Hostname: "IDENTITY-HOST",
+		OSInfo:   datagen.OSInfo{Type: datagen.OSLinux},
+	})
+	assert.Equal(t, "IDENTITY-HOST", gen.static.Record()["host.name"])
+
+	gen.SetHostIdentity(nil)
+	assert.NotEmpty(t, gen.static.Record()["host.name"])
 }

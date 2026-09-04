@@ -13,6 +13,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/fix/catalog"
+	"github.com/observiq/blitz/internal/datagen"
 )
 
 // captureConsumer buffers every record passed to ConsumeLogs.
@@ -244,4 +245,18 @@ func TestGeneratorSatisfiesProducerModule(t *testing.T) {
 	g, err := New(zap.NewNop(), DefaultConfig(), &captureConsumer{})
 	require.NoError(t, err)
 	var _ embed.ProducerModule = g
+}
+
+func TestSetHostIdentity(t *testing.T) {
+	g, err := New(zap.NewNop(), DefaultConfig(), &captureConsumer{})
+	require.NoError(t, err)
+
+	g.SetHostIdentity(&datagen.SystemIdentity{
+		Hostname: "IDENTITY-HOST",
+		OSInfo:   datagen.OSInfo{Type: datagen.OSLinux},
+	})
+	assert.Equal(t, "IDENTITY-HOST", g.static.Record()["host.name"])
+
+	g.SetHostIdentity(nil)
+	assert.NotEmpty(t, g.static.Record()["host.name"])
 }

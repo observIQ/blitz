@@ -10,6 +10,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/wel/catalog"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -250,4 +251,24 @@ func TestGeneratorSupportedTelemetry(t *testing.T) {
 	if types[0] != telemetry.Logs {
 		t.Errorf("expected Logs telemetry type, got %v", types[0])
 	}
+}
+
+func TestSetHostIdentity(t *testing.T) {
+	gen, err := New(Config{
+		Logger:    zap.NewNop(),
+		Workers:   1,
+		Rate:      time.Second,
+		Usernames: []string{"test"},
+		Consumer:  &mockConsumer{},
+	})
+	require.NoError(t, err)
+
+	gen.SetHostIdentity(&datagen.SystemIdentity{
+		Hostname: "IDENTITY-HOST",
+		OSInfo:   datagen.OSInfo{Type: datagen.OSLinux},
+	})
+	require.Equal(t, "IDENTITY-HOST", gen.static.Record()["host.name"])
+
+	gen.SetHostIdentity(nil)
+	require.NotEmpty(t, gen.static.Record()["host.name"])
 }

@@ -46,8 +46,15 @@ type Config struct {
 	// a deterministic Linux-style hostname is generated from Seed via
 	// datagen.GenerateHostname, matching the hostmetrics convention so
 	// records from both signals attribute consistently to the same
-	// simulated machine when configured with the same Seed.
+	// simulated machine when configured with the same Seed. Ignored when
+	// Identity is set.
 	Hostname string
+	// Identity, when non-nil, is the resolved simulated host these traces
+	// describe (PIPE-1036). Its full host.* / os.* / deployment.* projection
+	// becomes the static resource on every span. When nil, a minimal
+	// Linux-style identity is synthesized from Hostname, preserving the prior
+	// standalone-CLI behavior.
+	Identity *datagen.SystemIdentity
 	// Consumer receives each emitted span individually as it "completes"
 	// (its EndTime is reached on wall-clock). Required.
 	Consumer embed.TraceConsumer
@@ -90,6 +97,7 @@ type Generator struct {
 	workers  int
 	rate     time.Duration
 	hostname string
+	static   *resource.StaticResources
 	consumer embed.TraceConsumer
 	seed     int64
 
@@ -118,6 +126,33 @@ func New(cfg Config) (*Generator, error) {
 		return nil, fmt.Errorf("rate must be greater than 0, got %s", cfg.Rate)
 	}
 
+	// Resolve the simulated host: an explicit Environment identity when
+	// supplied, otherwise a minimal Linux-style identity synthesized from the
+	// Hostname knob. The resource projection is built once here and reused for
+	// every span.
+	sys := cfg.Identity
+	if sys == nil {
+		sys = syntheticIdentity(cfg)
+	}
+
+	return &Generator{
+		logger:   cfg.Logger.Named("generator-traces"),
+		workers:  cfg.Workers,
+		rate:     cfg.Rate,
+		hostname: sys.Hostname,
+		static:   resource.FromIdentity(sys, generatorType),
+		consumer: cfg.Consumer,
+		seed:     cfg.Seed,
+		stopCh:   make(chan struct{}),
+	}, nil
+}
+
+// syntheticIdentity builds a minimal Linux-style host identity from the Hostname
+// knob, used when no simulated Environment identity is wired (cfg.Identity ==
+// nil). When cfg.Hostname is empty a hostname is generated deterministically
+// from Seed, matching the hostmetrics convention so both signals attribute to
+// the same simulated machine under the same Seed.
+func syntheticIdentity(cfg Config) *datagen.SystemIdentity {
 	hostname := cfg.Hostname
 	if hostname == "" {
 		// Hostname-only RNG; seeded once at construction since the
@@ -132,16 +167,7 @@ func New(cfg Config) (*Generator, error) {
 			datagen.AllMythologyNames,
 		)
 	}
-
-	return &Generator{
-		logger:   cfg.Logger.Named("generator-traces"),
-		workers:  cfg.Workers,
-		rate:     cfg.Rate,
-		hostname: hostname,
-		consumer: cfg.Consumer,
-		seed:     cfg.Seed,
-		stopCh:   make(chan struct{}),
-	}, nil
+	return &datagen.SystemIdentity{Hostname: hostname}
 }
 
 // Name returns the module identifier for ProducerModule.
@@ -289,8 +315,10 @@ func (g *Generator) startTrace(r *mathrand.Rand) {
 		}
 	}
 
-	res := resource.Default(generatorType)
-	res["host.name"] = g.hostname
+	// The static host-identity resource is shared read-only; each span takes a
+	// defensive clone (cloneResource) so per-span mutations can't bleed across
+	// spans or into the shared set.
+	res := g.static.Record()
 
 	traceID := generateTraceID()
 	now := time.Now()

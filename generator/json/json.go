@@ -13,6 +13,7 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/generator/logtypes"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
@@ -81,6 +82,7 @@ type JSONLogGenerator struct {
 	rate     time.Duration
 	logType  string
 	consumer embed.LogConsumer
+	static   *resource.StaticResources
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
@@ -117,12 +119,21 @@ func New(logger *zap.Logger, workers int, rate time.Duration, logType string, co
 		rate:     rate,
 		logType:  logType,
 		consumer: consumer,
+		static:   resource.FromIdentity(nil, componentName),
 		stopCh:   make(chan struct{}),
 	}, nil
 }
 
 // Name returns the module identifier.
 func (g *JSONLogGenerator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *JSONLogGenerator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, componentName)
+}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer.
@@ -245,7 +256,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(_ int) error {
 	}
 
 	// Format log data as JSON
-	logRecord, err := formatAsJSON(logData)
+	logRecord, err := formatAsJSON(logData, g.static)
 	if err != nil {
 		g.recordWriteError("unknown", err)
 		return fmt.Errorf("format log as JSON: %w", err)
@@ -272,7 +283,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(_ int) error {
 }
 
 // formatAsJSON converts LogData to a JSON-formatted LogRecord
-func formatAsJSON(data logtypes.LogData) (embed.LogRecord, error) {
+func formatAsJSON(data logtypes.LogData, static *resource.StaticResources) (embed.LogRecord, error) {
 	var jsonData any
 	var timestamp time.Time
 	var severity string
@@ -326,7 +337,7 @@ func formatAsJSON(data logtypes.LogData) (embed.LogRecord, error) {
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: timestamp,
 			Severity:  severity,
-			Resource:  resource.Default(componentName, "json.type", jsonType),
+			Resource:  static.Record("json.type", jsonType),
 		},
 	}, nil
 }

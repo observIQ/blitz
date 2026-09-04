@@ -21,6 +21,7 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
@@ -98,6 +99,7 @@ type FileLogGenerator struct {
 	rate        time.Duration
 	source      string // file path or directory path or glob pattern
 	consumer    embed.LogConsumer
+	static      *resource.StaticResources
 	dataLibrary fs.FS // optional; nil falls back to ./data_library on disk for "package:" / bare-name sources
 	stopCh      chan struct{}
 	tracker     *count.Tracker
@@ -151,6 +153,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string, cac
 		rate:        rate,
 		source:      source,
 		consumer:    consumer,
+		static:      resource.FromIdentity(nil, "filegen", "filegen.source", source),
 		dataLibrary: dataLibrary,
 		stopCh:      make(chan struct{}),
 		cache:       cache,
@@ -159,6 +162,14 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string, cac
 
 // Name returns the module identifier.
 func (g *FileLogGenerator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *FileLogGenerator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, "filegen", "filegen.source", g.source)
+}
 
 // Start starts the File log generator and launches workers that push
 // records to the configured consumer.
@@ -498,7 +509,7 @@ func (g *FileLogGenerator) readAndWriteFile(filename string) error {
 		Message: processedLine,
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: time.Now(),
-			Resource:  resource.Default("filegen", "filegen.source", g.source),
+			Resource:  g.static.Record(),
 		},
 	}})
 	cancel()

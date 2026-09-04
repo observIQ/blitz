@@ -13,6 +13,7 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -34,6 +35,7 @@ type Generator struct {
 	workers  int
 	rate     time.Duration
 	consumer embed.LogConsumer
+	static   *resource.StaticResources
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
@@ -207,12 +209,21 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
+		static:   resource.FromIdentity(nil, componentName),
 		stopCh:   make(chan struct{}),
 	}, nil
 }
 
 // Name returns the module identifier.
 func (g *Generator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, componentName)
+}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer.
@@ -439,7 +450,7 @@ func (g *Generator) generateOktaLog(r *rand.Rand) (embed.LogRecord, error) {
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: now,
 			Severity:  event.severity,
-			Resource:  resource.Default(componentName),
+			Resource:  g.static.Record(),
 		},
 	}, nil
 }

@@ -19,11 +19,30 @@ const (
 // Arch represents a CPU architecture.
 type Arch string
 
+// Arch values are the OpenTelemetry semconv host.arch value set. Random system
+// generation uses the common ones (amd64, arm64); the rest are selectable via
+// explicit configuration (e.g. an s390x mainframe or ppc64 host).
 const (
 	ArchAMD64 Arch = "amd64"
+	ArchARM32 Arch = "arm32"
 	ArchARM64 Arch = "arm64"
+	ArchIA64  Arch = "ia64"
+	ArchPPC32 Arch = "ppc32"
+	ArchPPC64 Arch = "ppc64"
+	ArchS390X Arch = "s390x"
 	ArchX86   Arch = "x86"
 )
+
+// ParseArch maps a user-supplied CPU architecture string to an Arch, accepting
+// the OpenTelemetry semconv host.arch value set. Unknown values return an error.
+func ParseArch(s string) (Arch, error) {
+	switch a := Arch(strings.ToLower(strings.TrimSpace(s))); a {
+	case ArchAMD64, ArchARM32, ArchARM64, ArchIA64, ArchPPC32, ArchPPC64, ArchS390X, ArchX86:
+		return a, nil
+	default:
+		return "", fmt.Errorf("datagen: unsupported architecture %q", s)
+	}
+}
 
 // SystemRole represents a machine's role in the environment.
 type SystemRole string
@@ -35,41 +54,17 @@ const (
 	RoleRouter      SystemRole = "router"
 )
 
-// OS version pools.
-var (
-	LinuxVersions = NewPool(
-		"5.15.0-91-generic", // Ubuntu 22.04
-		"6.1.0-18-amd64",    // Debian 12
-		"5.14.0-362.el9",    // RHEL 9
-		"6.6.9-200.fc39",    // Fedora 39
-		"5.10.0-27-amd64",   // Debian 11
-	)
-
-	WindowsVersions = NewPool(
-		"10.0.20348", // Server 2022
-		"10.0.17763", // Server 2019
-		"10.0.14393", // Server 2016
-		"10.0.22631", // Windows 11 23H2
-		"10.0.19045", // Windows 10 22H2
-	)
-
-	MacOSVersions = NewPool(
-		"14.2.1", // Sonoma
-		"13.6.3", // Ventura
-		"12.7.2", // Monterey
-	)
-)
-
 // SystemIdentity represents a machine in the simulated environment.
 type SystemIdentity struct {
-	Hostname  string
-	FQDN      string // hostname + domain
-	OS        OSType
-	OSVersion string
-	Arch      Arch
-	Role      SystemRole
-	Domain    string // back-reference to DomainIdentity.Name
-	OUPath    string // "OU=Servers,DC=contoso,DC=com"
+	Hostname string
+	FQDN     string // hostname + domain
+	OSInfo   OSInfo // os.type / os.name / os.version / os.build_id / os.description
+	HostID   string // host.id (OS-appropriate machine identifier)
+	Arch     Arch
+	Role     SystemRole
+	Tier     DeploymentTier // deployment.environment.name
+	Domain   string         // back-reference to DomainIdentity.Name
+	OUPath   string         // "OU=Servers,DC=contoso,DC=com"
 
 	// Hardware
 	CPUCores int
@@ -82,9 +77,24 @@ type SystemIdentity struct {
 	// TLS cert issued by the domain CA
 	Cert *CertInfo
 
+	// Image is the host's OS/VM image provenance (host.image.*). It is a
+	// framework hook for a future CloudIdentity source and is nil today; core
+	// system generation never populates it. A nil Image means the resource
+	// projection emits no host.image.* attributes.
+	Image *HostImage
+
 	// Sub-identities (populated by environment generation)
 	Services     []*ServiceIdentity
 	Applications []*ApplicationIdentity
+}
+
+// HostImage is the OpenTelemetry host.image.* projection source: the VM image
+// or OS install a host was instantiated from. It is not populated by core
+// system generation — a future CloudIdentity source will set it on cloud hosts.
+type HostImage struct {
+	ID      string // host.image.id
+	Name    string // host.image.name
+	Version string // host.image.version
 }
 
 // NetworkInterface represents a NIC bound to a network subnet.
@@ -139,16 +149,9 @@ func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *Do
 		fqdn = strings.ToLower(hostname) + "." + domain.Name
 	}
 
-	// Pick OS version
-	var osVersion string
-	switch os {
-	case OSLinux:
-		osVersion = LinuxVersions.Random(r)
-	case OSWindows:
-		osVersion = WindowsVersions.Random(r)
-	case OSMacOS:
-		osVersion = MacOSVersions.Random(r)
-	}
+	// Coherent OS release + machine id, from authentic release data.
+	osInfo := GenerateOSInfo(r, os)
+	hostID := GenerateHostID(r, os)
 
 	// Pick arch
 	arch := ArchAMD64
@@ -166,18 +169,18 @@ func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *Do
 	cert := generateCertInfo(r, fqdn, hostname, domain.CA)
 
 	return &SystemIdentity{
-		Hostname:  hostname,
-		FQDN:      fqdn,
-		OS:        os,
-		OSVersion: osVersion,
-		Arch:      arch,
-		Role:      role,
-		Domain:    domain.Name,
-		OUPath:    ouPath,
-		CPUCores:  cpu,
-		MemoryMB:  mem,
-		DiskGB:    disk,
-		Cert:      cert,
+		Hostname: hostname,
+		FQDN:     fqdn,
+		OSInfo:   osInfo,
+		HostID:   hostID,
+		Arch:     arch,
+		Role:     role,
+		Domain:   domain.Name,
+		OUPath:   ouPath,
+		CPUCores: cpu,
+		MemoryMB: mem,
+		DiskGB:   disk,
+		Cert:     cert,
 	}, nil
 }
 

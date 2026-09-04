@@ -14,6 +14,7 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/generator/wel/catalog"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -38,6 +39,7 @@ type Generator struct {
 	role     catalog.MachineRole
 	channels []string
 	consumer embed.LogConsumer
+	static   *resource.StaticResources
 
 	registry *catalog.Registry
 	state    *catalog.StateTracker
@@ -127,6 +129,11 @@ func New(cfg Config) (*Generator, error) {
 		role:     cfg.Role,
 		channels: channels,
 		consumer: cfg.Consumer,
+		static: resource.FromIdentity(nil, componentName,
+			"wel.computer", cfg.Computer,
+			"wel.domain", cfg.Domain,
+			"wel.role", string(cfg.Role),
+		),
 		registry: reg,
 		state:    state,
 		opts:     opts,
@@ -136,6 +143,18 @@ func New(cfg Config) (*Generator, error) {
 
 // Name returns the module identifier.
 func (g *Generator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, componentName,
+		"wel.computer", g.computer,
+		"wel.domain", g.domain,
+		"wel.role", string(g.role),
+	)
+}
 
 // Start launches the worker goroutines that yield generated records
 // to the configured consumer. Start returns once workers are running.
@@ -264,12 +283,7 @@ func (g *Generator) generateAndWrite(rng *rand.Rand) error {
 		Message: xml,
 		Metadata: embed.LogRecordMetadata{
 			Severity: record.LevelName,
-			Resource: resource.Default(componentName,
-				"wel.channel", record.Channel,
-				"wel.computer", g.computer,
-				"wel.domain", g.domain,
-				"wel.role", string(g.role),
-			),
+			Resource: g.static.Record("wel.channel", record.Channel),
 		},
 	}
 

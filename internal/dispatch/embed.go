@@ -27,6 +27,7 @@ import (
 	"github.com/observiq/blitz/generator/wel"
 	welcatalog "github.com/observiq/blitz/generator/wel/catalog"
 	"github.com/observiq/blitz/internal/config"
+	"github.com/observiq/blitz/internal/datagen"
 	"go.uber.org/zap"
 )
 
@@ -71,11 +72,16 @@ func (c EmbedConsumers) requireTrace(typ config.GeneratorType) error {
 // the snapshot shipped in the blitz module, or nil to fall back to
 // reading ./data_library/ from the process cwd.
 //
+// env is the simulated identity environment (PIPE-1036). When non-nil, the
+// generator's host identity is resolved from it (see hostIdentity) so emitted
+// records carry the simulated host's host.* / os.* / deployment.* attributes;
+// when nil, generators fall back to the running process's hostname.
+//
 // Returns an error when the configured generator type requires a
 // consumer that is nil in `consumers` (e.g. hostmetrics without a
 // MetricConsumer, traces without a TraceConsumer), and for generator
 // types that are not embed-eligible at all (nop, winevt — see PIPE-1032).
-func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsumers, fileGenLibrary fs.FS) (embed.ProducerModule, error) {
+func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsumers, fileGenLibrary fs.FS, env *datagen.Environment) (embed.ProducerModule, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -84,52 +90,62 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return jsongen.New(logger, genCfg.JSON.Workers, genCfg.JSON.Rate, genCfg.JSON.Type, consumers.LogConsumer)
+		mod, err := jsongen.New(logger, genCfg.JSON.Workers, genCfg.JSON.Rate, genCfg.JSON.Type, consumers.LogConsumer)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypePaloAlto:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate, consumers.LogConsumer)
+		mod, err := paloalto.New(logger, genCfg.PaloAlto.Workers, genCfg.PaloAlto.Rate, consumers.LogConsumer)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeApache:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate, consumers.LogConsumer)
+		mod, err := apachegen.New(logger, genCfg.Apache.Workers, genCfg.Apache.Rate, consumers.LogConsumer)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeApacheCombined:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate, consumers.LogConsumer)
+		mod, err := apachecombinedgen.New(logger, genCfg.ApacheCombined.Workers, genCfg.ApacheCombined.Rate, consumers.LogConsumer)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeApacheError:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return apacheerrorgen.New(logger, genCfg.ApacheError.Workers, genCfg.ApacheError.Rate, consumers.LogConsumer)
+		mod, err := apacheerrorgen.New(logger, genCfg.ApacheError.Workers, genCfg.ApacheError.Rate, consumers.LogConsumer)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeNginx:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return nginx.New(logger, genCfg.Nginx.Workers, genCfg.Nginx.Rate, consumers.LogConsumer)
+		mod, err := nginx.New(logger, genCfg.Nginx.Workers, genCfg.Nginx.Rate, consumers.LogConsumer)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypePostgres:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return postgres.New(logger, genCfg.Postgres.Workers, genCfg.Postgres.Rate, consumers.LogConsumer)
+		mod, err := postgres.New(logger, genCfg.Postgres.Workers, genCfg.Postgres.Rate, consumers.LogConsumer)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeKubernetes:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format, consumers.LogConsumer)
+		mod, err := kubernetes.New(logger, genCfg.Kubernetes.Workers, genCfg.Kubernetes.Rate, genCfg.Kubernetes.Format, consumers.LogConsumer)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeFile:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, consumers.LogConsumer, fileGenLibrary)
+		mod, err := filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, consumers.LogConsumer, fileGenLibrary)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeOkta:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate, consumers.LogConsumer)
+		mod, err := okta.New(logger, genCfg.Okta.Workers, genCfg.Okta.Rate, consumers.LogConsumer)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeWel:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
@@ -138,7 +154,7 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 		if role == "" {
 			role = welcatalog.RoleMember
 		}
-		return wel.New(wel.Config{
+		mod, err := wel.New(wel.Config{
 			Logger:   logger,
 			Workers:  genCfg.Wel.Workers,
 			Rate:     genCfg.Wel.Rate,
@@ -148,11 +164,13 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			Channels: genCfg.Wel.Channels,
 			Consumer: consumers.LogConsumer,
 		})
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeFIX:
 		if err := consumers.requireLog(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return newFIX(logger, genCfg.FIX, consumers.LogConsumer)
+		mod, err := newFIX(logger, genCfg.FIX, consumers.LogConsumer)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeHostMetrics:
 		if err := consumers.requireMetric(genCfg.Type); err != nil {
 			return nil, err
@@ -166,6 +184,7 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			ScraperNames: genCfg.HostMetrics.Scrapers,
 			Consumer:     consumers.MetricConsumer,
 			Seed:         yamlSeedDefault(genCfg.HostMetrics.Seed),
+			Identity:     hostIdentity(env, genCfg.Type),
 		})
 	case config.GeneratorTypeTraces:
 		if err := consumers.requireTrace(genCfg.Type); err != nil {
@@ -178,6 +197,7 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			Hostname: genCfg.Traces.Hostname,
 			Consumer: consumers.TraceConsumer,
 			Seed:     yamlSeedDefault(genCfg.Traces.Seed),
+			Identity: hostIdentity(env, genCfg.Type),
 		})
 	case config.GeneratorTypeNop:
 		return nil, fmt.Errorf("generator type %q does not produce records; not embed-eligible", genCfg.Type)
@@ -186,6 +206,44 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 	default:
 		return nil, fmt.Errorf("unknown generator type %q", genCfg.Type)
 	}
+}
+
+// hostIdentitySetter is implemented by the log generators, whose positional
+// constructors take identity after construction (via SetHostIdentity) rather
+// than as a constructor argument. Metric- and trace-yielding generators take
+// their identity as a Config field instead, so they do not implement this.
+type hostIdentitySetter interface {
+	SetHostIdentity(*datagen.SystemIdentity)
+}
+
+// applyHostIdentity resolves the component's simulated host from env and applies
+// it to a just-constructed log generator, then returns it for the ForEmbed case
+// to hand back. It is a no-op when construction failed (err != nil) or when the
+// module does not accept a post-construction identity.
+func applyHostIdentity(mod embed.ProducerModule, err error, env *datagen.Environment, component config.GeneratorType) (embed.ProducerModule, error) {
+	if err != nil {
+		return nil, err
+	}
+	if setter, ok := mod.(hostIdentitySetter); ok {
+		setter.SetHostIdentity(hostIdentity(env, component))
+	}
+	return mod, nil
+}
+
+// hostIdentity resolves the simulated host a generator component's records
+// describe: the environment's deterministic SystemForKey selection keyed by the
+// generator type, so the same component always maps to the same host and
+// distinct components spread across the fleet. Returns nil when no environment
+// is configured, leaving the generator on its process-hostname fallback.
+//
+// Keying by component gives one host per generator (the default granularity).
+// Finer per-worker granularity — one host per worker — is a future opt-in that
+// would key SystemForKey by component plus worker index.
+func hostIdentity(env *datagen.Environment, component config.GeneratorType) *datagen.SystemIdentity {
+	if env == nil {
+		return nil
+	}
+	return env.SystemForKey(string(component))
 }
 
 // yamlSeedDefault translates a YAML-loaded Seed value into the

@@ -14,6 +14,7 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
+	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/generator/security"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
@@ -43,6 +44,7 @@ type ApacheLogGenerator struct {
 	workers  int
 	rate     time.Duration
 	consumer embed.LogConsumer
+	static   *resource.StaticResources
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
@@ -68,12 +70,21 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
+		static:   resource.FromIdentity(nil, componentName, "apache.format", "common"),
 		stopCh:   make(chan struct{}),
 	}, nil
 }
 
 // Name returns the module identifier.
 func (g *ApacheLogGenerator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *ApacheLogGenerator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, componentName, "apache.format", "common")
+}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer. Start returns once workers are running.
@@ -180,7 +191,7 @@ func (g *ApacheLogGenerator) generateAndWriteLog(_ int) error {
 	}
 
 	// Format log data as Apache CLF
-	logRecord, err := formatAsApacheCLF(logData)
+	logRecord, err := formatAsApacheCLF(logData, g.static)
 	if err != nil {
 		g.recordWriteError("unknown", err)
 		return fmt.Errorf("format log as Apache CLF: %w", err)
@@ -308,7 +319,7 @@ func generateStatusAndSeverity(r *rand.Rand) (int, string) {
 // formatAsApacheCLF converts apacheLogData to Apache Common Log Format
 // Format: remotehost rfc931 authuser [date] "request" status bytes
 // Example: 127.0.0.1 - - [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326
-func formatAsApacheCLF(data *apacheLogData) (embed.LogRecord, error) {
+func formatAsApacheCLF(data *apacheLogData, static *resource.StaticResources) (embed.LogRecord, error) {
 	// Format timestamp as [dd/MMM/yyyy:HH:mm:ss -TZ]
 	// Use local timezone offset
 	loc := time.Now().Location()
@@ -343,7 +354,7 @@ func formatAsApacheCLF(data *apacheLogData) (embed.LogRecord, error) {
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: data.timestamp,
 			Severity:  data.severity,
-			Resource:  resource.Default(componentName, "apache.format", "common"),
+			Resource:  static.Record(),
 		},
 	}, nil
 }

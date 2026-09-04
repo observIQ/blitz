@@ -36,6 +36,7 @@ import (
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
 	"github.com/observiq/blitz/generator/fix/state"
 	"github.com/observiq/blitz/generator/resource"
+	"github.com/observiq/blitz/internal/datagen"
 
 	// Bring in per-category and per-version registrations.
 	_ "github.com/observiq/blitz/generator/fix/catalog/v42"
@@ -96,6 +97,7 @@ type Generator struct {
 	logger   *zap.Logger
 	cfg      Config
 	consumer embed.LogConsumer
+	static   *resource.StaticResources
 
 	wg     sync.WaitGroup
 	stopCh chan struct{}
@@ -134,12 +136,21 @@ func New(logger *zap.Logger, cfg Config, consumer embed.LogConsumer) (*Generator
 		logger:   logger,
 		cfg:      cfg,
 		consumer: consumer,
+		static:   resource.FromIdentity(nil, componentName, "fix.version", cfg.Version.String()),
 		stopCh:   make(chan struct{}),
 	}, nil
 }
 
 // Name returns the module identifier.
 func (g *Generator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, componentName, "fix.version", g.cfg.Version.String())
+}
 
 // Start launches the worker goroutines.
 func (g *Generator) Start(_ context.Context) error {
@@ -207,9 +218,7 @@ func (g *Generator) runWorker(workerIdx int) {
 				Message: string(msg),
 				Metadata: embed.LogRecordMetadata{
 					Severity: "INFO",
-					Resource: resource.Default(componentName,
-						"fix.version", g.cfg.Version.String(),
-					),
+					Resource: g.static.Record(),
 				},
 			}
 			if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{rec}); err != nil {

@@ -65,6 +65,7 @@ type Generator struct {
 	workers  int
 	rate     time.Duration
 	consumer embed.LogConsumer
+	static   *resource.StaticResources
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
@@ -94,12 +95,21 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
+		static:   resource.FromIdentity(nil, componentName),
 		stopCh:   make(chan struct{}),
 	}, nil
 }
 
 // Name returns the module identifier.
 func (g *Generator) Name() string { return componentName }
+
+// SetHostIdentity sets the simulated host whose identity every emitted record
+// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
+// be called before Start; the resource it builds is read concurrently by
+// workers thereafter.
+func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
+	g.static = resource.FromIdentity(id, componentName)
+}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer.
@@ -199,7 +209,7 @@ func (g *Generator) generateAndWriteLog(_ int) error {
 		return fmt.Errorf("generate NGINX log data: %w", err)
 	}
 
-	logRecord, err := formatAsNginxCombined(logData)
+	logRecord, err := formatAsNginxCombined(logData, g.static)
 	if err != nil {
 		g.recordWriteError(errorTypeUnknown, err)
 		return fmt.Errorf("format log as NGINX Combined: %w", err)
@@ -303,7 +313,7 @@ func generateReferer(r *rand.Rand) string {
 // formatAsNginxCombined converts nginxLogData to NGINX Combined Log Format
 // Format: $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"
 // Example: 127.0.0.1 - - [25/Dec/2023:10:15:30 -0800] "GET /index.html HTTP/1.1" 200 2326 "https://www.example.com/" "Mozilla/5.0..."
-func formatAsNginxCombined(data *nginxLogData) (embed.LogRecord, error) {
+func formatAsNginxCombined(data *nginxLogData, static *resource.StaticResources) (embed.LogRecord, error) {
 	loc := time.Now().Location()
 	localTime := data.timestamp.In(loc)
 	_, offset := localTime.Zone()
@@ -353,7 +363,7 @@ func formatAsNginxCombined(data *nginxLogData) (embed.LogRecord, error) {
 		Metadata: embed.LogRecordMetadata{
 			Timestamp: data.timestamp,
 			Severity:  data.severity,
-			Resource:  resource.Default(componentName),
+			Resource:  static.Record(),
 		},
 	}, nil
 }
