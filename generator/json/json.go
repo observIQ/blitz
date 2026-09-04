@@ -86,11 +86,12 @@ type JSONLogGenerator struct {
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
+	metrics  *generator.Metrics
 }
 
 // New creates a new JSON log generator. The consumer receives each
 // generated record as a size-1 batch via ConsumeLogs.
-func New(logger *zap.Logger, workers int, rate time.Duration, logType string, consumer embed.LogConsumer) (*JSONLogGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, logType string, consumer embed.LogConsumer, tel embed.TelemetrySettings) (*JSONLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -113,6 +114,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration, logType string, co
 		return nil, fmt.Errorf("logType must be one of: %s, %s, got %q", LogTypeDefault, LogTypePII, logType)
 	}
 
+	metrics, err := generator.NewMetrics(tel.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build generator metrics: %w", err)
+	}
+
 	return &JSONLogGenerator{
 		logger:   logger,
 		workers:  workers,
@@ -120,6 +126,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, logType string, co
 		logType:  logType,
 		consumer: consumer,
 		static:   resource.FromIdentity(nil, componentName),
+		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
 }
@@ -143,7 +150,7 @@ func (g *JSONLogGenerator) Start(_ context.Context) error {
 		zap.Duration("rate", g.rate))
 
 	// Record initial active workers count
-	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
@@ -159,7 +166,7 @@ func (g *JSONLogGenerator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping JSON log generator")
 
 	// Record zero active workers
-	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
 
 	close(g.stopCh)
 
@@ -263,7 +270,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(_ int) error {
 	}
 
 	// Record logs generated counter
-	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
+	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	// Write the data with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -344,7 +351,7 @@ func formatAsJSON(data logtypes.LogData, static *resource.StaticResources) (embe
 
 // recordWriteError records metrics for write errors
 func (g *JSONLogGenerator) recordWriteError(errorType string, _ error) {
-	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+	g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
 		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 }

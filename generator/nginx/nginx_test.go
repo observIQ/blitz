@@ -20,7 +20,7 @@ import (
 // TestSetHostIdentity confirms the setter projects the given host onto the
 // static resource, and that a nil identity keeps the process-hostname fallback.
 func TestSetHostIdentity(t *testing.T) {
-	g, err := New(zaptest.NewLogger(t), 1, time.Second, newMockWriter())
+	g, err := New(zaptest.NewLogger(t), 1, time.Second, newMockWriter(), embed.NopTelemetry())
 	require.NoError(t, err)
 
 	g.SetHostIdentity(&datagen.SystemIdentity{Hostname: "IDENTITY-HOST", OSInfo: datagen.OSInfo{Type: datagen.OSLinux}})
@@ -102,7 +102,7 @@ func TestNew(t *testing.T) {
 	workers := 5
 	rate := 100 * time.Millisecond
 
-	generator, err := New(logger, workers, rate, newMockWriter())
+	generator, err := New(logger, workers, rate, newMockWriter(), embed.NopTelemetry())
 
 	assert.NoError(t, err)
 	assert.NotNil(t, generator)
@@ -113,7 +113,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNew_NilLogger(t *testing.T) {
-	generator, err := New(nil, 5, 100*time.Millisecond, newMockWriter())
+	generator, err := New(nil, 5, 100*time.Millisecond, newMockWriter(), embed.NopTelemetry())
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
@@ -123,12 +123,12 @@ func TestNew_NilLogger(t *testing.T) {
 func TestNew_InvalidWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	generator, err := New(logger, 0, 100*time.Millisecond, newMockWriter())
+	generator, err := New(logger, 0, 100*time.Millisecond, newMockWriter(), embed.NopTelemetry())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
 
-	generator, err = New(logger, -1, 100*time.Millisecond, newMockWriter())
+	generator, err = New(logger, -1, 100*time.Millisecond, newMockWriter(), embed.NopTelemetry())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
@@ -137,7 +137,7 @@ func TestNew_InvalidWorkers(t *testing.T) {
 func TestNginxGenerator_Start(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 2, 50*time.Millisecond, writer)
+	generator, err := New(logger, 2, 50*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -167,7 +167,7 @@ func TestNginxGenerator_Start(t *testing.T) {
 func TestNginxGenerator_Stop_GracefulShutdown(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 3, 10*time.Millisecond, writer)
+	generator, err := New(logger, 3, 10*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -196,7 +196,7 @@ func TestNginxGenerator_WriteErrors_Backoff(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 	writer.setWriteError(errors.New("write failed"))
-	generator, err := New(logger, 1, 10*time.Millisecond, writer)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -219,7 +219,7 @@ func TestNginxGenerator_WriteErrors_Backoff(t *testing.T) {
 func TestNginxGenerator_ConcurrentWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 5, 20*time.Millisecond, writer)
+	generator, err := New(logger, 5, 20*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -242,7 +242,7 @@ func TestNginxGenerator_ConcurrentWorkers(t *testing.T) {
 func TestFormatAsNginxCombined_Structure(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 10*time.Millisecond, writer)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -276,7 +276,7 @@ func TestFormatAsNginxCombined_Structure(t *testing.T) {
 func TestFormatAsNginxCombined_ParseFunc(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
-	generator, err := New(logger, 1, 10*time.Millisecond, writer)
+	generator, err := New(logger, 1, 10*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -303,7 +303,7 @@ func TestFormatAsNginxCombined_ParseFunc(t *testing.T) {
 // discardWriter implements output.Writer for benchmarking - discards all data
 func TestGenerator_SetCountTracker(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond, newMockWriter())
+	gen, err := New(logger, 1, 50*time.Millisecond, newMockWriter(), embed.NopTelemetry())
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -317,7 +317,7 @@ func TestGenerator_CountLimited(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 
-	gen, err := New(logger, 2, 10*time.Millisecond, writer)
+	gen, err := New(logger, 2, 10*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)
@@ -356,7 +356,7 @@ func (d *discardWriter) ConsumeLogs(_ context.Context, _ []embed.LogRecord) erro
 func BenchmarkNginxGenerator(b *testing.B) {
 	logger := zaptest.NewLogger(b)
 	writer := &discardWriter{}
-	generator, err := New(logger, 1, 1*time.Millisecond, writer)
+	generator, err := New(logger, 1, 1*time.Millisecond, writer, embed.NopTelemetry())
 	require.NoError(b, err)
 
 	err = generator.Start(context.Background())

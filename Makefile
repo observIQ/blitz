@@ -80,15 +80,15 @@ generate-o11y-check: generate-o11y
 
 generate-o11y:
 	@echo "Discovering metric registries..."
-	@for manifest in $$(find . -name "registry_manifest.yaml" -path "*/monitoring/registry_manifest.yaml" | sort); do \
+	@set -e; for manifest in $$(find . -name "registry_manifest.yaml" -path "*/monitoring/registry_manifest.yaml" | sort); do \
 		registry_path=$$(dirname $$(dirname $$manifest) | sed 's|^\./||'); \
 		depth=$$(echo "$$registry_path" | tr '/' '\n' | wc -l | tr -d ' '); \
 		rel_path=""; \
 		for i in $$(seq 1 $$depth); do rel_path="../$$rel_path"; done; \
 		echo "Generating metrics for $$registry_path..."; \
-		docker run --rm -v ${PWD}:/workspace -w /workspace/$$registry_path $(WEAVER_IMAGE) registry check --registry=./monitoring; \
-		docker run --rm -v ${PWD}:/workspace -w /workspace/$$registry_path $(WEAVER_IMAGE) registry generate --registry=./monitoring --templates=$${rel_path}weaver/templates --config=$${rel_path}weaver-go.yaml go .; \
-		docker run --rm -v ${PWD}:/workspace -w /workspace/$$registry_path $(WEAVER_IMAGE) registry generate --registry=./monitoring --templates=$${rel_path}weaver/templates --config=$${rel_path}weaver-markdown.yaml markdown .; \
+		docker run --rm --user $$(id -u):$$(id -g) -v ${PWD}:/workspace -w /workspace/$$registry_path $(WEAVER_IMAGE) registry check --registry=./monitoring; \
+		docker run --rm --user $$(id -u):$$(id -g) -v ${PWD}:/workspace -w /workspace/$$registry_path $(WEAVER_IMAGE) registry generate --registry=./monitoring --templates=$${rel_path}weaver/templates --config=$${rel_path}weaver-go.yaml go .; \
+		docker run --rm --user $$(id -u):$$(id -g) -v ${PWD}:/workspace -w /workspace/$$registry_path $(WEAVER_IMAGE) registry generate --registry=./monitoring --templates=$${rel_path}weaver/templates --config=$${rel_path}weaver-markdown.yaml markdown .; \
 		echo "✓ Generated $$registry_path/monitoring.go and $$registry_path/monitoring.md"; \
 	done
 	@go fmt ./...

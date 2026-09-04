@@ -21,7 +21,7 @@
 {%- endif -%}
 {%- endmacro -%}
 {%- macro observe_method_name(metric_name) -%}
-observe{{ smart_title_case(metric_name) }}
+Observe{{ smart_title_case(metric_name) }}
 {%- endmacro -%}
 {%- set registry_name = ctx[0].id.split('.')[0] if ctx and ctx | length > 0 else "unknown" -%}
 {%- set package_name = registry_name.split('/')[-1] if '/' in registry_name else registry_name -%}
@@ -59,7 +59,6 @@ import (
 	"context"
 {%- endif %}
 	"errors"
-	"fmt"
 
 	"go.opentelemetry.io/otel"
 {%- if has_any_required_attrs.value or has_any_enum_attrs.value %}
@@ -149,7 +148,7 @@ const (
 {%- set method_name = "Record" if uses_record else "Add" %}
 {%- set option_type = "RecordOption" if uses_record else "AddOption" %}
 {%- set field_name = "histogram" if metric.instrument in ["histogram", "Histogram"] else ("gauge" if metric.instrument in ["gauge", "Gauge"] else "counter") %}
-{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type == "Float64Histogram" %}
+{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type and metric.annotations.histogram.type[:7] == "Float64" %}
 {%- set value_type = "float64" if is_float64 else "int64" %}
 
 // {{ metric_type_name }} wraps the {{ metric.metric_name }} metric with type-safe required attributes
@@ -215,11 +214,11 @@ func (m {{ metric_type_name }}) {{ method_name }}(ctx context.Context, value {{ 
 
 {%- if has_observable_metrics.value %}
 
-// observableCallbacks defines the callback interface for observable metrics
-type observableCallbacks interface {
+// ObservableCallbacks defines the callback interface for observable metrics
+type ObservableCallbacks interface {
 {%- for metric in ctx %}
 {%- if metric.annotations and metric.annotations.observable %}
-{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type == "Float64Histogram" %}
+{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type and metric.annotations.histogram.type[:7] == "Float64" %}
 {%- set observer_type = "Float64Observer" if is_float64 else "Int64Observer" %}
 	{{ observe_method_name(metric.metric_name) }}(ctx context.Context, observer metric.{{ observer_type }}) error
 {%- endif %}
@@ -227,45 +226,8 @@ type observableCallbacks interface {
 }
 {%- endif %}
 
-var (
-{%- for meter_name in unique_meters.names | sort %}
-	{{ lower_first(smart_title_case(meter_name)) }}Meter = otel.Meter("{{ meter_name }}")
-{%- endfor %}
-
-{% for metric in ctx %}
-{%- set is_observable = metric.annotations and metric.annotations.observable %}
-{%- if not is_observable %}
-{%- set has_required_attrs = metric.attributes is defined and metric.attributes | selectattr("requirement_level", "equalto", "required") | list | length > 0 %}
-{%- if not has_required_attrs %}
-{%- set is_exported = metric.annotations and metric.annotations.exported %}
-{%- if is_exported %}
-{%- set metric_var_name = smart_title_case(metric.metric_name) ~ smart_title_case(metric.instrument) %}
-{%- else %}
-{%- set metric_var_name = lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) %}
-{%- endif %}
-{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type == "Float64Histogram" %}
-	// {{ metric.brief }}
-	{{ metric_var_name }} metric.{% if is_float64 %}Float64{{metric.instrument | map_text("metric_type_interface") | replace("Int64", "")}}{% else %}{{metric.instrument | map_text("metric_type_interface")}}{% endif %}
-{% endif %}
-{%- endif %}
-{%- endfor %}
-{%- for metric in ctx %}
-{%- set is_observable = metric.annotations and metric.annotations.observable %}
-{%- if not is_observable %}
-{%- set has_required_attrs = metric.attributes is defined and metric.attributes | selectattr("requirement_level", "equalto", "required") | list | length > 0 %}
-{%- if has_required_attrs %}
-{%- set is_exported = metric.annotations and metric.annotations.exported %}
-{%- if is_exported %}
-{%- set wrapper_var_name = smart_title_case(metric.metric_name) ~ smart_title_case(metric.instrument) %}
-{%- else %}
-{%- set wrapper_var_name = lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) %}
-{%- endif %}
-	// {{ metric.brief }}
-	{{ wrapper_var_name }} {{ lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) ~ "Type" }}
-{% endif %}
-{%- endif %}
-{%- endfor %}
 {%- set processed_attr_members = namespace(names=[], attr_groups=[]) -%}
+{%- set attr_member_lines = namespace(items=[]) -%}
 {%- for metric in ctx %}
 {%- if metric.attributes is defined %}
 {%- for attr in metric.attributes %}
@@ -273,25 +235,18 @@ var (
 {%- for member in attr.type.members %}
 {%- set attr_var_name = "attr" ~ smart_title_case(attr.name) ~ smart_title_case(member.id) %}
 {%- if attr_var_name not in processed_attr_members.names %}
-{%- if attr.name not in processed_attr_members.attr_groups and processed_attr_members.attr_groups | length > 0 %}
-
-{% endif %}
-{%- if attr.name not in processed_attr_members.attr_groups %}
-{%- set processed_attr_members.attr_groups = processed_attr_members.attr_groups + [attr.name] %}
-	// {{ attr.name }}
-{%- endif %}
 {%- set processed_attr_members.names = processed_attr_members.names + [attr_var_name] %}
 {%- set attr_key = attr.annotations['attribute.name'] if attr.annotations and 'attribute.name' in attr.annotations else attr.name %}
 {%- set enum_const = lower_first(smart_title_case(attr.name)) ~ smart_title_case(member.id) %}
-	{{ attr_var_name }} = attribute.String(attr{{ smart_title_case(attr_key) }}, string({{ enum_const }}))
+{%- set attr_member_lines.items = attr_member_lines.items + ["\t" ~ attr_var_name ~ " = attribute.String(attr" ~ smart_title_case(attr_key) ~ ", string(" ~ enum_const ~ "))"] %}
 {%- endif %}
 {%- endfor %}
 {%- endif %}
-{% endfor %}
+{%- endfor %}
 {%- endif %}
 {%- endfor %}
-
-{%- set processed_attr_sets = namespace(names=[], attr_groups=[]) -%}
+{%- set processed_attr_sets = namespace(names=[]) -%}
+{%- set attr_set_lines = namespace(items=[]) -%}
 {%- for metric in ctx %}
 {%- if metric.attributes is defined %}
 {%- for attr in metric.attributes %}
@@ -302,15 +257,8 @@ var (
 {%- set attr_var_name = "attr" ~ title_case_name %}
 {%- set attr_set_name = "attrSet" ~ title_case_name %}
 {%- if attr_set_name not in processed_attr_sets.names %}
-{%- if attr.name not in processed_attr_sets.attr_groups and processed_attr_sets.attr_groups | length > 0 %}
-
-{% endif %}
-{%- if attr.name not in processed_attr_sets.attr_groups %}
-{%- set processed_attr_sets.attr_groups = processed_attr_sets.attr_groups + [attr.name] %}
-	// {{ attr.name }}
-{%- endif %}
 {%- set processed_attr_sets.names = processed_attr_sets.names + [attr_set_name] %}
-	{{ attr_set_name }} = metric.WithAttributeSet(attribute.NewSet({{ attr_var_name }}))
+{%- set attr_set_lines.items = attr_set_lines.items + ["\t" ~ attr_set_name ~ " = metric.WithAttributeSet(attribute.NewSet(" ~ attr_var_name ~ "))"] %}
 {%- endif %}
 {%- endfor %}
 {%- endif %}
@@ -318,168 +266,110 @@ var (
 {%- endfor %}
 {%- endif %}
 {%- endfor %}
+
+{%- if attr_member_lines.items | length > 0 or attr_set_lines.items | length > 0 %}
+
+// Attribute value options (provider-independent)
+var (
+{%- for line in attr_member_lines.items %}
+{{ line }}
+{%- endfor %}
+{%- if attr_set_lines.items | length > 0 %}
+
+{% for line in attr_set_lines.items %}{{ line }}
+{% endfor -%}
+{%- endif %}
 )
+{%- endif %}
 
-{%- set has_non_optional_non_observable_metrics = namespace(value=false) -%}
-{%- for metric in ctx -%}
-  {%- set is_optional = metric.annotations and metric.annotations.optional -%}
-  {%- set is_observable = metric.annotations and metric.annotations.observable -%}
-  {%- if not is_optional and not is_observable -%}
-    {%- set has_non_optional_non_observable_metrics.value = true -%}
-  {%- endif -%}
-{%- endfor -%}
-
-{%- if has_non_optional_non_observable_metrics.value %}
-
-func init() {
-	var err, errs error
-
+// Metrics holds blitz's {{ package_name }} self-telemetry instruments. Build one
+// with NewMetrics from a caller-supplied MeterProvider so metrics can be routed
+// to any provider (an embedding host's, or the process global).
+type Metrics struct {
+{%- for meter_name in unique_meters.names | sort %}
+	{{ lower_first(smart_title_case(meter_name)) }}Meter metric.Meter
+{%- endfor %}
 {% for metric in ctx %}
-{%- set is_optional = metric.annotations and metric.annotations.optional %}
 {%- set is_observable = metric.annotations and metric.annotations.observable %}
-{%- if not is_optional and not is_observable %}
+{%- if not is_observable %}
 {%- set has_required_attrs = metric.attributes is defined and metric.attributes | selectattr("requirement_level", "equalto", "required") | list | length > 0 %}
 {%- set is_exported = metric.annotations and metric.annotations.exported %}
 {%- if is_exported %}
-{%- set metric_var_name = smart_title_case(metric.metric_name) ~ smart_title_case(metric.instrument) %}
+{%- set field_name = smart_title_case(metric.metric_name) ~ smart_title_case(metric.instrument) %}
 {%- else %}
-{%- set metric_var_name = lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) %}
+{%- set field_name = lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) %}
 {%- endif %}
-{%- set metric_meter_name = metric.annotations.meter if metric.annotations and metric.annotations.meter else registry_name %}
-{%- set meter_var = lower_first(smart_title_case(metric_meter_name)) ~ "Meter" %}
+{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type and metric.annotations.histogram.type[:7] == "Float64" %}
+	// {{ metric.brief }}
 {%- if has_required_attrs %}
-{%- set raw_counter_var = metric_var_name ~ "Raw" %}
-{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type == "Float64Histogram" %}
-	{{ raw_counter_var }}, err := {{ meter_var }}.{% if is_float64 %}Float64{{metric.instrument | map_text("metric_type_interface") | replace("Int64", "")}}{% else %}{{metric.instrument | map_text("metric_type_interface")}}{% endif %}(
-		"{{metric.metric_name}}",
-		metric.WithDescription("{{metric.brief}}"),
-{%- if metric.unit %}
-		metric.WithUnit("{{metric.unit}}"),
-{%- endif %}
-{%- if metric.instrument == "histogram" and metric.annotations and metric.annotations.histogram and metric.annotations.histogram.explicit_bucket_boundaries %}
-		metric.WithExplicitBucketBoundaries({{ metric.annotations.histogram.explicit_bucket_boundaries | join(", ") }}),
-{%- endif %}
-	)
-	errs = errors.Join(errs, err)
-{%- if is_exported %}
-{%- set wrapper_var_name = smart_title_case(metric.metric_name) ~ smart_title_case(metric.instrument) %}
+	{{ field_name }} {{ lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) ~ "Type" }}
 {%- else %}
-{%- set wrapper_var_name = lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) %}
+	{{ field_name }} metric.{% if is_float64 %}Float64{{metric.instrument | map_text("metric_type_interface") | replace("Int64", "")}}{% else %}{{metric.instrument | map_text("metric_type_interface")}}{% endif %}
 {%- endif %}
-
-{%- set field_name = "histogram" if metric.instrument in ["histogram", "Histogram"] else ("gauge" if metric.instrument in ["gauge", "Gauge"] else "counter") %}
-	{{ wrapper_var_name }} = {{ lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) ~ "Type" }}{ {{- field_name -}}: {{ raw_counter_var }}}
-{%- else %}
-{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type == "Float64Histogram" %}
-	{{ metric_var_name }}, err = {{ meter_var }}.{% if is_float64 %}Float64{{metric.instrument | map_text("metric_type_interface") | replace("Int64", "")}}{% else %}{{metric.instrument | map_text("metric_type_interface")}}{% endif %}(
-		"{{metric.metric_name}}",
-		metric.WithDescription("{{metric.brief}}"),
-{%- if metric.unit %}
-		metric.WithUnit("{{metric.unit}}"),
 {%- endif %}
-{%- if metric.instrument == "histogram" and metric.annotations and metric.annotations.histogram and metric.annotations.histogram.explicit_bucket_boundaries %}
-		metric.WithExplicitBucketBoundaries({{ metric.annotations.histogram.explicit_bucket_boundaries | join(", ") }}),
-{%- endif %}
-	)
-	errs = errors.Join(errs, err)
-{%- endif %}
-
-{%- endif %}
-{% endfor %}
-	if errs != nil {
-		panic(fmt.Sprintf("Initialize {{ package_name }} metrics: %s", errs))
-	}
+{%- endfor %}
 }
-{%- endif %}
 
-{%- set has_optional_non_observable_metrics = namespace(value=false) -%}
-{%- for metric in ctx -%}
-  {%- set is_optional = metric.annotations and metric.annotations.optional -%}
-  {%- set is_observable = metric.annotations and metric.annotations.observable -%}
-  {%- if is_optional and not is_observable -%}
-    {%- set has_optional_non_observable_metrics.value = true -%}
-  {%- endif -%}
-{%- endfor -%}
-
-{%- if has_optional_non_observable_metrics.value %}
-
-// initOptionalMetrics initializes optional metrics that can be enabled when needed
-func initOptionalMetrics() {
-	var err, errs error
-
+// NewMetrics builds the {{ package_name }} instruments from mp. A nil mp falls
+// back to the process-global MeterProvider, preserving standalone behavior.
+func NewMetrics(mp metric.MeterProvider) (*Metrics, error) {
+	if mp == nil {
+		mp = otel.GetMeterProvider()
+	}
+	m := &Metrics{}
+	var errs error
+{% for meter_name in unique_meters.names | sort %}
+	m.{{ lower_first(smart_title_case(meter_name)) }}Meter = mp.Meter("{{ meter_name }}")
+{%- endfor %}
 {% for metric in ctx %}
-{%- set is_optional = metric.annotations and metric.annotations.optional %}
 {%- set is_observable = metric.annotations and metric.annotations.observable %}
-{%- if is_optional and not is_observable %}
+{%- if not is_observable %}
 {%- set has_required_attrs = metric.attributes is defined and metric.attributes | selectattr("requirement_level", "equalto", "required") | list | length > 0 %}
 {%- set is_exported = metric.annotations and metric.annotations.exported %}
 {%- if is_exported %}
-{%- set metric_var_name = smart_title_case(metric.metric_name) ~ smart_title_case(metric.instrument) %}
+{%- set field_name = smart_title_case(metric.metric_name) ~ smart_title_case(metric.instrument) %}
 {%- else %}
-{%- set metric_var_name = lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) %}
+{%- set field_name = lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) %}
 {%- endif %}
 {%- set metric_meter_name = metric.annotations.meter if metric.annotations and metric.annotations.meter else registry_name %}
 {%- set meter_var = lower_first(smart_title_case(metric_meter_name)) ~ "Meter" %}
+{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type and metric.annotations.histogram.type[:7] == "Float64" %}
+{%- set field_kind = "histogram" if metric.instrument in ["histogram", "Histogram"] else ("gauge" if metric.instrument in ["gauge", "Gauge"] else "counter") %}
+	{{ field_name }}Raw, err := m.{{ meter_var }}.{% if is_float64 %}Float64{{metric.instrument | map_text("metric_type_interface") | replace("Int64", "")}}{% else %}{{metric.instrument | map_text("metric_type_interface")}}{% endif %}(
+		"{{metric.metric_name}}",
+		metric.WithDescription("{{metric.brief}}"),
+{%- if metric.unit %}
+		metric.WithUnit("{{metric.unit}}"),
+{%- endif %}
+{%- if metric.instrument == "histogram" and metric.annotations and metric.annotations.histogram and metric.annotations.histogram.explicit_bucket_boundaries %}
+		metric.WithExplicitBucketBoundaries({{ metric.annotations.histogram.explicit_bucket_boundaries | join(", ") }}),
+{%- endif %}
+	)
+	errs = errors.Join(errs, err)
 {%- if has_required_attrs %}
-{%- set raw_counter_var = metric_var_name ~ "Raw" %}
-{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type == "Float64Histogram" %}
-	{{ raw_counter_var }}, err := {{ meter_var }}.{% if is_float64 %}Float64{{metric.instrument | map_text("metric_type_interface") | replace("Int64", "")}}{% else %}{{metric.instrument | map_text("metric_type_interface")}}{% endif %}(
-		"{{metric.metric_name}}",
-		metric.WithDescription("{{metric.brief}}"),
-{%- if metric.unit %}
-		metric.WithUnit("{{metric.unit}}"),
-{%- endif %}
-{%- if metric.instrument == "histogram" and metric.annotations and metric.annotations.histogram and metric.annotations.histogram.explicit_bucket_boundaries %}
-		metric.WithExplicitBucketBoundaries({{ metric.annotations.histogram.explicit_bucket_boundaries | join(", ") }}),
-{%- endif %}
-	)
-	errs = errors.Join(errs, err)
-{%- if is_exported %}
-{%- set wrapper_var_name = smart_title_case(metric.metric_name) ~ smart_title_case(metric.instrument) %}
+	m.{{ field_name }} = {{ lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) ~ "Type" }}{ {{- field_kind -}}: {{ field_name }}Raw}
 {%- else %}
-{%- set wrapper_var_name = lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) %}
+	m.{{ field_name }} = {{ field_name }}Raw
 {%- endif %}
-
-{%- set field_name = "histogram" if metric.instrument in ["histogram", "Histogram"] else ("gauge" if metric.instrument in ["gauge", "Gauge"] else "counter") %}
-	{{ wrapper_var_name }} = {{ lower_first(smart_title_case(metric.metric_name)) ~ smart_title_case(metric.instrument) ~ "Type" }}{ {{- field_name -}}: {{ raw_counter_var }}}
-{%- else %}
-{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type == "Float64Histogram" %}
-	{{ metric_var_name }}, err = {{ meter_var }}.{% if is_float64 %}Float64{{metric.instrument | map_text("metric_type_interface") | replace("Int64", "")}}{% else %}{{metric.instrument | map_text("metric_type_interface")}}{% endif %}(
-		"{{metric.metric_name}}",
-		metric.WithDescription("{{metric.brief}}"),
-{%- if metric.unit %}
-		metric.WithUnit("{{metric.unit}}"),
-{%- endif %}
-{%- if metric.instrument == "histogram" and metric.annotations and metric.annotations.histogram and metric.annotations.histogram.explicit_bucket_boundaries %}
-		metric.WithExplicitBucketBoundaries({{ metric.annotations.histogram.explicit_bucket_boundaries | join(", ") }}),
-{%- endif %}
-	)
-	errs = errors.Join(errs, err)
-{%- endif %}
-
-{%- endif %}
-{% endfor %}
-	if errs != nil {
-		panic(fmt.Sprintf("Initialize {{ package_name }} optional metrics: %s", errs))
-	}
+{% endif %}
+{%- endfor %}
+	return m, errs
 }
-{%- endif %}
-
 {%- if has_observable_metrics.value %}
 
-// initObservableMetrics initializes observable metrics with the provided callbacks
-func initObservableMetrics(callbacks observableCallbacks) {
+// InitObservable registers the observable instruments against callbacks. Call
+// it once, after NewMetrics, from the component that owns the observed state.
+func (m *Metrics) InitObservable(callbacks ObservableCallbacks) error {
 	var err, errs error
-
 {% for metric in ctx %}
 {%- if metric.annotations and metric.annotations.observable %}
 {%- set metric_meter_name = metric.annotations.meter if metric.annotations and metric.annotations.meter else registry_name %}
 {%- set meter_var = lower_first(smart_title_case(metric_meter_name)) ~ "Meter" %}
 {%- set is_counter = metric.instrument == "counter" %}
 {%- set instrument_type = "ObservableCounter" if is_counter else "ObservableGauge" %}
-{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type == "Float64Histogram" %}
+{%- set is_float64 = metric.annotations and metric.annotations.histogram and metric.annotations.histogram.type and metric.annotations.histogram.type[:7] == "Float64" %}
 {%- set observer_func = "Float64" if is_float64 else "Int64" %}
-	_, err = {{ meter_var }}.{{ observer_func }}{{ instrument_type }}(
+	_, err = m.{{ meter_var }}.{{ observer_func }}{{ instrument_type }}(
 		"{{metric.metric_name}}",
 		metric.WithDescription("{{metric.brief}}"),
 {%- if metric.unit %}
@@ -488,11 +378,8 @@ func initObservableMetrics(callbacks observableCallbacks) {
 		metric.With{{ observer_func }}Callback(callbacks.{{ observe_method_name(metric.metric_name) }}),
 	)
 	errs = errors.Join(errs, err)
-
-{%- endif %}
-{% endfor %}
-	if errs != nil {
-		panic(fmt.Sprintf("Initialize {{ package_name }} observable metrics: %s", errs))
-	}
+{% endif %}
+{%- endfor %}
+	return errs
 }
 {%- endif %}

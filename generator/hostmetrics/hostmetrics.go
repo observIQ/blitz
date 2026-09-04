@@ -54,6 +54,10 @@ type Config struct {
 	// data by default; pass a positive value explicitly for
 	// reproducibility.
 	Seed int64
+	// Telemetry supplies the OTel providers blitz routes its own
+	// self-telemetry through. The zero value falls back to the process
+	// global providers.
+	Telemetry embed.TelemetrySettings
 }
 
 // Generator implements embed.ProducerModule for host metrics.
@@ -69,6 +73,7 @@ type Generator struct {
 	scrapers []Scraper
 	consumer embed.MetricConsumer
 	seed     int64
+	metrics  *generator.Metrics
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
@@ -95,6 +100,11 @@ func New(cfg Config) (*Generator, error) {
 		return nil, fmt.Errorf("rate must be greater than 0, got %s", cfg.Rate)
 	}
 
+	metrics, err := generator.NewMetrics(cfg.Telemetry.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build generator metrics: %w", err)
+	}
+
 	// Resolve the simulated host: an explicit Environment identity when
 	// supplied, otherwise a minimal identity synthesized from the OS/Hostname
 	// knobs. Either way the resource projection is built once here and reused
@@ -114,6 +124,7 @@ func New(cfg Config) (*Generator, error) {
 		scrapers: buildScrapers(cfg.ScraperNames),
 		consumer: cfg.Consumer,
 		seed:     cfg.Seed,
+		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
 }
@@ -168,7 +179,7 @@ func (g *Generator) Start(_ context.Context) error {
 		zap.Int("scrapers", len(g.scrapers)),
 	)
 
-	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), generatorType)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), generatorType)
 
 	for i := range g.workers {
 		g.wg.Add(1)
@@ -184,7 +195,7 @@ func (g *Generator) Stop(ctx context.Context) error {
 
 	close(g.stopCh)
 
-	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, generatorType)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, generatorType)
 
 	done := make(chan struct{})
 	go func() {
@@ -257,12 +268,12 @@ func (g *Generator) scrape(r *rand.Rand) {
 				zap.String("scraper", scraper.Name()),
 				zap.Error(err),
 			)
-			generator.BlitzGeneratorWriteErrorsCounter.Add(ctx, 1, generatorType,
+			g.metrics.BlitzGeneratorWriteErrorsCounter.Add(ctx, 1, generatorType,
 				metric.WithAttributeSet(attribute.NewSet(attribute.String("scraper", scraper.Name()))),
 			)
 			continue
 		}
-		generator.BlitzGeneratorEntriesCounter.Add(ctx, int64(len(points)), generatorType)
+		g.metrics.BlitzGeneratorEntriesCounter.Add(ctx, int64(len(points)), generatorType)
 	}
 }
 

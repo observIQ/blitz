@@ -48,11 +48,12 @@ type ApacheLogGenerator struct {
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
+	metrics  *generator.Metrics
 }
 
 // New creates a new Apache log generator. The consumer receives each
 // generated record as a size-1 batch via ConsumeLogs.
-func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer) (*ApacheLogGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer, tel embed.TelemetrySettings) (*ApacheLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -65,12 +66,18 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		return nil, fmt.Errorf("consumer cannot be nil")
 	}
 
+	metrics, err := generator.NewMetrics(tel.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build generator metrics: %w", err)
+	}
+
 	return &ApacheLogGenerator{
 		logger:   logger,
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
 		static:   resource.FromIdentity(nil, componentName, "apache.format", "common"),
+		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
 }
@@ -94,7 +101,7 @@ func (g *ApacheLogGenerator) Start(_ context.Context) error {
 		zap.Duration("rate", g.rate))
 
 	// Record initial active workers count
-	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
@@ -110,7 +117,7 @@ func (g *ApacheLogGenerator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping Apache log generator")
 
 	// Record zero active workers
-	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, componentName)
 
 	close(g.stopCh)
 
@@ -198,7 +205,7 @@ func (g *ApacheLogGenerator) generateAndWriteLog(_ int) error {
 	}
 
 	// Record logs generated counter
-	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
+	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	// Push as a size-1 batch with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -410,7 +417,7 @@ func parseApacheCLF(line string) (map[string]any, error) {
 
 // recordWriteError records metrics for write errors
 func (g *ApacheLogGenerator) recordWriteError(errorType string, _ error) {
-	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+	g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
 		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 }

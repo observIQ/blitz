@@ -43,14 +43,14 @@ func (m *mockWriter) getWrites() [][]byte {
 
 func TestGenerator_Name(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond, "cri-o", newMockWriter())
+	gen, err := New(logger, 1, 50*time.Millisecond, "cri-o", newMockWriter(), embed.NopTelemetry())
 	require.NoError(t, err)
 	assert.Equal(t, componentName, gen.Name())
 }
 
 func TestGenerator_NilConsumer(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond, "cri-o", nil)
+	gen, err := New(logger, 1, 50*time.Millisecond, "cri-o", nil, embed.NopTelemetry())
 	assert.Error(t, err)
 	assert.Nil(t, gen)
 	assert.Contains(t, err.Error(), "consumer cannot be nil")
@@ -58,7 +58,7 @@ func TestGenerator_NilConsumer(t *testing.T) {
 
 func TestGenerator_SetCountTracker(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond, "cri-o", newMockWriter())
+	gen, err := New(logger, 1, 50*time.Millisecond, "cri-o", newMockWriter(), embed.NopTelemetry())
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -72,7 +72,7 @@ func TestGenerator_CountLimited(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	writer := newMockWriter()
 
-	gen, err := New(logger, 2, 10*time.Millisecond, "cri-o", writer)
+	gen, err := New(logger, 2, 10*time.Millisecond, "cri-o", writer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)
@@ -104,7 +104,7 @@ func TestGenerator_CountLimited(t *testing.T) {
 
 func TestSetHostIdentity(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond, "cri-o", newMockWriter())
+	gen, err := New(logger, 1, 50*time.Millisecond, "cri-o", newMockWriter(), embed.NopTelemetry())
 	require.NoError(t, err)
 
 	gen.SetHostIdentity(&datagen.SystemIdentity{

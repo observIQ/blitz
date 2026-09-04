@@ -18,7 +18,7 @@ func (o *OTLPGrpc) WriteMetric(ctx context.Context, data output.MetricRecord) er
 
 	select {
 	case o.metricChan <- pbMetric:
-		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "metrics")
+		o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "metrics")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write metric: %w", ctx.Err())
@@ -33,7 +33,7 @@ func (o *OTLPGrpc) WriteTrace(ctx context.Context, data output.TraceRecord) erro
 
 	select {
 	case o.traceChan <- pbSpan:
-		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "traces")
+		o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "traces")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write trace: %w", ctx.Err())

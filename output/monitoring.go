@@ -7,7 +7,6 @@ package output
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -20,35 +19,17 @@ const (
 	attrTelemetryType = "telemetry_type"
 )
 
+// Constants for enum members
+
 // Wrapper types for metrics with required attributes
 
-// BlitzOutputEntriesReceivedCounterType wraps the blitz.output.entries_received metric with type-safe required attributes
-type BlitzOutputEntriesReceivedCounterType struct {
-	counter metric.Int64Counter
-}
-
-// Add records a value for blitz.output.entries_received with required attributes
-func (m BlitzOutputEntriesReceivedCounterType) Add(ctx context.Context, value int64, outputType string, telemetryType string, opts ...metric.AddOption) {
-	attrs := metric.WithAttributeSet(attribute.NewSet(
-		attribute.String(attrOutputType, outputType),
-		attribute.String(attrTelemetryType, telemetryType),
-	))
-
-	if len(opts) == 0 {
-		m.counter.Add(ctx, value, attrs)
-	} else {
-		allOpts := append([]metric.AddOption{attrs}, opts...)
-		m.counter.Add(ctx, value, allOpts...)
-	}
-}
-
-// BlitzOutputActiveWorkersGaugeType wraps the blitz.output.active_workers metric with type-safe required attributes
-type BlitzOutputActiveWorkersGaugeType struct {
+// blitzOutputActiveWorkersGaugeType wraps the blitz.output.active_workers metric with type-safe required attributes
+type blitzOutputActiveWorkersGaugeType struct {
 	gauge metric.Int64Gauge
 }
 
 // Record records a value for blitz.output.active_workers with required attributes
-func (m BlitzOutputActiveWorkersGaugeType) Record(ctx context.Context, value int64, outputType string, opts ...metric.RecordOption) {
+func (m blitzOutputActiveWorkersGaugeType) Record(ctx context.Context, value int64, outputType string, opts ...metric.RecordOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
 	))
@@ -61,13 +42,13 @@ func (m BlitzOutputActiveWorkersGaugeType) Record(ctx context.Context, value int
 	}
 }
 
-// BlitzOutputEntryRateCounterType wraps the blitz.output.entry_rate metric with type-safe required attributes
-type BlitzOutputEntryRateCounterType struct {
-	counter metric.Float64Counter
+// blitzOutputEntriesReceivedCounterType wraps the blitz.output.entries_received metric with type-safe required attributes
+type blitzOutputEntriesReceivedCounterType struct {
+	counter metric.Int64Counter
 }
 
-// Add records a value for blitz.output.entry_rate with required attributes
-func (m BlitzOutputEntryRateCounterType) Add(ctx context.Context, value float64, outputType string, telemetryType string, opts ...metric.AddOption) {
+// Add records a value for blitz.output.entries_received with required attributes
+func (m blitzOutputEntriesReceivedCounterType) Add(ctx context.Context, value int64, outputType string, telemetryType string, opts ...metric.AddOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
 		attribute.String(attrTelemetryType, telemetryType),
@@ -81,33 +62,33 @@ func (m BlitzOutputEntryRateCounterType) Add(ctx context.Context, value float64,
 	}
 }
 
-// BlitzOutputRequestSizeHistogramType wraps the blitz.output.request_size metric with type-safe required attributes
-type BlitzOutputRequestSizeHistogramType struct {
-	histogram metric.Int64Histogram
+// blitzOutputEntryRateCounterType wraps the blitz.output.entry_rate metric with type-safe required attributes
+type blitzOutputEntryRateCounterType struct {
+	counter metric.Float64Counter
 }
 
-// Record records a value for blitz.output.request_size with required attributes
-func (m BlitzOutputRequestSizeHistogramType) Record(ctx context.Context, value int64, outputType string, telemetryType string, opts ...metric.RecordOption) {
+// Add records a value for blitz.output.entry_rate with required attributes
+func (m blitzOutputEntryRateCounterType) Add(ctx context.Context, value float64, outputType string, telemetryType string, opts ...metric.AddOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
 		attribute.String(attrTelemetryType, telemetryType),
 	))
 
 	if len(opts) == 0 {
-		m.histogram.Record(ctx, value, attrs)
+		m.counter.Add(ctx, value, attrs)
 	} else {
-		allOpts := append([]metric.RecordOption{attrs}, opts...)
-		m.histogram.Record(ctx, value, allOpts...)
+		allOpts := append([]metric.AddOption{attrs}, opts...)
+		m.counter.Add(ctx, value, allOpts...)
 	}
 }
 
-// BlitzOutputRequestLatencyHistogramType wraps the blitz.output.request_latency metric with type-safe required attributes
-type BlitzOutputRequestLatencyHistogramType struct {
+// blitzOutputRequestLatencyHistogramType wraps the blitz.output.request_latency metric with type-safe required attributes
+type blitzOutputRequestLatencyHistogramType struct {
 	histogram metric.Float64Histogram
 }
 
 // Record records a value for blitz.output.request_latency with required attributes
-func (m BlitzOutputRequestLatencyHistogramType) Record(ctx context.Context, value float64, outputType string, telemetryType string, opts ...metric.RecordOption) {
+func (m blitzOutputRequestLatencyHistogramType) Record(ctx context.Context, value float64, outputType string, telemetryType string, opts ...metric.RecordOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
 		attribute.String(attrTelemetryType, telemetryType),
@@ -121,13 +102,33 @@ func (m BlitzOutputRequestLatencyHistogramType) Record(ctx context.Context, valu
 	}
 }
 
-// BlitzOutputSendErrorsCounterType wraps the blitz.output.send_errors metric with type-safe required attributes
-type BlitzOutputSendErrorsCounterType struct {
+// blitzOutputRequestSizeHistogramType wraps the blitz.output.request_size metric with type-safe required attributes
+type blitzOutputRequestSizeHistogramType struct {
+	histogram metric.Int64Histogram
+}
+
+// Record records a value for blitz.output.request_size with required attributes
+func (m blitzOutputRequestSizeHistogramType) Record(ctx context.Context, value int64, outputType string, telemetryType string, opts ...metric.RecordOption) {
+	attrs := metric.WithAttributeSet(attribute.NewSet(
+		attribute.String(attrOutputType, outputType),
+		attribute.String(attrTelemetryType, telemetryType),
+	))
+
+	if len(opts) == 0 {
+		m.histogram.Record(ctx, value, attrs)
+	} else {
+		allOpts := append([]metric.RecordOption{attrs}, opts...)
+		m.histogram.Record(ctx, value, allOpts...)
+	}
+}
+
+// blitzOutputSendErrorsCounterType wraps the blitz.output.send_errors metric with type-safe required attributes
+type blitzOutputSendErrorsCounterType struct {
 	counter metric.Int64Counter
 }
 
 // Add records a value for blitz.output.send_errors with required attributes
-func (m BlitzOutputSendErrorsCounterType) Add(ctx context.Context, value int64, outputType string, telemetryType string, opts ...metric.AddOption) {
+func (m blitzOutputSendErrorsCounterType) Add(ctx context.Context, value int64, outputType string, telemetryType string, opts ...metric.AddOption) {
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
 		attribute.String(attrTelemetryType, telemetryType),
@@ -146,89 +147,94 @@ type ObservableCallbacks interface {
 	ObserveBlitzOutputQueueSize(ctx context.Context, observer metric.Int64Observer) error
 }
 
-var (
-	outputMeter = otel.Meter("output")
+// Metrics holds blitz's output self-telemetry instruments. Build one
+// with NewMetrics from a caller-supplied MeterProvider so metrics can be routed
+// to any provider (an embedding host's, or the process global).
+type Metrics struct {
+	outputMeter metric.Meter
 
-	// BlitzOutputEntriesReceivedCounter tracks the total number of log entries received by the output
-	BlitzOutputEntriesReceivedCounter BlitzOutputEntriesReceivedCounterType
+	// number of active output worker goroutines
+	BlitzOutputActiveWorkersGauge blitzOutputActiveWorkersGaugeType
+	// total number of telemetry entries received by the output
+	BlitzOutputEntriesReceivedCounter blitzOutputEntriesReceivedCounterType
+	// rate of telemetry entries processed per second
+	BlitzOutputEntryRateCounter blitzOutputEntryRateCounterType
+	// latency of output requests
+	BlitzOutputRequestLatencyHistogram blitzOutputRequestLatencyHistogramType
+	// size of output requests in bytes
+	BlitzOutputRequestSizeHistogram blitzOutputRequestSizeHistogramType
+	// total number of send errors
+	BlitzOutputSendErrorsCounter blitzOutputSendErrorsCounterType
+}
 
-	// BlitzOutputActiveWorkersGauge tracks the number of active output worker goroutines
-	BlitzOutputActiveWorkersGauge BlitzOutputActiveWorkersGaugeType
+// NewMetrics builds the output instruments from mp. A nil mp falls
+// back to the process-global MeterProvider, preserving standalone behavior.
+func NewMetrics(mp metric.MeterProvider) (*Metrics, error) {
+	if mp == nil {
+		mp = otel.GetMeterProvider()
+	}
+	m := &Metrics{}
+	var errs error
 
-	// BlitzOutputEntryRateCounter tracks the rate of log entries processed per second
-	BlitzOutputEntryRateCounter BlitzOutputEntryRateCounterType
+	m.outputMeter = mp.Meter("output")
 
-	// BlitzOutputRequestSizeHistogram tracks the size of output requests in bytes
-	BlitzOutputRequestSizeHistogram BlitzOutputRequestSizeHistogramType
-
-	// BlitzOutputRequestLatencyHistogram tracks the latency of output requests
-	BlitzOutputRequestLatencyHistogram BlitzOutputRequestLatencyHistogramType
-
-	// BlitzOutputSendErrorsCounter tracks the total number of send errors
-	BlitzOutputSendErrorsCounter BlitzOutputSendErrorsCounterType
-)
-
-func init() {
-	var err, errs error
-
-	blitzOutputEntriesReceivedCounterRaw, err := outputMeter.Int64Counter(
-		"blitz.output.entries_received",
-		metric.WithDescription("total number of log entries received by the output"),
-		metric.WithUnit("{entry}"),
-	)
-	errs = errors.Join(errs, err)
-	BlitzOutputEntriesReceivedCounter = BlitzOutputEntriesReceivedCounterType{counter: blitzOutputEntriesReceivedCounterRaw}
-
-	blitzOutputActiveWorkersGaugeRaw, err := outputMeter.Int64Gauge(
+	BlitzOutputActiveWorkersGaugeRaw, err := m.outputMeter.Int64Gauge(
 		"blitz.output.active_workers",
 		metric.WithDescription("number of active output worker goroutines"),
 		metric.WithUnit("{worker}"),
 	)
 	errs = errors.Join(errs, err)
-	BlitzOutputActiveWorkersGauge = BlitzOutputActiveWorkersGaugeType{gauge: blitzOutputActiveWorkersGaugeRaw}
+	m.BlitzOutputActiveWorkersGauge = blitzOutputActiveWorkersGaugeType{gauge: BlitzOutputActiveWorkersGaugeRaw}
 
-	blitzOutputEntryRateCounterRaw, err := outputMeter.Float64Counter(
+	BlitzOutputEntriesReceivedCounterRaw, err := m.outputMeter.Int64Counter(
+		"blitz.output.entries_received",
+		metric.WithDescription("total number of telemetry entries received by the output"),
+		metric.WithUnit("{entry}"),
+	)
+	errs = errors.Join(errs, err)
+	m.BlitzOutputEntriesReceivedCounter = blitzOutputEntriesReceivedCounterType{counter: BlitzOutputEntriesReceivedCounterRaw}
+
+	BlitzOutputEntryRateCounterRaw, err := m.outputMeter.Float64Counter(
 		"blitz.output.entry_rate",
-		metric.WithDescription("rate of log entries processed per second"),
+		metric.WithDescription("rate of telemetry entries processed per second"),
 		metric.WithUnit("{entry}/s"),
 	)
 	errs = errors.Join(errs, err)
-	BlitzOutputEntryRateCounter = BlitzOutputEntryRateCounterType{counter: blitzOutputEntryRateCounterRaw}
+	m.BlitzOutputEntryRateCounter = blitzOutputEntryRateCounterType{counter: BlitzOutputEntryRateCounterRaw}
 
-	blitzOutputRequestSizeHistogramRaw, err := outputMeter.Int64Histogram(
-		"blitz.output.request_size",
-		metric.WithDescription("size of output requests in bytes"),
-		metric.WithUnit("By"),
-	)
-	errs = errors.Join(errs, err)
-	BlitzOutputRequestSizeHistogram = BlitzOutputRequestSizeHistogramType{histogram: blitzOutputRequestSizeHistogramRaw}
-
-	blitzOutputRequestLatencyHistogramRaw, err := outputMeter.Float64Histogram(
+	BlitzOutputRequestLatencyHistogramRaw, err := m.outputMeter.Float64Histogram(
 		"blitz.output.request_latency",
 		metric.WithDescription("latency of output requests"),
 		metric.WithUnit("s"),
 	)
 	errs = errors.Join(errs, err)
-	BlitzOutputRequestLatencyHistogram = BlitzOutputRequestLatencyHistogramType{histogram: blitzOutputRequestLatencyHistogramRaw}
+	m.BlitzOutputRequestLatencyHistogram = blitzOutputRequestLatencyHistogramType{histogram: BlitzOutputRequestLatencyHistogramRaw}
 
-	blitzOutputSendErrorsCounterRaw, err := outputMeter.Int64Counter(
+	BlitzOutputRequestSizeHistogramRaw, err := m.outputMeter.Int64Histogram(
+		"blitz.output.request_size",
+		metric.WithDescription("size of output requests in bytes"),
+		metric.WithUnit("By"),
+	)
+	errs = errors.Join(errs, err)
+	m.BlitzOutputRequestSizeHistogram = blitzOutputRequestSizeHistogramType{histogram: BlitzOutputRequestSizeHistogramRaw}
+
+	BlitzOutputSendErrorsCounterRaw, err := m.outputMeter.Int64Counter(
 		"blitz.output.send_errors",
 		metric.WithDescription("total number of send errors"),
 		metric.WithUnit("{error}"),
 	)
 	errs = errors.Join(errs, err)
-	BlitzOutputSendErrorsCounter = BlitzOutputSendErrorsCounterType{counter: blitzOutputSendErrorsCounterRaw}
+	m.BlitzOutputSendErrorsCounter = blitzOutputSendErrorsCounterType{counter: BlitzOutputSendErrorsCounterRaw}
 
-	if errs != nil {
-		panic(fmt.Sprintf("Initialize output metrics: %s", errs))
-	}
+	return m, errs
 }
 
-// InitObservableMetrics initializes observable metrics with the provided callbacks
-func InitObservableMetrics(callbacks ObservableCallbacks) {
+// InitObservable registers the observable instruments against callbacks. Call
+// it once, after NewMetrics, from the component that owns the observed state.
+func (m *Metrics) InitObservable(callbacks ObservableCallbacks) error {
 	var err, errs error
 
-	_, err = outputMeter.Int64ObservableGauge(
+	_, err = m.outputMeter.Int64ObservableGauge(
 		"blitz.output.queue_size",
 		metric.WithDescription("current number of entries in the output queue"),
 		metric.WithUnit("{entry}"),
@@ -236,7 +242,5 @@ func InitObservableMetrics(callbacks ObservableCallbacks) {
 	)
 	errs = errors.Join(errs, err)
 
-	if errs != nil {
-		panic(fmt.Sprintf("Initialize output observable metrics: %s", errs))
-	}
+	return errs
 }

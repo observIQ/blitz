@@ -74,6 +74,10 @@ type Config struct {
 	// uniqueness across blitz instances that share a Seed but
 	// participate in the same downstream pipeline.
 	Seed int64
+	// Telemetry supplies the OTel providers blitz routes its own
+	// self-telemetry through. The zero value falls back to the process
+	// global providers.
+	Telemetry embed.TelemetrySettings
 }
 
 // Generator implements embed.ProducerModule for synthetic distributed
@@ -100,6 +104,7 @@ type Generator struct {
 	static   *resource.StaticResources
 	consumer embed.TraceConsumer
 	seed     int64
+	metrics  *generator.Metrics
 
 	wg      sync.WaitGroup
 	stopCh  chan struct{}
@@ -126,6 +131,11 @@ func New(cfg Config) (*Generator, error) {
 		return nil, fmt.Errorf("rate must be greater than 0, got %s", cfg.Rate)
 	}
 
+	metrics, err := generator.NewMetrics(cfg.Telemetry.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build generator metrics: %w", err)
+	}
+
 	// Resolve the simulated host: an explicit Environment identity when
 	// supplied, otherwise a minimal Linux-style identity synthesized from the
 	// Hostname knob. The resource projection is built once here and reused for
@@ -143,6 +153,7 @@ func New(cfg Config) (*Generator, error) {
 		static:   resource.FromIdentity(sys, generatorType),
 		consumer: cfg.Consumer,
 		seed:     cfg.Seed,
+		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
 }
@@ -192,7 +203,7 @@ func (g *Generator) Start(_ context.Context) error {
 		zap.String("hostname", g.hostname),
 	)
 
-	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), generatorType)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), generatorType)
 
 	for i := range g.workers {
 		g.wg.Add(1)
@@ -230,7 +241,7 @@ func (g *Generator) Stop(ctx context.Context) error {
 
 	close(g.stopCh)
 
-	generator.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, generatorType)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(ctx, 0, generatorType)
 
 	drainCtx, cancel := context.WithTimeout(ctx, stopDrainTimeout)
 	defer cancel()
@@ -465,12 +476,12 @@ func (g *Generator) emitSpan(sp embed.Span) {
 	ctx := context.Background()
 	if err := g.consumer.ConsumeTraces(ctx, []embed.Span{sp}); err != nil {
 		g.logger.Debug("Consume trace error", zap.Error(err))
-		generator.BlitzGeneratorWriteErrorsCounter.Add(ctx, 1, generatorType,
+		g.metrics.BlitzGeneratorWriteErrorsCounter.Add(ctx, 1, generatorType,
 			metric.WithAttributeSet(attribute.NewSet(attribute.String("span_kind", string(sp.Kind)))),
 		)
 		return
 	}
-	generator.BlitzGeneratorEntriesCounter.Add(ctx, 1, generatorType)
+	g.metrics.BlitzGeneratorEntriesCounter.Add(ctx, 1, generatorType)
 }
 
 // cloneResource returns a defensive copy so per-span mutations (e.g. a

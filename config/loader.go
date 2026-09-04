@@ -122,6 +122,11 @@ type EmbedOpts struct {
 	// the CLI's BLITZ_* env-var path; blitz never reads os.Environ()
 	// itself in embedded mode.
 	EnvOverrides map[string]string
+
+	// Telemetry carries the OTel providers blitz routes its own
+	// self-telemetry through, forwarded to every constructed generator. The
+	// zero value falls back to the process-global providers.
+	Telemetry embed.TelemetrySettings
 }
 
 // LoadModules parses blitz YAML bytes, constructs the corresponding
@@ -164,7 +169,7 @@ func LoadModules(yamlBytes []byte, opts EmbedOpts) ([]embed.ProducerModule, erro
 	}
 	modules := make([]embed.ProducerModule, 0, len(gens))
 	for i, gen := range gens {
-		mod, err := dispatch.ForEmbed(logger, gen, consumers, opts.FileGenLibrary, env)
+		mod, err := dispatch.ForEmbed(logger, gen, consumers, opts.FileGenLibrary, env, opts.Telemetry)
 		if err != nil {
 			return nil, fmt.Errorf("generator[%d] type=%q: %w", i, gen.Type, err)
 		}

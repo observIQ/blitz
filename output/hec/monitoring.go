@@ -6,90 +6,103 @@ package hec
 
 import (
 	"errors"
-	"fmt"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 )
 
-var (
-	hecMeter = otel.Meter("hec")
+// Constants for enum members
 
-	// number of entries per HEC batch
-	blitzOutputHecBatchSizeHistogram metric.Int64Histogram
+// Wrapper types for metrics with required attributes
 
-	// number of ACKs currently pending confirmation
-	blitzOutputHecAckPendingGauge metric.Int64Gauge
+// Metrics holds blitz's hec self-telemetry instruments. Build one
+// with NewMetrics from a caller-supplied MeterProvider so metrics can be routed
+// to any provider (an embedding host's, or the process global).
+type Metrics struct {
+	hecMeter metric.Meter
 
 	// total number of ACKs confirmed by the server
 	blitzOutputHecAckConfirmedCounter metric.Int64Counter
-
-	// total number of ACKs that expired without confirmation
-	blitzOutputHecAckExpiredCounter metric.Int64Counter
-
-	// total number of batches retried due to ACK failure
-	blitzOutputHecAckRetriedCounter metric.Int64Counter
-
 	// total number of batches dropped after max retries
 	blitzOutputHecAckDroppedCounter metric.Int64Counter
-
+	// total number of ACKs that expired without confirmation
+	blitzOutputHecAckExpiredCounter metric.Int64Counter
+	// number of ACKs currently pending confirmation
+	blitzOutputHecAckPendingGauge metric.Int64Gauge
 	// latency of ACK polling requests
 	blitzOutputHecAckPollLatencyHistogram metric.Float64Histogram
-)
+	// total number of batches retried due to ACK failure
+	blitzOutputHecAckRetriedCounter metric.Int64Counter
+	// number of entries per HEC batch
+	blitzOutputHecBatchSizeHistogram metric.Int64Histogram
+}
 
-func init() {
-	var err, errs error
+// NewMetrics builds the hec instruments from mp. A nil mp falls
+// back to the process-global MeterProvider, preserving standalone behavior.
+func NewMetrics(mp metric.MeterProvider) (*Metrics, error) {
+	if mp == nil {
+		mp = otel.GetMeterProvider()
+	}
+	m := &Metrics{}
+	var errs error
 
-	blitzOutputHecBatchSizeHistogram, err = hecMeter.Int64Histogram(
-		"blitz.output.hec.batch_size",
-		metric.WithDescription("number of entries per HEC batch"),
-		metric.WithUnit("{entry}"),
-	)
-	errs = errors.Join(errs, err)
+	m.hecMeter = mp.Meter("hec")
 
-	blitzOutputHecAckPendingGauge, err = hecMeter.Int64Gauge(
-		"blitz.output.hec.ack_pending",
-		metric.WithDescription("number of ACKs currently pending confirmation"),
-		metric.WithUnit("{ack}"),
-	)
-	errs = errors.Join(errs, err)
-
-	blitzOutputHecAckConfirmedCounter, err = hecMeter.Int64Counter(
+	blitzOutputHecAckConfirmedCounterRaw, err := m.hecMeter.Int64Counter(
 		"blitz.output.hec.ack_confirmed",
 		metric.WithDescription("total number of ACKs confirmed by the server"),
 		metric.WithUnit("{ack}"),
 	)
 	errs = errors.Join(errs, err)
+	m.blitzOutputHecAckConfirmedCounter = blitzOutputHecAckConfirmedCounterRaw
 
-	blitzOutputHecAckExpiredCounter, err = hecMeter.Int64Counter(
-		"blitz.output.hec.ack_expired",
-		metric.WithDescription("total number of ACKs that expired without confirmation"),
-		metric.WithUnit("{ack}"),
-	)
-	errs = errors.Join(errs, err)
-
-	blitzOutputHecAckRetriedCounter, err = hecMeter.Int64Counter(
-		"blitz.output.hec.ack_retried",
-		metric.WithDescription("total number of batches retried due to ACK failure"),
-		metric.WithUnit("{ack}"),
-	)
-	errs = errors.Join(errs, err)
-
-	blitzOutputHecAckDroppedCounter, err = hecMeter.Int64Counter(
+	blitzOutputHecAckDroppedCounterRaw, err := m.hecMeter.Int64Counter(
 		"blitz.output.hec.ack_dropped",
 		metric.WithDescription("total number of batches dropped after max retries"),
 		metric.WithUnit("{ack}"),
 	)
 	errs = errors.Join(errs, err)
+	m.blitzOutputHecAckDroppedCounter = blitzOutputHecAckDroppedCounterRaw
 
-	blitzOutputHecAckPollLatencyHistogram, err = hecMeter.Float64Histogram(
+	blitzOutputHecAckExpiredCounterRaw, err := m.hecMeter.Int64Counter(
+		"blitz.output.hec.ack_expired",
+		metric.WithDescription("total number of ACKs that expired without confirmation"),
+		metric.WithUnit("{ack}"),
+	)
+	errs = errors.Join(errs, err)
+	m.blitzOutputHecAckExpiredCounter = blitzOutputHecAckExpiredCounterRaw
+
+	blitzOutputHecAckPendingGaugeRaw, err := m.hecMeter.Int64Gauge(
+		"blitz.output.hec.ack_pending",
+		metric.WithDescription("number of ACKs currently pending confirmation"),
+		metric.WithUnit("{ack}"),
+	)
+	errs = errors.Join(errs, err)
+	m.blitzOutputHecAckPendingGauge = blitzOutputHecAckPendingGaugeRaw
+
+	blitzOutputHecAckPollLatencyHistogramRaw, err := m.hecMeter.Float64Histogram(
 		"blitz.output.hec.ack_poll_latency",
 		metric.WithDescription("latency of ACK polling requests"),
 		metric.WithUnit("s"),
 	)
 	errs = errors.Join(errs, err)
+	m.blitzOutputHecAckPollLatencyHistogram = blitzOutputHecAckPollLatencyHistogramRaw
 
-	if errs != nil {
-		panic(fmt.Sprintf("Initialize hec metrics: %s", errs))
-	}
+	blitzOutputHecAckRetriedCounterRaw, err := m.hecMeter.Int64Counter(
+		"blitz.output.hec.ack_retried",
+		metric.WithDescription("total number of batches retried due to ACK failure"),
+		metric.WithUnit("{ack}"),
+	)
+	errs = errors.Join(errs, err)
+	m.blitzOutputHecAckRetriedCounter = blitzOutputHecAckRetriedCounterRaw
+
+	blitzOutputHecBatchSizeHistogramRaw, err := m.hecMeter.Int64Histogram(
+		"blitz.output.hec.batch_size",
+		metric.WithDescription("number of entries per HEC batch"),
+		metric.WithUnit("{entry}"),
+	)
+	errs = errors.Join(errs, err)
+	m.blitzOutputHecBatchSizeHistogram = blitzOutputHecBatchSizeHistogramRaw
+
+	return m, errs
 }

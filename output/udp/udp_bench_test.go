@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
 )
@@ -59,7 +60,7 @@ func BenchmarkUDP_1Worker(b *testing.B) {
 	}
 
 	// Create UDP client with 1 worker
-	udp, err := New(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -94,7 +95,7 @@ func BenchmarkUDP_10Workers(b *testing.B) {
 	}
 
 	// Create UDP client with 10 workers
-	udp, err := New(logger, host, port, 10)
+	udp, err := New(logger, host, port, 10, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -130,7 +131,7 @@ func BenchmarkUDP_1Worker_Sequential(b *testing.B) {
 	}
 
 	// Create UDP client with 1 worker
-	udp, err := New(logger, host, port, 1)
+	udp, err := New(logger, host, port, 1, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create UDP client: %v", err)
 	}
@@ -164,7 +165,7 @@ func BenchmarkUDP_10Workers_Sequential(b *testing.B) {
 	}
 
 	// Create UDP client with 10 workers
-	udp, err := New(logger, host, port, 10)
+	udp, err := New(logger, host, port, 10, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create UDP client: %v", err)
 	}

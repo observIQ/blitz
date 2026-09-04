@@ -39,6 +39,7 @@ type Generator struct {
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
 	tracker  *count.Tracker
+	metrics  *generator.Metrics
 }
 
 // Predefined data for realistic Okta log generation
@@ -191,7 +192,7 @@ var (
 
 // New creates a new Okta log generator. The consumer receives each
 // generated record as a size-1 batch via ConsumeLogs.
-func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer) (*Generator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer, tel embed.TelemetrySettings) (*Generator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -204,12 +205,18 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		return nil, fmt.Errorf("consumer cannot be nil")
 	}
 
+	metrics, err := generator.NewMetrics(tel.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build generator metrics: %w", err)
+	}
+
 	return &Generator{
 		logger:   logger,
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
 		static:   resource.FromIdentity(nil, componentName),
+		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
 }
@@ -272,8 +279,8 @@ func (g *Generator) worker(workerID int) {
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID))) // #nosec G404
 
-	generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
-	defer generator.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 0, componentName)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
+	defer g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 0, componentName)
 
 	backoffConfig := backoff.NewExponentialBackOff()
 	backoffConfig.InitialInterval = g.rate
@@ -322,7 +329,7 @@ func (g *Generator) generateAndWriteLog(r *rand.Rand, _ int) error {
 		return fmt.Errorf("generate Okta log: %w", err)
 	}
 
-	generator.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
+	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -482,7 +489,7 @@ func generateRandomIP(r *rand.Rand) string {
 }
 
 func (g *Generator) recordWriteError(errorType string, err error) {
-	generator.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
+	g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
 		metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", errorType))),
 	)
 	g.logger.Debug("Recorded write error",

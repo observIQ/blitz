@@ -83,7 +83,7 @@ func TestNew(t *testing.T) {
 	workers := 5
 	rate := 100 * time.Millisecond
 
-	generator, err := New(logger, workers, rate, newMockConsumer())
+	generator, err := New(logger, workers, rate, newMockConsumer(), embed.NopTelemetry())
 
 	assert.NoError(t, err)
 	assert.NotNil(t, generator)
@@ -95,7 +95,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNew_NilLogger(t *testing.T) {
-	generator, err := New(nil, 5, 100*time.Millisecond, newMockConsumer())
+	generator, err := New(nil, 5, 100*time.Millisecond, newMockConsumer(), embed.NopTelemetry())
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
@@ -104,7 +104,7 @@ func TestNew_NilLogger(t *testing.T) {
 
 func TestNew_NilConsumer(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	generator, err := New(logger, 5, 100*time.Millisecond, nil)
+	generator, err := New(logger, 5, 100*time.Millisecond, nil, embed.NopTelemetry())
 
 	assert.Error(t, err)
 	assert.Nil(t, generator)
@@ -115,13 +115,13 @@ func TestNew_InvalidWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Test zero workers
-	generator, err := New(logger, 0, 100*time.Millisecond, newMockConsumer())
+	generator, err := New(logger, 0, 100*time.Millisecond, newMockConsumer(), embed.NopTelemetry())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
 
 	// Test negative workers
-	generator, err = New(logger, -1, 100*time.Millisecond, newMockConsumer())
+	generator, err = New(logger, -1, 100*time.Millisecond, newMockConsumer(), embed.NopTelemetry())
 	assert.Error(t, err)
 	assert.Nil(t, generator)
 	assert.Contains(t, err.Error(), "workers must be 1 or greater")
@@ -129,7 +129,7 @@ func TestNew_InvalidWorkers(t *testing.T) {
 
 func TestApacheErrorGenerator_Name(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	generator, err := New(logger, 1, 100*time.Millisecond, newMockConsumer())
+	generator, err := New(logger, 1, 100*time.Millisecond, newMockConsumer(), embed.NopTelemetry())
 	require.NoError(t, err)
 	assert.Equal(t, componentName, generator.Name())
 }
@@ -140,7 +140,7 @@ var _ embed.ProducerModule = (*ApacheErrorLogGenerator)(nil)
 func TestApacheErrorGenerator_Start(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := newMockConsumer()
-	generator, err := New(logger, 2, 50*time.Millisecond, consumer)
+	generator, err := New(logger, 2, 50*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -171,7 +171,7 @@ func TestApacheErrorGenerator_Start(t *testing.T) {
 func TestApacheErrorGenerator_Stop_GracefulShutdown(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := newMockConsumer()
-	generator, err := New(logger, 3, 10*time.Millisecond, consumer)
+	generator, err := New(logger, 3, 10*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -202,7 +202,7 @@ func TestApacheErrorGenerator_WriteErrors_Backoff(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := newMockConsumer()
 	consumer.setConsumeError(errors.New("write failed"))
-	generator, err := New(logger, 1, 10*time.Millisecond, consumer)
+	generator, err := New(logger, 1, 10*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -227,7 +227,7 @@ func TestApacheErrorGenerator_WriteErrors_Backoff(t *testing.T) {
 func TestApacheErrorGenerator_ConcurrentWorkers(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := newMockConsumer()
-	generator, err := New(logger, 5, 20*time.Millisecond, consumer)
+	generator, err := New(logger, 5, 20*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -252,7 +252,7 @@ func TestApacheErrorGenerator_ConcurrentWorkers(t *testing.T) {
 func TestFormatAsApacheError_Structure(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := newMockConsumer()
-	generator, err := New(logger, 1, 10*time.Millisecond, consumer)
+	generator, err := New(logger, 1, 10*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -295,7 +295,7 @@ func TestFormatAsApacheError_Structure(t *testing.T) {
 func TestFormatAsApacheError_ParseFunc(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := newMockConsumer()
-	generator, err := New(logger, 1, 10*time.Millisecond, consumer)
+	generator, err := New(logger, 1, 10*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	err = generator.Start(context.Background())
@@ -323,7 +323,7 @@ func TestFormatAsApacheError_ParseFunc(t *testing.T) {
 
 func TestApacheErrorLogGenerator_SetCountTracker(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 50*time.Millisecond, newMockConsumer())
+	gen, err := New(logger, 1, 50*time.Millisecond, newMockConsumer(), embed.NopTelemetry())
 	require.NoError(t, err)
 
 	assert.Nil(t, gen.tracker, "tracker should be nil initially")
@@ -337,7 +337,7 @@ func TestApacheErrorLogGenerator_CountLimited(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	consumer := newMockConsumer()
 
-	gen, err := New(logger, 2, 10*time.Millisecond, consumer)
+	gen, err := New(logger, 2, 10*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(t, err)
 
 	tracker := count.NewTracker(5)
@@ -377,7 +377,7 @@ func (d *discardConsumer) ConsumeLogs(_ context.Context, _ []embed.LogRecord) er
 func BenchmarkApacheErrorGenerator(b *testing.B) {
 	logger := zaptest.NewLogger(b)
 	consumer := &discardConsumer{}
-	generator, err := New(logger, 1, 1*time.Millisecond, consumer)
+	generator, err := New(logger, 1, 1*time.Millisecond, consumer, embed.NopTelemetry())
 	require.NoError(b, err)
 
 	err = generator.Start(context.Background())
@@ -393,7 +393,7 @@ func BenchmarkApacheErrorGenerator(b *testing.B) {
 
 func TestSetHostIdentity(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 100*time.Millisecond, newMockConsumer())
+	gen, err := New(logger, 1, 100*time.Millisecond, newMockConsumer(), embed.NopTelemetry())
 	require.NoError(t, err)
 
 	gen.SetHostIdentity(&datagen.SystemIdentity{

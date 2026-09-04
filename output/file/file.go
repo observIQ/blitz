@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -43,10 +44,11 @@ type File struct {
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
 	writer        *lumberjack.Logger
+	metrics       *output.Metrics
 }
 
 // New creates a new File output instance
-func New(logger *zap.Logger, path string, workers int, rotation RotationOptions) (*File, error) {
+func New(logger *zap.Logger, path string, workers int, rotation RotationOptions, tel embed.TelemetrySettings) (*File, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -55,6 +57,11 @@ func New(logger *zap.Logger, path string, workers int, rotation RotationOptions)
 	}
 	if workers <= 0 {
 		workers = DefaultFileWorkers
+	}
+
+	m, err := output.NewMetrics(tel.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build output metrics: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -76,6 +83,7 @@ func New(logger *zap.Logger, path string, workers int, rotation RotationOptions)
 		ctx:      ctx,
 		cancel:   cancel,
 		writer:   writer,
+		metrics:  m,
 	}
 
 	f.logger.Info("Starting File output",
@@ -85,13 +93,15 @@ func New(logger *zap.Logger, path string, workers int, rotation RotationOptions)
 	)
 
 	// Register observable metrics (queue_size)
-	output.InitObservableMetrics(f)
+	if err := f.metrics.InitObservable(f); err != nil {
+		return nil, fmt.Errorf("init observable metrics: %w", err)
+	}
 
 	// Worker manager
 	f.workerManager = workermanager.NewWorkerManager(f.logger, workers, f.fileWorker)
 
 	// Record initial active workers count
-	output.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(workers), outputType)
+	f.metrics.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(workers), outputType)
 
 	f.workerManager.Start()
 
@@ -108,7 +118,7 @@ func (f *File) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.In
 func (f *File) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case f.dataChan <- data.Message:
-		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
+		f.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -121,7 +131,7 @@ func (f *File) Write(ctx context.Context, data output.LogRecord) error {
 func (f *File) Stop(ctx context.Context) error {
 	f.logger.Info("Stopping File output")
 
-	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
+	f.metrics.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
 	close(f.dataChan)
 	f.cancel()
@@ -175,8 +185,8 @@ func (f *File) writeData(data string) error {
 	}
 
 	latency := time.Since(start).Seconds()
-	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType, "logs")
-	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType, "logs")
+	f.metrics.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType, "logs")
+	f.metrics.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType, "logs")
 
 	// Record latency as a histogram using Float64Histogram like TCP for symmetry
 	// Use a separate metric name if needed in the future; omitted here to reduce metric cardinality
@@ -186,7 +196,7 @@ func (f *File) writeData(data string) error {
 }
 
 func (f *File) recordWriteError(_ string, _ error) {
-	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
+	f.metrics.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
 }
 
 // SupportedTelemetry returns the telemetry types this output can consume.

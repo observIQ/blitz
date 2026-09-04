@@ -92,7 +92,7 @@ func TestForEmbedLogGeneratorWiresEnvironmentIdentity(t *testing.T) {
 		Nginx: config.NginxGeneratorConfig{Workers: 1, Rate: 20 * time.Millisecond},
 	}
 
-	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{LogConsumer: cons}, nil, env)
+	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{LogConsumer: cons}, nil, env, embed.NopTelemetry())
 	require.NoError(t, err)
 	require.NoError(t, mod.Start(context.Background()))
 	require.Eventually(t, func() bool { return len(cons.snapshot()) > 0 }, 2*time.Second, 10*time.Millisecond)
@@ -112,7 +112,7 @@ func TestForEmbedPropagatesConstructorError(t *testing.T) {
 		Type:  config.GeneratorTypeNginx,
 		Nginx: config.NginxGeneratorConfig{Workers: 0, Rate: time.Second},
 	}
-	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{LogConsumer: noopConsumer{}}, nil, nil)
+	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{LogConsumer: noopConsumer{}}, nil, nil, embed.NopTelemetry())
 	require.Error(t, err)
 	require.Nil(t, mod)
 }
@@ -156,7 +156,7 @@ func TestForEmbedHostMetricsWiresEnvironmentIdentity(t *testing.T) {
 		},
 	}
 
-	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{MetricConsumer: cons}, nil, env)
+	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{MetricConsumer: cons}, nil, env, embed.NopTelemetry())
 	require.NoError(t, err)
 	require.NoError(t, mod.Start(context.Background()))
 	require.Eventually(t, func() bool { return len(cons.snapshot()) > 0 }, 2*time.Second, 10*time.Millisecond)
@@ -179,7 +179,7 @@ func TestForEmbedWelReturnsProducerModule(t *testing.T) {
 			Role:    "member",
 		},
 	}
-	mod, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil)
+	mod, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil, embed.NopTelemetry())
 	require.NoError(t, err)
 	require.NotNil(t, mod)
 	assert.Equal(t, "wel", mod.Name())
@@ -193,14 +193,14 @@ func TestForEmbedWelDefaultsEmptyRole(t *testing.T) {
 			Rate:    50 * time.Millisecond,
 		},
 	}
-	mod, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil)
+	mod, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil, embed.NopTelemetry())
 	require.NoError(t, err)
 	require.NotNil(t, mod)
 }
 
 func TestForEmbedWinevtRejectionMentionsWel(t *testing.T) {
 	cfg := config.Generator{Type: config.GeneratorTypeWinevt}
-	_, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil)
+	_, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil, embed.NopTelemetry())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "DEPRECATED")
 	assert.Contains(t, err.Error(), "`wel` generator")
@@ -216,7 +216,7 @@ func TestForEmbedFIXReturnsProducerModule(t *testing.T) {
 			Version: "4.4",
 		},
 	}
-	mod, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil)
+	mod, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil, embed.NopTelemetry())
 	require.NoError(t, err)
 	require.NotNil(t, mod)
 	assert.Equal(t, "fix", mod.Name())
@@ -231,7 +231,7 @@ func TestForEmbedFIXRejectsUnknownVersion(t *testing.T) {
 			Version: "4.3",
 		},
 	}
-	_, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil)
+	_, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil, embed.NopTelemetry())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown version")
 }
@@ -245,18 +245,18 @@ func TestForEmbedFIXRejectsUnknownCategory(t *testing.T) {
 			EnabledCategories: []string{"crypto"},
 		},
 	}
-	_, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil)
+	_, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil, embed.NopTelemetry())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown asset category")
 }
 
 func TestForEmbedRejectsNilLogger(t *testing.T) {
-	_, err := ForEmbed(nil, config.Generator{Type: config.GeneratorTypeFIX}, logsOnly(), nil, nil)
+	_, err := ForEmbed(nil, config.Generator{Type: config.GeneratorTypeFIX}, logsOnly(), nil, nil, embed.NopTelemetry())
 	require.Error(t, err)
 }
 
 func TestForEmbedRejectsMissingLogConsumerForLogType(t *testing.T) {
-	_, err := ForEmbed(zap.NewNop(), config.Generator{Type: config.GeneratorTypeFIX}, EmbedConsumers{}, nil, nil)
+	_, err := ForEmbed(zap.NewNop(), config.Generator{Type: config.GeneratorTypeFIX}, EmbedConsumers{}, nil, nil, embed.NopTelemetry())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "LogConsumer")
 }
@@ -272,7 +272,7 @@ func TestForEmbedHostMetricsReturnsProducerModule(t *testing.T) {
 			Hostname: "test-host",
 		},
 	}
-	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{MetricConsumer: noopMetricConsumer{}}, nil, nil)
+	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{MetricConsumer: noopMetricConsumer{}}, nil, nil, embed.NopTelemetry())
 	require.NoError(t, err)
 	require.NotNil(t, mod)
 	assert.Equal(t, "hostmetrics", mod.Name())
@@ -287,7 +287,7 @@ func TestForEmbedHostMetricsRejectsMissingMetricConsumer(t *testing.T) {
 			OS:      "linux",
 		},
 	}
-	_, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{}, nil, nil)
+	_, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{}, nil, nil, embed.NopTelemetry())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "MetricConsumer")
 }
@@ -301,7 +301,7 @@ func TestForEmbedTracesReturnsProducerModule(t *testing.T) {
 			Rate:    50 * time.Millisecond,
 		},
 	}
-	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{TraceConsumer: noopTraceConsumer{}}, nil, nil)
+	mod, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{TraceConsumer: noopTraceConsumer{}}, nil, nil, embed.NopTelemetry())
 	require.NoError(t, err)
 	require.NotNil(t, mod)
 	assert.Equal(t, "traces", mod.Name())
@@ -315,7 +315,7 @@ func TestForEmbedTracesRejectsMissingTraceConsumer(t *testing.T) {
 			Rate:    time.Second,
 		},
 	}
-	_, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{}, nil, nil)
+	_, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{}, nil, nil, embed.NopTelemetry())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "TraceConsumer")
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -19,7 +20,7 @@ func TestFileOutputWriteSingleLine(t *testing.T) {
 
 	logger := zap.NewNop()
 	rot := RotationOptions{MaxSizeMB: 100, MaxBackups: 1, MaxAgeDays: 1, Compress: false, LocalTime: false}
-	f, err := New(logger, path, 1, rot)
+	f, err := New(logger, path, 1, rot, embed.NopTelemetry())
 	if err != nil {
 		t.Fatalf("new file output: %v", err)
 	}
@@ -54,7 +55,7 @@ func TestFileOutputWriteMultipleLines(t *testing.T) {
 
 	logger := zap.NewNop()
 	rot := RotationOptions{MaxSizeMB: 100, MaxBackups: 2, MaxAgeDays: 2, Compress: false, LocalTime: false}
-	f, err := New(logger, path, 2, rot)
+	f, err := New(logger, path, 2, rot, embed.NopTelemetry())
 	if err != nil {
 		t.Fatalf("new file output: %v", err)
 	}

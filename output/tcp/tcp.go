@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -45,10 +46,11 @@ type TCP struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
+	metrics       *output.Metrics
 }
 
 // New creates a new TCP output instance
-func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Config) (*TCP, error) {
+func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Config, tel embed.TelemetrySettings) (*TCP, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -62,6 +64,11 @@ func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Conf
 		workers = DefaultTCPWorkers
 	}
 
+	m, err := output.NewMetrics(tel.MeterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build output metrics: %w", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	tcp := &TCP{
@@ -73,6 +80,7 @@ func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Conf
 		dataChan:  make(chan string, DefaultTCPChannelSize),
 		ctx:       ctx,
 		cancel:    cancel,
+		metrics:   m,
 	}
 
 	tcp.logger.Info("Starting TCP output",
@@ -84,13 +92,15 @@ func New(logger *zap.Logger, host, port string, workers int, tlsConfig *tls.Conf
 	)
 
 	// Register observable metrics (queue_size)
-	output.InitObservableMetrics(tcp)
+	if err := tcp.metrics.InitObservable(tcp); err != nil {
+		return nil, fmt.Errorf("init observable metrics: %w", err)
+	}
 
 	// Create worker manager
 	tcp.workerManager = workermanager.NewWorkerManager(tcp.logger, workers, tcp.tcpWorker)
 
 	// Record initial active workers count
-	output.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(workers), outputType)
+	tcp.metrics.BlitzOutputActiveWorkersGauge.Record(context.Background(), int64(workers), outputType)
 
 	// Start the workers
 	tcp.workerManager.Start()
@@ -111,7 +121,7 @@ func (t *TCP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 func (t *TCP) Write(ctx context.Context, data output.LogRecord) error {
 	select {
 	case t.dataChan <- data.Message:
-		output.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
+		t.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
@@ -128,7 +138,7 @@ func (t *TCP) Stop(ctx context.Context) error {
 	t.logger.Info("Stopping TCP output")
 
 	// Record zero active workers
-	output.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
+	t.metrics.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
 	// Reject any further writes and stop the workers (and their restart loop).
 	t.cancel()
@@ -283,16 +293,16 @@ func (t *TCP) sendData(conn net.Conn, data string) error {
 
 	// Record successful send metrics
 	latency := time.Since(startTime).Seconds()
-	output.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType, "logs")
-	output.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType, "logs")
-	output.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "logs")
+	t.metrics.BlitzOutputEntryRateCounter.Add(context.Background(), 1.0, outputType, "logs")
+	t.metrics.BlitzOutputRequestSizeHistogram.Record(context.Background(), int64(bytesWritten), outputType, "logs")
+	t.metrics.BlitzOutputRequestLatencyHistogram.Record(context.Background(), latency, outputType, "logs")
 
 	return nil
 }
 
 // recordSendError records metrics for send errors
 func (t *TCP) recordSendError(_ string, _ error) {
-	output.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
+	t.metrics.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "logs")
 }
 
 // SupportedTelemetry returns the telemetry types this output can consume.

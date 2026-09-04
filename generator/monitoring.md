@@ -4,13 +4,38 @@
 
 | Metric | Type | Unit | Description |
 |--------|------|------|-------------|
+| [`blitz.generator.active_workers`](#blitzgeneratoractive-workers) | Gauge | `{worker}` | number of active worker goroutines |
 | [`blitz.generator.entries`](#blitzgeneratorentries) | Counter | `{entry}` | total number of telemetry entries generated |
-| [`blitz.generator.active_workers`](#blitzgeneratoractive-workers) | Counter | `{worker}` | number of active worker goroutines |
 | [`blitz.generator.write_errors`](#blitzgeneratorwrite-errors) | Counter | `{error}` | total number of write errors |
 
 ---
 
 ## Metrics Detail
+
+### blitz.generator.active_workers
+
+| Property | Value |
+|----------|-------|
+| **Type** | Gauge |
+| **Unit** | `{worker}` |
+| **Meter** | `generator` |
+| **Stability** | Stable |
+| **Description** | number of active worker goroutines |
+| **Attributes** |`generator_type` |
+
+**Attributes:**
+
+| Name | Type | Required | Values |
+|------|------|----------|--------|
+| `generator_type` | string | ✓ | - |
+
+**Usage:**
+```go
+// Type-safe wrapper with required attributes
+blitzGeneratorActiveWorkersGauge.Add(ctx, 1, generatorTypeValue)
+```
+
+---
 
 ### blitz.generator.entries
 
@@ -21,7 +46,7 @@
 | **Meter** | `generator` |
 | **Stability** | Stable |
 | **Description** | total number of telemetry entries generated |
-| **Attributes** | `generator_type` |
+| **Attributes** |`generator_type` |
 
 **Attributes:**
 
@@ -37,31 +62,6 @@ blitzGeneratorEntriesCounter.Add(ctx, 1, generatorTypeValue)
 
 ---
 
-### blitz.generator.active_workers
-
-| Property | Value |
-|----------|-------|
-| **Type** | Gauge |
-| **Unit** | `{worker}` |
-| **Meter** | `generator` |
-| **Stability** | Stable |
-| **Description** | number of active worker goroutines |
-| **Attributes** | `generator_type` |
-
-**Attributes:**
-
-| Name | Type | Required | Values |
-|------|------|----------|--------|
-| `generator_type` | string | ✓ | - |
-
-**Usage:**
-```go
-// Type-safe wrapper with required attributes
-blitzGeneratorActiveWorkersGauge.Record(ctx, 1, generatorTypeValue)
-```
-
----
-
 ### blitz.generator.write_errors
 
 | Property | Value |
@@ -71,7 +71,7 @@ blitzGeneratorActiveWorkersGauge.Record(ctx, 1, generatorTypeValue)
 | **Meter** | `generator` |
 | **Stability** | Stable |
 | **Description** | total number of write errors |
-| **Attributes** | `generator_type`, `error_type` |
+| **Attributes** |`generator_type`, `error_type` |
 
 **Attributes:**
 
@@ -87,6 +87,7 @@ blitzGeneratorWriteErrorsCounter.Add(ctx, 1, generatorTypeValue)
 ```
 
 ---
+
 
 
 ---

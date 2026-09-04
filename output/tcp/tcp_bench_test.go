@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"go.uber.org/zap"
 )
@@ -166,7 +167,7 @@ func BenchmarkTCP_1Worker(b *testing.B) {
 	}
 
 	// Create TCP client with 1 worker
-	tcp, err := New(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -201,7 +202,7 @@ func BenchmarkTCP_10Workers(b *testing.B) {
 	}
 
 	// Create TCP client with 10 workers
-	tcp, err := New(logger, host, port, 10, nil)
+	tcp, err := New(logger, host, port, 10, nil, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -237,7 +238,7 @@ func BenchmarkTCP_1Worker_Sequential(b *testing.B) {
 	}
 
 	// Create TCP client with 1 worker
-	tcp, err := New(logger, host, port, 1, nil)
+	tcp, err := New(logger, host, port, 1, nil, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -271,7 +272,7 @@ func BenchmarkTCP_10Workers_Sequential(b *testing.B) {
 	}
 
 	// Create TCP client with 10 workers
-	tcp, err := New(logger, host, port, 10, nil)
+	tcp, err := New(logger, host, port, 10, nil, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create TCP client: %v", err)
 	}
@@ -360,7 +361,7 @@ func BenchmarkTCP_TLS_1Worker(b *testing.B) {
 	}
 
 	// Create TCP client with 1 worker and TLS
-	tcp, err := New(logger, host, port, 1, tlsConfig)
+	tcp, err := New(logger, host, port, 1, tlsConfig, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
@@ -399,7 +400,7 @@ func BenchmarkTCP_TLS_10Workers(b *testing.B) {
 	}
 
 	// Create TCP client with 10 workers and TLS
-	tcp, err := New(logger, host, port, 10, tlsConfig)
+	tcp, err := New(logger, host, port, 10, tlsConfig, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
@@ -437,7 +438,7 @@ func BenchmarkTCP_TLS_1Worker_Sequential(b *testing.B) {
 	}
 
 	// Create TCP client with 1 worker and TLS
-	tcp, err := New(logger, host, port, 1, tlsConfig)
+	tcp, err := New(logger, host, port, 1, tlsConfig, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
@@ -473,7 +474,7 @@ func BenchmarkTCP_TLS_10Workers_Sequential(b *testing.B) {
 	}
 
 	// Create TCP client with 10 workers and TLS
-	tcp, err := New(logger, host, port, 10, tlsConfig)
+	tcp, err := New(logger, host, port, 10, tlsConfig, embed.NopTelemetry())
 	if err != nil {
 		b.Fatalf("Failed to create TLS TCP client: %v", err)
 	}
