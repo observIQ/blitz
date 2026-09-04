@@ -243,7 +243,13 @@ func (t *TCP) drainTo(ctx context.Context, conn net.Conn, deadline time.Time) {
 				zap.Int("dropped", len(t.dataChan)+1))
 			return
 		}
-		if err := t.sendData(conn, data); err != nil {
+		_, span := output.StartSendSpan(data.ctx, t.tel, "blitz.output.tcp.send")
+		err := t.sendData(conn, data.msg)
+		if err != nil {
+			span.RecordError(err)
+		}
+		span.End()
+		if err != nil {
 			t.logger.Error("Failed to send buffered record while draining on shutdown",
 				zap.Int("dropped", len(t.dataChan)+1),
 				zap.Error(err))
