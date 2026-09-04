@@ -25,6 +25,7 @@ import (
 	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/dispatch"
 	"github.com/observiq/blitz/internal/logging"
+	"github.com/observiq/blitz/internal/runtime"
 	"github.com/observiq/blitz/internal/service"
 	"github.com/observiq/blitz/internal/telemetry/logs"
 	"github.com/observiq/blitz/internal/telemetry/metrics"
@@ -96,6 +97,11 @@ func main() {
 }
 
 func run(cmd *cobra.Command, args []string) error {
+	// Mark process start so the blitz.startup.duration metric can measure the
+	// full standalone startup: config load, provider construction, output
+	// wiring, and bringing every generator up.
+	startTime := time.Now()
+
 	// Configure Viper to handle env overrides
 	viper.SetConfigType("yaml")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -417,6 +423,13 @@ func run(cmd *cobra.Command, args []string) error {
 	if err := svc.Start(); err != nil {
 		logger.Error("Failed to start service", zap.Error(err))
 		return err
+	}
+
+	// Record process-level startup latency (best effort; a metric-build failure
+	// must not fail startup). Per-module and session startup are recorded by the
+	// runtime.
+	if lifecycleMetrics, merr := runtime.NewMetrics(tel.MeterProvider); merr == nil {
+		lifecycleMetrics.BlitzStartupDurationHistogram.Record(ctx, runtime.DurationMillis(time.Since(startTime)))
 	}
 
 	if tracker == nil {
