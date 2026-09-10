@@ -231,32 +231,22 @@ func TestOktaGenerator_ConcurrentWorkers(t *testing.T) {
 
 func TestOktaGenerator_EventTypeVariety(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	writer := newMockWriter()
-	generator, err := New(logger, 1, 5*time.Millisecond, writer, embed.NopTelemetry())
+	r := rand.New(rand.NewSource(42)) // #nosec G404
+
+	generator, err := New(logger, 1, time.Second, newMockWriter(), embed.NopTelemetry())
 	require.NoError(t, err)
-
-	err = generator.Start(context.Background())
-	require.NoError(t, err)
-
-	// Poll until many logs have been generated, then stop.
-	require.Eventually(t, func() bool {
-		return len(writer.getWrites()) > 10
-	}, 5*time.Second, 10*time.Millisecond)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	err = generator.Stop(ctx)
-	assert.NoError(t, err)
-
-	writes := writer.getWrites()
-	assert.Greater(t, len(writes), 10, "Expected many logs")
 
 	eventTypeSet := make(map[string]int)
 	severitySet := make(map[string]int)
 
-	for _, write := range writes {
+	// Deterministic sample large enough to hit every severity tier (the catalog
+	// skews 32 INFO / 14 WARN / 3 ERROR, so a tiny sample can be single-severity).
+	for range 200 {
+		logRecord, err := generator.generateOktaLog(r)
+		require.NoError(t, err)
+
 		var log map[string]any
-		err := json.Unmarshal(write, &log)
+		err = json.Unmarshal([]byte(logRecord.Message), &log)
 		require.NoError(t, err)
 
 		if et, ok := log["eventType"].(string); ok {
