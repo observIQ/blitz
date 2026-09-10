@@ -8,7 +8,7 @@
 | [`blitz.output.hec.ack_dropped`](#blitzoutputhecack-dropped) | Counter | `{ack}` | total number of batches dropped after max retries |
 | [`blitz.output.hec.ack_expired`](#blitzoutputhecack-expired) | Counter | `{ack}` | total number of ACKs that expired without confirmation |
 | [`blitz.output.hec.ack_pending`](#blitzoutputhecack-pending) | Gauge | `{ack}` | number of ACKs currently pending confirmation |
-| [`blitz.output.hec.ack_poll_latency`](#blitzoutputhecack-poll-latency) | Histogram | `s` | latency of ACK polling requests |
+| [`blitz.output.hec.ack_poll_latency`](#blitzoutputhecack-poll-latency) | Histogram | `ms` | latency of ACK polling requests |
 | [`blitz.output.hec.ack_retried`](#blitzoutputhecack-retried) | Counter | `{ack}` | total number of batches retried due to ACK failure |
 | [`blitz.output.hec.batch_size`](#blitzoutputhecbatch-size) | Histogram | `{entry}` | number of entries per HEC batch |
 
@@ -89,7 +89,7 @@ blitzOutputHecAckPendingGauge.Add(ctx, 1)
 | Property | Value |
 |----------|-------|
 | **Type** | Histogram |
-| **Unit** | `s` |
+| **Unit** | `ms` |
 | **Meter** | `hec` |
 | **Stability** | Stable |
 | **Description** | latency of ACK polling requests |

@@ -83,7 +83,7 @@ func NewMetrics(mp metric.MeterProvider) (*Metrics, error) {
 	blitzOutputHecAckPollLatencyHistogramRaw, err := m.hecMeter.Float64Histogram(
 		"blitz.output.hec.ack_poll_latency",
 		metric.WithDescription("latency of ACK polling requests"),
-		metric.WithUnit("s"),
+		metric.WithUnit("ms"),
 	)
 	errs = errors.Join(errs, err)
 	m.blitzOutputHecAckPollLatencyHistogram = blitzOutputHecAckPollLatencyHistogramRaw
