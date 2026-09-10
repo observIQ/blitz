@@ -8,9 +8,29 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
+	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
+
+// TestStartSendSpan_gated covers both branches of the shared output send-span
+// helper: off yields a non-recording span, on records a named span.
+func TestStartSendSpan_gated(t *testing.T) {
+	rec := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(rec))
+
+	off := embed.TelemetrySettings{TracerProvider: tp, PerBatchSpans: false}
+	_, span := output.StartSendSpan(context.Background(), off, "blitz.output.test.send")
+	span.End()
+	require.Empty(t, rec.Ended(), "no span expected when PerBatchSpans is off")
+
+	on := embed.TelemetrySettings{TracerProvider: tp, PerBatchSpans: true}
+	_, span = output.StartSendSpan(context.Background(), on, "blitz.output.test.send")
+	span.End()
+	ended := rec.Ended()
+	require.Len(t, ended, 1)
+	require.Equal(t, "blitz.output.test.send", ended[0].Name())
+}
 
 type recordingWriter struct {
 	mu      sync.Mutex

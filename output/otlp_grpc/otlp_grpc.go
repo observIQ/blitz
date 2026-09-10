@@ -12,6 +12,7 @@ import (
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	collectormetrics "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
@@ -161,6 +162,7 @@ const outputType = "otlp-grpc"
 // OTLPGrpc implements the Output interface for OTLP gRPC connections
 type OTLPGrpc struct {
 	logger        *zap.Logger
+	tel           embed.TelemetrySettings
 	host          string
 	port          string
 	workers       int
@@ -234,6 +236,7 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 	otlp := &OTLPGrpc{
 		logger:             logger.Named("output-otlp-grpc"),
 		host:               cfg.host,
+		tel:                cfg.tel,
 		port:               cfg.port,
 		workers:            cfg.workers,
 		insecure:           cfg.insecure,
@@ -535,6 +538,10 @@ func (o *OTLPGrpc) sendMetricBatch(client collectormetrics.MetricsServiceClient,
 		return nil
 	}
 
+	_, span := output.StartSendSpan(o.ctx, o.tel, "blitz.output.otlp.send")
+	span.SetAttributes(attribute.Int("blitz.batch.size", len(metrics)), attribute.String("blitz.signal", "metrics"))
+	defer span.End()
+
 	rm := buildMetricRequest(metrics, nil)
 	request := &collectormetrics.ExportMetricsServiceRequest{
 		ResourceMetrics: []*metricspb.ResourceMetrics{rm},
@@ -547,6 +554,7 @@ func (o *OTLPGrpc) sendMetricBatch(client collectormetrics.MetricsServiceClient,
 	startTime := time.Now()
 	_, err := client.Export(ctx, request)
 	if err != nil {
+		span.RecordError(err)
 		o.metrics.BlitzOutputSendErrorsCounter.Add(context.Background(), 1, outputType, "metrics")
 		return fmt.Errorf("failed to export metrics: %w", err)
 	}
@@ -565,6 +573,10 @@ func (o *OTLPGrpc) sendTraceBatch(client collectortrace.TraceServiceClient, batc
 	if len(spans) == 0 {
 		return nil
 	}
+
+	_, span := output.StartSendSpan(o.ctx, o.tel, "blitz.output.otlp.send")
+	span.SetAttributes(attribute.Int("blitz.batch.size", len(spans)), attribute.String("blitz.signal", "traces"))
+	defer span.End()
 
 	rs := buildTraceRequest(spans)
 	request := &collectortrace.ExportTraceServiceRequest{
@@ -672,6 +684,13 @@ func (o *OTLPGrpc) sendBatch(client collectorlogs.LogsServiceClient, batch *logB
 		return nil
 	}
 
+	// The batch send covers many records from many emit spans, so it is a
+	// standalone operation span carrying the batch size rather than a child of
+	// any single record's trace.
+	_, span := output.StartSendSpan(o.ctx, o.tel, "blitz.output.otlp.send")
+	span.SetAttributes(attribute.Int("blitz.batch.size", len(logs)), attribute.String("blitz.signal", "logs"))
+	defer span.End()
+
 	// Build OTLP request
 	request := o.buildOTLPRequest(logs)
 
@@ -683,6 +702,7 @@ func (o *OTLPGrpc) sendBatch(client collectorlogs.LogsServiceClient, batch *logB
 
 	_, err := client.Export(ctx, request)
 	if err != nil {
+		span.RecordError(err)
 		o.recordSendError("export_error", err)
 		return fmt.Errorf("failed to export logs: %w", err)
 	}

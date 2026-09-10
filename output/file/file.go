@@ -34,12 +34,20 @@ type RotationOptions struct {
 	LocalTime  bool
 }
 
+// fileItem is one queued line plus the emit-span context it was written under,
+// so the worker can parent its write span to the emit span.
+type fileItem struct {
+	ctx context.Context
+	msg string
+}
+
 // File implements the Output interface for file writes
 type File struct {
 	logger        *zap.Logger
+	tel           embed.TelemetrySettings
 	path          string
 	workers       int
-	dataChan      chan string
+	dataChan      chan fileItem
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
@@ -77,9 +85,10 @@ func New(logger *zap.Logger, path string, workers int, rotation RotationOptions,
 
 	f := &File{
 		logger:   logger.Named("output-file"),
+		tel:      tel,
 		path:     path,
 		workers:  workers,
-		dataChan: make(chan string, DefaultFileChannelSize),
+		dataChan: make(chan fileItem, DefaultFileChannelSize),
 		ctx:      ctx,
 		cancel:   cancel,
 		writer:   writer,
@@ -117,7 +126,7 @@ func (f *File) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.In
 // Write enqueues data for file workers.
 func (f *File) Write(ctx context.Context, data output.LogRecord) error {
 	select {
-	case f.dataChan <- data.Message:
+	case f.dataChan <- fileItem{ctx: ctx, msg: data.Message}:
 		f.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
@@ -151,13 +160,21 @@ func (f *File) fileWorker(id int) {
 
 	for {
 		select {
-		case data, ok := <-f.dataChan:
+		case item, ok := <-f.dataChan:
 			if !ok {
 				f.logger.Info("File worker exiting - channel closed", zap.Int("worker_id", id))
 				return
 			}
 
-			if err := f.writeData(data); err != nil {
+			// The write span covers the lumberjack write, which transparently
+			// absorbs any file rotation that fires during it.
+			_, span := output.StartSendSpan(item.ctx, f.tel, "blitz.output.file.write")
+			err := f.writeData(item.msg)
+			if err != nil {
+				span.RecordError(err)
+			}
+			span.End()
+			if err != nil {
 				f.logger.Error("Failed to write file data", zap.Int("worker_id", id), zap.Error(err))
 				return
 			}

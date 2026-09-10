@@ -602,7 +602,7 @@ func (f *fakeConn) SetWriteDeadline(time.Time) error { return nil }
 
 // drainBuffered with an empty channel must return before attempting to connect.
 func TestTCP_drainBuffered_emptyChannelReturnsEarly(t *testing.T) {
-	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan string, 1)}
+	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan tcpItem, 1)}
 	tcp.drainBuffered(context.Background())
 }
 
@@ -610,9 +610,9 @@ func TestTCP_drainBuffered_emptyChannelReturnsEarly(t *testing.T) {
 func TestTCP_drainTo_stopsOnSendError(t *testing.T) {
 	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
 	require.NoError(t, err)
-	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan string, 4), metrics: m}
-	tcp.dataChan <- "one"
-	tcp.dataChan <- "two"
+	tcp := &TCP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m, dataChan: make(chan tcpItem, 4)}
+	tcp.dataChan <- tcpItem{ctx: context.Background(), msg: "one"}
+	tcp.dataChan <- tcpItem{ctx: context.Background(), msg: "two"}
 	close(tcp.dataChan)
 
 	conn := &fakeConn{writeErr: fmt.Errorf("write failed")}
@@ -623,8 +623,8 @@ func TestTCP_drainTo_stopsOnSendError(t *testing.T) {
 
 // drainTo returns without sending when the context is already done.
 func TestTCP_drainTo_stopsWhenContextDone(t *testing.T) {
-	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan string, 4)}
-	tcp.dataChan <- "one"
+	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan tcpItem, 4)}
+	tcp.dataChan <- tcpItem{ctx: context.Background(), msg: "one"}
 	close(tcp.dataChan)
 
 	ctx, cancel := context.WithCancel(context.Background())

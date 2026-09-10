@@ -14,6 +14,7 @@ import (
 	"github.com/observiq/blitz/internal/config"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 )
 
@@ -268,6 +269,7 @@ func newWorker(id int, logger *zap.Logger, cfg Config, hostname string, dataChan
 			cfg.maxRetries,
 			w.resendCh,
 			m,
+			cfg.tel,
 		)
 	}
 
@@ -363,11 +365,19 @@ func (w *worker) sendBatch(batch []output.LogRecord) {
 		return
 	}
 
+	// The batch POST covers many records from many emit spans, so it is a
+	// standalone operation span carrying the batch size. The indexing
+	// confirmation is traced separately in the ACK poller.
+	_, span := output.StartSendSpan(w.ctx, w.cfg.tel, "blitz.output.hec.send")
+	span.SetAttributes(attribute.Int("blitz.batch.size", len(batch)))
+	defer span.End()
+
 	startTime := time.Now()
 	resp, err := w.postEvents(payload)
 	latency := time.Since(startTime).Seconds()
 
 	if err != nil {
+		span.RecordError(err)
 		w.logger.Error("Failed to send HEC events", zap.Error(err), zap.Int("batch_size", len(batch)))
 		w.metrics.recordSendError(ctx, "transport")
 		return
