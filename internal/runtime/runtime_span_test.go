@@ -23,10 +23,11 @@ func TestRuntime_emitsSessionAndGeneratorSpans(t *testing.T) {
 	exp := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
 
-	rt := runtime.New(nil, []runtime.Module{
+	rt, err := runtime.New(nil, []runtime.Module{
 		spanTestModule{n: "json"},
 		spanTestModule{n: "apache"},
-	}, tp)
+	}, tp, nil)
+	require.NoError(t, err)
 	require.NoError(t, rt.Start(context.Background()))
 	require.NoError(t, rt.Stop(context.Background()))
 

@@ -3,9 +3,11 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -47,6 +49,7 @@ type Runtime struct {
 	logger  *zap.Logger
 	modules []Module
 	tracer  trace.Tracer
+	metrics *Metrics
 
 	// sessionSpan and moduleSpans hold the open self-telemetry spans between
 	// Start and Stop. Start and Stop are called once each and never
@@ -56,27 +59,34 @@ type Runtime struct {
 	moduleSpans []trace.Span
 }
 
-// New returns a Runtime configured with the given logger, modules, and tracer
-// provider. A nil tracerProvider falls back to the process global, so span
-// emission is always safe.
-func New(logger *zap.Logger, modules []Module, tracerProvider trace.TracerProvider) *Runtime {
+// New returns a Runtime configured with the given logger, modules, tracer
+// provider, and meter provider. A nil tracerProvider or meterProvider falls
+// back to the process global, so emission is always safe. It returns an error
+// only if the runtime's own metric instruments cannot be built.
+func New(logger *zap.Logger, modules []Module, tracerProvider trace.TracerProvider, meterProvider metric.MeterProvider) (*Runtime, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 	if tracerProvider == nil {
 		tracerProvider = otel.GetTracerProvider()
 	}
+	metrics, err := NewMetrics(meterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("build runtime metrics: %w", err)
+	}
 	return &Runtime{
 		logger:  logger,
 		modules: modules,
 		tracer:  tracerProvider.Tracer(tracerScope),
-	}
+		metrics: metrics,
+	}, nil
 }
 
 // Start begins every configured module. If any module's Start returns
 // an error, Start stops the modules already started (in reverse order)
 // and returns the failure.
 func (r *Runtime) Start(ctx context.Context) error {
+	sessionStart := time.Now()
 	ctx, r.sessionSpan = r.tracer.Start(ctx, "blitz.session")
 	r.moduleSpans = make([]trace.Span, 0, len(r.modules))
 
@@ -84,6 +94,7 @@ func (r *Runtime) Start(ctx context.Context) error {
 	for _, m := range r.modules {
 		mctx, mspan := r.tracer.Start(ctx, "blitz.generator.run",
 			trace.WithAttributes(attribute.String("blitz.generator.name", m.Name())))
+		moduleStart := time.Now()
 		if err := m.Start(mctx); err != nil {
 			mspan.End()
 			// Roll back: stop modules already started, in reverse order.
@@ -98,9 +109,11 @@ func (r *Runtime) Start(ctx context.Context) error {
 			r.sessionSpan.End()
 			return fmt.Errorf("start module %s: %w", m.Name(), err)
 		}
+		r.metrics.BlitzModuleStartupDurationHistogram.Record(ctx, DurationMillis(time.Since(moduleStart)), m.Name())
 		started = append(started, m)
 		r.moduleSpans = append(r.moduleSpans, mspan)
 	}
+	r.metrics.BlitzSessionStartupDurationHistogram.Record(ctx, DurationMillis(time.Since(sessionStart)))
 	return nil
 }
 

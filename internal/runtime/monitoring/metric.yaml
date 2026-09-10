@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/open-telemetry/weaver/refs/heads/main/schemas/semconv.schema.json
+groups:
+- id: runtime.module.startup.duration
+  type: metric
+  metric_name: "blitz.module.startup.duration"
+  stability: stable
+  brief: "time to start a single module during session startup"
+  instrument: histogram
+  unit: "ms"
+  annotations:
+    exported: true
+    histogram:
+      type: Float64Histogram
+  attributes:
+    - id: module_name
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "name of the module"
+      examples: ["apache-common", "json", "hostmetrics", "traces"]
+
+- id: runtime.session.startup.duration
+  type: metric
+  metric_name: "blitz.session.startup.duration"
+  stability: stable
+  brief: "time to start all modules in the session"
+  instrument: histogram
+  unit: "ms"
+  annotations:
+    exported: true
+    histogram:
+      type: Float64Histogram
+
+- id: runtime.startup.duration
+  type: metric
+  metric_name: "blitz.startup.duration"
+  stability: stable
+  brief: "time from process start to the service running"
+  instrument: histogram
+  unit: "ms"
+  annotations:
+    exported: true
+    histogram:
+      type: Float64Histogram
