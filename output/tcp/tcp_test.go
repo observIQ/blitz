@@ -18,6 +18,8 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/require"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/zap"
 )
 
@@ -581,13 +583,17 @@ func getReceivedData(t *testing.T) [][]byte {
 // fakeConn is a minimal net.Conn used to exercise drainTo's send-failure and
 // context/deadline branches without real network I/O.
 type fakeConn struct {
-	writeErr error
-	writes   int
+	writeErr   error
+	writes     int
+	writeDelay time.Duration // makes Write take a known time, to measure send latency
 }
 
 func (f *fakeConn) Read([]byte) (int, error) { return 0, io.EOF }
 func (f *fakeConn) Write(b []byte) (int, error) {
 	f.writes++
+	if f.writeDelay > 0 {
+		time.Sleep(f.writeDelay)
+	}
 	if f.writeErr != nil {
 		return 0, f.writeErr
 	}
@@ -599,6 +605,44 @@ func (f *fakeConn) RemoteAddr() net.Addr             { return &net.TCPAddr{} }
 func (f *fakeConn) SetDeadline(time.Time) error      { return nil }
 func (f *fakeConn) SetReadDeadline(time.Time) error  { return nil }
 func (f *fakeConn) SetWriteDeadline(time.Time) error { return nil }
+
+// TestSendDataRecordsLatencyInMillis is the call-site guard for PIPE-1404: a
+// send that takes a known ~20ms must record request_latency ABOVE the le=5ms
+// bucket. It exercises the real recording path in sendData, so a regression to
+// time.Since(start).Seconds() (which would record ~0.02 and collapse into
+// le=5) fails this test. This is the check the unit-string assertion in
+// output/duration_test.go cannot make: the unit string is unchanged by such a
+// regression. The deliberate write delay is the point of the test (it measures
+// timing), so a fixed sleep is appropriate here rather than a polling helper.
+func TestSendDataRecordsLatencyInMillis(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	m, err := output.NewMetrics(mp)
+	require.NoError(t, err)
+
+	tcp := &TCP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m}
+	require.NoError(t, tcp.sendData(&fakeConn{writeDelay: 20 * time.Millisecond}, "payload"))
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+
+	var sum float64
+	var found bool
+	for _, sm := range rm.ScopeMetrics {
+		for _, mm := range sm.Metrics {
+			if mm.Name != "blitz.output.request_latency" {
+				continue
+			}
+			h, ok := mm.Data.(metricdata.Histogram[float64])
+			require.True(t, ok, "request_latency should be a float64 histogram")
+			require.NotEmpty(t, h.DataPoints)
+			sum = h.DataPoints[0].Sum
+			found = true
+		}
+	}
+	require.True(t, found, "request_latency histogram not recorded")
+	require.Greaterf(t, sum, 5.0, "a ~20ms send must record ms-scale latency; got %v (a .Seconds() regression records ~0.02)", sum)
+}
 
 // drainBuffered with an empty channel must return before attempting to connect.
 func TestTCP_drainBuffered_emptyChannelReturnsEarly(t *testing.T) {
