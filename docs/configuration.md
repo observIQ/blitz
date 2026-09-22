@@ -175,11 +175,9 @@ For detailed configuration options for each generator, see the individual genera
 
 ### Output Configuration
 
-**Note:** Only a single output can be configured at a time.
-
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file` |
+| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec` |
 
 For detailed configuration options for each output, see the individual output documentation:
 
@@ -190,6 +188,32 @@ For detailed configuration options for each output, see the individual output do
 - [Syslog Output](https://github.com/observiq/blitz/blob/main/docs/output/syslog.md)
 - [OTLP gRPC Output](https://github.com/observiq/blitz/blob/main/docs/output/otlp-grpc.md)
 - [File Output](https://github.com/observiq/blitz/blob/main/docs/output/file.md)
+- [HEC Output](https://github.com/observiq/blitz/blob/main/docs/output/hec.md)
+
+#### Multiple Outputs (Fan-Out)
+
+To send one generated stream to several destinations at once, use the `outputs:`
+list instead of the singular `output:` block. Every generated record is fanned
+out to all listed outputs. Each entry takes the same fields as `output`, minus
+the `type` selector, which moves to the list item.
+
+```yaml
+outputs:
+  - type: stdout
+  - type: otlp-grpc
+    otlp-grpc:
+      host: localhost
+      port: 4317
+      insecure: true
+```
+
+Notes:
+
+- Set `output` or `outputs`, not both. A config with both is rejected, since it is ambiguous which one applies.
+- Writes are best-effort: one dead destination does not stop the others, and
+  each signal goes only to the outputs that support it.
+- Each list entry inherits any field it leaves unset (workers, and so on) from
+  the same defaults the singular `output` uses; fields you set on the entry win.
 
 ## Example Configurations
 
