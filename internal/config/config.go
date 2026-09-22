@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -17,6 +18,10 @@ type Config struct {
 	Generators []Generator `yaml:"generators,omitempty" mapstructure:"generators,omitempty"`
 	// Output configuration
 	Output Output `yaml:"output,omitempty" mapstructure:"output,omitempty"`
+	// Outputs is the list of outputs for multi-output (fan-out) mode.
+	// If set, takes precedence over the singular Output field, and every
+	// generated record is fanned out to all of them.
+	Outputs []Output `yaml:"outputs,omitempty" mapstructure:"outputs,omitempty"`
 	// Metrics configuration (Prometheus scrape endpoint for self-metrics)
 	Metrics Metrics `yaml:"metrics,omitempty" mapstructure:"metrics,omitempty"`
 	// Environment configures the simulated datagen.Environment identities
@@ -38,7 +43,14 @@ func (c *Config) Validate() error {
 	if err := c.Generator.Validate(); err != nil {
 		return err
 	}
-	if err := c.Output.Validate(); err != nil {
+	if len(c.Outputs) > 0 {
+		// Validate the defaulted entries, since that is what gets built.
+		for i, o := range c.EffectiveOutputs() {
+			if err := o.Validate(); err != nil {
+				return fmt.Errorf("outputs[%d] validation failed: %w", i, err)
+			}
+		}
+	} else if err := c.Output.Validate(); err != nil {
 		return err
 	}
 	if err := c.Metrics.Validate(); err != nil {
@@ -64,6 +76,43 @@ func (c *Config) EffectiveGenerators() []Generator {
 		return expandGenerators(c.Generators)
 	}
 	return expandGenerators([]Generator{c.Generator})
+}
+
+// EffectiveOutputs returns the list of outputs to use.
+// If Outputs is set, it takes precedence over the singular Output field.
+// The singular Output carries the defaults applied by the override system,
+// so each list entry inherits any field it leaves unset (workers, and so on)
+// from it, while user-set fields win.
+func (c *Config) EffectiveOutputs() []Output {
+	if len(c.Outputs) == 0 {
+		return []Output{c.Output}
+	}
+	outs := make([]Output, len(c.Outputs))
+	for i, o := range c.Outputs {
+		merged := o
+		fillZeroFields(reflect.ValueOf(&merged).Elem(), reflect.ValueOf(c.Output))
+		outs[i] = merged
+	}
+	return outs
+}
+
+// fillZeroFields sets each zero-valued field of dst to the corresponding
+// field of tmpl, recursing into nested structs. A non-zero field in dst is
+// left untouched, so an explicitly-set value always wins over the default.
+func fillZeroFields(dst, tmpl reflect.Value) {
+	for i := 0; i < dst.NumField(); i++ {
+		df := dst.Field(i)
+		if !df.CanSet() {
+			continue
+		}
+		if df.Kind() == reflect.Struct {
+			fillZeroFields(df, tmpl.Field(i))
+			continue
+		}
+		if df.IsZero() {
+			df.Set(tmpl.Field(i))
+		}
+	}
 }
 
 // expandGenerators expands comma-separated HostMetrics OS values.
