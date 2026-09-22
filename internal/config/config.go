@@ -40,7 +40,14 @@ func (c *Config) Validate() error {
 	if err := c.Logging.Validate(); err != nil {
 		return err
 	}
-	if err := c.Generator.Validate(); err != nil {
+	if len(c.Generators) > 0 {
+		// Validate the defaulted entries, since that is what runs.
+		for i, g := range c.EffectiveGenerators() {
+			if err := g.Validate(); err != nil {
+				return fmt.Errorf("generators[%d] validation failed: %w", i, err)
+			}
+		}
+	} else if err := c.Generator.Validate(); err != nil {
 		return err
 	}
 	if len(c.Outputs) > 0 {
@@ -70,12 +77,21 @@ func (c *Config) Validate() error {
 
 // EffectiveGenerators returns the list of generators to use.
 // If Generators is set, it takes precedence over the singular Generator field.
+// The singular Generator carries the defaults applied by the override system,
+// so each list entry inherits any field it leaves unset (workers, and so on)
+// from it, while user-set fields win.
 // Comma-separated HostMetrics OS values are expanded into separate generators.
 func (c *Config) EffectiveGenerators() []Generator {
-	if len(c.Generators) > 0 {
-		return expandGenerators(c.Generators)
+	if len(c.Generators) == 0 {
+		return expandGenerators([]Generator{c.Generator})
 	}
-	return expandGenerators([]Generator{c.Generator})
+	merged := make([]Generator, len(c.Generators))
+	for i, g := range c.Generators {
+		m := g
+		fillZeroFields(reflect.ValueOf(&m).Elem(), reflect.ValueOf(c.Generator))
+		merged[i] = m
+	}
+	return expandGenerators(merged)
 }
 
 // EffectiveOutputs returns the list of outputs to use.
