@@ -121,6 +121,10 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := config.ValidateExclusiveGeneratorConfig(viper.GetViper()); err != nil {
+		return err
+	}
+
 	cfg := config.NewConfig()
 	if err := viper.Unmarshal(cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
