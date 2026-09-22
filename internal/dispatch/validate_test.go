@@ -51,6 +51,18 @@ func TestValidateSignalCompat_OrphanGeneratorAndOutputAggregated(t *testing.T) {
 	assert.Contains(t, err.Error(), "stdout")
 }
 
+func TestValidateSignalCompat_NoSignalsEmittedIsValid(t *testing.T) {
+	// Degenerate do-nothing config (the packaged default): a nop generator
+	// emits nothing and a nop output accepts logs. With no signal emitted at
+	// all there is nothing to route, so the config is valid rather than an
+	// orphaned output.
+	err := ValidateSignalCompat(
+		[]config.GeneratorType{config.GeneratorTypeNop},
+		[]OutputSignals{{Name: "nop", Signals: []telemetry.Type{telemetry.Logs}}},
+	)
+	assert.NoError(t, err)
+}
+
 func TestValidateSignalCompat_AllCompatible(t *testing.T) {
 	err := ValidateSignalCompat(
 		[]config.GeneratorType{config.GeneratorTypeJSON},
