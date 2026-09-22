@@ -119,7 +119,7 @@ func TestHEC_WriteAndBatchBySize(t *testing.T) {
 
 	// Send exactly batchSize records
 	for i := range 3 {
-		err := h.Write(ctx, output.LogRecord{
+		err := h.WriteLog(ctx, output.LogRecord{
 			Message: "test message " + string(rune('0'+i)),
 			Metadata: output.LogRecordMetadata{
 				Timestamp: time.Now(),
@@ -169,7 +169,7 @@ func TestHEC_WriteAndBatchByTimeout(t *testing.T) {
 	ctx := context.Background()
 
 	// Send fewer events than batch size
-	err = h.Write(ctx, output.LogRecord{
+	err = h.WriteLog(ctx, output.LogRecord{
 		Message:  "timeout test",
 		Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 	})
@@ -221,7 +221,7 @@ func TestHEC_AuthHeader(t *testing.T) {
 		require.NoError(t, err)
 
 		ctx := context.Background()
-		err = h.Write(ctx, output.LogRecord{
+		err = h.WriteLog(ctx, output.LogRecord{
 			Message:  "test",
 			Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 		})
@@ -253,7 +253,7 @@ func TestHEC_AuthHeader(t *testing.T) {
 		require.NoError(t, err)
 
 		ctx := context.Background()
-		err = h.Write(ctx, output.LogRecord{
+		err = h.WriteLog(ctx, output.LogRecord{
 			Message:  "test",
 			Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 		})
@@ -302,7 +302,7 @@ func TestHEC_EventFormatRaw(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	err = h.Write(ctx, output.LogRecord{
+	err = h.WriteLog(ctx, output.LogRecord{
 		Message:  `{"key":"value"}`,
 		Metadata: output.LogRecordMetadata{Timestamp: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
 	})
@@ -350,7 +350,7 @@ func TestHEC_EventFormatParsed(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	err = h.Write(ctx, output.LogRecord{
+	err = h.WriteLog(ctx, output.LogRecord{
 		Message: `original message`,
 		ParseFunc: func(msg string) (map[string]any, error) {
 			return map[string]any{"parsed": true, "msg": msg}, nil
@@ -406,7 +406,7 @@ func TestHEC_EventFormatParsedFallback(t *testing.T) {
 
 	ctx := context.Background()
 	// No ParseFunc — should fall back to raw
-	err = h.Write(ctx, output.LogRecord{
+	err = h.WriteLog(ctx, output.LogRecord{
 		Message:  "raw fallback",
 		Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 	})
@@ -451,7 +451,7 @@ func TestHEC_HECErrorResponse(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	err = h.Write(ctx, output.LogRecord{
+	err = h.WriteLog(ctx, output.LogRecord{
 		Message:  "test",
 		Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 	})
@@ -497,7 +497,7 @@ func TestHEC_GracefulShutdown(t *testing.T) {
 
 	// Write some events that won't fill a batch
 	for range 5 {
-		err := h.Write(ctx, output.LogRecord{
+		err := h.WriteLog(ctx, output.LogRecord{
 			Message:  "shutdown test",
 			Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 		})
@@ -544,7 +544,7 @@ func TestHEC_MultipleWorkers(t *testing.T) {
 
 	// Send enough events for multiple workers to process
 	for range 10 {
-		err := h.Write(ctx, output.LogRecord{
+		err := h.WriteLog(ctx, output.LogRecord{
 			Message:  "multi worker test",
 			Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 		})

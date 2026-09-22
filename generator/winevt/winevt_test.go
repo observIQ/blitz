@@ -11,12 +11,13 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/generators/winevt/templates"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-// mockWriter implements output.Writer for testing
+// mockWriter implements output.LogWriter for testing
 type mockWriter struct {
 	mu     sync.Mutex
 	writes [][]byte
@@ -28,11 +29,17 @@ func newMockWriter() *mockWriter {
 	}
 }
 
-func (m *mockWriter) Write(ctx context.Context, data output.LogRecord) error {
+func (m *mockWriter) WriteLog(ctx context.Context, data output.LogRecord) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.writes = append(m.writes, append([]byte(nil), data.Message...))
 	return nil
+}
+
+func (m *mockWriter) Stop(context.Context) error { return nil }
+
+func (m *mockWriter) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }
 
 func (m *mockWriter) getWrites() [][]byte {

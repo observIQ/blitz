@@ -58,7 +58,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, tel embed.Telemetr
 }
 
 // Start starts the Windows Event generator.
-func (g *WinevtGenerator) Start(writer output.Writer) error {
+func (g *WinevtGenerator) Start(writer output.LogWriter) error {
 	g.logger.Info("Starting Windows Event generator",
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
@@ -101,7 +101,7 @@ func (g *WinevtGenerator) SetCountTracker(t *count.Tracker) {
 	g.tracker = t
 }
 
-func (g *WinevtGenerator) worker(workerID int, writer output.Writer) {
+func (g *WinevtGenerator) worker(workerID int, writer output.LogWriter) {
 	defer g.wg.Done()
 	g.logger.Debug("Starting worker", zap.Int("worker_id", workerID))
 
@@ -142,7 +142,7 @@ func (g *WinevtGenerator) worker(workerID int, writer output.Writer) {
 	}
 }
 
-func (g *WinevtGenerator) generateAndWrite(writer output.Writer, workerID int) error {
+func (g *WinevtGenerator) generateAndWrite(writer output.LogWriter, workerID int) error {
 	data, err := templates.RenderTemplate(templates.RenderOptions{})
 	if err != nil {
 		g.recordWriteError("unknown", err)
@@ -161,7 +161,7 @@ func (g *WinevtGenerator) generateAndWrite(writer output.Writer, workerID int) e
 		},
 	}
 
-	if err := writer.Write(ctx, logRecord); err != nil {
+	if err := writer.WriteLog(ctx, logRecord); err != nil {
 		errorType := "unknown"
 		if ctx.Err() == context.DeadlineExceeded {
 			errorType = "timeout"

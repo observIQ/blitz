@@ -60,7 +60,7 @@ func TestWrite_countsAndDiscards(t *testing.T) {
 	o, err := New(zap.NewNop(), embed.TelemetrySettings{MeterProvider: mp})
 	require.NoError(t, err)
 
-	require.NoError(t, o.Write(context.Background(), output.LogRecord{Message: "discarded"}))
+	require.NoError(t, o.WriteLog(context.Background(), output.LogRecord{Message: "discarded"}))
 	require.NoError(t, o.Stop(context.Background()))
 
 	var rm metricdata.ResourceMetrics

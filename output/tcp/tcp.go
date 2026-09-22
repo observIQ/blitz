@@ -127,7 +127,7 @@ func (t *TCP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 // Write shall not be called after Stop is called.
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
-func (t *TCP) Write(ctx context.Context, data output.LogRecord) error {
+func (t *TCP) WriteLog(ctx context.Context, data output.LogRecord) error {
 	select {
 	case t.dataChan <- tcpItem{ctx: ctx, msg: data.Message}:
 		t.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")

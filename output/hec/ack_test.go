@@ -176,7 +176,7 @@ func TestHEC_ACKConfirmFlow(t *testing.T) {
 	ctx := t.Context()
 
 	// Send an event — it will get ackId 0
-	err = h.Write(ctx, output.LogRecord{
+	err = h.WriteLog(ctx, output.LogRecord{
 		Message:  "ack test",
 		Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 	})
@@ -224,7 +224,7 @@ func TestHEC_ACKExpireAndResend(t *testing.T) {
 	ctx := t.Context()
 
 	// Send an event — gets ackId 0
-	err = h.Write(ctx, output.LogRecord{
+	err = h.WriteLog(ctx, output.LogRecord{
 		Message:  "resend test",
 		Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 	})
@@ -276,7 +276,7 @@ func TestHEC_ACKMaxRetriesDrop(t *testing.T) {
 	ctx := t.Context()
 
 	// Send an event
-	err = h.Write(ctx, output.LogRecord{
+	err = h.WriteLog(ctx, output.LogRecord{
 		Message:  "drop test",
 		Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 	})
@@ -322,7 +322,7 @@ func TestHEC_ACKDisabledNoTracker(t *testing.T) {
 	assert.Nil(t, h.workers[0].poller)
 
 	ctx := t.Context()
-	err = h.Write(ctx, output.LogRecord{
+	err = h.WriteLog(ctx, output.LogRecord{
 		Message:  "no ack",
 		Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 	})

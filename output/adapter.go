@@ -46,7 +46,7 @@ func StartSendSpan(ctx context.Context, tel embed.TelemetrySettings, name string
 // Panics on nil writer — a nil writer is a programming bug, not a
 // runtime condition, and catching it at construction surfaces the
 // failure at the boundary rather than deep in ConsumeLogs.
-func WriterAsLogConsumer(w Writer, tel embed.TelemetrySettings) embed.LogConsumer {
+func WriterAsLogConsumer(w LogWriter, tel embed.TelemetrySettings) embed.LogConsumer {
 	if w == nil {
 		panic("output.WriterAsLogConsumer: writer cannot be nil")
 	}
@@ -54,7 +54,7 @@ func WriterAsLogConsumer(w Writer, tel embed.TelemetrySettings) embed.LogConsume
 }
 
 type writerAsLogConsumer struct {
-	w   Writer
+	w   LogWriter
 	tel embed.TelemetrySettings
 }
 
@@ -65,7 +65,7 @@ func (a *writerAsLogConsumer) ConsumeLogs(ctx context.Context, records []embed.L
 		defer span.End()
 	}
 	for i := range records {
-		if err := a.w.Write(ctx, records[i]); err != nil {
+		if err := a.w.WriteLog(ctx, records[i]); err != nil {
 			return err
 		}
 	}

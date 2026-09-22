@@ -73,7 +73,7 @@ type Config struct {
 type Syslog struct {
 	logger    *zap.Logger
 	cfg       Config
-	transport output.Output
+	transport output.LogWriter
 }
 
 // New creates a Syslog output that delegates to TCP or UDP outputs.
@@ -101,7 +101,7 @@ func New(logger *zap.Logger, cfg Config) (*Syslog, error) {
 	}
 
 	var (
-		underlying output.Output
+		underlying output.LogWriter
 		err        error
 	)
 
@@ -141,7 +141,7 @@ func New(logger *zap.Logger, cfg Config) (*Syslog, error) {
 }
 
 // newWithTransport is intended for tests.
-func newWithTransport(logger *zap.Logger, cfg Config, transport output.Output) *Syslog {
+func newWithTransport(logger *zap.Logger, cfg Config, transport output.LogWriter) *Syslog {
 	return &Syslog{
 		logger:    logger.Named("output-syslog"),
 		cfg:       cfg,
@@ -150,7 +150,7 @@ func newWithTransport(logger *zap.Logger, cfg Config, transport output.Output) *
 }
 
 // Write formats a record as syslog and delegates to the underlying transport.
-func (s *Syslog) Write(ctx context.Context, rec output.LogRecord) error {
+func (s *Syslog) WriteLog(ctx context.Context, rec output.LogRecord) error {
 	formatted, err := s.format(rec)
 	if err != nil {
 		return err
@@ -164,7 +164,7 @@ func (s *Syslog) Write(ctx context.Context, rec output.LogRecord) error {
 		}
 	}
 
-	return s.transport.Write(ctx, output.LogRecord{Message: formatted})
+	return s.transport.WriteLog(ctx, output.LogRecord{Message: formatted})
 }
 
 // Stop delegates to the underlying transport.
@@ -288,4 +288,4 @@ func (s *Syslog) SupportedTelemetry() []telemetry.Type {
 }
 
 // Ensure Syslog implements output.Output
-var _ output.Output = (*Syslog)(nil)
+var _ output.LogWriter = (*Syslog)(nil)

@@ -294,7 +294,7 @@ func (o *OTLPGrpc) ObserveBlitzOutputQueueSize(_ context.Context, observer metri
 // Write shall not be called after Stop is called.
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
-func (o *OTLPGrpc) Write(ctx context.Context, data output.LogRecord) error {
+func (o *OTLPGrpc) WriteLog(ctx context.Context, data output.LogRecord) error {
 	// Build OTLP log record before batching
 	timestamp := time.Now()
 	severityText := "INFO"

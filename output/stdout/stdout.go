@@ -70,7 +70,7 @@ func New(logger *zap.Logger, opts ...Option) (*StdoutOutput, error) {
 }
 
 // Write buffers the log record for the next flush.
-func (o *StdoutOutput) Write(ctx context.Context, data output.LogRecord) error {
+func (o *StdoutOutput) WriteLog(ctx context.Context, data output.LogRecord) error {
 	o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 
 	o.mu.Lock()
