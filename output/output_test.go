@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -121,7 +122,11 @@ var _ TraceWriter = (*traceWriterImpl)(nil)
 type metricWriterImpl struct{}
 
 func (m *metricWriterImpl) WriteMetric(_ context.Context, _ MetricRecord) error { return nil }
+func (m *metricWriterImpl) Stop(context.Context) error                          { return nil }
+func (m *metricWriterImpl) SupportedTelemetry() []telemetry.Type                { return nil }
 
 type traceWriterImpl struct{}
 
 func (t *traceWriterImpl) WriteTrace(_ context.Context, _ TraceRecord) error { return nil }
+func (t *traceWriterImpl) Stop(context.Context) error                        { return nil }
+func (t *traceWriterImpl) SupportedTelemetry() []telemetry.Type              { return nil }

@@ -120,7 +120,7 @@ func (u *UDP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 // Write shall not be called after Stop is called.
 // If the provided context is done, Write will return immediately
 // even if the data is not written to the channel.
-func (u *UDP) Write(ctx context.Context, data output.LogRecord) error {
+func (u *UDP) WriteLog(ctx context.Context, data output.LogRecord) error {
 	select {
 	case u.dataChan <- udpItem{ctx: ctx, msg: data.Message}:
 		u.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")

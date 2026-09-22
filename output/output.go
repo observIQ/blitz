@@ -68,31 +68,40 @@ type TraceRecord = embed.Span
 // can construct TraceRecord values without depending on embed directly.
 type SpanMetadata = embed.SpanMetadata
 
-// Writer can consume log records.
+// Writer is the base output capability: lifecycle plus the telemetry
+// types the output accepts. Logs, metrics, and traces are each an
+// optional extension of Writer (LogWriter, MetricWriter, TraceWriter);
+// an output implements one extension per signal it accepts.
 type Writer interface {
-	// Write writes the data to the output.
-	Write(ctx context.Context, data LogRecord) error
-}
-
-// MetricWriter can consume metric records.
-type MetricWriter interface {
-	// WriteMetric writes a metric record to the output.
-	WriteMetric(ctx context.Context, data MetricRecord) error
-}
-
-// TraceWriter can consume trace records.
-type TraceWriter interface {
-	// WriteTrace writes a trace record to the output.
-	WriteTrace(ctx context.Context, data TraceRecord) error
-}
-
-// Output is the interface for outputting data.
-type Output interface {
-	Writer
-
 	// Stop stops the output.
 	Stop(ctx context.Context) error
 
 	// SupportedTelemetry returns the telemetry types this output can consume.
 	SupportedTelemetry() []telemetry.Type
 }
+
+// LogWriter is a Writer that consumes log records.
+type LogWriter interface {
+	Writer
+	// WriteLog writes a log record to the output.
+	WriteLog(ctx context.Context, data LogRecord) error
+}
+
+// MetricWriter is a Writer that consumes metric records.
+type MetricWriter interface {
+	Writer
+	// WriteMetric writes a metric record to the output.
+	WriteMetric(ctx context.Context, data MetricRecord) error
+}
+
+// TraceWriter is a Writer that consumes trace records.
+type TraceWriter interface {
+	Writer
+	// WriteTrace writes a trace record to the output.
+	WriteTrace(ctx context.Context, data TraceRecord) error
+}
+
+// Output is an alias of the base Writer, kept for callers that hold an
+// output without needing a specific signal. Callers type-assert
+// LogWriter / MetricWriter / TraceWriter for the signals they write.
+type Output = Writer
