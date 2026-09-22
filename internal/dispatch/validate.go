@@ -38,6 +38,13 @@ func ValidateSignalCompat(genTypes []config.GeneratorType, outputs []OutputSigna
 		}
 	}
 
+	// No signal emitted at all is the degenerate do-nothing config (the
+	// packaged default is nop generator + nop output). Nothing to route, so
+	// nothing to orphan.
+	if len(emitted) == 0 {
+		return nil
+	}
+
 	var errs []error
 
 	// Orphan generator signals: emitted with no accepting output. Dedupe by
