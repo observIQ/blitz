@@ -29,6 +29,13 @@ func ValidateExclusiveOutputConfig(v *viper.Viper, explicit func(*Override) bool
 	return validateListForm(v, "output", "outputs")
 }
 
+// ValidateExclusiveGeneratorConfig rejects a config that sets both the
+// singular `generator` and the plural `generators`, the same ambiguity the
+// output check guards against.
+func ValidateExclusiveGeneratorConfig(v *viper.Viper) error {
+	return rejectBothForms(v, "generator", "generators")
+}
+
 // rejectBothForms errors when the plural form is in the config and the
 // singular form is set anywhere: in the config file, by a source explicit
 // reports, or by any value that differs from the declared default. Viper's
