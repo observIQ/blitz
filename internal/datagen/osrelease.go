@@ -81,6 +81,67 @@ var (
 	}
 )
 
+// osRelease is one authentic release for a PIPE-1260 OS: os.name / os.version /
+// os.build_id / os.description, each an internally-consistent real value.
+type osRelease struct{ name, version, buildID, description string }
+
+// extendedReleases holds the authentic release pools for the OSType values added
+// in PIPE-1260. The hypervisor-host Linux flavors carry their real distro in
+// os.name and emit os.type=linux via SemconvOSType. Values are real product
+// versions and build strings.
+var extendedReleases = map[OSType][]osRelease{
+	OSESXi: {
+		{"VMware ESXi", "8.0.2", "22380479", "VMware ESXi 8.0 Update 2 (build 22380479)"},
+		{"VMware ESXi", "8.0.1", "21495797", "VMware ESXi 8.0 Update 1 (build 21495797)"},
+		{"VMware ESXi", "8.0.0", "20513097", "VMware ESXi 8.0 GA (build 20513097)"},
+		{"VMware ESXi", "7.0.3", "19193900", "VMware ESXi 7.0 Update 3c (build 19193900)"},
+	},
+	OSAIX: {
+		{"AIX", "7.3", "7300-02-02-2420", "AIX 7.3 TL2 SP2"},
+		{"AIX", "7.3", "7300-01-03-2346", "AIX 7.3 TL1 SP3"},
+		{"AIX", "7.2", "7200-05-07-2420", "AIX 7.2 TL5 SP7"},
+	},
+	OSSolaris: {
+		{"Oracle Solaris", "11.4", "11.4.54.0.1.135", "Oracle Solaris 11.4 SRU54"},
+		{"Oracle Solaris", "11.4", "11.4.42.0.1.111", "Oracle Solaris 11.4 SRU42"},
+		{"Oracle Solaris", "11.4", "11.4.60.0.1.146", "Oracle Solaris 11.4 SRU60"},
+	},
+	OSFreeBSD: {
+		{"FreeBSD", "14.1-RELEASE", "14.1-RELEASE-p6", "FreeBSD 14.1-RELEASE-p6"},
+		{"FreeBSD", "14.0-RELEASE", "14.0-RELEASE-p8", "FreeBSD 14.0-RELEASE-p8"},
+		{"FreeBSD", "13.3-RELEASE", "13.3-RELEASE-p5", "FreeBSD 13.3-RELEASE-p5"},
+	},
+	OSOpenBSD: {
+		{"OpenBSD", "7.5", "GENERIC.MP#82", "OpenBSD 7.5"},
+		{"OpenBSD", "7.4", "GENERIC.MP#4", "OpenBSD 7.4"},
+		{"OpenBSD", "7.3", "GENERIC.MP#1", "OpenBSD 7.3"},
+	},
+	OSXenDom0: {
+		{"XCP-ng", "8.3", "4.19.0+1", "XCP-ng 8.3"},
+		{"XCP-ng", "8.2.1", "4.19.0+1", "XCP-ng 8.2.1 LTS"},
+	},
+	OSNutanixAHV: {
+		{"Nutanix AHV", "20230302.103003", "5.10.149-2.nutanix.el8", "Nutanix AHV 20230302.103003"},
+		{"Nutanix AHV", "20220304.480", "5.10.149-1.nutanix.el7", "Nutanix AHV 20220304.480"},
+	},
+	OSOpenStackKVM: {
+		{"Red Hat Enterprise Linux", "9.4", "5.14.0-427.el9_4.x86_64", "Red Hat Enterprise Linux 9.4 (Plow)"},
+		{"Ubuntu", "22.04.4", "5.15.0-105-generic", "Ubuntu 22.04.4 LTS"},
+	},
+}
+
+// buildExtendedOSInfo projects an osRelease into an OSInfo carrying os as the
+// os.type source. SemconvOSType handles the linux mapping for hypervisor hosts.
+func buildExtendedOSInfo(os OSType, rel osRelease) OSInfo {
+	return OSInfo{
+		Type:        os,
+		Name:        rel.name,
+		Version:     rel.version,
+		BuildID:     rel.buildID,
+		Description: rel.description,
+	}
+}
+
 // GenerateOSInfo returns a coherent OSInfo for the given OS type, drawn from the
 // authentic release pools. Windows picks one real UBR per selection.
 // Deterministic for a given (r, os).
@@ -92,6 +153,9 @@ func GenerateOSInfo(r *rand.Rand, os OSType) OSInfo {
 	case OSMacOS:
 		return buildMacOSInfo(macReleases[r.Intn(len(macReleases))]) // #nosec G404
 	default:
+		if pool, ok := extendedReleases[os]; ok {
+			return buildExtendedOSInfo(os, pool[r.Intn(len(pool))]) // #nosec G404
+		}
 		return buildLinuxOSInfo(linuxReleases[r.Intn(len(linuxReleases))]) // #nosec G404
 	}
 }
@@ -108,6 +172,9 @@ func osInfoForTier(r *rand.Rand, os OSType, older bool) OSInfo {
 	case OSMacOS:
 		return buildMacOSInfo(macReleases[pickHalfIndex(r, len(macReleases), older)])
 	default:
+		if pool, ok := extendedReleases[os]; ok {
+			return buildExtendedOSInfo(os, pool[pickHalfIndex(r, len(pool), older)])
+		}
 		return buildLinuxOSInfo(linuxReleases[r.Intn(len(linuxReleases))]) // #nosec G404
 	}
 }
@@ -157,15 +224,23 @@ func buildLinuxOSInfo(rel linuxRelease) OSInfo {
 }
 
 // GenerateHostID returns an OS-appropriate host.id: a /etc/machine-id-style
-// 32-char lowercase hex string on Linux, a registry MachineGuid-style GUID on
-// Windows, and an uppercase IOPlatformUUID on macOS.
+// 32-char lowercase hex string on Linux (and the hypervisor-host Linux flavors),
+// a registry MachineGuid-style GUID on Windows, an uppercase IOPlatformUUID on
+// macOS, a lowercase SMBIOS/system UUID on ESXi and the BSDs, an AIX
+// uname-m-style machine id, and an 8-hex-digit hostid on Solaris.
 func GenerateHostID(r *rand.Rand, os OSType) string {
 	h := randomHex(r, 16) // 32 lowercase hex chars
 	switch os {
-	case OSWindows:
+	case OSWindows, OSESXi, OSFreeBSD, OSOpenBSD:
 		return formatUUID(h)
 	case OSMacOS:
 		return strings.ToUpper(formatUUID(h))
+	case OSAIX:
+		// uname -m form: "00" + 6-hex serial + "4C00" model suffix.
+		return "00" + strings.ToUpper(h[:6]) + "4C00"
+	case OSSolaris:
+		// hostid: 8 lowercase hex digits.
+		return h[:8]
 	default:
 		return h
 	}
