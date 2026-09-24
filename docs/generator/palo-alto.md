@@ -2,12 +2,34 @@
 
 **Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
 
-The Palo Alto generator generates realistic Palo Alto firewall syslog entries in the standard Palo Alto log format. These logs are suitable for testing Palo Alto firewall log processing and analysis systems.
+The Palo Alto generator generates realistic PAN-OS firewall syslog entries in the standard comma-separated field format. It emits all 13 log types the Bindplane Palo Alto blueprints parse, each at its full PAN-OS 11.0 field width.
 
-## Example Logs
+## Log Types
+
+Every emitted record is one of these types, selected at random per record. The field count is the number of comma-separated fields in the record body (field 1 is `FUTURE_USE`), validated against Palo Alto's public PAN-OS 11.0 "Syslog Field Descriptions".
+
+| Log Type | Fields |
+|----------|-------:|
+| TRAFFIC | 115 |
+| THREAT | 121 |
+| SYSTEM | 26 |
+| CONFIG | 28 |
+| AUTHENTICATION | 47 |
+| CORRELATION | 22 |
+| DECRYPTION | 106 |
+| GLOBALPROTECT | 50 |
+| GTP | 94 |
+| HIP-MATCH | 32 |
+| IPTAG | 27 |
+| SCTP | 65 |
+| USERID | 37 |
+
+Field order is validated against Palo Alto's public PAN-OS 11.0 "Syslog Field Descriptions" and enforced by tests (`generator/paloalto/logs.go` holds the ordered field-name list per type; `logs_test.go` asserts count and named-position order). The authoritative page is unified across 11.0 and later; for TRAFFIC the page explicitly marks Flow Type, AI Traffic, AI Forward Error, K8S Cluster ID (11.1+) and Adv DevID (12.1.2+), which are excluded. Counts and full field order were extracted from the rendered spec pages (headless Chrome) and are enforced by tests. DECRYPTION 106 and THREAT 121 exclude fields the pages mark 11.1+/12.1.2+ (Cluster Name, Flow Type, AI/K8S/Adv DevID); GTP 94 has none.
+
+## Example Log (SYSTEM)
 
 ```
-1,2024/01/15 10:30:45,001234567890,SYSTEM,threat,2049,2024/01/15 10:30:45,192.0.2.10,10.0.0.1,0.0.0.0,0.0.0.0,rule1,,,inbound,vsys1,trust,untrust,ethernet1/1,ethernet1/2,Forward,1,2024/01/15 10:30:45,123456,1,62873,0,0,0x0,tcp,allow,2049,2024/01/15 10:30:45,10,any,0,1234567890,0x8000000000000000,192.168.1.0-192.168.1.255,United States,0,1,0,aged-out,0,0,0,0,,N/A,0,0,0,0,,,from-policy,,,0,,0,,N/A,unknown,AppThreat-0000,0x0,0x0000000000000000
+Jan 15 10:30:45 1,2024/01/15 10:30:45,001234567890,SYSTEM,general,,2024/01/15 10:30:43,vsys1,42,general,,,general,informational,Config installed,1234567,0x0,0,0,0,0,vsys1,PA-VM,,,2024-01-15T10:30:45.000-05:00
 ```
 
 ## Configuration
