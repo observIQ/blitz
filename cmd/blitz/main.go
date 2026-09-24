@@ -35,6 +35,7 @@ import (
 	hecout "github.com/observiq/blitz/output/hec"
 	"github.com/observiq/blitz/output/nop"
 	otlpgrpc "github.com/observiq/blitz/output/otlp_grpc"
+	promrw "github.com/observiq/blitz/output/promrw"
 	stdoutout "github.com/observiq/blitz/output/stdout"
 	syslogout "github.com/observiq/blitz/output/syslog"
 	"github.com/observiq/blitz/output/tcp"
@@ -365,6 +366,13 @@ func run(cmd *cobra.Command, args []string) error {
 		outputInstance, err = hecout.New(logger, hecOpts...)
 		if err != nil {
 			logger.Error("Failed to create HEC output", zap.Error(err))
+			return err
+		}
+	case config.OutputTypePrometheusRemoteWrite:
+		rw := cfg.Output.PrometheusRemoteWrite
+		outputInstance, err = promrw.New(rw.Endpoint, rw.Version, rw.BatchSize, rw.BatchTimeout, rw.Timeout, rw.Headers, tel, logger)
+		if err != nil {
+			logger.Error("Failed to create prometheus-remote-write output", zap.Error(err))
 			return err
 		}
 	default:
