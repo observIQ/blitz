@@ -383,6 +383,22 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Configure generators
 	effectiveGens := cfg.EffectiveGenerators()
+
+	// Fail fast on a signal mismatch, reporting every orphan at once: a
+	// generated signal with no accepting output, or an output that accepts no
+	// generated signal.
+	genTypes := make([]config.GeneratorType, 0, len(effectiveGens))
+	for _, g := range effectiveGens {
+		genTypes = append(genTypes, g.Type)
+	}
+	outSignals := []dispatch.OutputSignals{
+		{Name: string(cfg.Output.Type), Signals: outputInstance.SupportedTelemetry()},
+	}
+	if err := dispatch.ValidateSignalCompat(genTypes, outSignals); err != nil {
+		logger.Error("output/generator signal mismatch", zap.Error(err))
+		return fmt.Errorf("signal compatibility: %w", err)
+	}
+
 	var generators []any
 	var tracker *count.Tracker
 
@@ -492,8 +508,9 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	// generators work standalone; ForEmbed rejects with a clear message
 	// when an output doesn't support a signal the configured generator
 	// needs.
-	consumers := dispatch.EmbedConsumers{
-		LogConsumer: output.WriterAsLogConsumer(out, tel),
+	consumers := dispatch.EmbedConsumers{}
+	if lw, ok := out.(output.LogWriter); ok {
+		consumers.LogConsumer = output.WriterAsLogConsumer(lw, tel)
 	}
 	if mw, ok := out.(output.MetricWriter); ok {
 		consumers.MetricConsumer = output.WriterAsMetricConsumer(mw, tel)

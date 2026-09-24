@@ -8,6 +8,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -38,7 +39,7 @@ type recordingWriter struct {
 	err     error
 }
 
-func (w *recordingWriter) Write(_ context.Context, rec output.LogRecord) error {
+func (w *recordingWriter) WriteLog(_ context.Context, rec output.LogRecord) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.err != nil {
@@ -257,4 +258,17 @@ func TestWriterAsMetricConsumerPanicsOnNilWriter(t *testing.T) {
 		}
 	}()
 	_ = output.WriterAsMetricConsumer(nil, embed.NopTelemetry())
+}
+
+func (w *recordingWriter) Stop(context.Context) error { return nil }
+func (w *recordingWriter) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
+}
+func (w *recordingMetricWriter) Stop(context.Context) error { return nil }
+func (w *recordingMetricWriter) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Metrics}
+}
+func (w *recordingTraceWriter) Stop(context.Context) error { return nil }
+func (w *recordingTraceWriter) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Traces}
 }

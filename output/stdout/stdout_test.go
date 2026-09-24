@@ -73,7 +73,7 @@ func TestStdoutOutput_Write(t *testing.T) {
 	out, err := New(logger)
 	require.NoError(t, err)
 
-	err = out.Write(context.Background(), output.LogRecord{Message: "test log message"})
+	err = out.WriteLog(context.Background(), output.LogRecord{Message: "test log message"})
 	require.NoError(t, err)
 
 	// Stop flushes the buffer before we read.
@@ -201,7 +201,7 @@ func TestStdoutOutput_FlushOnInterval(t *testing.T) {
 		}
 	}()
 
-	err = out.Write(context.Background(), output.LogRecord{Message: "interval flush message"})
+	err = out.WriteLog(context.Background(), output.LogRecord{Message: "interval flush message"})
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
@@ -227,7 +227,7 @@ func TestStdoutOutput_FlushOnStop(t *testing.T) {
 	out, err := New(logger, WithFlushInterval(10*time.Second))
 	require.NoError(t, err)
 
-	err = out.Write(context.Background(), output.LogRecord{Message: "stop flush message"})
+	err = out.WriteLog(context.Background(), output.LogRecord{Message: "stop flush message"})
 	require.NoError(t, err)
 
 	// Stop performs a final flush before returning.
@@ -263,7 +263,7 @@ func TestStdoutOutput_ConcurrentWrites(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < msgsPerWorker; j++ {
 				msg := fmt.Sprintf("worker-%d-msg-%d", id, j)
-				require.NoError(t, out.Write(context.Background(), output.LogRecord{Message: msg}))
+				require.NoError(t, out.WriteLog(context.Background(), output.LogRecord{Message: msg}))
 			}
 		}(i)
 	}
@@ -328,7 +328,7 @@ func TestStdout_SelfTelemetry(t *testing.T) {
 
 	out, err := New(zap.NewNop(), WithFlushInterval(10*time.Millisecond), WithTelemetry(tel))
 	require.NoError(t, err)
-	require.NoError(t, out.Write(context.Background(), output.LogRecord{Message: "x"}))
+	require.NoError(t, out.WriteLog(context.Background(), output.LogRecord{Message: "x"}))
 
 	require.Eventually(t, func() bool {
 		for _, s := range spanRec.Ended() {

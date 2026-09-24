@@ -73,7 +73,7 @@ func BenchmarkUDP_1Worker(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := udp.Write(ctx, output.LogRecord{Message: testData})
+			err := udp.WriteLog(ctx, output.LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -108,7 +108,7 @@ func BenchmarkUDP_10Workers(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := context.Background()
 		for pb.Next() {
-			err := udp.Write(ctx, output.LogRecord{Message: testData})
+			err := udp.WriteLog(ctx, output.LogRecord{Message: testData})
 			if err != nil {
 				b.Errorf("Write failed: %v", err)
 			}
@@ -143,7 +143,7 @@ func BenchmarkUDP_1Worker_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := udp.Write(ctx, output.LogRecord{Message: testData})
+		err := udp.WriteLog(ctx, output.LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}
@@ -177,7 +177,7 @@ func BenchmarkUDP_10Workers_Sequential(b *testing.B) {
 	b.ResetTimer()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		err := udp.Write(ctx, output.LogRecord{Message: testData})
+		err := udp.WriteLog(ctx, output.LogRecord{Message: testData})
 		if err != nil {
 			b.Errorf("Write failed: %v", err)
 		}

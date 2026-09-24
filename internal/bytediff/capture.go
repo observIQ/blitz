@@ -5,9 +5,10 @@ import (
 	"sync"
 
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 )
 
-// LogCapture is a Writer that records every LogRecord written to it.
+// LogCapture is a LogWriter that records every LogRecord written to it.
 // Use it as the destination when capturing a generator's output for a
 // byte-diff comparison.
 type LogCapture struct {
@@ -20,9 +21,9 @@ func NewLogCapture() *LogCapture {
 	return &LogCapture{}
 }
 
-// Write appends the record to the capture buffer. Safe for concurrent
+// WriteLog appends the record to the capture buffer. Safe for concurrent
 // calls from generator workers.
-func (c *LogCapture) Write(_ context.Context, data output.LogRecord) error {
+func (c *LogCapture) WriteLog(_ context.Context, data output.LogRecord) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.records = append(c.records, data)
@@ -57,4 +58,12 @@ func (c *LogCapture) Reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.records = c.records[:0]
+}
+
+// Stop is a no-op; the capture holds no resources.
+func (c *LogCapture) Stop(context.Context) error { return nil }
+
+// SupportedTelemetry reports that the capture accepts logs.
+func (c *LogCapture) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs}
 }

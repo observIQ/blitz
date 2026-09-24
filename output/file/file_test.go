@@ -29,7 +29,7 @@ func TestFileOutputWriteSingleLine(t *testing.T) {
 	defer cancel()
 
 	msg := "hello world"
-	if err := f.Write(ctx, output.LogRecord{Message: msg}); err != nil {
+	if err := f.WriteLog(ctx, output.LogRecord{Message: msg}); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -63,7 +63,7 @@ func TestFileOutputWriteMultipleLines(t *testing.T) {
 	ctx := context.Background()
 	msgs := []string{"one", "two", "three"}
 	for _, m := range msgs {
-		if err := f.Write(ctx, output.LogRecord{Message: m}); err != nil {
+		if err := f.WriteLog(ctx, output.LogRecord{Message: m}); err != nil {
 			t.Fatalf("write: %v", err)
 		}
 	}
