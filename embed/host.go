@@ -20,6 +20,9 @@ type Host struct {
 	// Traces is the destination for spans. Nil means spans are dropped.
 	Traces TraceConsumer
 
+	// Flows is the destination for flow records. Nil means flows are dropped.
+	Flows FlowConsumer
+
 	// Resource is the per-session base resource attributes blitz applies
 	// to every emitted record before module-level overrides merge on top.
 	//

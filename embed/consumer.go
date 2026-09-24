@@ -23,3 +23,11 @@ type MetricConsumer interface {
 type TraceConsumer interface {
 	ConsumeTraces(ctx context.Context, spans []Span) error
 }
+
+// FlowConsumer consumes batches of flow records produced by blitz flow
+// modules (netflow, ipfix, sflow).
+//
+// Implementations must be safe for concurrent calls.
+type FlowConsumer interface {
+	ConsumeFlows(ctx context.Context, records []FlowRecord) error
+}

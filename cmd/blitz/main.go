@@ -32,6 +32,7 @@ import (
 	"github.com/observiq/blitz/internal/telemetry/traces"
 	"github.com/observiq/blitz/output"
 	fileout "github.com/observiq/blitz/output/file"
+	flowout "github.com/observiq/blitz/output/flow"
 	hecout "github.com/observiq/blitz/output/hec"
 	"github.com/observiq/blitz/output/nop"
 	otlpgrpc "github.com/observiq/blitz/output/otlp_grpc"
@@ -367,6 +368,13 @@ func run(cmd *cobra.Command, args []string) error {
 			logger.Error("Failed to create HEC output", zap.Error(err))
 			return err
 		}
+	case config.OutputTypeFlow:
+		f := cfg.Output.Flow
+		outputInstance, err = flowout.New(logger, f.Host, strconv.Itoa(f.Port), flowout.Protocol(f.Protocol), f.Vendor, f.AgentIP, tel)
+		if err != nil {
+			logger.Error("Failed to create flow output", zap.Error(err))
+			return err
+		}
 	default:
 		logger.Error("Invalid output type", zap.String("type", string(cfg.Output.Type)))
 		return fmt.Errorf("invalid output type: %s", cfg.Output.Type)
@@ -500,6 +508,11 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	}
 	if tw, ok := out.(output.TraceWriter); ok {
 		consumers.TraceConsumer = output.WriterAsTraceConsumer(tw, tel)
+	}
+	// The flow output implements FlowConsumer directly (it UDP-encodes flows),
+	// so wire it through when the configured output supports flows.
+	if fc, ok := out.(embed.FlowConsumer); ok {
+		consumers.FlowConsumer = fc
 	}
 	// Pass the embedded library so an embed_library build resolves package
 	// sources; without the tag FS() is empty and resolution uses disk (PIPE-1445).

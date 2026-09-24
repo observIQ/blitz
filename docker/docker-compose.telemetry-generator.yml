@@ -230,6 +230,21 @@ services:
       BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
       BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
 
+  # Network flow records (NetFlow/IPFIX/sFlow) exported over UDP. Point it at a
+  # collector with a netflow/sflow receiver (e.g. bdot-collector with a
+  # netflowreceiver, or a standalone nfcapd/sflowtool).
+  blitz-flow:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: flow
+      BLITZ_GENERATOR_FLOW_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_FLOW_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_FLOW_SCENARIO: ${FLOW_SCENARIO:-default}
+      BLITZ_OUTPUT_TYPE: flow
+      BLITZ_OUTPUT_FLOW_HOST: ${FLOW_COLLECTOR_HOST:-bdot-collector}
+      BLITZ_OUTPUT_FLOW_PORT: ${FLOW_COLLECTOR_PORT:-2055}
+      BLITZ_OUTPUT_FLOW_PROTOCOL: ${FLOW_PROTOCOL:-netflow-v9}
+
 networks:
   telemetry-net:
     driver: bridge
