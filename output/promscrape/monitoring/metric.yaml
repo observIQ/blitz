@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/open-telemetry/weaver/refs/heads/main/schemas/semconv.schema.json
+groups:
+- id: promscrape.scrapes
+  type: metric
+  metric_name: "blitz.output.prometheus_scrape.scrapes"
+  stability: stable
+  brief: "total number of scrape requests served"
+  instrument: counter
+  unit: "{scrape}"
+
+- id: promscrape.series_exposed
+  type: metric
+  metric_name: "blitz.output.prometheus_scrape.series_exposed"
+  stability: stable
+  brief: "number of series exposed at the last scrape"
+  instrument: gauge
+  unit: "{series}"
+
+- id: promscrape.exposition_bytes
+  type: metric
+  metric_name: "blitz.output.prometheus_scrape.exposition_bytes"
+  stability: stable
+  brief: "size of the exposition body per scrape"
+  instrument: histogram
+  unit: "By"
+
+- id: promscrape.scrape_latency
+  type: metric
+  metric_name: "blitz.output.prometheus_scrape.scrape_latency"
+  stability: stable
+  brief: "latency of serving a scrape request"
+  instrument: histogram
+  unit: "ms"
+  annotations:
+    histogram:
+      type: Float64Histogram

@@ -110,6 +110,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 | `blitz-hostmetrics-linux` | Host Metrics | Synthetic host metrics (CPU, memory, disk, etc.) for Linux |
 | `blitz-hostmetrics-windows` | Host Metrics | Synthetic host metrics (CPU, memory, disk, etc.) for Windows |
 | `blitz-hostmetrics-promrw` | Host Metrics | Synthetic host metrics sent via the Prometheus remote-write output (needs a receiver at `PROM_RW_ENDPOINT`; starts only with `--profile prometheus-remote-write`) |
+| `blitz-hostmetrics-promscrape` | Host Metrics | Synthetic host metrics served on a Prometheus scrape (pull) endpoint |
 | `blitz-traces` | Traces | Synthetic distributed traces (HTTP + DB spans) |
 | `blitz-fix` | FIX | FIX protocol messages (4.2 / 4.4 / 5.0 SP2) across 10 asset categories — NewOrderSingle, ExecutionReport, cancel/replace/status |
 | `blitz-flow` | Network Flow | Synthetic NetFlow/IPFIX/sFlow records exported over UDP |

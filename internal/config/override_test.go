@@ -163,6 +163,9 @@ func getTestOverrideFlagsArgs() []string {
 		"--output-prometheus-remote-write-batchtimeout", "10s",
 		"--output-prometheus-remote-write-maxbufferedseries", "4000",
 		"--output-prometheus-remote-write-timeout", "20s",
+		"--output-prometheus-scrape-listenaddress", "127.0.0.1:19464",
+		"--output-prometheus-scrape-metricspath", "/flagmetrics",
+		"--output-prometheus-scrape-emittimestamps", "true",
 		"--output-stdout-flushinterval", "50ms",
 		"--metrics-port", "8080",
 		"--telemetry-traces-otlpendpoint", "traces.example:4317",
@@ -312,6 +315,15 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_OUTPUT_FLOW_PROTOCOL":                             "netflow-v9",
 		"BLITZ_OUTPUT_FLOW_VENDOR":                               "rflow",
 		"BLITZ_OUTPUT_FLOW_AGENTIP":                              "10.0.0.2",
+		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_ENDPOINT":          "http://rw-env.example.com/api/v1/write",
+		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_VERSION":           "2.0",
+		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_BATCHSIZE":         "300",
+		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_BATCHTIMEOUT":      "7s",
+		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_MAXBUFFEREDSERIES": "6000",
+		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_TIMEOUT":           "25s",
+		"BLITZ_OUTPUT_PROMETHEUS_SCRAPE_LISTENADDRESS":           "127.0.0.1:29464",
+		"BLITZ_OUTPUT_PROMETHEUS_SCRAPE_METRICSPATH":             "/envmetrics",
+		"BLITZ_OUTPUT_PROMETHEUS_SCRAPE_EMITTIMESTAMPS":          "true",
 		"BLITZ_OUTPUT_HEC_ENABLE_TLS":                            "false",
 		"BLITZ_OUTPUT_HEC_TLS_CERT":                              "/env/hec_cert.pem",
 		"BLITZ_OUTPUT_HEC_TLS_KEY":                               "/env/hec_key.pem",
@@ -325,12 +337,6 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_TELEMETRY_TRACES_PERBATCHSPANS":                   "true",
 		"BLITZ_TELEMETRY_LOGS_OTLPENDPOINT":                      "logs.env.example:4317",
 		"BLITZ_TELEMETRY_LOGS_INSECURE":                          "true",
-		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_ENDPOINT":          "http://rw-env.example.com/api/v1/write",
-		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_VERSION":           "2.0",
-		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_BATCHSIZE":         "300",
-		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_BATCHTIMEOUT":      "7s",
-		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_TIMEOUT":           "25s",
-		"BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_MAXBUFFEREDSERIES": "6000",
 	}
 }
 
@@ -545,6 +551,10 @@ func TestOverrideDefaults(t *testing.T) {
 				BatchTimeout:      DefaultPromRWBatchTimeout,
 				MaxBufferedSeries: DefaultPromRWMaxBufferedSeries,
 				Timeout:           DefaultPromRWTimeout,
+			},
+			PrometheusScrape: PrometheusScrapeOutputConfig{
+				ListenAddress: DefaultPromScrapeListenAddress,
+				MetricsPath:   DefaultPromScrapeMetricsPath,
 			},
 		},
 		Metrics: Metrics{
@@ -793,6 +803,11 @@ func TestOverrideFlags(t *testing.T) {
 				BatchTimeout:      10 * time.Second,
 				MaxBufferedSeries: 4000,
 				Timeout:           20 * time.Second,
+			},
+			PrometheusScrape: PrometheusScrapeOutputConfig{
+				ListenAddress:  "127.0.0.1:19464",
+				MetricsPath:    "/flagmetrics",
+				EmitTimestamps: true,
 			},
 		},
 		Metrics: Metrics{
@@ -1045,6 +1060,11 @@ func TestOverrideEnvs(t *testing.T) {
 				BatchTimeout:      7 * time.Second,
 				MaxBufferedSeries: 6000,
 				Timeout:           25 * time.Second,
+			},
+			PrometheusScrape: PrometheusScrapeOutputConfig{
+				ListenAddress:  "127.0.0.1:29464",
+				MetricsPath:    "/envmetrics",
+				EmitTimestamps: true,
 			},
 		},
 		Metrics: Metrics{
