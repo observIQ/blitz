@@ -245,6 +245,21 @@ services:
       BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_ENDPOINT: ${PROM_RW_ENDPOINT:-http://bdot-collector:19291/api/v1/write}
       BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_VERSION: ${PROM_RW_VERSION:-1.0}
 
+  # Host metrics served on a Prometheus scrape (pull) endpoint. Point a scraper
+  # (the collector prometheusreceiver, or a Prometheus server) at
+  # blitz-hostmetrics-promscrape:9464/metrics to pull the exposition.
+  blitz-hostmetrics-promscrape:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: hostmetrics
+      BLITZ_GENERATOR_HOSTMETRICS_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_HOSTMETRICS_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_HOSTMETRICS_OS: linux
+      BLITZ_OUTPUT_TYPE: prometheus-scrape
+      BLITZ_OUTPUT_PROMETHEUS_SCRAPE_LISTENADDRESS: 0.0.0.0:9464
+    ports:
+      - "${PROM_SCRAPE_PORT:-9464}:9464"
+
 networks:
   telemetry-net:
     driver: bridge
