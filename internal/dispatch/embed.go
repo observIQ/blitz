@@ -16,6 +16,7 @@ import (
 	"github.com/observiq/blitz/generator/filegen"
 	fixgen "github.com/observiq/blitz/generator/fix"
 	"github.com/observiq/blitz/generator/fix/catalog"
+	flowgen "github.com/observiq/blitz/generator/flow"
 	"github.com/observiq/blitz/generator/hostmetrics"
 	jsongen "github.com/observiq/blitz/generator/json"
 	"github.com/observiq/blitz/generator/kubernetes"
@@ -42,6 +43,7 @@ type EmbedConsumers struct {
 	LogConsumer    embed.LogConsumer
 	MetricConsumer embed.MetricConsumer
 	TraceConsumer  embed.TraceConsumer
+	FlowConsumer   embed.FlowConsumer
 }
 
 func (c EmbedConsumers) requireLog(typ config.GeneratorType) error {
@@ -61,6 +63,13 @@ func (c EmbedConsumers) requireMetric(typ config.GeneratorType) error {
 func (c EmbedConsumers) requireTrace(typ config.GeneratorType) error {
 	if c.TraceConsumer == nil {
 		return fmt.Errorf("generator type %q requires EmbedConsumers.TraceConsumer", typ)
+	}
+	return nil
+}
+
+func (c EmbedConsumers) requireFlow(typ config.GeneratorType) error {
+	if c.FlowConsumer == nil {
+		return fmt.Errorf("generator type %q requires EmbedConsumers.FlowConsumer", typ)
 	}
 	return nil
 }
@@ -172,6 +181,11 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 		}
 		mod, err := newFIX(logger, genCfg.FIX, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
+	case config.GeneratorTypeFlow:
+		if err := consumers.requireFlow(genCfg.Type); err != nil {
+			return nil, err
+		}
+		return flowgen.New(logger, genCfg.Flow.Workers, genCfg.Flow.Rate, flowgen.Scenario(genCfg.Flow.Scenario), genCfg.Flow.Seed, consumers.FlowConsumer, tel)
 	case config.GeneratorTypeHostMetrics:
 		if err := consumers.requireMetric(genCfg.Type); err != nil {
 			return nil, err

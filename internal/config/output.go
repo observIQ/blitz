@@ -24,6 +24,8 @@ const (
 	OutputTypeFile OutputType = "file"
 	// OutputTypeHEC represents Splunk HEC output
 	OutputTypeHEC OutputType = "hec"
+	// OutputTypeFlow represents the network flow (NetFlow/IPFIX/sFlow) output
+	OutputTypeFlow OutputType = "flow"
 )
 
 // Output contains configuration for output destinations
@@ -44,6 +46,8 @@ type Output struct {
 	HEC HECOutputConfig `yaml:"hec,omitempty" mapstructure:"hec,omitempty"`
 	// Stdout contains stdout output configuration
 	Stdout StdoutOutputConfig `yaml:"stdout,omitempty" mapstructure:"stdout,omitempty"`
+	// Flow contains network flow output configuration
+	Flow FlowOutputConfig `yaml:"flow,omitempty" mapstructure:"flow,omitempty"`
 }
 
 // Validate validates the output configuration
@@ -84,8 +88,12 @@ func (o *Output) Validate() error {
 		if err := o.HEC.Validate(); err != nil {
 			return fmt.Errorf("HEC output validation failed: %w", err)
 		}
+	case OutputTypeFlow:
+		if err := o.Flow.Validate(); err != nil {
+			return fmt.Errorf("flow output validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file, hec", o.Type)
+		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file, hec, flow", o.Type)
 	}
 
 	return nil

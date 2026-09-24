@@ -1,6 +1,9 @@
 package embed
 
-import "time"
+import (
+	"net"
+	"time"
+)
 
 // LogRecord represents a single log entry.
 type LogRecord struct {
@@ -155,6 +158,60 @@ type Span struct {
 // OpenTelemetry span-attribute typing convention (strings, ints, bools,
 // arrays).
 type SpanMetadata struct {
+	Attributes map[string]any
+	Resource   map[string]any
+}
+
+// FlowRecord represents a single network flow record — one observed
+// conversation identified by the classic 5-tuple, plus the byte/packet
+// counters and routing dimensions the NetFlow/IPFIX/sFlow wire encoders
+// carry. It is blitz's fourth signal type, alongside LogRecord,
+// MetricPoint, and Span.
+//
+// Addresses are net.IP so a single record serves both IPv4 and IPv6
+// encoders. StartTime/EndTime are the flow's first/last packet times;
+// encoders that use switch-relative timestamps (NetFlow v5/v9) derive
+// them against a boot time the encoder owns.
+type FlowRecord struct {
+	// SrcIP, DstIP are the flow endpoints.
+	SrcIP, DstIP net.IP
+	// SrcPort, DstPort are the transport ports (0 for non-port protocols).
+	SrcPort, DstPort uint16
+	// Protocol is the IP protocol number (6 TCP, 17 UDP, 1 ICMP, ...).
+	Protocol uint8
+	// TOS is the IP type-of-service / DSCP byte.
+	TOS uint8
+	// TCPFlags is the cumulative OR of TCP flags across the flow.
+	TCPFlags uint8
+
+	// NextHop is the IP of the next-hop router (may be nil).
+	NextHop net.IP
+	// InputIface, OutputIface are SNMP ifIndex values.
+	InputIface, OutputIface uint32
+
+	// Packets, Bytes are the flow's packet and byte counts.
+	Packets, Bytes uint64
+
+	// StartTime, EndTime are the first and last packet timestamps.
+	StartTime, EndTime time.Time
+
+	// SrcAS, DstAS are the source/destination autonomous-system numbers.
+	SrcAS, DstAS uint32
+	// SrcMask, DstMask are the source/destination prefix lengths.
+	SrcMask, DstMask uint8
+
+	// SamplingRate is the packet sampling rate (sFlow; 0 = unsampled).
+	SamplingRate uint32
+
+	// Metadata carries timestamp, per-record Attributes, and Resource for
+	// the OTel/log representation. See LogRecordMetadata for conventions.
+	Metadata FlowRecordMetadata
+}
+
+// FlowRecordMetadata is the metadata for a flow record. See
+// LogRecordMetadata's doc comment for Resource/Attributes semantics.
+type FlowRecordMetadata struct {
+	Timestamp  time.Time
 	Attributes map[string]any
 	Resource   map[string]any
 }

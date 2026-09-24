@@ -32,6 +32,7 @@ import (
 	"github.com/observiq/blitz/internal/telemetry/traces"
 	"github.com/observiq/blitz/output"
 	fileout "github.com/observiq/blitz/output/file"
+	flowout "github.com/observiq/blitz/output/flow"
 	hecout "github.com/observiq/blitz/output/hec"
 	"github.com/observiq/blitz/output/nop"
 	otlpgrpc "github.com/observiq/blitz/output/otlp_grpc"
@@ -624,6 +625,13 @@ func buildOutput(logger *zap.Logger, out config.Output, tel embed.TelemetrySetti
 			logger.Error("Failed to create HEC output", zap.Error(err))
 			return nil, err
 		}
+	case config.OutputTypeFlow:
+		f := out.Flow
+		inst, err = flowout.New(logger, f.Host, strconv.Itoa(f.Port), flowout.Protocol(f.Protocol), f.Vendor, f.AgentIP, tel)
+		if err != nil {
+			logger.Error("Failed to create flow output", zap.Error(err))
+			return nil, err
+		}
 	default:
 		logger.Error("Invalid output type", zap.String("type", string(out.Type)))
 		return nil, fmt.Errorf("invalid output type: %s", out.Type)
@@ -684,13 +692,19 @@ func buildOutputs(logger *zap.Logger, outs []config.Output, tel embed.TelemetryS
 // metric-yielding (hostmetrics) and trace-yielding (traces) generators work
 // standalone.
 func consumersFor(out output.Output, tel embed.TelemetrySettings) dispatch.EmbedConsumers {
+	consumers := dispatch.EmbedConsumers{}
+	// The flow output implements FlowConsumer directly (it UDP-encodes flows),
+	// so wire it through when the configured output supports flows.
+	if fc, ok := out.(embed.FlowConsumer); ok {
+		consumers.FlowConsumer = fc
+	}
 	// A fan-out takes whole batches, so one generator batch (a hostmetrics
 	// scrape) is one queue slot per child and a burst never drops points on a
 	// healthy output.
 	if m, ok := out.(*output.MultiOutput); ok {
-		return dispatch.EmbedConsumers{LogConsumer: m, MetricConsumer: m, TraceConsumer: m}
+		consumers.LogConsumer, consumers.MetricConsumer, consumers.TraceConsumer = m, m, m
+		return consumers
 	}
-	consumers := dispatch.EmbedConsumers{}
 	if lw, ok := out.(output.LogWriter); ok {
 		consumers.LogConsumer = output.WriterAsLogConsumer(lw, tel)
 	}

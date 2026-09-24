@@ -13,12 +13,14 @@ const (
 	Metrics Type = "metrics"
 	// Traces represents trace telemetry.
 	Traces Type = "traces"
+	// Flows represents network flow telemetry (NetFlow/IPFIX/sFlow).
+	Flows Type = "flows"
 )
 
 // Valid returns true if the type is a known telemetry type.
 func (t Type) Valid() bool {
 	switch t {
-	case Logs, Metrics, Traces:
+	case Logs, Metrics, Traces, Flows:
 		return true
 	default:
 		return false
