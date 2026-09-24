@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/open-telemetry/weaver/refs/heads/main/schemas/semconv.schema.json
+groups:
+- id: promrw.batch_size
+  type: metric
+  metric_name: "blitz.output.prometheus_remote_write.batch_size"
+  stability: stable
+  brief: "number of series per remote-write batch"
+  instrument: histogram
+  unit: "{series}"
+
+- id: promrw.series_sent
+  type: metric
+  metric_name: "blitz.output.prometheus_remote_write.series_sent"
+  stability: stable
+  brief: "total number of series successfully posted"
+  instrument: counter
+  unit: "{series}"
+
+- id: promrw.posts_failed
+  type: metric
+  metric_name: "blitz.output.prometheus_remote_write.posts_failed"
+  stability: stable
+  brief: "total number of remote-write POSTs that failed"
+  instrument: counter
+  unit: "{post}"
+
+- id: promrw.post_latency
+  type: metric
+  metric_name: "blitz.output.prometheus_remote_write.post_latency"
+  stability: stable
+  brief: "latency of remote-write POST requests"
+  instrument: histogram
+  unit: "ms"
+  annotations:
+    histogram:
+      type: Float64Histogram
