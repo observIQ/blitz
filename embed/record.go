@@ -45,13 +45,13 @@ type LogRecordMetadata struct {
 type MetricType string
 
 const (
-	// MetricTypeGauge represents a gauge metric.
+	// MetricTypeGauge is a point-in-time value that can rise or fall.
 	MetricTypeGauge MetricType = "gauge"
-	// MetricTypeSum represents a sum metric.
+	// MetricTypeSum is a non-monotonic sum (OTel Sum monotonic=false; Prometheus gauge).
 	MetricTypeSum MetricType = "sum"
-	// MetricTypeCounter represents a counter metric.
+	// MetricTypeCounter is a monotonic cumulative count (OTel Sum monotonic=true; Prometheus counter, _total).
 	MetricTypeCounter MetricType = "counter"
-	// MetricTypeHistogram represents a histogram metric.
+	// MetricTypeHistogram is a bucketed distribution (Prometheus _bucket/_sum/_count).
 	MetricTypeHistogram MetricType = "histogram"
 )
 
