@@ -1,0 +1,4 @@
+name: prometheus_remote_write
+description: Prometheus Remote-Write Output Metrics
+semconv_version: 0.1.0
+schema_base_url: https://github.com/observiq/blitz/schemas/output/promrw/
