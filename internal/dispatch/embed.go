@@ -13,6 +13,7 @@ import (
 	apachegen "github.com/observiq/blitz/generator/apache"
 	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
 	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
+	f5gen "github.com/observiq/blitz/generator/f5"
 	"github.com/observiq/blitz/generator/filegen"
 	fixgen "github.com/observiq/blitz/generator/fix"
 	"github.com/observiq/blitz/generator/fix/catalog"
@@ -171,6 +172,19 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			return nil, err
 		}
 		mod, err := newFIX(logger, genCfg.FIX, consumers.LogConsumer, tel)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
+	case config.GeneratorTypeF5:
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		mod, err := f5gen.New(logger, f5gen.Config{
+			Workers:         genCfg.F5.Workers,
+			Rate:            genCfg.F5.Rate,
+			Hostname:        genCfg.F5.Hostname,
+			EnabledProducts: genCfg.F5.EnabledProducts,
+			Weights:         genCfg.F5.Weights,
+			Seed:            genCfg.F5.Seed,
+		}, consumers.LogConsumer, tel)
 		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeHostMetrics:
 		if err := consumers.requireMetric(genCfg.Type); err != nil {

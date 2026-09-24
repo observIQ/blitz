@@ -249,7 +249,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("metrics.port", "HTTP port for the metrics endpoint", DefaultMetricsPort),
 		NewOverride("generator.count", "total number of logs to generate (0 = unlimited)", 0),
 		NewOverride("onFinish", "behavior when finite generation completes. One of: exit|idle", "exit"),
-		NewOverride("generator.type", "generator type. One of: nop|json|winevt|wel|palo-alto|apache-common|apache-combined|apache-error|nginx|postgres|kubernetes|filegen|okta|hostmetrics|traces", GeneratorTypeNop),
+		NewOverride("generator.type", "generator type. One of: nop|json|winevt|wel|palo-alto|apache-common|apache-combined|apache-error|nginx|postgres|kubernetes|filegen|okta|hostmetrics|traces|fix|f5", GeneratorTypeNop),
 		NewOverride("generator.json.workers", "number of JSON generator workers", 1),
 		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),
 		NewOverride("generator.json.type", "type of log to generate. One of: default|pii", logtypes.LogTypeDefault),
