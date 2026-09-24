@@ -14,7 +14,31 @@ const (
 	OSLinux   OSType = "linux"
 	OSWindows OSType = "windows"
 	OSMacOS   OSType = "macos"
+
+	// ESXi is a real OS: closed, but it installs on hardware you choose, so it
+	// belongs here rather than in ApplianceOS.
+	OSESXi OSType = "esxi"
+
+	// Hypervisor-host Linux flavors. Each renders os.type=linux (its distro is
+	// carried in os.name/os.version) but is a distinct simulate-as selector.
+	OSXenDom0      OSType = "xen-dom0"      // Xen dom0 (XCP-ng / Citrix Hypervisor)
+	OSNutanixAHV   OSType = "nutanix-ahv"   // Nutanix AHV host
+	OSOpenStackKVM OSType = "openstack-kvm" // OpenStack/KVM compute host
+
+	// Unix families.
+	OSAIX     OSType = "aix"
+	OSSolaris OSType = "solaris"
+	OSFreeBSD OSType = "freebsd"
+	OSOpenBSD OSType = "openbsd"
 )
+
+// hypervisorHostLinux is the set of OSType values that are Linux under the hood
+// (os.type=linux) but present a distinct hypervisor-host identity.
+var hypervisorHostLinux = map[OSType]bool{
+	OSXenDom0:      true,
+	OSNutanixAHV:   true,
+	OSOpenStackKVM: true,
+}
 
 // Arch represents a CPU architecture.
 type Arch string
