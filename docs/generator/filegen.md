@@ -54,6 +54,22 @@ Fri Jan 14 08:22:17 2026 nginx.webserver.test nginx: 10.20.30.40 - - [Fri Jan 14
 Mon Jan 13 10:15:23 2026 checkpoint.firewall.test Check Point: orig=192.168.1.100 Rule=allow_http Action=Accept Protocol=tcp src=192.168.1.100 dst=203.0.113.1 sport=54321 dport=80
 ```
 
+### Journald (`journalctl -o json`)
+
+The `journald` package emits one JSON object per line in the shape the
+OpenTelemetry `journald` receiver consumes — raw journald field names
+(`_PID`, `_EXE`, `MESSAGE`, `PRIORITY`, `SYSLOG_IDENTIFIER`, `_HOSTNAME`),
+not OpenTelemetry-conventional names.
+
+```
+{"__REALTIME_TIMESTAMP":"1783087320123456","_HOSTNAME":"linux-host01.test","_TRANSPORT":"syslog","SYSLOG_IDENTIFIER":"sshd","SYSLOG_TIMESTAMP":"Jan 13 15:30:45","PRIORITY":"6","_COMM":"sshd","_EXE":"/usr/sbin/sshd","_PID":"1842","_SYSTEMD_UNIT":"ssh.service","MESSAGE":"Accepted publickey for deploy from 10.0.4.12 port 51322 ssh2: ED25519 SHA256:abcd1234"}
+```
+
+Note: journald's canonical timestamp, `__REALTIME_TIMESTAMP`, is epoch
+microseconds, which has no ctime directive — those values are static in the
+sample. Records carried over the syslog transport also carry
+`SYSLOG_TIMESTAMP`, which does use a directive and advances per emission.
+
 ## Timestamp Directives
 
 The File generator automatically processes timestamp directives in log files, replacing them with actual formatted timestamps. Use these directives in your log files to enable dynamic timestamp generation:
