@@ -230,6 +230,19 @@ services:
       BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
       BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
 
+  # Multi-product F5 log generator (BIG-IP LTM/ASM/AFM/APM/DNS/audit,
+  # NGINX-on-F5 Plus + App Protect, iRules, F5OS). All products enabled
+  # by default; set BLITZ_GENERATOR_F5_ENABLEDPRODUCTS to a subset.
+  blitz-f5:
+    <<: *blitz-common
+    environment:
+      BLITZ_GENERATOR_TYPE: f5
+      BLITZ_GENERATOR_F5_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_F5_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_OUTPUT_TYPE: otlp-grpc
+      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+
 networks:
   telemetry-net:
     driver: bridge
