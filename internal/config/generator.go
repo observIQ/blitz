@@ -41,6 +41,9 @@ const (
 	// GeneratorTypeFIX represents the FIX (Financial Information
 	// eXchange) protocol generator
 	GeneratorTypeFIX GeneratorType = "fix"
+	// GeneratorTypeFlow represents the network flow (NetFlow/IPFIX/sFlow)
+	// generator
+	GeneratorTypeFlow GeneratorType = "flow"
 )
 
 // Generator contains configuration for log generators
@@ -79,6 +82,8 @@ type Generator struct {
 	Wel WelGeneratorConfig `yaml:"wel,omitempty" mapstructure:"wel,omitempty"`
 	// FIX contains FIX generator configuration
 	FIX FIXGeneratorConfig `yaml:"fix,omitempty" mapstructure:"fix,omitempty"`
+	// Flow contains network flow generator configuration
+	Flow FlowGeneratorConfig `yaml:"flow,omitempty" mapstructure:"flow,omitempty"`
 }
 
 // Validate validates the generator configuration
@@ -155,8 +160,12 @@ func (g *Generator) Validate() error {
 		if err := g.FIX.Validate(); err != nil {
 			return fmt.Errorf("fix generator validation failed: %w", err)
 		}
+	case GeneratorTypeFlow:
+		if err := g.Flow.Validate(); err != nil {
+			return fmt.Errorf("flow generator validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen, okta, hostmetrics, traces, wel, fix", g.Type)
+		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen, okta, hostmetrics, traces, wel, fix, flow", g.Type)
 	}
 
 	return nil
