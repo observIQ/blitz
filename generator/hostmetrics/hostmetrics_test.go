@@ -13,6 +13,8 @@ import (
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -101,12 +103,43 @@ func TestNew(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("invalid workers", func(t *testing.T) {
+	t.Run("workers unset is valid", func(t *testing.T) {
 		cfg := baseCfg(t, &mockMetricConsumer{})
 		cfg.Workers = 0
 		_, err := New(cfg)
-		require.Error(t, err)
+		require.NoError(t, err)
 	})
+}
+
+// TestWorkersIgnored asserts one simulated host runs exactly one worker no
+// matter what Workers says: parallel workers would emit duplicate series for
+// the same host, and rate is the load knob.
+func TestWorkersIgnored(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+
+	cfg := baseCfg(t, &mockMetricConsumer{})
+	cfg.Workers = 4
+	cfg.Telemetry = embed.TelemetrySettings{MeterProvider: mp}
+	g, err := New(cfg)
+	require.NoError(t, err)
+	require.NoError(t, g.Start(context.Background()))
+	t.Cleanup(func() { _ = g.Stop(context.Background()) })
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	var active int64 = -1
+	for _, sm := range rm.ScopeMetrics {
+		for _, md := range sm.Metrics {
+			if md.Name != "blitz.generator.active_workers" {
+				continue
+			}
+			if gauge, ok := md.Data.(metricdata.Gauge[int64]); ok && len(gauge.DataPoints) > 0 {
+				active = gauge.DataPoints[0].Value
+			}
+		}
+	}
+	require.Equal(t, int64(1), active)
 }
 
 // TestNewProjectsIdentityResource confirms that when a resolved datagen

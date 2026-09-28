@@ -369,7 +369,6 @@ func TestOverrideDefaults(t *testing.T) {
 				Rate:    1 * time.Second,
 			},
 			HostMetrics: HostMetricsGeneratorConfig{
-				Workers:  1,
 				Rate:     1 * time.Second,
 				OS:       "linux",
 				Scrapers: []string{},
@@ -996,4 +995,18 @@ func TestOverrideCoverage(t *testing.T) {
 
 		t.Errorf("%s", report.String())
 	}
+}
+
+// TestHostMetricsWorkersFlagDeprecated asserts the removed
+// --generator-hostmetrics-workers flag stays registered but is marked
+// deprecated for the warning window, so CLI users see a warning instead of an
+// unknown-flag failure.
+func TestHostMetricsWorkersFlagDeprecated(t *testing.T) {
+	flagSet := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	for _, o := range DefaultOverrides() {
+		require.NoError(t, o.Bind(flagSet))
+	}
+	f := flagSet.Lookup("generator-hostmetrics-workers")
+	require.NotNil(t, f)
+	require.Contains(t, f.Deprecated, "rate")
 }
