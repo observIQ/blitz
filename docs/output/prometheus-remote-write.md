@@ -12,6 +12,12 @@ Generated metric points map to Prometheus series before encoding:
 
 Metric and label names are sanitized to the Prometheus grammar. Each series carries its `__name__` plus the metric's attributes as labels, with the value and millisecond timestamp from the point. Remote-write 2.0 de-duplicates label strings into a symbol table.
 
+Resource attributes follow the OpenTelemetry-to-Prometheus convention. Every series gets `job` and `instance` labels, taken from `service.namespace`/`service.name` and `service.instance.id`, or from `telemetry.source` and `host.name` when those are absent. A `target_info` series carries the remaining resource attributes, sent once per target per batch.
+
+## Delivery
+
+A single sender makes every request, so each series' samples arrive in order. It sends when `batchSize` series are buffered or when `batchTimeout` passes, whichever comes first. Network errors, `429`, and `5xx` responses are retried with exponential backoff (30ms to 5s, or the server's `Retry-After`) for up to 10 attempts. Other `4xx` responses drop the batch.
+
 ## Configuration
 
 | YAML Path                                     | Flag                                            | Environment Variable                                | Default | Description                                          |
@@ -19,8 +25,8 @@ Metric and label names are sanitized to the Prometheus grammar. Each series carr
 | `output.type`                                 | `--output-type`                                 | `BLITZ_OUTPUT_TYPE`                                 | `nop`   | Set to `prometheus-remote-write` to use this output. |
 | `output.prometheus-remote-write.endpoint`     | `--output-prometheus-remote-write-endpoint`     | `BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_ENDPOINT`     | `""`    | Remote-write endpoint URL. Required, http or https.  |
 | `output.prometheus-remote-write.version`      | `--output-prometheus-remote-write-version`      | `BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_VERSION`      | `1.0`   | Protocol version: `1.0` or `2.0`.                    |
-| `output.prometheus-remote-write.batchSize`    | `--output-prometheus-remote-write-batchsize`    | `BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_BATCHSIZE`    | `500`   | Series buffered before a flush.                      |
-| `output.prometheus-remote-write.batchTimeout` | `--output-prometheus-remote-write-batchtimeout` | `BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_BATCHTIMEOUT` | `5s`    | Maximum wait before flushing a partial batch.        |
+| `output.prometheus-remote-write.batchSize`    | `--output-prometheus-remote-write-batchsize`    | `BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_BATCHSIZE`    | `500`   | Series buffered before a send.                       |
+| `output.prometheus-remote-write.batchTimeout` | `--output-prometheus-remote-write-batchtimeout` | `BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_BATCHTIMEOUT` | `5s`    | Maximum wait before sending a partial batch.         |
 | `output.prometheus-remote-write.timeout`      | `--output-prometheus-remote-write-timeout`      | `BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_TIMEOUT`      | `30s`   | Per-request HTTP timeout.                            |
 | `output.prometheus-remote-write.headers`      | n/a                                             | n/a                                                 | `{}`    | Extra HTTP headers sent on every request. YAML only. |
 
