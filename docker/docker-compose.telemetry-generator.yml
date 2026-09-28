@@ -188,7 +188,6 @@ services:
     <<: *blitz-common
     environment:
       BLITZ_GENERATOR_TYPE: hostmetrics
-      BLITZ_GENERATOR_HOSTMETRICS_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_HOSTMETRICS_RATE: ${BLITZ_RATE:-1s}
       BLITZ_GENERATOR_HOSTMETRICS_OS: linux
       BLITZ_OUTPUT_TYPE: otlp-grpc
@@ -200,7 +199,6 @@ services:
     <<: *blitz-common
     environment:
       BLITZ_GENERATOR_TYPE: hostmetrics
-      BLITZ_GENERATOR_HOSTMETRICS_WORKERS: ${BLITZ_WORKERS:-1}
       BLITZ_GENERATOR_HOSTMETRICS_RATE: ${BLITZ_RATE:-1s}
       BLITZ_GENERATOR_HOSTMETRICS_OS: windows
       BLITZ_OUTPUT_TYPE: otlp-grpc

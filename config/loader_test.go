@@ -168,7 +168,6 @@ func TestLoadModules_HostMetricsRequiresMetricConsumer(t *testing.T) {
 generator:
   type: hostmetrics
   hostmetrics:
-    workers: 1
     rate: 1s
     os: linux
 output:
