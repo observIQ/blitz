@@ -28,11 +28,14 @@ The generator includes 8 scrapers, each producing metrics for a specific subsyst
 | YAML Path                          | Flag Name                          | Environment Variable                    | Default   | Description                                                          |
 |------------------------------------|------------------------------------|-----------------------------------------|-----------|----------------------------------------------------------------------|
 | `generator.type`                   | `--generator-type`                 | `BLITZ_GENERATOR_TYPE`                  | `nop`     | Generator type. Set to `hostmetrics` to use this generator.          |
-| `generator.hostmetrics.workers`    | `--generator-hostmetrics-workers`  | `BLITZ_GENERATOR_HOSTMETRICS_WORKERS`   | `1`       | Number of worker goroutines.                                         |
 | `generator.hostmetrics.rate`       | `--generator-hostmetrics-rate`     | `BLITZ_GENERATOR_HOSTMETRICS_RATE`      | `1s`      | Scrape interval for host metrics.                                    |
 | `generator.hostmetrics.os`         | `--generator-hostmetrics-os`       | `BLITZ_GENERATOR_HOSTMETRICS_OS`        | `linux`   | Simulated operating system. One of: `linux`, `windows`.              |
 | `generator.hostmetrics.hostname`   | `--generator-hostmetrics-hostname` | `BLITZ_GENERATOR_HOSTMETRICS_HOSTNAME`  | (random)  | Simulated hostname. If empty, a random hostname is generated.        |
 | `generator.hostmetrics.scrapers`   | `--generator-hostmetrics-scrapers` | `BLITZ_GENERATOR_HOSTMETRICS_SCRAPERS`  | (all)     | Scrapers to enable. If empty, all scrapers are enabled.              |
+
+`generator.hostmetrics.workers` has been removed. One simulated host runs one worker, so use `rate` for more
+frequent writes and add `generators:` entries for more hosts. A configured value is ignored with a warning, and is
+expected to fail config validation as of v0.25.0.
 
 ## Example Configuration
 
@@ -40,7 +43,6 @@ The generator includes 8 scrapers, each producing metrics for a specific subsyst
 generator:
   type: hostmetrics
   hostmetrics:
-    workers: 1
     rate: 1s
     os: linux
     scrapers:

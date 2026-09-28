@@ -167,6 +167,7 @@ func run(cmd *cobra.Command, args []string) error {
 	// Emit Warn-level banners for any deprecated generator types
 	// configured by the user. Fires once per startup, not per record.
 	config.LogGeneratorDeprecations(logger, cfg)
+	config.LogRemovedSettings(logger, cfg)
 
 	if err := setupMetrics(ctx, cfg, logger); err != nil {
 		logger.Error("Failed to setup metrics", zap.Error(err))

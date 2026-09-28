@@ -178,7 +178,6 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 		}
 		return hostmetrics.New(hostmetrics.Config{
 			Logger:       logger,
-			Workers:      genCfg.HostMetrics.Workers,
 			Rate:         genCfg.HostMetrics.Rate,
 			OS:           genCfg.HostMetrics.OS,
 			Hostname:     genCfg.HostMetrics.Hostname,

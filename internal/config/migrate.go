@@ -78,3 +78,32 @@ func LogGeneratorDeprecations(logger *zap.Logger, cfg *Config) {
 		}
 	}
 }
+
+// LogRemovedSettings emits a Warn once per startup for every configured
+// setting that has been removed. A removed setting is ignored rather than
+// rejected during a deprecation window, so existing configs keep loading.
+//
+// Currently emits warnings for:
+//   - generator.hostmetrics.workers: one simulated host runs one worker, and
+//     rate is the load knob. Parallel workers only duplicated the same host's
+//     series.
+//
+// TODO: hostmetrics `workers` was removed (rate is the load knob). Expected in
+// v0.25.0: turn this warning into a config validation error and drop the
+// deprecated --generator-hostmetrics-workers flag.
+func LogRemovedSettings(logger *zap.Logger, cfg *Config) {
+	if logger == nil || cfg == nil {
+		return
+	}
+	for _, g := range cfg.EffectiveGenerators() {
+		if g.Type == GeneratorTypeHostMetrics && g.HostMetrics.Workers != 0 {
+			logger.Warn(HostMetricsWorkersRemoved)
+		}
+	}
+}
+
+// HostMetricsWorkersRemoved is the warning for the removed
+// generator.hostmetrics.workers setting, shared by the startup log and the
+// deprecated CLI flag.
+const HostMetricsWorkersRemoved = "`generator.hostmetrics.workers` is no longer supported and is ignored; " +
+	"use `rate` for more frequent writes. Setting it is expected to fail config validation as of v0.25.0."

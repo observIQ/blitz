@@ -21,6 +21,9 @@ type Override struct {
 	Usage string
 	// Default is the default value for the override
 	Default any
+	// Deprecated, when set, hides the flag and prints this message when it
+	// is used, while keeping it bound for a deprecation window.
+	Deprecated string
 }
 
 // NewOverride creates a new override
@@ -37,6 +40,11 @@ func NewOverride(field, usage string, def any) *Override {
 // Bind binds the override to the viper instance
 func (o *Override) Bind(flags *pflag.FlagSet) error {
 	flag := o.createFlag(flags)
+	if o.Deprecated != "" {
+		if err := flags.MarkDeprecated(o.Flag, o.Deprecated); err != nil {
+			return err
+		}
+	}
 	if err := viper.BindPFlag(o.Field, flag); err != nil {
 		return err
 	}
@@ -277,7 +285,15 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.filegen.cache-ttl", "file cache time-to-live (0 = never expire)", time.Duration(0)),
 		NewOverride("generator.okta.workers", "number of Okta generator workers", 1),
 		NewOverride("generator.okta.rate", "rate at which Okta logs are generated per worker", 1*time.Second),
-		NewOverride("generator.hostmetrics.workers", "number of host metrics generator workers", 1),
+		// Removed setting kept bound for the deprecation window; see LogRemovedSettings.
+		&Override{
+			Field:      "generator.hostmetrics.workers",
+			Flag:       createFlagName("generator.hostmetrics.workers"),
+			Env:        createEnvName("generator.hostmetrics.workers"),
+			Usage:      "removed: ignored, use --generator-hostmetrics-rate",
+			Default:    0,
+			Deprecated: HostMetricsWorkersRemoved,
+		},
 		NewOverride("generator.hostmetrics.rate", "scrape interval for host metrics generation", 1*time.Second),
 		NewOverride("generator.hostmetrics.os", "simulated operating system. One of: linux|windows", "linux"),
 		NewOverride("generator.hostmetrics.hostname", "simulated hostname (empty = random)", ""),
