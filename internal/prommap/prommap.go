@@ -5,6 +5,7 @@
 package prommap
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -55,7 +56,7 @@ type MetricFamily struct {
 // le labels, including +Inf), plus _sum and _count.
 func Map(mp embed.MetricPoint) (MetricFamily, error) {
 	base := sanitizeName(mp.Name)
-	labels := sortedLabels(mp.Metadata.Attributes)
+	labels := sortedLabels(mp.Metadata.Attributes, targetLabels(mp.Metadata.Resource))
 	tsMS := mp.Metadata.Timestamp.UnixMilli()
 
 	fam := MetricFamily{Help: mp.Description, Unit: mp.Unit}
@@ -122,22 +123,134 @@ func histogramSamples(base string, labels []Label, mp embed.MetricPoint, tsMS in
 	samples = append(samples,
 		Sample{Name: base + "_bucket", Labels: withLE(labels, "+Inf"), Value: float64(cumulative), TimestampMS: tsMS},
 		Sample{Name: base + "_sum", Labels: labels, Value: mp.HistogramSum, TimestampMS: tsMS},
-		Sample{Name: base + "_count", Labels: labels, Value: float64(mp.HistogramCount), TimestampMS: tsMS},
+		// _count must equal the +Inf bucket, so derive it from the buckets
+		// rather than trusting HistogramCount to agree.
+		Sample{Name: base + "_count", Labels: labels, Value: float64(cumulative), TimestampMS: tsMS},
 	)
 	return samples, nil
 }
 
 // sortedLabels converts metric attributes to sanitized, name-sorted labels.
-func sortedLabels(attrs map[string]string) []Label {
-	if len(attrs) == 0 {
+// Target labels (job, instance) win over a same-named attribute.
+func sortedLabels(attrs map[string]string, target []Label) []Label {
+	if len(attrs) == 0 && len(target) == 0 {
 		return nil
 	}
-	labels := make([]Label, 0, len(attrs))
+	byName := make(map[string]string, len(attrs)+len(target))
 	for k, v := range attrs {
-		labels = append(labels, Label{Name: sanitizeLabelName(k), Value: v})
+		byName[sanitizeLabelName(k)] = v
+	}
+	for _, l := range target {
+		byName[l.Name] = l.Value
+	}
+	return sortLabels(byName)
+}
+
+func sortLabels(byName map[string]string) []Label {
+	labels := make([]Label, 0, len(byName))
+	for k, v := range byName {
+		labels = append(labels, Label{Name: k, Value: v})
 	}
 	sort.Slice(labels, func(i, j int) bool { return labels[i].Name < labels[j].Name })
 	return labels
+}
+
+// Resource keys the OTel-to-Prometheus compatibility spec promotes to job and
+// instance. They feed the target labels and are left off target_info.
+const (
+	keyServiceName       = "service.name"
+	keyServiceNamespace  = "service.namespace"
+	keyServiceInstanceID = "service.instance.id"
+	keyHostName          = "host.name"
+	keyTelemetrySource   = "telemetry.source"
+)
+
+// targetLabels derives job and instance from a resource. It follows the spec
+// (job = [service.namespace/]service.name, instance = service.instance.id)
+// and falls back to telemetry.source and host.name, which blitz generators
+// set in place of service.*. Empty values are omitted.
+func targetLabels(res map[string]any) []Label {
+	if len(res) == 0 {
+		return nil
+	}
+	job := resourceString(res, keyServiceName)
+	if ns := resourceString(res, keyServiceNamespace); job != "" && ns != "" {
+		job = ns + "/" + job
+	}
+	if job == "" {
+		job = resourceString(res, keyTelemetrySource)
+	}
+	instance := resourceString(res, keyServiceInstanceID)
+	if instance == "" {
+		instance = resourceString(res, keyHostName)
+	}
+	var labels []Label
+	if instance != "" {
+		labels = append(labels, Label{Name: "instance", Value: instance})
+	}
+	if job != "" {
+		labels = append(labels, Label{Name: "job", Value: job})
+	}
+	return labels
+}
+
+// TargetInfo builds the target_info series for a point's resource: a gauge
+// of 1 labeled with job, instance, and every other resource attribute. It
+// reports false when the resource yields neither job nor instance.
+func TargetInfo(mp embed.MetricPoint) (MetricFamily, bool) {
+	target := targetLabels(mp.Metadata.Resource)
+	if len(target) == 0 {
+		return MetricFamily{}, false
+	}
+	byName := make(map[string]string, len(mp.Metadata.Resource)+len(target))
+	for k, v := range mp.Metadata.Resource {
+		switch k {
+		case keyServiceName, keyServiceNamespace, keyServiceInstanceID:
+			continue
+		}
+		byName[sanitizeLabelName(k)] = attrString(v)
+	}
+	for _, l := range target {
+		byName[l.Name] = l.Value
+	}
+	return MetricFamily{
+		Name: "target_info",
+		Type: TypeGauge,
+		Help: "Target metadata",
+		Samples: []Sample{{
+			Name:        "target_info",
+			Labels:      sortLabels(byName),
+			Value:       1,
+			TimestampMS: mp.Metadata.Timestamp.UnixMilli(),
+		}},
+	}, true
+}
+
+func resourceString(res map[string]any, key string) string {
+	v, ok := res[key]
+	if !ok {
+		return ""
+	}
+	return attrString(v)
+}
+
+// attrString renders a resource value as the collector does (pcommon
+// Value.AsString): strings as-is, scalars formatted, slices and maps as JSON.
+func attrString(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case nil:
+		return ""
+	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		return fmt.Sprint(t)
+	default:
+		b, err := json.Marshal(t)
+		if err != nil {
+			return fmt.Sprint(t)
+		}
+		return string(b)
+	}
 }
 
 // withLE copies base and appends le last (Prometheus puts le last on a bucket).
