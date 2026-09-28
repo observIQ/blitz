@@ -26,6 +26,8 @@ const (
 	OutputTypeHEC OutputType = "hec"
 	// OutputTypePrometheusRemoteWrite represents Prometheus remote-write output
 	OutputTypePrometheusRemoteWrite OutputType = "prometheus-remote-write"
+	// OutputTypePrometheusScrape represents Prometheus scrape (pull) output
+	OutputTypePrometheusScrape OutputType = "prometheus-scrape"
 )
 
 // Output contains configuration for output destinations
@@ -48,6 +50,8 @@ type Output struct {
 	Stdout StdoutOutputConfig `yaml:"stdout,omitempty" mapstructure:"stdout,omitempty"`
 	// PrometheusRemoteWrite contains Prometheus remote-write output configuration
 	PrometheusRemoteWrite PrometheusRemoteWriteOutputConfig `yaml:"prometheus-remote-write,omitempty" mapstructure:"prometheus-remote-write,omitempty"`
+	// PrometheusScrape contains Prometheus scrape output configuration
+	PrometheusScrape PrometheusScrapeOutputConfig `yaml:"prometheus-scrape,omitempty" mapstructure:"prometheus-scrape,omitempty"`
 }
 
 // Validate validates the output configuration
@@ -92,8 +96,12 @@ func (o *Output) Validate() error {
 		if err := o.PrometheusRemoteWrite.Validate(); err != nil {
 			return fmt.Errorf("prometheus-remote-write output validation failed: %w", err)
 		}
+	case OutputTypePrometheusScrape:
+		if err := o.PrometheusScrape.Validate(); err != nil {
+			return fmt.Errorf("prometheus-scrape output validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file, hec, prometheus-remote-write", o.Type)
+		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file, hec, prometheus-remote-write, prometheus-scrape", o.Type)
 	}
 
 	return nil
