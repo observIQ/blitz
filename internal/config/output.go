@@ -24,6 +24,8 @@ const (
 	OutputTypeFile OutputType = "file"
 	// OutputTypeHEC represents Splunk HEC output
 	OutputTypeHEC OutputType = "hec"
+	// OutputTypePrometheusRemoteWrite represents Prometheus remote-write output
+	OutputTypePrometheusRemoteWrite OutputType = "prometheus-remote-write"
 )
 
 // Output contains configuration for output destinations
@@ -44,6 +46,8 @@ type Output struct {
 	HEC HECOutputConfig `yaml:"hec,omitempty" mapstructure:"hec,omitempty"`
 	// Stdout contains stdout output configuration
 	Stdout StdoutOutputConfig `yaml:"stdout,omitempty" mapstructure:"stdout,omitempty"`
+	// PrometheusRemoteWrite contains Prometheus remote-write output configuration
+	PrometheusRemoteWrite PrometheusRemoteWriteOutputConfig `yaml:"prometheus-remote-write,omitempty" mapstructure:"prometheus-remote-write,omitempty"`
 }
 
 // Validate validates the output configuration
@@ -84,8 +88,12 @@ func (o *Output) Validate() error {
 		if err := o.HEC.Validate(); err != nil {
 			return fmt.Errorf("HEC output validation failed: %w", err)
 		}
+	case OutputTypePrometheusRemoteWrite:
+		if err := o.PrometheusRemoteWrite.Validate(); err != nil {
+			return fmt.Errorf("prometheus-remote-write output validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file, hec", o.Type)
+		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file, hec, prometheus-remote-write", o.Type)
 	}
 
 	return nil
