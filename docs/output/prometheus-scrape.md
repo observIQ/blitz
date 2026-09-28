@@ -10,18 +10,21 @@ Generated metric points map to Prometheus series before encoding:
 - Counter becomes a counter with a `_total` suffix.
 - Histogram becomes cumulative `_bucket` series with `le` labels, including `+Inf`, plus `_sum` and `_count`.
 
-Metric and label names are sanitized to the Prometheus grammar. Each series carries its name plus the metric's attributes as labels. The endpoint keeps the latest value per series (name, type, and label set), so repeated writes to the same series overwrite rather than accumulate — a faithful exporter model.
+Metric and label names are sanitized to the Prometheus grammar. Each series carries its name plus the metric's attributes as labels. The endpoint keeps the latest value per series (name, type, and label set), so repeated writes to the same series overwrite rather than accumulate, as a real exporter does. A series not updated within `metricExpiration` is dropped, so a host that stops reporting stops being exposed.
+
+Resource attributes follow the OpenTelemetry-to-Prometheus convention. Every series gets `job` and `instance` labels, taken from `service.namespace`/`service.name` and `service.instance.id`, or from `telemetry.source` and `host.name` when those are absent. A single `target_info` series per target carries the remaining resource attributes.
 
 By default no explicit timestamp is written, and the scraper stamps each sample at scrape time (the idiomatic exporter behavior). Set `emitTimestamps: true` to append each sample's millisecond timestamp instead.
 
 ## Configuration
 
-| YAML Path                                  | Flag                                          | Environment Variable                            | Default          | Description                                        |
-|--------------------------------------------|-----------------------------------------------|-------------------------------------------------|------------------|----------------------------------------------------|
-| `output.type`                              | `--output-type`                               | `BLITZ_OUTPUT_TYPE`                             | `nop`            | Set to `prometheus-scrape` to use this output.     |
-| `output.prometheus-scrape.listenAddress`   | `--output-prometheus-scrape-listenaddress`    | `BLITZ_OUTPUT_PROMETHEUS_SCRAPE_LISTENADDRESS`  | `0.0.0.0:9464`   | Host:port the metrics endpoint binds to.           |
-| `output.prometheus-scrape.metricsPath`     | `--output-prometheus-scrape-metricspath`      | `BLITZ_OUTPUT_PROMETHEUS_SCRAPE_METRICSPATH`    | `/metrics`       | URL path the exposition is served on.              |
-| `output.prometheus-scrape.emitTimestamps`  | `--output-prometheus-scrape-emittimestamps`   | `BLITZ_OUTPUT_PROMETHEUS_SCRAPE_EMITTIMESTAMPS` | `false`          | Append per-sample millisecond timestamps.          |
+| YAML Path                                   | Flag                                          | Environment Variable                              | Default        | Description                                                               |
+|---------------------------------------------|-----------------------------------------------|---------------------------------------------------|----------------|---------------------------------------------------------------------------|
+| `output.type`                               | `--output-type`                               | `BLITZ_OUTPUT_TYPE`                               | `nop`          | Set to `prometheus-scrape` to use this output.                            |
+| `output.prometheus-scrape.listenAddress`    | `--output-prometheus-scrape-listenaddress`    | `BLITZ_OUTPUT_PROMETHEUS_SCRAPE_LISTENADDRESS`    | `0.0.0.0:9464` | Host:port the metrics endpoint binds to.                                  |
+| `output.prometheus-scrape.metricsPath`      | `--output-prometheus-scrape-metricspath`      | `BLITZ_OUTPUT_PROMETHEUS_SCRAPE_METRICSPATH`      | `/metrics`     | URL path the exposition is served on.                                     |
+| `output.prometheus-scrape.emitTimestamps`   | `--output-prometheus-scrape-emittimestamps`   | `BLITZ_OUTPUT_PROMETHEUS_SCRAPE_EMITTIMESTAMPS`   | `false`        | Append per-sample millisecond timestamps.                                 |
+| `output.prometheus-scrape.metricExpiration` | `--output-prometheus-scrape-metricexpiration` | `BLITZ_OUTPUT_PROMETHEUS_SCRAPE_METRICEXPIRATION` | `5m`           | Drop a series not updated within this duration. `0` keeps series forever. |
 
 ## Example Configuration
 

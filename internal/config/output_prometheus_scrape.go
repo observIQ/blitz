@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 )
 
 // Default prometheus-scrape output configuration values.
@@ -12,6 +13,8 @@ const (
 	DefaultPromScrapeListenAddress = "0.0.0.0:9464"
 	// DefaultPromScrapeMetricsPath is the conventional exposition path.
 	DefaultPromScrapeMetricsPath = "/metrics"
+	// DefaultPromScrapeMetricExpiration matches the collector prometheusexporter.
+	DefaultPromScrapeMetricExpiration = 5 * time.Minute
 )
 
 // PrometheusScrapeOutputConfig contains configuration for the prometheus-scrape
@@ -24,6 +27,9 @@ type PrometheusScrapeOutputConfig struct {
 	// EmitTimestamps, when true, appends each sample's millisecond timestamp to
 	// the exposition. Default false lets the scraper stamp at scrape time.
 	EmitTimestamps bool `yaml:"emitTimestamps,omitempty" mapstructure:"emitTimestamps,omitempty"`
+	// MetricExpiration drops a series not updated within it, so churned or
+	// stopped hosts stop being exposed. 0 keeps series forever.
+	MetricExpiration time.Duration `yaml:"metricExpiration,omitempty" mapstructure:"metricExpiration,omitempty"`
 }
 
 // Validate validates the prometheus-scrape output configuration. Empty fields
@@ -33,6 +39,9 @@ func (c *PrometheusScrapeOutputConfig) Validate() error {
 		if _, _, err := net.SplitHostPort(c.ListenAddress); err != nil {
 			return fmt.Errorf("prometheus-scrape output listen address is not a valid host:port: %w", err)
 		}
+	}
+	if c.MetricExpiration < 0 {
+		return fmt.Errorf("prometheus-scrape output metric expiration cannot be negative, got %s", c.MetricExpiration)
 	}
 	if c.MetricsPath != "" && !strings.HasPrefix(c.MetricsPath, "/") {
 		return fmt.Errorf("prometheus-scrape output metrics path must start with '/', got %q", c.MetricsPath)

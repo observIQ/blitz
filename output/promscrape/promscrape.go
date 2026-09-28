@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/internal/prommap"
 	"github.com/observiq/blitz/output"
@@ -30,7 +31,9 @@ type Output struct {
 // New builds a prometheus-scrape output and starts serving. It binds the
 // listener eagerly so a port conflict surfaces here rather than at first
 // scrape. metricsPath is the path the exposition is served on (e.g. /metrics).
-func New(listenAddr, metricsPath string, emitTimestamps bool, tel embed.TelemetrySettings, logger *zap.Logger) (*Output, error) {
+// metricExpiration drops a series not updated within it (0 keeps series
+// forever), matching the collector prometheusexporter's metric_expiration.
+func New(listenAddr, metricsPath string, emitTimestamps bool, metricExpiration time.Duration, tel embed.TelemetrySettings, logger *zap.Logger) (*Output, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -45,7 +48,7 @@ func New(listenAddr, metricsPath string, emitTimestamps bool, tel embed.Telemetr
 
 	o := &Output{
 		emitTimestamps: emitTimestamps,
-		reg:            newRegistry(),
+		reg:            newRegistry(clockwork.NewRealClock(), metricExpiration),
 		ln:             ln,
 		logger:         logger,
 	}
@@ -94,6 +97,11 @@ func (o *Output) WriteMetric(ctx context.Context, data output.MetricRecord) erro
 		return fmt.Errorf("promscrape: map metric: %w", err)
 	}
 	o.reg.upsert(fam)
+	// target_info shares one registry entry per target, so repeats refresh it
+	// rather than duplicating it.
+	if t, ok := prommap.TargetInfo(data); ok {
+		o.reg.upsert(t)
+	}
 	if o.metrics != nil {
 		o.metrics.recordSeriesReceived(ctx, int64(len(fam.Samples)))
 	}

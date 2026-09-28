@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 
 func newTestOutput(t *testing.T) *Output {
 	t.Helper()
-	o, err := New("127.0.0.1:0", "/metrics", false, embed.TelemetrySettings{}, zap.NewNop())
+	o, err := New("127.0.0.1:0", "/metrics", false, 5*time.Minute, embed.TelemetrySettings{}, zap.NewNop())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 	return o
@@ -50,7 +51,7 @@ func TestScrapeServesExposition(t *testing.T) {
 
 func TestBindFailureSurfaces(t *testing.T) {
 	o := newTestOutput(t)
-	_, err := New(o.Addr(), "/metrics", false, embed.TelemetrySettings{}, zap.NewNop())
+	_, err := New(o.Addr(), "/metrics", false, 5*time.Minute, embed.TelemetrySettings{}, zap.NewNop())
 	require.Error(t, err)
 }
 
@@ -68,4 +69,28 @@ func scrape(t *testing.T, o *Output) string {
 	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	return string(b)
+}
+
+// Resource becomes job/instance on every series plus one target_info series,
+// however many points share the target.
+func TestScrapeTargetInfoAndLabels(t *testing.T) {
+	o := newTestOutput(t)
+	res := map[string]any{"host.name": "athena", "telemetry.source": "hostmetrics", "os.type": "linux"}
+	for _, state := range []string{"used", "free"} {
+		v := 1.0
+		require.NoError(t, o.WriteMetric(context.Background(), output.MetricRecord{
+			Name:        "system.memory.usage",
+			Type:        embed.MetricTypeGauge,
+			DoubleValue: &v,
+			Metadata: output.MetricPointMetadata{
+				Attributes: map[string]string{"state": state},
+				Resource:   res,
+			},
+		}))
+	}
+
+	body := scrape(t, o)
+	require.Contains(t, body, `system_memory_usage{instance="athena",job="hostmetrics",state="used"} 1`)
+	require.Equal(t, 1, strings.Count(body, "\ntarget_info{"))
+	require.Contains(t, body, `target_info{host_name="athena",instance="athena",job="hostmetrics",os_type="linux",telemetry_source="hostmetrics"} 1`)
 }

@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestPrometheusScrapeOutputConfigValidate(t *testing.T) {
 	tests := []struct {
@@ -13,6 +16,7 @@ func TestPrometheusScrapeOutputConfigValidate(t *testing.T) {
 		{"emit timestamps ok", PrometheusScrapeOutputConfig{ListenAddress: "127.0.0.1:9464", MetricsPath: "/m", EmitTimestamps: true}, false},
 		{"path missing leading slash", PrometheusScrapeOutputConfig{ListenAddress: "0.0.0.0:9464", MetricsPath: "metrics"}, true},
 		{"listen address no port", PrometheusScrapeOutputConfig{ListenAddress: "0.0.0.0", MetricsPath: "/metrics"}, true},
+		{"negative metric expiration", PrometheusScrapeOutputConfig{MetricExpiration: -time.Second}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

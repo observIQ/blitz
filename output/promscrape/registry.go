@@ -3,45 +3,64 @@ package promscrape
 import (
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/jonboulle/clockwork"
 
 	"github.com/observiq/blitz/internal/prommap"
 )
 
 // registry holds the latest MetricFamily per series identity. WriteMetric
 // upserts; the scrape handler snapshots. It is bounded by distinct series
-// (updates overwrite), not by write count.
+// (updates overwrite), not by write count, and a series not updated within
+// expiry is dropped, so churned or stopped hosts stop being exposed.
 type registry struct {
-	mu   sync.Mutex
-	fams map[string]prommap.MetricFamily
+	clock  clockwork.Clock
+	expiry time.Duration // 0 keeps series forever
+
+	mu      sync.Mutex
+	entries map[string]regEntry
 }
 
-func newRegistry() *registry {
-	return &registry{fams: make(map[string]prommap.MetricFamily)}
+type regEntry struct {
+	fam      prommap.MetricFamily
+	lastSeen time.Time
 }
 
-// upsert stores fam under its identity key, replacing any prior value.
+func newRegistry(clk clockwork.Clock, expiry time.Duration) *registry {
+	return &registry{clock: clk, expiry: expiry, entries: make(map[string]regEntry)}
+}
+
+// upsert stores fam under its identity key, replacing any prior value and
+// refreshing its expiry.
 func (r *registry) upsert(fam prommap.MetricFamily) {
 	k := familyKey(fam)
+	now := r.clock.Now()
 	r.mu.Lock()
-	r.fams[k] = fam
+	r.entries[k] = regEntry{fam: fam, lastSeen: now}
 	r.mu.Unlock()
 }
 
-// snapshot returns a copy of the current families for encoding.
+// snapshot drops expired series and returns a copy of the rest for encoding.
 func (r *registry) snapshot() []prommap.MetricFamily {
+	now := r.clock.Now()
 	r.mu.Lock()
-	out := make([]prommap.MetricFamily, 0, len(r.fams))
-	for _, f := range r.fams {
-		out = append(out, f)
+	defer r.mu.Unlock()
+	out := make([]prommap.MetricFamily, 0, len(r.entries))
+	for k, e := range r.entries {
+		if r.expiry > 0 && now.Sub(e.lastSeen) > r.expiry {
+			delete(r.entries, k)
+			continue
+		}
+		out = append(out, e.fam)
 	}
-	r.mu.Unlock()
 	return out
 }
 
 // len reports the current series count.
 func (r *registry) len() int {
 	r.mu.Lock()
-	n := len(r.fams)
+	n := len(r.entries)
 	r.mu.Unlock()
 	return n
 }

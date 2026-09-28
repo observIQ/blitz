@@ -615,7 +615,7 @@ func buildOutput(logger *zap.Logger, out config.Output, tel embed.TelemetrySetti
 		}
 	case config.OutputTypePrometheusScrape:
 		ps := out.PrometheusScrape
-		inst, err = promscrape.New(ps.ListenAddress, ps.MetricsPath, ps.EmitTimestamps, tel, logger)
+		inst, err = promscrape.New(ps.ListenAddress, ps.MetricsPath, ps.EmitTimestamps, ps.MetricExpiration, tel, logger)
 		if err != nil {
 			logger.Error("Failed to create prometheus-scrape output", zap.Error(err))
 			return nil, err
