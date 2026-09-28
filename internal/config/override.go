@@ -362,6 +362,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("output.prometheus-scrape.listenAddress", "Prometheus scrape endpoint listen address (host:port)", DefaultPromScrapeListenAddress),
 		NewOverride("output.prometheus-scrape.metricsPath", "Prometheus scrape endpoint metrics path", DefaultPromScrapeMetricsPath),
 		NewOverride("output.prometheus-scrape.emitTimestamps", "append per-sample millisecond timestamps to the exposition", false),
+		NewOverride("output.prometheus-scrape.metricExpiration", "drop a series not updated within this duration (0 keeps forever)", DefaultPromScrapeMetricExpiration),
 		NewOverride("telemetry.traces.otlpEndpoint", "OTLP gRPC endpoint (host:port) for exporting blitz's own spans (empty = disabled)", ""),
 		NewOverride("telemetry.traces.insecure", "send blitz's own spans over plaintext gRPC (no TLS)", false),
 		NewOverride("telemetry.traces.perBatchSpans", "enable higher-volume per-emit-cycle spans (off by default)", false),

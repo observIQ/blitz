@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/observiq/blitz/internal/prommap"
+	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -117,4 +119,40 @@ func TestEncodeStableFamilyOrder(t *testing.T) {
 
 	got := string(encode(fams, false))
 	require.Less(t, strings.Index(got, "aaa"), strings.Index(got, "zzz"))
+}
+
+// Two label sets of one metric must share a single HELP/TYPE header; a repeat
+// is rejected by promtool and client_golang/expfmt consumers.
+func TestEncodeGroupsByFamilyName(t *testing.T) {
+	fams := []prommap.MetricFamily{
+		{Name: "system_cpu_time", Type: prommap.TypeCounter, Help: "CPU time", Samples: []prommap.Sample{
+			{Name: "system_cpu_time", Labels: []prommap.Label{{Name: "cpu", Value: "1"}}, Value: 2},
+		}},
+		{Name: "system_cpu_time", Type: prommap.TypeCounter, Help: "CPU time", Samples: []prommap.Sample{
+			{Name: "system_cpu_time", Labels: []prommap.Label{{Name: "cpu", Value: "0"}}, Value: 1},
+		}},
+	}
+
+	got := string(encode(fams, false))
+	want := "# HELP system_cpu_time CPU time\n" +
+		"# TYPE system_cpu_time counter\n" +
+		"system_cpu_time{cpu=\"0\"} 1\n" +
+		"system_cpu_time{cpu=\"1\"} 2\n"
+	require.Equal(t, want, got)
+}
+
+// Regression: the exposition must parse with the same parser client_golang
+// consumers use.
+func TestEncodeParsesWithExpfmt(t *testing.T) {
+	var fams []prommap.MetricFamily
+	for _, cpu := range []string{"0", "1", "2"} {
+		fams = append(fams, prommap.MetricFamily{
+			Name: "system_cpu_time", Type: prommap.TypeCounter, Help: "CPU time",
+			Samples: []prommap.Sample{{Name: "system_cpu_time", Labels: []prommap.Label{{Name: "cpu", Value: cpu}}, Value: 1}},
+		})
+	}
+	parser := expfmt.NewTextParser(model.LegacyValidation)
+	parsed, err := parser.TextToMetricFamilies(strings.NewReader(string(encode(fams, false))))
+	require.NoError(t, err)
+	require.Len(t, parsed["system_cpu_time"].GetMetric(), 3)
 }

@@ -379,7 +379,7 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	case config.OutputTypePrometheusScrape:
 		ps := cfg.Output.PrometheusScrape
-		outputInstance, err = promscrape.New(ps.ListenAddress, ps.MetricsPath, ps.EmitTimestamps, tel, logger)
+		outputInstance, err = promscrape.New(ps.ListenAddress, ps.MetricsPath, ps.EmitTimestamps, ps.MetricExpiration, tel, logger)
 		if err != nil {
 			logger.Error("Failed to create prometheus-scrape output", zap.Error(err))
 			return err

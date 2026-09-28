@@ -146,6 +146,7 @@ func getTestOverrideFlagsArgs() []string {
 		"--output-prometheus-scrape-listenaddress", "127.0.0.1:19464",
 		"--output-prometheus-scrape-metricspath", "/flagmetrics",
 		"--output-prometheus-scrape-emittimestamps", "true",
+		"--output-prometheus-scrape-metricexpiration", "7m",
 		"--output-stdout-flushinterval", "50ms",
 		"--metrics-port", "8080",
 		"--telemetry-traces-otlpendpoint", "traces.example:4317",
@@ -285,6 +286,7 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_OUTPUT_PROMETHEUS_SCRAPE_LISTENADDRESS":      "127.0.0.1:29464",
 		"BLITZ_OUTPUT_PROMETHEUS_SCRAPE_METRICSPATH":        "/envmetrics",
 		"BLITZ_OUTPUT_PROMETHEUS_SCRAPE_EMITTIMESTAMPS":     "true",
+		"BLITZ_OUTPUT_PROMETHEUS_SCRAPE_METRICEXPIRATION":   "9m",
 		"BLITZ_OUTPUT_HEC_ENABLE_TLS":                       "false",
 		"BLITZ_OUTPUT_HEC_TLS_CERT":                         "/env/hec_cert.pem",
 		"BLITZ_OUTPUT_HEC_TLS_KEY":                          "/env/hec_key.pem",
@@ -489,8 +491,9 @@ func TestOverrideDefaults(t *testing.T) {
 				Timeout:      DefaultPromRWTimeout,
 			},
 			PrometheusScrape: PrometheusScrapeOutputConfig{
-				ListenAddress: DefaultPromScrapeListenAddress,
-				MetricsPath:   DefaultPromScrapeMetricsPath,
+				ListenAddress:    DefaultPromScrapeListenAddress,
+				MetricsPath:      DefaultPromScrapeMetricsPath,
+				MetricExpiration: DefaultPromScrapeMetricExpiration,
 			},
 		},
 		Metrics: Metrics{
@@ -716,9 +719,10 @@ func TestOverrideFlags(t *testing.T) {
 				Timeout:      20 * time.Second,
 			},
 			PrometheusScrape: PrometheusScrapeOutputConfig{
-				ListenAddress:  "127.0.0.1:19464",
-				MetricsPath:    "/flagmetrics",
-				EmitTimestamps: true,
+				ListenAddress:    "127.0.0.1:19464",
+				MetricsPath:      "/flagmetrics",
+				EmitTimestamps:   true,
+				MetricExpiration: 7 * time.Minute,
 			},
 		},
 		Metrics: Metrics{
@@ -948,9 +952,10 @@ func TestOverrideEnvs(t *testing.T) {
 				Timeout:      25 * time.Second,
 			},
 			PrometheusScrape: PrometheusScrapeOutputConfig{
-				ListenAddress:  "127.0.0.1:29464",
-				MetricsPath:    "/envmetrics",
-				EmitTimestamps: true,
+				ListenAddress:    "127.0.0.1:29464",
+				MetricsPath:      "/envmetrics",
+				EmitTimestamps:   true,
+				MetricExpiration: 9 * time.Minute,
 			},
 		},
 		Metrics: Metrics{
