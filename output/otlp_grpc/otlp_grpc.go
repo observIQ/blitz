@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -168,9 +169,9 @@ type OTLPGrpc struct {
 	workers       int
 	insecure      bool
 	tlsConfig     *tls.Config
-	dataChan      chan *logspb.LogRecord
-	metricChan    chan *metricspb.Metric
-	traceChan     chan *tracepb.Span
+	dataChan      chan *entry[*logspb.LogRecord]
+	metricChan    chan *entry[*metricspb.Metric]
+	traceChan     chan *entry[*tracepb.Span]
 	ctx           context.Context
 	cancel        context.CancelFunc
 	workerManager *workermanager.WorkerManager
@@ -241,9 +242,9 @@ func New(logger *zap.Logger, opts ...OTLPGrpcOption) (*OTLPGrpc, error) {
 		workers:            cfg.workers,
 		insecure:           cfg.insecure,
 		tlsConfig:          cfg.tlsConfig,
-		dataChan:           make(chan *logspb.LogRecord, DefaultOTLPGrpcChannelSize),
-		metricChan:         make(chan *metricspb.Metric, DefaultOTLPGrpcChannelSize),
-		traceChan:          make(chan *tracepb.Span, DefaultOTLPGrpcChannelSize),
+		dataChan:           make(chan *entry[*logspb.LogRecord], DefaultOTLPGrpcChannelSize),
+		metricChan:         make(chan *entry[*metricspb.Metric], DefaultOTLPGrpcChannelSize),
+		traceChan:          make(chan *entry[*tracepb.Span], DefaultOTLPGrpcChannelSize),
 		ctx:                ctx,
 		cancel:             cancel,
 		batchTimeout:       cfg.batchTimeout,
@@ -349,9 +350,10 @@ func (o *OTLPGrpc) Write(ctx context.Context, data output.LogRecord) error {
 			},
 		},
 	}
+	record.Attributes = append(record.Attributes, anyMapToKeyValues(data.Metadata.Attributes)...)
 
 	select {
-	case o.dataChan <- record:
+	case o.dataChan <- newEntry(record, data.Metadata.Resource):
 		o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
@@ -542,9 +544,8 @@ func (o *OTLPGrpc) sendMetricBatch(client collectormetrics.MetricsServiceClient,
 	span.SetAttributes(attribute.Int("blitz.batch.size", len(metrics)), attribute.String("blitz.signal", "metrics"))
 	defer span.End()
 
-	rm := buildMetricRequest(metrics, nil)
 	request := &collectormetrics.ExportMetricsServiceRequest{
-		ResourceMetrics: []*metricspb.ResourceMetrics{rm},
+		ResourceMetrics: buildMetricRequests(metrics),
 	}
 
 	ctx, cancel := context.WithTimeout(o.ctx, o.batchTimeout)
@@ -578,9 +579,8 @@ func (o *OTLPGrpc) sendTraceBatch(client collectortrace.TraceServiceClient, batc
 	span.SetAttributes(attribute.Int("blitz.batch.size", len(spans)), attribute.String("blitz.signal", "traces"))
 	defer span.End()
 
-	rs := buildTraceRequest(spans)
 	request := &collectortrace.ExportTraceServiceRequest{
-		ResourceSpans: []*tracepb.ResourceSpans{rs},
+		ResourceSpans: buildTraceRequests(spans),
 	}
 
 	ctx, cancel := context.WithTimeout(o.ctx, o.batchTimeout)
@@ -629,7 +629,7 @@ func (o *OTLPGrpc) connect() (*grpc.ClientConn, error) {
 
 // logBatch holds a batch of logs to be sent
 type logBatch struct {
-	logs    []*logspb.LogRecord
+	logs    []*entry[*logspb.LogRecord]
 	maxSize int
 	timer   *time.Timer
 	mu      sync.Mutex
@@ -638,14 +638,14 @@ type logBatch struct {
 // newLogBatch creates a new log batch
 func newLogBatch(maxSize int, timeout time.Duration) *logBatch {
 	return &logBatch{
-		logs:    make([]*logspb.LogRecord, 0, maxSize),
+		logs:    make([]*entry[*logspb.LogRecord], 0, maxSize),
 		maxSize: maxSize,
 		timer:   time.NewTimer(timeout),
 	}
 }
 
 // add adds a log to the batch
-func (b *logBatch) add(data *logspb.LogRecord) {
+func (b *logBatch) add(data *entry[*logspb.LogRecord]) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -667,11 +667,11 @@ func (b *logBatch) isEmpty() bool {
 }
 
 // getAndClear returns all logs and clears the batch
-func (b *logBatch) getAndClear() []*logspb.LogRecord {
+func (b *logBatch) getAndClear() []*entry[*logspb.LogRecord] {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	logs := b.logs
-	b.logs = make([]*logspb.LogRecord, 0, b.maxSize)
+	b.logs = make([]*entry[*logspb.LogRecord], 0, b.maxSize)
 	return logs
 }
 
@@ -731,37 +731,31 @@ func (o *OTLPGrpc) flushBatch(client collectorlogs.LogsServiceClient, batch *log
 	return o.sendBatch(client, batch)
 }
 
-// buildOTLPRequest builds an OTLP ExportLogsServiceRequest from prepared LogRecord entries
-func (o *OTLPGrpc) buildOTLPRequest(logs []*logspb.LogRecord) *collectorlogs.ExportLogsServiceRequest {
-	resourceLogs := &logspb.ResourceLogs{
-		Resource: &resourcepb.Resource{
-			Attributes: []*commonpb.KeyValue{
-				{
-					Key: "service.name",
-					Value: &commonpb.AnyValue{
-						Value: &commonpb.AnyValue_StringValue{
-							StringValue: "blitz",
-						},
-					},
-				},
-			},
-		},
-		ScopeLogs: []*logspb.ScopeLogs{
-			{
-				LogRecords: make([]*logspb.LogRecord, 0, len(logs)),
-			},
-		},
-	}
-
-	for _, logRecord := range logs {
-		if logRecord == nil {
+// buildOTLPRequest builds an OTLP ExportLogsServiceRequest from prepared log
+// entries, with one ResourceLogs per distinct resource so each record keeps
+// the resource attributes (host.name, telemetry.source, ...) its generator
+// set in Metadata.Resource.
+func (o *OTLPGrpc) buildOTLPRequest(logs []*entry[*logspb.LogRecord]) *collectorlogs.ExportLogsServiceRequest {
+	groups := groupByResource(logs)
+	resourceLogs := make([]*logspb.ResourceLogs, 0, len(groups))
+	for _, g := range groups {
+		records := make([]*logspb.LogRecord, 0, len(g.items))
+		for _, r := range g.items {
+			if r != nil {
+				records = append(records, r)
+			}
+		}
+		if len(records) == 0 {
 			continue
 		}
-		resourceLogs.ScopeLogs[0].LogRecords = append(resourceLogs.ScopeLogs[0].LogRecords, logRecord)
+		resourceLogs = append(resourceLogs, &logspb.ResourceLogs{
+			Resource:  &resourcepb.Resource{Attributes: resourceAttributes(g.resource)},
+			ScopeLogs: []*logspb.ScopeLogs{{LogRecords: records}},
+		})
 	}
 
 	return &collectorlogs.ExportLogsServiceRequest{
-		ResourceLogs: []*logspb.ResourceLogs{resourceLogs},
+		ResourceLogs: resourceLogs,
 	}
 }
 
@@ -849,19 +843,31 @@ func (o *OTLPGrpc) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces}
 }
 
-// mapSeverityNumber maps string log levels to OTLP severity numbers
+// mapSeverityNumber maps string log levels to OTLP severity numbers.
+// Matching is case-insensitive and covers the level names generators emit:
+// lowercase levels (kubernetes, apache error), Windows Event Log level names
+// (Verbose, Information, Warning, Critical), syslog-style names (notice, crit)
+// and PostgreSQL's LOG, WARNING and PANIC. Unknown levels map to INFO.
 func (o *OTLPGrpc) mapSeverityNumber(level string) logspb.SeverityNumber {
-	switch level {
+	switch strings.ToUpper(level) {
+	case "TRACE", "VERBOSE":
+		return logspb.SeverityNumber_SEVERITY_NUMBER_TRACE
 	case "DEBUG":
 		return logspb.SeverityNumber_SEVERITY_NUMBER_DEBUG
-	case "INFO":
+	case "INFO", "INFORMATION", "INFORMATIONAL", "LOG":
 		return logspb.SeverityNumber_SEVERITY_NUMBER_INFO
-	case "WARN":
+	case "NOTICE":
+		return logspb.SeverityNumber_SEVERITY_NUMBER_INFO2
+	case "WARN", "WARNING":
 		return logspb.SeverityNumber_SEVERITY_NUMBER_WARN
-	case "ERROR":
+	case "ERROR", "ERR":
 		return logspb.SeverityNumber_SEVERITY_NUMBER_ERROR
+	case "CRIT", "CRITICAL", "ALERT":
+		return logspb.SeverityNumber_SEVERITY_NUMBER_FATAL
 	case "FATAL":
 		return logspb.SeverityNumber_SEVERITY_NUMBER_FATAL2
+	case "PANIC", "EMERG", "EMERGENCY":
+		return logspb.SeverityNumber_SEVERITY_NUMBER_FATAL4
 	default:
 		return logspb.SeverityNumber_SEVERITY_NUMBER_INFO
 	}

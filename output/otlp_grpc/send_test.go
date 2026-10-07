@@ -58,26 +58,26 @@ func TestOTLPGrpc_sendBatchesEmitSpans(t *testing.T) {
 	o := testOTLP(t)
 
 	lb := newLogBatch(10, time.Second)
-	lb.add(&logspb.LogRecord{})
+	lb.add(newEntry(&logspb.LogRecord{}, nil))
 	require.NoError(t, o.sendBatch(mockLogsClient{}, lb))
 
 	lbErr := newLogBatch(10, time.Second)
-	lbErr.add(&logspb.LogRecord{})
+	lbErr.add(newEntry(&logspb.LogRecord{}, nil))
 	require.Error(t, o.sendBatch(mockLogsClient{err: errors.New("boom")}, lbErr))
 
 	mb := newMetricBatch(10, time.Second)
-	mb.add(&metricspb.Metric{})
+	mb.add(newEntry(&metricspb.Metric{}, nil))
 	require.NoError(t, o.sendMetricBatch(mockMetricsClient{}, mb))
 
 	mbErr := newMetricBatch(10, time.Second)
-	mbErr.add(&metricspb.Metric{})
+	mbErr.add(newEntry(&metricspb.Metric{}, nil))
 	require.Error(t, o.sendMetricBatch(mockMetricsClient{err: errors.New("boom")}, mbErr))
 
 	tb := newTraceBatch(10, time.Second)
-	tb.add(&tracepb.Span{})
+	tb.add(newEntry(&tracepb.Span{}, nil))
 	require.NoError(t, o.sendTraceBatch(mockTraceClient{}, tb))
 
 	tbErr := newTraceBatch(10, time.Second)
-	tbErr.add(&tracepb.Span{})
+	tbErr.add(newEntry(&tracepb.Span{}, nil))
 	require.Error(t, o.sendTraceBatch(mockTraceClient{err: errors.New("boom")}, tbErr))
 }

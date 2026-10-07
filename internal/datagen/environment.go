@@ -43,7 +43,26 @@ func (e *Environment) AllNetworkSystems() []*NetworkSystemIdentity { return e.Ne
 // identity once and attributes every record it emits consistently. Returns nil
 // when the environment has no systems.
 func (e *Environment) SystemForKey(key string) *SystemIdentity {
-	if len(e.Systems) == 0 {
+	return systemForKey(e.Systems, key)
+}
+
+// SystemForKeyWithOS is SystemForKey restricted to the environment's systems
+// running os: the same key always maps to the same system of that OS. It is
+// for generators whose output depends on the host OS (hostmetrics), so a
+// configured OS is honored instead of inheriting whatever OS the key-selected
+// system happens to run. Returns nil when no system runs os.
+func (e *Environment) SystemForKeyWithOS(key string, os OSType) *SystemIdentity {
+	matching := make([]*SystemIdentity, 0, len(e.Systems))
+	for _, s := range e.Systems {
+		if s != nil && s.OSInfo.Type == os {
+			matching = append(matching, s)
+		}
+	}
+	return systemForKey(matching, key)
+}
+
+func systemForKey(systems []*SystemIdentity, key string) *SystemIdentity {
+	if len(systems) == 0 {
 		return nil
 	}
 	h := fnv.New32a()
@@ -51,8 +70,8 @@ func (e *Environment) SystemForKey(key string) *SystemIdentity {
 	// int64 throughout: uint32->int64 and int->int64 are widening (never
 	// negative, never truncating), so this is correct on 32-bit targets and
 	// avoids an int->uint32 narrowing conversion.
-	idx := int64(h.Sum32()) % int64(len(e.Systems))
-	return e.Systems[idx]
+	idx := int64(h.Sum32()) % int64(len(systems))
+	return systems[idx]
 }
 
 // EnvironmentOpts controls the size and shape of the generated environment.

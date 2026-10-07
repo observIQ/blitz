@@ -167,11 +167,11 @@ func TestMetricBatch(t *testing.T) {
 	assert.True(t, batch.isEmpty())
 	assert.False(t, batch.isFull())
 
-	batch.add(&metricspb.Metric{Name: "test1"})
+	batch.add(newEntry(&metricspb.Metric{Name: "test1"}, nil))
 	assert.False(t, batch.isEmpty())
 	assert.False(t, batch.isFull())
 
-	batch.add(&metricspb.Metric{Name: "test2"})
+	batch.add(newEntry(&metricspb.Metric{Name: "test2"}, nil))
 	assert.True(t, batch.isFull())
 
 	metrics := batch.getAndClear()
@@ -184,8 +184,8 @@ func TestTraceBatch(t *testing.T) {
 	batch := newTraceBatch(2, time.Second)
 	assert.True(t, batch.isEmpty())
 
-	batch.add(&tracepb.Span{Name: "span1"})
-	batch.add(&tracepb.Span{Name: "span2"})
+	batch.add(newEntry(&tracepb.Span{Name: "span1"}, nil))
+	batch.add(newEntry(&tracepb.Span{Name: "span2"}, nil))
 	assert.True(t, batch.isFull())
 
 	spans := batch.getAndClear()

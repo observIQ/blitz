@@ -41,3 +41,36 @@ func TestEnvironmentSystemForKey(t *testing.T) {
 		t.Error("SystemForKey on an empty environment should return nil")
 	}
 }
+
+func TestEnvironmentSystemForKeyWithOS(t *testing.T) {
+	env := &Environment{Systems: []*SystemIdentity{
+		{Hostname: "win-1", OSInfo: OSInfo{Type: OSWindows}},
+		{Hostname: "lin-1", OSInfo: OSInfo{Type: OSLinux}},
+		{Hostname: "win-2", OSInfo: OSInfo{Type: OSWindows}},
+		{Hostname: "lin-2", OSInfo: OSInfo{Type: OSLinux}},
+		nil,
+	}}
+
+	// Only systems running the requested OS are eligible, for every key.
+	for _, k := range []string{"hostmetrics", "apache", "nginx", "postgres", "wel", "traces"} {
+		if s := env.SystemForKeyWithOS(k, OSLinux); s == nil || s.OSInfo.Type != OSLinux {
+			t.Errorf("SystemForKeyWithOS(%q, linux) = %+v, want a linux system", k, s)
+		}
+		if s := env.SystemForKeyWithOS(k, OSWindows); s == nil || s.OSInfo.Type != OSWindows {
+			t.Errorf("SystemForKeyWithOS(%q, windows) = %+v, want a windows system", k, s)
+		}
+	}
+
+	// Deterministic for a repeated key.
+	first := env.SystemForKeyWithOS("hostmetrics", OSLinux)
+	for i := 0; i < 5; i++ {
+		if env.SystemForKeyWithOS("hostmetrics", OSLinux) != first {
+			t.Fatal("SystemForKeyWithOS is not deterministic for a repeated key")
+		}
+	}
+
+	// No system runs the OS: nil, not a system of another OS.
+	if s := env.SystemForKeyWithOS("hostmetrics", OSMacOS); s != nil {
+		t.Errorf("SystemForKeyWithOS(macos) = %+v, want nil", s)
+	}
+}

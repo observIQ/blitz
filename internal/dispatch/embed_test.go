@@ -133,6 +133,33 @@ func TestHostIdentityResolvesFromEnvironment(t *testing.T) {
 	assert.Equal(t, "PANTHEON-01", got.Hostname)
 }
 
+// TestHostMetricsIdentityHonorsConfiguredOS covers the hostmetrics-specific
+// resolution: the selected host always runs the configured OS (empty means
+// linux), and an OS no system runs falls back to nil (synthetic host).
+func TestHostMetricsIdentityHonorsConfiguredOS(t *testing.T) {
+	assert.Nil(t, hostMetricsIdentity(nil, "linux"))
+
+	env := &datagen.Environment{
+		Systems: []*datagen.SystemIdentity{
+			{Hostname: "FLORA-WORKER09", OSInfo: datagen.OSInfo{Type: datagen.OSWindows}},
+			{Hostname: "mimir-db-14", OSInfo: datagen.OSInfo{Type: datagen.OSLinux}},
+		},
+	}
+
+	for _, osName := range []string{"linux", "LINUX", ""} {
+		got := hostMetricsIdentity(env, osName)
+		require.NotNil(t, got, "os %q", osName)
+		assert.Equal(t, "mimir-db-14", got.Hostname, "os %q", osName)
+	}
+
+	got := hostMetricsIdentity(env, "windows")
+	require.NotNil(t, got)
+	assert.Equal(t, "FLORA-WORKER09", got.Hostname)
+
+	assert.Nil(t, hostMetricsIdentity(env, "macos"), "no macos system: fall back to a synthetic host")
+	assert.Nil(t, hostMetricsIdentity(env, "solaris"), "unknown OS: fall back to a synthetic host")
+}
+
 // TestForEmbedHostMetricsWiresEnvironmentIdentity proves the full wiring: a
 // hostmetrics module built through ForEmbed with an environment emits points
 // carrying the resolved simulated host's identity attributes.
