@@ -185,7 +185,7 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			ScraperNames: genCfg.HostMetrics.Scrapers,
 			Consumer:     consumers.MetricConsumer,
 			Seed:         yamlSeedDefault(genCfg.HostMetrics.Seed),
-			Identity:     hostIdentity(env, genCfg.Type),
+			Identity:     hostMetricsIdentity(env, genCfg.HostMetrics.OS),
 			Telemetry:    tel,
 		})
 	case config.GeneratorTypeTraces:
@@ -247,6 +247,29 @@ func hostIdentity(env *datagen.Environment, component config.GeneratorType) *dat
 		return nil
 	}
 	return env.SystemForKey(string(component))
+}
+
+// hostMetricsIdentity resolves the simulated host for the hostmetrics
+// generator. Its metrics are OS-specific and its OS is configurable
+// (generator.hostmetrics.os), so the host is chosen only among the
+// environment's systems running that OS; otherwise the key-selected system's
+// OS silently overrode the setting. An empty OS means linux, the config
+// default. Returns nil (the generator then synthesizes a host from OS and
+// Hostname) when no environment is configured, the OS is not recognized, or
+// no system in the environment runs it.
+func hostMetricsIdentity(env *datagen.Environment, osName string) *datagen.SystemIdentity {
+	if env == nil {
+		return nil
+	}
+	osType := datagen.OSLinux
+	if osName != "" {
+		parsed, err := datagen.ParseOSType(osName)
+		if err != nil {
+			return nil
+		}
+		osType = parsed
+	}
+	return env.SystemForKeyWithOS(string(config.GeneratorTypeHostMetrics), osType)
 }
 
 // yamlSeedDefault translates a YAML-loaded Seed value into the
