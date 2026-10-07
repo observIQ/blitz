@@ -17,7 +17,7 @@ func (o *OTLPGrpc) WriteMetric(ctx context.Context, data output.MetricRecord) er
 	pbMetric := convertMetricRecord(data)
 
 	select {
-	case o.metricChan <- pbMetric:
+	case o.metricChan <- newEntry(pbMetric, data.Metadata.Resource):
 		o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "metrics")
 		return nil
 	case <-ctx.Done():
@@ -32,7 +32,7 @@ func (o *OTLPGrpc) WriteTrace(ctx context.Context, data output.TraceRecord) erro
 	pbSpan := convertTraceRecord(data)
 
 	select {
-	case o.traceChan <- pbSpan:
+	case o.traceChan <- newEntry(pbSpan, data.Metadata.Resource):
 		o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "traces")
 		return nil
 	case <-ctx.Done():
@@ -230,18 +230,24 @@ func hexByte(c byte) byte {
 	}
 }
 
-// buildMetricRequest builds an OTLP ExportMetricsServiceRequest from prepared metrics.
-func buildMetricRequest(metrics []*metricspb.Metric, resource map[string]any) *metricspb.ResourceMetrics {
-	resourceAttrs := make([]*commonpb.KeyValue, 0, len(resource)+1)
-	resourceAttrs = append(resourceAttrs, &commonpb.KeyValue{
-		Key:   "service.name",
-		Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: "blitz"}},
-	})
-	resourceAttrs = append(resourceAttrs, anyMapToKeyValues(resource)...)
+// buildMetricRequests builds one ResourceMetrics per distinct resource in the
+// batch, so each metric keeps the resource attributes (host.name, ...) its
+// generator set in Metadata.Resource.
+func buildMetricRequests(metrics []*entry[*metricspb.Metric]) []*metricspb.ResourceMetrics {
+	groups := groupByResource(metrics)
+	out := make([]*metricspb.ResourceMetrics, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, buildMetricRequest(g.items, g.resource))
+	}
+	return out
+}
 
+// buildMetricRequest builds an OTLP ResourceMetrics from prepared metrics that
+// share one resource.
+func buildMetricRequest(metrics []*metricspb.Metric, resource map[string]any) *metricspb.ResourceMetrics {
 	return &metricspb.ResourceMetrics{
 		Resource: &resourcepb.Resource{
-			Attributes: resourceAttrs,
+			Attributes: resourceAttributes(resource),
 		},
 		ScopeMetrics: []*metricspb.ScopeMetrics{
 			{
@@ -251,16 +257,24 @@ func buildMetricRequest(metrics []*metricspb.Metric, resource map[string]any) *m
 	}
 }
 
-// buildTraceRequest builds an OTLP ResourceSpans from prepared spans.
-func buildTraceRequest(spans []*tracepb.Span) *tracepb.ResourceSpans {
+// buildTraceRequests builds one ResourceSpans per distinct resource in the
+// batch, so each span keeps the resource attributes (host.name, service.name,
+// ...) its generator set in Metadata.Resource.
+func buildTraceRequests(spans []*entry[*tracepb.Span]) []*tracepb.ResourceSpans {
+	groups := groupByResource(spans)
+	out := make([]*tracepb.ResourceSpans, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, buildTraceRequest(g.items, g.resource))
+	}
+	return out
+}
+
+// buildTraceRequest builds an OTLP ResourceSpans from prepared spans that
+// share one resource.
+func buildTraceRequest(spans []*tracepb.Span, resource map[string]any) *tracepb.ResourceSpans {
 	return &tracepb.ResourceSpans{
 		Resource: &resourcepb.Resource{
-			Attributes: []*commonpb.KeyValue{
-				{
-					Key:   "service.name",
-					Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: "blitz"}},
-				},
-			},
+			Attributes: resourceAttributes(resource),
 		},
 		ScopeSpans: []*tracepb.ScopeSpans{
 			{
@@ -272,50 +286,50 @@ func buildTraceRequest(spans []*tracepb.Span) *tracepb.ResourceSpans {
 
 // metricBatch holds a batch of metrics to be sent
 type metricBatch struct {
-	metrics []*metricspb.Metric
+	metrics []*entry[*metricspb.Metric]
 	maxSize int
 	timer   *time.Timer
 }
 
 func newMetricBatch(maxSize int, timeout time.Duration) *metricBatch {
 	return &metricBatch{
-		metrics: make([]*metricspb.Metric, 0, maxSize),
+		metrics: make([]*entry[*metricspb.Metric], 0, maxSize),
 		maxSize: maxSize,
 		timer:   time.NewTimer(timeout),
 	}
 }
 
-func (b *metricBatch) add(m *metricspb.Metric) { b.metrics = append(b.metrics, m) }
-func (b *metricBatch) isFull() bool            { return len(b.metrics) >= b.maxSize }
-func (b *metricBatch) isEmpty() bool           { return len(b.metrics) == 0 }
+func (b *metricBatch) add(m *entry[*metricspb.Metric]) { b.metrics = append(b.metrics, m) }
+func (b *metricBatch) isFull() bool                    { return len(b.metrics) >= b.maxSize }
+func (b *metricBatch) isEmpty() bool                   { return len(b.metrics) == 0 }
 
-func (b *metricBatch) getAndClear() []*metricspb.Metric {
+func (b *metricBatch) getAndClear() []*entry[*metricspb.Metric] {
 	metrics := b.metrics
-	b.metrics = make([]*metricspb.Metric, 0, b.maxSize)
+	b.metrics = make([]*entry[*metricspb.Metric], 0, b.maxSize)
 	return metrics
 }
 
 // traceBatch holds a batch of spans to be sent
 type traceBatch struct {
-	spans   []*tracepb.Span
+	spans   []*entry[*tracepb.Span]
 	maxSize int
 	timer   *time.Timer
 }
 
 func newTraceBatch(maxSize int, timeout time.Duration) *traceBatch {
 	return &traceBatch{
-		spans:   make([]*tracepb.Span, 0, maxSize),
+		spans:   make([]*entry[*tracepb.Span], 0, maxSize),
 		maxSize: maxSize,
 		timer:   time.NewTimer(timeout),
 	}
 }
 
-func (b *traceBatch) add(s *tracepb.Span) { b.spans = append(b.spans, s) }
-func (b *traceBatch) isFull() bool        { return len(b.spans) >= b.maxSize }
-func (b *traceBatch) isEmpty() bool       { return len(b.spans) == 0 }
+func (b *traceBatch) add(s *entry[*tracepb.Span]) { b.spans = append(b.spans, s) }
+func (b *traceBatch) isFull() bool                { return len(b.spans) >= b.maxSize }
+func (b *traceBatch) isEmpty() bool               { return len(b.spans) == 0 }
 
-func (b *traceBatch) getAndClear() []*tracepb.Span {
+func (b *traceBatch) getAndClear() []*entry[*tracepb.Span] {
 	spans := b.spans
-	b.spans = make([]*tracepb.Span, 0, b.maxSize)
+	b.spans = make([]*entry[*tracepb.Span], 0, b.maxSize)
 	return spans
 }
