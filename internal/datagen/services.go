@@ -81,6 +81,75 @@ var linuxWorkstationServices = []serviceTemplate{
 	{"NetworkManager", "Network Manager", "/usr/sbin/NetworkManager", StartAutomatic, "root"},
 }
 
+// extendedServerServices holds the bespoke server-role daemon sets for the
+// PIPE-1260 OSes. Each is the authentic daemon roster for that platform, so a
+// generated host reads as a real box of its kind (ESXi hostd/vpxa, AIX SRC,
+// Solaris SMF FMRIs, BSD rc daemons, the virtualization stacks).
+var extendedServerServices = map[OSType][]serviceTemplate{
+	OSESXi: {
+		{"hostd", "VMware ESXi Host Agent", "/bin/hostd", StartAutomatic, "root"},
+		{"vpxa", "vCenter Agent", "/bin/vpxa", StartAutomatic, "root"},
+		{"fdm", "vSphere HA Agent", "/opt/vmware/fdm/fdm", StartAutomatic, "root"},
+		{"ntpd", "Network Time Protocol Daemon", "/sbin/ntpd", StartAutomatic, "root"},
+		{"sfcbd-watchdog", "CIM Server", "/sbin/sfcbd-watchdog", StartAutomatic, "root"},
+		{"dcui", "Direct Console User Interface", "/sbin/dcui", StartAutomatic, "root"},
+		{"vsanmgmtd", "vSAN Management Daemon", "/usr/lib/vmware/vsan/bin/vsanmgmtd", StartAutomatic, "root"},
+	},
+	OSAIX: {
+		{"sshd", "OpenSSH Daemon", "/usr/sbin/sshd", StartAutomatic, "root"},
+		{"srcmstr", "System Resource Controller", "/usr/sbin/srcmstr", StartAutomatic, "root"},
+		{"inetd", "Internet Super-Server", "/usr/sbin/inetd", StartAutomatic, "root"},
+		{"syslogd", "System Logging Daemon", "/usr/sbin/syslogd", StartAutomatic, "root"},
+		{"cron", "Clock Daemon", "/usr/sbin/cron", StartAutomatic, "root"},
+		{"xntpd", "Network Time Protocol Daemon", "/usr/sbin/xntpd", StartAutomatic, "root"},
+		{"qdaemon", "Queue Daemon", "/usr/sbin/qdaemon", StartAutomatic, "root"},
+	},
+	OSSolaris: {
+		{"svc:/network/ssh:default", "SSH server", "/usr/lib/ssh/sshd", StartAutomatic, "root"},
+		{"svc:/system/system-log:default", "System Log", "/usr/sbin/syslogd", StartAutomatic, "root"},
+		{"svc:/network/ntp:default", "Network Time Protocol", "/usr/lib/inet/ntpd", StartAutomatic, "root"},
+		{"svc:/system/cron:default", "Clock Daemon", "/usr/sbin/cron", StartAutomatic, "root"},
+		{"svc:/system/name-service-cache:default", "Name Service Cache Daemon", "/usr/sbin/nscd", StartAutomatic, "root"},
+		{"svc:/network/smtp:sendmail", "Sendmail", "/usr/lib/sendmail", StartAutomatic, "root"},
+	},
+	OSFreeBSD: {
+		{"sshd", "OpenSSH Daemon", "/usr/sbin/sshd", StartAutomatic, "root"},
+		{"syslogd", "System Logging Daemon", "/usr/sbin/syslogd", StartAutomatic, "root"},
+		{"cron", "Clock Daemon", "/usr/sbin/cron", StartAutomatic, "root"},
+		{"ntpd", "Network Time Protocol Daemon", "/usr/sbin/ntpd", StartAutomatic, "root"},
+		{"pf", "Packet Filter Firewall", "/sbin/pfctl", StartAutomatic, "root"},
+		{"nginx", "nginx web server", "/usr/local/sbin/nginx", StartAutomatic, "www"},
+	},
+	OSOpenBSD: {
+		{"sshd", "OpenSSH Daemon", "/usr/sbin/sshd", StartAutomatic, "root"},
+		{"syslogd", "System Logging Daemon", "/usr/sbin/syslogd", StartAutomatic, "root"},
+		{"cron", "Clock Daemon", "/usr/sbin/cron", StartAutomatic, "root"},
+		{"ntpd", "OpenNTP Daemon", "/usr/sbin/ntpd", StartAutomatic, "_ntp"},
+		{"pf", "Packet Filter Firewall", "/sbin/pfctl", StartAutomatic, "root"},
+		{"httpd", "OpenBSD httpd", "/usr/sbin/httpd", StartAutomatic, "www"},
+	},
+	OSXenDom0: {
+		{"xapi", "XenAPI Toolstack", "/opt/xensource/bin/xapi", StartAutomatic, "root"},
+		{"xenstored", "Xen Store Daemon", "/usr/sbin/oxenstored", StartAutomatic, "root"},
+		{"xenconsoled", "Xen Console Daemon", "/usr/sbin/xenconsoled", StartAutomatic, "root"},
+		{"sshd", "OpenSSH Daemon", "/usr/sbin/sshd", StartAutomatic, "root"},
+		{"ntpd", "Network Time Protocol Daemon", "/usr/sbin/ntpd", StartAutomatic, "root"},
+	},
+	OSNutanixAHV: {
+		{"libvirtd", "libvirt Virtualization Daemon", "/usr/sbin/libvirtd", StartAutomatic, "root"},
+		{"frodo", "AHV I/O Path (Frodo)", "/usr/bin/frodo", StartAutomatic, "root"},
+		{"sshd", "OpenSSH Daemon", "/usr/sbin/sshd", StartAutomatic, "root"},
+		{"chronyd", "NTP Client (chrony)", "/usr/sbin/chronyd", StartAutomatic, "chrony"},
+	},
+	OSOpenStackKVM: {
+		{"libvirtd", "libvirt Virtualization Daemon", "/usr/sbin/libvirtd", StartAutomatic, "root"},
+		{"openstack-nova-compute", "OpenStack Nova Compute", "/usr/bin/nova-compute", StartAutomatic, "nova"},
+		{"neutron-openvswitch-agent", "OpenStack Neutron Open vSwitch Agent", "/usr/bin/neutron-openvswitch-agent", StartAutomatic, "neutron"},
+		{"sshd", "OpenSSH Daemon", "/usr/sbin/sshd", StartAutomatic, "root"},
+		{"chronyd", "NTP Client (chrony)", "/usr/sbin/chronyd", StartAutomatic, "chrony"},
+	},
+}
+
 // GenerateServicesForSystem returns services appropriate for the given OS and role.
 //
 // Domain controllers always receive every entry in dcServices: NTDS, DNS,
@@ -104,8 +173,10 @@ func GenerateServicesForSystem(r *rand.Rand, os OSType, role SystemRole, hostnam
 		templates = linuxServerServices
 	case os == OSLinux && role == RoleWorkstation:
 		templates = linuxWorkstationServices
+	case role == RoleServer && extendedServerServices[os] != nil:
+		templates = extendedServerServices[os]
 	default:
-		// Router or macOS — minimal services
+		// Router, macOS, or a non-server role on an expanded OS — minimal services
 		templates = []serviceTemplate{
 			{"sshd", "OpenSSH server daemon", "/usr/sbin/sshd", StartAutomatic, "root"},
 		}

@@ -73,11 +73,27 @@ func TestHostMetricsGeneratorConfig_Validate(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid OS",
+			name: "valid OS esxi",
+			config: HostMetricsGeneratorConfig{
+				Workers: 1,
+				Rate:    time.Second,
+				OS:      "esxi",
+			},
+		},
+		{
+			name: "valid OS solaris",
 			config: HostMetricsGeneratorConfig{
 				Workers: 1,
 				Rate:    time.Second,
 				OS:      "solaris",
+			},
+		},
+		{
+			name: "invalid OS",
+			config: HostMetricsGeneratorConfig{
+				Workers: 1,
+				Rate:    time.Second,
+				OS:      "plan9",
 			},
 			wantErr: true,
 			errMsg:  "unsupported OS",

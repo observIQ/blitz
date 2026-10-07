@@ -207,6 +207,49 @@ user := env.Users[r.Intn(len(env.Users))]
 system := env.Systems[r.Intn(len(env.Systems))]
 ```
 
+## OS Types (`OSType`)
+
+A `SystemIdentity` carries an `OSType`: the operating system of a real OS host,
+as opposed to the embedded `ApplianceOS` a purpose-built appliance runs (see
+below).
+
+### Real vs appliance boundary
+
+The test is **installability, not openness**. A real OS installs on supported
+hardware you choose; it belongs in `OSType` even when it is closed (Windows,
+macOS, and ESXi all qualify). An appliance OS ships preinstalled on dedicated
+hardware and is not separately installable, so it lives in `ApplianceOS`
+(NimbleOS, PAN-OS, NX-OS, and the rest). ESXi is the boundary case that makes the
+rule concrete: closed like an appliance, but you install it on hardware you pick,
+so it is a real OS.
+
+### The `OSType` set
+
+`ParseOSType` gates the user-facing `os:` knob against this set; each value has a
+coherent release pool, an OS-appropriate `host.id`, and a bespoke server-role
+service roster.
+
+| `OSType` | `os.type` (semconv) | Notes |
+|----------|---------------------|-------|
+| `linux` | `linux` | general-purpose Linux distros |
+| `windows` | `windows` | |
+| `macos` | `darwin` | |
+| `esxi` | `esxi` | VMware ESXi, a real OS (closed, but installable) |
+| `xen-dom0` | `linux` | Xen dom0 (XCP-ng / Citrix Hypervisor) |
+| `nutanix-ahv` | `linux` | Nutanix AHV host |
+| `openstack-kvm` | `linux` | OpenStack/KVM compute host |
+| `aix` | `aix` | |
+| `solaris` | `solaris` | Oracle Solaris |
+| `freebsd` | `freebsd` | |
+| `openbsd` | `openbsd` | |
+
+The three hypervisor-host Linux flavors are distinct simulate-as selectors that
+carry their real distro in `os.name`/`os.version` while reporting `os.type=linux`
+(they are Linux under the hood). The Unix families are already valid semconv
+`os.type` values, so they pass through unchanged. Random environment population
+draws Linux and Windows hosts; the expanded OSes are selected by explicit
+configuration.
+
 ## Appliance Identities
 
 Alongside the general-purpose `SystemIdentity`, datagen models purpose-built

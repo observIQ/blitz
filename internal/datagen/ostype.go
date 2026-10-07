@@ -20,20 +20,36 @@ import (
 // internally and to the user, but a real OpenTelemetry pipeline stamps
 // os.type=darwin, so that is the value emitted on records.
 
+// simulatableOSes is the set of OSType values the fake-identity path can render
+// a coherent host for. ParseOSType gates the user-facing `os:` knob against it.
+var simulatableOSes = map[OSType]bool{
+	OSLinux: true, OSWindows: true, OSMacOS: true,
+	OSESXi: true, OSXenDom0: true, OSNutanixAHV: true, OSOpenStackKVM: true,
+	OSAIX: true, OSSolaris: true, OSFreeBSD: true, OSOpenBSD: true,
+}
+
+// osAliases maps accepted spellings to their canonical OSType.
+var osAliases = map[string]OSType{
+	"darwin":      OSMacOS,
+	"vmware":      OSESXi,
+	"vmware-esxi": OSESXi,
+	"xen":         OSXenDom0,
+	"ahv":         OSNutanixAHV,
+	"kvm":         OSOpenStackKVM,
+}
+
 // ParseOSType maps a user-supplied OS string to an OSType for the fake-identity
-// path. It accepts the three simulate-able OSes, treating "darwin" as an alias
-// for "macos". Unknown values return an error.
+// path. It accepts every simulate-able OS plus a few aliases (e.g. "darwin" for
+// macos, "vmware" for esxi). Unknown values return an error.
 func ParseOSType(s string) (OSType, error) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "linux":
-		return OSLinux, nil
-	case "windows":
-		return OSWindows, nil
-	case "macos", "darwin":
-		return OSMacOS, nil
-	default:
-		return "", fmt.Errorf("datagen: unsupported OS %q (want one of: linux, windows, macos)", s)
+	key := strings.ToLower(strings.TrimSpace(s))
+	if alias, ok := osAliases[key]; ok {
+		return alias, nil
 	}
+	if os := OSType(key); simulatableOSes[os] {
+		return os, nil
+	}
+	return "", fmt.Errorf("datagen: unsupported OS %q (want one of: linux, windows, macos, esxi, xen-dom0, nutanix-ahv, openstack-kvm, aix, solaris, freebsd, openbsd)", s)
 }
 
 // OSTypeFromGOOS maps a runtime.GOOS value to an OSType for the real-host path.
@@ -53,10 +69,17 @@ func OSTypeFromGOOS(goos string) OSType {
 }
 
 // SemconvOSType returns the OpenTelemetry semantic-convention os.type value for
-// o, which differs from the OSType constant only for macOS (macos -> darwin).
+// o. It differs from the OSType constant for macOS (macos -> darwin) and for the
+// hypervisor-host Linux flavors, which are Linux under the hood (-> linux). The
+// Unix families (aix, solaris, freebsd, openbsd) are already valid semconv
+// os.type values, so they pass through unchanged.
 func (o OSType) SemconvOSType() string {
-	if o == OSMacOS {
+	switch {
+	case o == OSMacOS:
 		return "darwin"
+	case hypervisorHostLinux[o]:
+		return "linux"
+	default:
+		return string(o)
 	}
-	return string(o)
 }
