@@ -310,5 +310,6 @@ func allScrapers() []Scraper {
 		&loadScraper{},
 		&pagingScraper{},
 		&processesScraper{},
+		&processScraper{},
 	}
 }
