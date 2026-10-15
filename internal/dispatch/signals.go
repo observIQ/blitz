@@ -16,6 +16,8 @@ func SignalsFor(t config.GeneratorType) []telemetry.Type {
 		return []telemetry.Type{telemetry.Metrics}
 	case config.GeneratorTypeTraces:
 		return []telemetry.Type{telemetry.Traces}
+	case config.GeneratorTypeFlow:
+		return []telemetry.Type{telemetry.Flows}
 	case config.GeneratorTypeNop:
 		return nil
 	case config.GeneratorTypeJSON,

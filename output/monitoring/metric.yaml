@@ -21,7 +21,7 @@ groups:
       stability: stable
       requirement_level: required
       brief: "telemetry signal type"
-      examples: ["logs", "metrics", "traces"]
+      examples: ["logs", "metrics", "traces", "flows"]
 
 - id: output.active_workers
   type: metric
@@ -63,7 +63,7 @@ groups:
       stability: stable
       requirement_level: required
       brief: "telemetry signal type"
-      examples: ["logs", "metrics", "traces"]
+      examples: ["logs", "metrics", "traces", "flows"]
 
 - id: output.request_size
   type: metric
@@ -86,7 +86,7 @@ groups:
       stability: stable
       requirement_level: required
       brief: "telemetry signal type"
-      examples: ["logs", "metrics", "traces"]
+      examples: ["logs", "metrics", "traces", "flows"]
 
 - id: output.request_latency
   type: metric
@@ -111,7 +111,7 @@ groups:
       stability: stable
       requirement_level: required
       brief: "telemetry signal type"
-      examples: ["logs", "metrics", "traces"]
+      examples: ["logs", "metrics", "traces", "flows"]
 
 - id: output.send_errors
   type: metric
@@ -134,7 +134,7 @@ groups:
       stability: stable
       requirement_level: required
       brief: "telemetry signal type"
-      examples: ["logs", "metrics", "traces"]
+      examples: ["logs", "metrics", "traces", "flows"]
 
 - id: output.queue_size
   type: metric
@@ -175,7 +175,7 @@ groups:
       stability: stable
       requirement_level: required
       brief: "telemetry signal type"
-      examples: ["logs", "metrics", "traces"]
+      examples: ["logs", "metrics", "traces", "flows"]
     - id: output
       type: string
       stability: stable
@@ -204,7 +204,7 @@ groups:
       stability: stable
       requirement_level: required
       brief: "telemetry signal type"
-      examples: ["logs", "metrics", "traces"]
+      examples: ["logs", "metrics", "traces", "flows"]
     - id: output
       type: string
       stability: stable

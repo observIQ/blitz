@@ -178,7 +178,7 @@ generators:
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes` |
+| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `flow` |
 
 For detailed configuration options for each generator, see the individual generator documentation:
 
@@ -197,7 +197,7 @@ For detailed configuration options for each generator, see the individual genera
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec` |
+| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec`, `flow` |
 
 For detailed configuration options for each output, see the individual output documentation:
 
@@ -209,6 +209,7 @@ For detailed configuration options for each output, see the individual output do
 - [OTLP gRPC Output](https://github.com/observiq/blitz/blob/main/docs/output/otlp-grpc.md)
 - [File Output](https://github.com/observiq/blitz/blob/main/docs/output/file.md)
 - [HEC Output](https://github.com/observiq/blitz/blob/main/docs/output/hec.md)
+- [Flow Output](https://github.com/observiq/blitz/blob/main/docs/output/flow.md)
 
 #### Multiple Outputs (Fan-Out)
 
@@ -234,15 +235,15 @@ Notes:
   `BLITZ_OUTPUT_*` environment variable, an `--output-*` flag, or an embedded
   override next to an `outputs:` list, even one set to its default.
 - Writes are best-effort: one slow or dead destination does not stop or slow
-  the others, and each signal goes only to the outputs that support it. Each
-  output has its own queue of 100 batches (a generator's batch, such as one
-  hostmetrics scrape, takes one slot however many records it holds). When an
-  output's queue is full, new batches are dropped for that output only. Each
-  drop is logged at Warn right away (sampled during a flood) and counted in
-  `blitz.output.fanout_dropped`. A drop is not a write error while another
-  output accepted the record; a record is a generator write error only when
-  every output dropped it. An output that accepts a record and then fails to
-  send it is logged at Warn (same sampling) and counted in
+  the others, and each signal (logs, metrics, traces, flows) goes only to the
+  outputs that support it. Each output has its own queue of 100 batches (a
+  generator's batch, such as one hostmetrics scrape, takes one slot however many
+  records it holds). When an output's queue is full, new batches are dropped for
+  that output only. Each drop is logged at Warn right away (sampled during a
+  flood) and counted in `blitz.output.fanout_dropped`. A drop is not a write
+  error while another output accepted the record; a record is a generator write
+  error only when every output dropped it. An output that accepts a record and
+  then fails to send it is logged at Warn (same sampling) and counted in
   `blitz.output.fanout_write_errors`.
 - On shutdown, an output that will not stop writing is abandoned and logged
   at Error, so one bad output cannot hang blitz or use up the other outputs'
@@ -473,8 +474,8 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
 - `logging.type` - Must be one of: `stdout`, `file`
 - `logging.file.path` - Required when `logging.type` is `file`
-- `generator.type` - Must be one of: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`
-- `output.type` - Must be one of: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`
+- `generator.type` - Must be one of: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `flow`
+- `output.type` - Must be one of: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec`, `flow`
 
 ## Error Handling
 

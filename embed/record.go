@@ -175,7 +175,9 @@ type SpanMetadata struct {
 type FlowRecord struct {
 	// SrcIP, DstIP are the flow endpoints.
 	SrcIP, DstIP net.IP
-	// SrcPort, DstPort are the transport ports (0 for non-port protocols).
+	// SrcPort, DstPort are the transport ports. ICMP follows the NetFlow v5
+	// convention: SrcPort 0 and DstPort ICMP type*256+code, which each encoder
+	// maps to its protocol's ICMP field. Other port-less protocols carry 0.
 	SrcPort, DstPort uint16
 	// Protocol is the IP protocol number (6 TCP, 17 UDP, 1 ICMP, ...).
 	Protocol uint8
@@ -200,7 +202,12 @@ type FlowRecord struct {
 	// SrcMask, DstMask are the source/destination prefix lengths.
 	SrcMask, DstMask uint8
 
-	// SamplingRate is the packet sampling rate (sFlow; 0 = unsampled).
+	// ExporterIP is the address of the device that exported the flow (the
+	// router or firewall a collector sees as the sampler); nil when unknown.
+	ExporterIP net.IP
+
+	// SamplingRate is the 1-in-N packet sampling rate every encoder reports
+	// (v5 header, v9/IPFIX sampling options, sFlow per sample); 0 = unsampled.
 	SamplingRate uint32
 
 	// Metadata carries timestamp, per-record Attributes, and Resource for

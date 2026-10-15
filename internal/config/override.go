@@ -65,6 +65,8 @@ func (o *Override) createFlag(flags *pflag.FlagSet) *pflag.Flag {
 		_ = flags.String(o.Flag, "", o.Usage)
 	case int:
 		_ = flags.Int(o.Flag, 0, o.Usage)
+	case int64:
+		_ = flags.Int64(o.Flag, 0, o.Usage)
 	case time.Duration:
 		_ = flags.Duration(o.Flag, 0, o.Usage)
 	case bool:
@@ -250,7 +252,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("metrics.port", "HTTP port for the metrics endpoint", DefaultMetricsPort),
 		NewOverride("generator.count", "total number of logs to generate (0 = unlimited)", 0),
 		NewOverride("onFinish", "behavior when finite generation completes. One of: exit|idle", "exit"),
-		NewOverride("generator.type", "generator type. One of: nop|json|winevt|wel|palo-alto|apache-common|apache-combined|apache-error|nginx|postgres|kubernetes|filegen|okta|hostmetrics|traces", GeneratorTypeNop),
+		NewOverride("generator.type", "generator type. One of: nop|json|winevt|wel|palo-alto|apache-common|apache-combined|apache-error|nginx|postgres|kubernetes|filegen|okta|hostmetrics|traces|fix|flow", GeneratorTypeNop),
 		NewOverride("generator.json.workers", "number of JSON generator workers", 1),
 		NewOverride("generator.json.rate", "rate at which logs are generated per worker", 1*time.Second),
 		NewOverride("generator.json.type", "type of log to generate. One of: default|pii", logtypes.LogTypeDefault),
@@ -296,7 +298,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.wel.domain", "domain name for WEL events", "WORKGROUP"),
 		NewOverride("generator.wel.role", "WEL machine role. One of: workstation|member|dc", "member"),
 		NewOverride("generator.wel.manageEventSources", "auto-register/deregister WEL event sources (requires admin)", true),
-		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file|hec", OutputTypeNop),
+		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file|hec|flow", OutputTypeNop),
 		NewOverride("output.stdout.flushInterval", "stdout output flush interval", DefaultStdoutFlushInterval),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),
@@ -346,8 +348,8 @@ func DefaultOverrides() []*Override {
 		NewOverride("output.flow.host", "flow collector host", DefaultFlowOutputHost),
 		NewOverride("output.flow.port", "flow collector UDP port", DefaultFlowOutputPort),
 		NewOverride("output.flow.protocol", "flow wire format. One of: netflow-v5|netflow-v9|ipfix|sflow", DefaultFlowProtocol),
-		NewOverride("output.flow.vendor", "optional flow vendor flavor. One of: jflow|netstream|cflow|appflow|rflow", ""),
-		NewOverride("output.flow.agentIP", "sFlow exporter agent IP (sflow only)", ""),
+		NewOverride("output.flow.vendor", "optional flow vendor flavor. One of: jflow|netstream|cflowd|appflow|rflow", ""),
+		NewOverride("output.flow.agentIP", "sFlow exporter agent IP (sflow only; empty = each record's exporter)", ""),
 		NewOverride("telemetry.traces.otlpEndpoint", "OTLP gRPC endpoint (host:port) for exporting blitz's own spans (empty = disabled)", ""),
 		NewOverride("telemetry.traces.insecure", "send blitz's own spans over plaintext gRPC (no TLS)", false),
 		NewOverride("telemetry.traces.perBatchSpans", "enable higher-volume per-emit-cycle spans (off by default)", false),

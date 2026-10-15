@@ -7,7 +7,6 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/embed/otelpdata"
-	"github.com/observiq/blitz/output"
 )
 
 // ConsumeFlows sends flow records to the OTLP gRPC output as OTLP logs, using
@@ -16,8 +15,7 @@ import (
 // destination for the flow signal, alongside logs/metrics/traces.
 func (o *OTLPGrpc) ConsumeFlows(ctx context.Context, records []embed.FlowRecord) error {
 	for i := range records {
-		rec := otelpdata.FlowToLogRecord(records[i])
-		rec.ObservedTimeUnixNano = output.TimeToUnixNanoUint64(time.Now())
+		rec := otelpdata.FlowToLogRecord(records[i], time.Now())
 		select {
 		case o.dataChan <- rec:
 			o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "flows")

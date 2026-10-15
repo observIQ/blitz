@@ -1,6 +1,10 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"net"
+	"slices"
+)
 
 // Default flow output configuration values.
 const (
@@ -24,16 +28,15 @@ var validFlowProtocols = map[string]bool{
 //
 // Sources (per row): Juniper jFlow (v5/v9/IPFIX — Juniper "Flow Monitoring"
 // docs); Huawei NetStream (v5/v9/IPFIX — Huawei NetStream config guide); Nokia
-// cflowd (v5/v8/v9/IPFIX — Nokia SR OS cflowd; v8 is aggregation-only and
-// excluded here, see note); Citrix AppFlow (IPFIX only — Citrix AppFlow is an
+// cflowd (v5/v8/v9/IPFIX — Nokia SR OS cflowd; v8 is aggregation-only, and
+// blitz encodes no v8); Citrix AppFlow (IPFIX only — Citrix AppFlow is an
 // IPFIX application); Redback rFlow (v5/v9 — Redback/Ericsson SmartEdge rFlow).
 //
-// How the vendor distinction rides each format: IPFIX carries a decoder-readable
-// enterprise IE (the vendor's IANA PEN); NetFlow v9 has no PEN mechanism, so the
-// signature is a proprietary field type in the template; NetFlow v5 is a fixed
-// layout with no vendor mechanism at all, so a v5 export is byte-identical
-// across vendors (the pairing is allowed for fidelity, but carries no
-// vendor-distinct wire element — this is the real protocol's behavior).
+// On the wire, only IPFIX can mark a vendor, with an enterprise IE under the
+// vendor's IANA PEN, and only jflow (Juniper) and appflow (Citrix) have a
+// published IE to use (see output/flow). NetFlow v5 and v9 have no vendor
+// mechanism, so those exports, and every netstream/cflowd/rflow export, are
+// wire-standard; the pairing is still validated for realism.
 var flowVendorFormats = map[string][]string{
 	"jflow":     {"netflow-v5", "netflow-v9", "ipfix"}, // Juniper, PEN 2636
 	"netstream": {"netflow-v5", "netflow-v9", "ipfix"}, // Huawei, PEN 2011
@@ -50,7 +53,7 @@ type FlowOutputConfig struct {
 	Port int `yaml:"port,omitempty" mapstructure:"port,omitempty"`
 	// Protocol is the wire format: netflow-v5, netflow-v9, ipfix, sflow.
 	Protocol string `yaml:"protocol,omitempty" mapstructure:"protocol,omitempty"`
-	// Vendor is an optional vendor flavor (jflow, netstream, cflow, appflow,
+	// Vendor is an optional vendor flavor (jflow, netstream, cflowd, appflow,
 	// rflow); it must be compatible with Protocol. Empty means standard.
 	Vendor string `yaml:"vendor,omitempty" mapstructure:"vendor,omitempty"`
 	// AgentIP is the exporter address reported by sFlow (optional).
@@ -60,8 +63,14 @@ type FlowOutputConfig struct {
 // Validate validates the flow output configuration, including the
 // vendor/protocol single-flavor compatibility rule.
 func (c *FlowOutputConfig) Validate() error {
-	if c.Port < 0 || c.Port > 65535 {
-		return fmt.Errorf("flow output port must be between 0 and 65535, got %d", c.Port)
+	if err := ValidateHost(c.Host); err != nil {
+		return fmt.Errorf("flow output %w", err)
+	}
+	if err := ValidatePort(c.Port); err != nil {
+		return fmt.Errorf("flow output %w", err)
+	}
+	if c.AgentIP != "" && net.ParseIP(c.AgentIP) == nil {
+		return fmt.Errorf("flow output agentIP must be an IPv4 or IPv6 address, got %q", c.AgentIP)
 	}
 	if !validFlowProtocols[c.Protocol] {
 		return fmt.Errorf("flow output protocol must be one of: netflow-v5, netflow-v9, ipfix, sflow; got %q", c.Protocol)
@@ -75,18 +84,9 @@ func (c *FlowOutputConfig) Validate() error {
 		if proto == "" {
 			proto = DefaultFlowProtocol
 		}
-		if !contains(formats, proto) {
+		if !slices.Contains(formats, proto) {
 			return fmt.Errorf("flow output vendor %q does not support protocol %q; supported: %v", c.Vendor, proto, formats)
 		}
 	}
 	return nil
-}
-
-func contains(s []string, v string) bool {
-	for _, x := range s {
-		if x == v {
-			return true
-		}
-	}
-	return false
 }

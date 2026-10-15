@@ -11,7 +11,7 @@ const (
 	DefaultFlowScenario = "default"
 	// DefaultFlowSeed randomizes each run (negative = randomize per the
 	// datagen seed contract).
-	DefaultFlowSeed = -1
+	DefaultFlowSeed int64 = -1
 )
 
 // validFlowScenarios is the set of accepted traffic-shape presets.

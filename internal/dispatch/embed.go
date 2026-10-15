@@ -185,7 +185,8 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 		if err := consumers.requireFlow(genCfg.Type); err != nil {
 			return nil, err
 		}
-		return flowgen.New(logger, genCfg.Flow.Workers, genCfg.Flow.Rate, flowgen.Scenario(genCfg.Flow.Scenario), genCfg.Flow.Seed, consumers.FlowConsumer, tel)
+		mod, err := flowgen.New(logger, genCfg.Flow.Workers, genCfg.Flow.Rate, flowgen.Scenario(genCfg.Flow.Scenario), genCfg.Flow.Seed, consumers.FlowConsumer, tel)
+		return applyHostIdentity(mod, err, env, genCfg.Type)
 	case config.GeneratorTypeHostMetrics:
 		if err := consumers.requireMetric(genCfg.Type); err != nil {
 			return nil, err

@@ -147,6 +147,7 @@ A generator takes its consumer (`embed.LogConsumer`, `MetricConsumer`, or
 `TraceConsumer`) at construction and writes records to it. The CLI hands it a
 single output through the `output.WriterAsLogConsumer` family of adapters,
 and a fan-out as the `output.MultiOutput` itself, which takes whole batches.
+A flow output is itself the `embed.FlowConsumer` a flow generator takes.
 
 #### NOP Generator Implementation (`nop.go`):
 
@@ -221,7 +222,9 @@ type Output = Writer
 An output implements only the writers for the signals it accepts. This
 replaced the single `Output` interface: its `Write` method is now
 `LogWriter.WriteLog`, and `Output` is an alias of the lifecycle-only `Writer`.
-Code that implemented or called `output.Output` moves to `LogWriter`.
+Code that implemented or called `output.Output` moves to `LogWriter`. Flows
+have no writer extension: a flow output implements `embed.FlowConsumer`
+(`ConsumeFlows`).
 
 #### NOP Output Implementation (`nop.go`):
 
