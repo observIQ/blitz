@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	fixgen "github.com/observiq/blitz/generator/fix"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -71,6 +72,13 @@ func getTestOverrideFlagsArgs() []string {
 		"--generator-wel-domain", "FLAGDOMAIN",
 		"--generator-wel-role", "dc",
 		"--generator-wel-manageeventsources=false",
+		"--generator-fix-workers", "3",
+		"--generator-fix-rate", "250ms",
+		"--generator-fix-version", "5.0sp2",
+		"--generator-fix-sendercompid", "FLAGSND",
+		"--generator-fix-targetcompid", "FLAGTGT",
+		"--generator-fix-enabledcategories", "equities,fx",
+		"--generator-fix-seed=-5",
 		"--output-type", "otlp-grpc",
 		"--output-udp-host", "udp.example.com",
 		"--output-udp-port", "1514",
@@ -217,6 +225,13 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_GENERATOR_WEL_DOMAIN":                "ENVDOMAIN",
 		"BLITZ_GENERATOR_WEL_ROLE":                  "dc",
 		"BLITZ_GENERATOR_WEL_MANAGEEVENTSOURCES":    "false",
+		"BLITZ_GENERATOR_FIX_WORKERS":               "3",
+		"BLITZ_GENERATOR_FIX_RATE":                  "750ms",
+		"BLITZ_GENERATOR_FIX_VERSION":               "4.2",
+		"BLITZ_GENERATOR_FIX_SENDERCOMPID":          "ENVSND",
+		"BLITZ_GENERATOR_FIX_TARGETCOMPID":          "ENVTGT",
+		"BLITZ_GENERATOR_FIX_ENABLEDCATEGORIES":     "futures,options",
+		"BLITZ_GENERATOR_FIX_SEED":                  "-3",
 		"BLITZ_OUTPUT_TYPE":                         "file",
 		"BLITZ_OUTPUT_UDP_HOST":                     "udp.env.example",
 		"BLITZ_OUTPUT_UDP_PORT":                     "5514",
@@ -304,6 +319,8 @@ func getTestOverrideEnvs() map[string]string {
 }
 
 func TestOverrideDefaults(t *testing.T) {
+	// FIX override defaults must come from the generator's own DefaultConfig.
+	fixDefaults := fixgen.DefaultConfig()
 	flagSet := pflag.NewFlagSet("test", pflag.PanicOnError)
 	overrides := DefaultOverrides()
 	for _, override := range overrides {
@@ -409,6 +426,15 @@ func TestOverrideDefaults(t *testing.T) {
 				Domain:             "WORKGROUP",
 				Role:               "member",
 				ManageEventSources: true,
+			},
+			FIX: FIXGeneratorConfig{
+				Workers:           fixDefaults.Workers,
+				Rate:              fixDefaults.Rate,
+				Version:           fixDefaults.Version.String(),
+				SenderCompID:      fixDefaults.SenderCompID,
+				TargetCompID:      fixDefaults.TargetCompID,
+				EnabledCategories: []string{},
+				Seed:              fixDefaults.Seed,
 			},
 		},
 		OnFinish: "exit",
@@ -621,6 +647,15 @@ func TestOverrideFlags(t *testing.T) {
 				Domain:             "FLAGDOMAIN",
 				Role:               "dc",
 				ManageEventSources: false,
+			},
+			FIX: FIXGeneratorConfig{
+				Workers:           3,
+				Rate:              250 * time.Millisecond,
+				Version:           "5.0sp2",
+				SenderCompID:      "FLAGSND",
+				TargetCompID:      "FLAGTGT",
+				EnabledCategories: []string{"equities", "fx"},
+				Seed:              -5,
 			},
 		},
 		OnFinish: "idle",
@@ -856,6 +891,15 @@ func TestOverrideEnvs(t *testing.T) {
 				Role:               "dc",
 				ManageEventSources: false,
 			},
+			FIX: FIXGeneratorConfig{
+				Workers:           3,
+				Rate:              750 * time.Millisecond,
+				Version:           "4.2",
+				SenderCompID:      "ENVSND",
+				TargetCompID:      "ENVTGT",
+				EnabledCategories: []string{"futures", "options"},
+				Seed:              -3,
+			},
 		},
 		OnFinish: "idle",
 		Output: Output{
@@ -1053,6 +1097,8 @@ func TestOverrideCoverage(t *testing.T) {
 	}
 }
 
+// TestCreateFlagInt64 pins the int64 flag type used by seed overrides: the
+// flag is a real int64 (so a non-number is rejected) and takes negatives.
 func TestCreateFlagInt64(t *testing.T) {
 	flagSet := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	o := NewOverride("test.int64.seed", "an int64 override", int64(-1))

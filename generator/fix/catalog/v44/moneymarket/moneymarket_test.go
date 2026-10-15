@@ -2,7 +2,12 @@ package moneymarket
 
 import (
 	"math/rand"
+	"regexp"
+	"strconv"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -117,13 +122,10 @@ func TestMMInstrumentBlockCoherent(t *testing.T) {
 	}
 }
 
-// TestMMMaturityWithinOneYearAndVaries pins that MaturityDate uses the
-// computed days budget (7-365 days from IssueDate 2026-01-01),
-// producing a real range of dates rather than the 12 month-end values
-// that the bug emitted. Asserts (a) every maturity is within (issue,
-// issue+1y], and (b) the set of distinct maturity dates across seeds
-// exceeds 12 (proving days variation, not month-only).
-func TestMMMaturityWithinOneYearAndVaries(t *testing.T) {
+// TestMMMaturityWithinOneYear pins that every maturity is within
+// (issue, issue+1y] of IssueDate 2026-01-01, and that each tenor in the
+// table shows up.
+func TestMMMaturityWithinOneYear(t *testing.T) {
 	reregisterAll()
 	def := catalog.Get(catalog.MessageKey{Version: catalog.V44, MsgType: app.MsgTypeNewOrderSingle, AssetCategory: catalog.AssetCategoryMoneyMarket})
 	const issue = "20260101"
@@ -137,8 +139,9 @@ func TestMMMaturityWithinOneYearAndVaries(t *testing.T) {
 		}
 		seen[m] = struct{}{}
 	}
-	if len(seen) <= 12 {
-		t.Errorf("MaturityDate uses month-only granularity (got %d distinct dates across 200 seeds, want > 12)", len(seen))
+	// One date per tenor in the table (30, 60, 90, 180 days).
+	if len(seen) < 4 {
+		t.Errorf("MaturityDate took %d distinct dates across 200 seeds, want one per tenor (4)", len(seen))
 	}
 }
 
@@ -156,10 +159,41 @@ func TestMMDeterminismFromSeed(t *testing.T) {
 
 func buildTagMap(gens []catalog.FieldGenerator, r *rand.Rand) map[catalog.Tag]string {
 	out := make(map[catalog.Tag]string, len(gens))
-	ctx := &catalog.GenerateCtx{Version: catalog.V44, AssetCategory: catalog.AssetCategoryMoneyMarket}
+	// Trade (and issue) on 2026-01-01 so the fixed expected dates below hold.
+	ctx := &catalog.GenerateCtx{Version: catalog.V44, AssetCategory: catalog.AssetCategoryMoneyMarket, Now: time.Date(2026, 1, 1, 14, 0, 0, 0, time.UTC)}
 	for _, g := range gens {
 		f := g(r, ctx)
 		out[f.Tag] = f.Value
 	}
 	return out
+}
+
+// TestMMIssuedOnABusinessDay pins that paper traded on a weekend (a live run
+// started on a Saturday) is issued the next business day, as maturity and
+// settlement dates roll, and matures within a year of that issue date.
+func TestMMIssuedOnABusinessDay(t *testing.T) {
+	ctx := &catalog.GenerateCtx{Now: time.Date(2026, 10, 17, 14, 0, 0, 0, time.UTC)} // Saturday
+	require.Equal(t, "20261019", issueDateField()(rand.New(rand.NewSource(1)), ctx).Value)
+	for seed := int64(0); seed < 200; seed++ {
+		m := maturityDateField()(rand.New(rand.NewSource(seed)), ctx).Value
+		require.True(t, m >= "20261026" && m <= "20271019", "seed %d: maturity %s", seed, m)
+	}
+}
+
+// TestMMMaturesAtItsSymbolsTenor pins that the tenor a symbol names
+// (GE-CP-30D) is the one MaturityDate carries: issue date plus that many
+// days, rolled to a business day.
+func TestMMMaturesAtItsSymbolsTenor(t *testing.T) {
+	tenor := regexp.MustCompile(`-(\d+)D$`)
+	for seed := int64(0); seed < 200; seed++ {
+		r := rand.New(rand.NewSource(seed))
+		ctx := &catalog.GenerateCtx{Now: time.Date(2026, 10, 14, 14, 0, 0, 0, time.UTC)}
+		sym := symbolField()(r, ctx).Value
+		m := tenor.FindStringSubmatch(sym)
+		require.NotNil(t, m, sym)
+		days, err := strconv.Atoi(m[1])
+		require.NoError(t, err)
+		want := catalog.NextBusinessDay(issueDate(ctx).AddDate(0, 0, days)).Format("20060102")
+		require.Equal(t, want, maturityDateField()(r, ctx).Value, sym)
+	}
 }
