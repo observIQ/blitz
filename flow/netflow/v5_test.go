@@ -1,13 +1,18 @@
 package netflow
 
 import (
+	"bytes"
 	"encoding/binary"
 	"net"
 	"testing"
 	"time"
 
-	"github.com/observiq/blitz/embed"
+	nfl "github.com/netsampler/goflow2/v2/decoders/netflowlegacy"
+	protoproducer "github.com/netsampler/goflow2/v2/producer/proto"
 	"github.com/stretchr/testify/require"
+
+	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/flow/wire"
 )
 
 func testFlow() embed.FlowRecord {
@@ -38,7 +43,7 @@ func TestV5EncodeHeaderAndRecord(t *testing.T) {
 	enc := NewV5Encoder(boot)
 	now := time.Unix(1700000010, 0)
 
-	pkts := enc.Encode(now, []embed.FlowRecord{testFlow()})
+	pkts := v5Encode(t, enc, now, []embed.FlowRecord{testFlow()})
 	require.Len(t, pkts, 1)
 	pkt := pkts[0]
 	require.Len(t, pkt, 24+48) // header + one record
@@ -72,23 +77,106 @@ func TestV5EncodeHeaderAndRecord(t *testing.T) {
 	require.Equal(t, uint32((1700000005-1699999000)*1000), last)
 }
 
-func TestV5SplitsAt30Records(t *testing.T) {
+func TestV5SplitsAtMaxFlows(t *testing.T) {
 	enc := NewV5Encoder(time.Unix(1699999000, 0))
-	flows := make([]embed.FlowRecord, 31)
+	flows := make([]embed.FlowRecord, v5MaxFlows+1)
 	for i := range flows {
 		flows[i] = testFlow()
 	}
-	pkts := enc.Encode(time.Unix(1700000010, 0), flows)
+	pkts := v5Encode(t, enc, time.Unix(1700000010, 0), flows)
 	require.Len(t, pkts, 2)
-	require.Equal(t, uint16(30), binary.BigEndian.Uint16(pkts[0][2:4]))
+	require.Equal(t, uint16(29), binary.BigEndian.Uint16(pkts[0][2:4]), "30 records exceed the MTU budget")
 	require.Equal(t, uint16(1), binary.BigEndian.Uint16(pkts[1][2:4]))
 }
 
 func TestV5FlowSequenceAdvances(t *testing.T) {
 	enc := NewV5Encoder(time.Unix(1699999000, 0))
 	now := time.Unix(1700000010, 0)
-	enc.Encode(now, []embed.FlowRecord{testFlow(), testFlow()})
-	pkts := enc.Encode(now, []embed.FlowRecord{testFlow()})
+	v5Encode(t, enc, now, []embed.FlowRecord{testFlow(), testFlow()})
+	pkts := v5Encode(t, enc, now, []embed.FlowRecord{testFlow()})
 	// flow_sequence counts records, so the second packet starts at 2.
 	require.Equal(t, uint32(2), binary.BigEndian.Uint32(pkts[0][16:20]))
+}
+
+func v5Encode(t *testing.T, enc *V5Encoder, now time.Time, flows []embed.FlowRecord) [][]byte {
+	t.Helper()
+	pkts, err := enc.Encode(now, flows)
+	require.NoError(t, err)
+	return pkts
+}
+
+func decodeV5(t *testing.T, pkt []byte) []*protoproducer.ProtoProducerMessage {
+	t.Helper()
+	var p nfl.PacketNetFlowV5
+	require.NoError(t, nfl.DecodeMessageVersion(bytes.NewBuffer(pkt), &p))
+	msgs, err := protoproducer.ProcessMessageNetFlowLegacy(&p)
+	require.NoError(t, err)
+	out := make([]*protoproducer.ProtoProducerMessage, 0, len(msgs))
+	for _, m := range msgs {
+		out = append(out, m.(*protoproducer.ProtoProducerMessage))
+	}
+	return out
+}
+
+// TestV5SamplingInterval: the header's sampling_interval carries mode 01
+// (packet interval) in the top 2 bits and the 1-in-N rate in the low 14.
+func TestV5SamplingInterval(t *testing.T) {
+	f := testFlow()
+	f.SamplingRate = 1024
+	pkt := v5Encode(t, NewV5Encoder(v9Boot), v9Now, []embed.FlowRecord{f})[0]
+	require.Equal(t, uint16(1<<14|1024), binary.BigEndian.Uint16(pkt[22:24]))
+	require.Equal(t, uint64(1024), decodeV5(t, pkt)[0].SamplingRate)
+
+	// Unsampled reports 1 in 1, the rate every other format reports for it,
+	// so a collector sees the same sampling_rate whichever format carries it.
+	f.SamplingRate = 0
+	pkt = v5Encode(t, NewV5Encoder(v9Boot), v9Now, []embed.FlowRecord{f})[0]
+	require.Equal(t, uint16(1<<14|1), binary.BigEndian.Uint16(pkt[22:24]))
+	require.Equal(t, uint64(1), decodeV5(t, pkt)[0].SamplingRate)
+
+	// The interval field is 14 bits: a larger rate caps at 16383 and never
+	// spills into the two sampling-mode bits.
+	for _, rate := range []uint32{16383, 16384, 40000, 0xFFFFFFFF} {
+		f.SamplingRate = rate
+		pkt = v5Encode(t, NewV5Encoder(v9Boot), v9Now, []embed.FlowRecord{f})[0]
+		want := uint16(min(rate, 16383))
+		require.Equal(t, uint16(1<<14)|want, binary.BigEndian.Uint16(pkt[22:24]), "rate %d", rate)
+	}
+}
+
+// TestV5SplitsOnRateChange: the rate lives in the packet header, so records at
+// different rates never share a packet.
+func TestV5SplitsOnRateChange(t *testing.T) {
+	a, b := testFlow(), testFlow()
+	a.SamplingRate, b.SamplingRate = 1024, 512
+	pkts := v5Encode(t, NewV5Encoder(v9Boot), v9Now, []embed.FlowRecord{a, a, b})
+	require.Len(t, pkts, 2)
+	require.Equal(t, uint16(2), binary.BigEndian.Uint16(pkts[0][2:4]))
+	require.Equal(t, uint16(1<<14|512), binary.BigEndian.Uint16(pkts[1][22:24]))
+}
+
+// TestV5FourByteASIsASTrans: v5's AS fields are 2 bytes, so a 32-bit ASN is
+// reported as AS_TRANS (23456, RFC 6793).
+func TestV5FourByteASIsASTrans(t *testing.T) {
+	f := testFlow()
+	f.SrcAS, f.DstAS = 4_200_000_000, 64500
+	m := decodeV5(t, v5Encode(t, NewV5Encoder(v9Boot), v9Now, []embed.FlowRecord{f})[0])[0]
+	require.Equal(t, uint32(23456), m.SrcAs)
+	require.Equal(t, uint32(64500), m.DstAs)
+}
+
+func TestV5PacketsFitMTU(t *testing.T) {
+	flows := make([]embed.FlowRecord, 60)
+	for i := range flows {
+		flows[i] = testFlow()
+	}
+	for _, p := range v5Encode(t, NewV5Encoder(v9Boot), v9Now, flows) {
+		require.LessOrEqual(t, len(p), wire.MaxPayload)
+	}
+}
+
+// TestV5RejectsIPv6: v5's record layout is IPv4-only.
+func TestV5RejectsIPv6(t *testing.T) {
+	_, err := NewV5Encoder(v9Boot).Encode(v9Now, []embed.FlowRecord{testFlow(), v6Flow()})
+	require.ErrorContains(t, err, "IPv6")
 }

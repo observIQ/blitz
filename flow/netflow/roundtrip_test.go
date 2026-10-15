@@ -17,7 +17,7 @@ import (
 // decoded flow matches the input.
 func TestV5RoundTripGoflow2(t *testing.T) {
 	enc := NewV5Encoder(time.Unix(1699999000, 0))
-	pkt := enc.Encode(time.Unix(1700000010, 0), []embed.FlowRecord{testFlow()})[0]
+	pkt := v5Encode(t, enc, time.Unix(1700000010, 0), []embed.FlowRecord{testFlow()})[0]
 
 	var p nfl.PacketNetFlowV5
 	require.NoError(t, nfl.DecodeMessageVersion(bytes.NewBuffer(pkt), &p))
@@ -59,7 +59,7 @@ func fieldValue(rec nf.DataRecord, typ uint16) ([]byte, bool) {
 }
 
 func TestV9RoundTripGoflow2(t *testing.T) {
-	enc := NewV9Encoder(time.Unix(1699999000, 0), 0, 0)
+	enc := NewV9Encoder(time.Unix(1699999000, 0), 0)
 	pkt := enc.Encode(time.Unix(1700000010, 0), []embed.FlowRecord{testFlow()})[0]
 	recs := decodeV9(t, pkt)
 	require.Len(t, recs, 1)
@@ -74,24 +74,13 @@ func TestV9RoundTripGoflow2(t *testing.T) {
 	require.Equal(t, uint16(54321), binary.BigEndian.Uint16(sp))
 }
 
-func TestV9VendorRoundTripGoflow2(t *testing.T) {
-	cases := []struct {
-		name  string
-		field uint16
-	}{
-		{"netstream-huawei", 0x9001},
-		{"rflow-redback", 0x9002},
-		{"jflow-juniper", 0x9003},
-		{"cflowd-nokia", 0x9004},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			enc := NewV9Encoder(time.Unix(1699999000, 0), 0, tc.field)
-			pkt := enc.Encode(time.Unix(1700000010, 0), []embed.FlowRecord{testFlow()})[0]
-			recs := decodeV9(t, pkt)
-			require.Len(t, recs, 1)
-			_, ok := fieldValue(recs[0], tc.field)
-			require.True(t, ok, "decoded record must carry the vendor field type 0x%x", tc.field)
-		})
-	}
+// TestV9ICMPType: ICMP carries ICMP_TYPE (field 32, type*256+code, RFC 3954).
+func TestV9ICMPType(t *testing.T) {
+	f := testFlow()
+	f.Protocol, f.TCPFlags, f.SrcPort, f.DstPort = 1, 0, 0, 11<<8 // time exceeded
+	recs := decodeV9(t, NewV9Encoder(time.Unix(1699999000, 0), 0).Encode(time.Unix(1700000010, 0), []embed.FlowRecord{f})[0])
+	require.Len(t, recs, 1)
+	tc, ok := fieldValue(recs[0], 32)
+	require.True(t, ok, "ICMP_TYPE present")
+	require.Equal(t, uint16(11<<8), binary.BigEndian.Uint16(tc))
 }

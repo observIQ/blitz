@@ -54,32 +54,20 @@ func TestIPFIXRoundTripGoflow2(t *testing.T) {
 	require.Equal(t, uint16(54321), binary.BigEndian.Uint16(sp))
 }
 
-func TestIPFIXVendorRoundTripGoflow2(t *testing.T) {
-	cases := []struct {
-		name string
-		pen  uint32
-		ieid uint16
-	}{
-		{"appflow-citrix", 5951, 130},
-		{"jflow-juniper", 2636, 137},
-		{"cflowd-nokia", 6527, 91},
-		{"netstream-huawei", 2011, 140},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			enc := NewEncoder(0, &Vendor{PEN: tc.pen, IEID: tc.ieid})
-			msg := enc.Encode(time.Unix(1700000010, 0), []embed.FlowRecord{testFlow()})[0]
-			recs := decodeIPFIX(t, msg)
-			require.Len(t, recs, 1)
+// TestIPFIXICMPTypeCode: ICMP carries icmpTypeCodeIPv4 (IE 32, type*256+code)
+// and zero transport ports, which IANA defines only for port-bearing protocols.
+func TestIPFIXICMPTypeCode(t *testing.T) {
+	f := testFlow()
+	f.Protocol, f.TCPFlags, f.SrcPort, f.DstPort = 1, 0, 0, 8<<8 // echo request
+	recs := decodeIPFIX(t, NewEncoder(0, nil).Encode(time.Unix(1700000010, 0), []embed.FlowRecord{f})[0])
+	require.Len(t, recs, 1)
+	tc, ok := field(recs[0], 32)
+	require.True(t, ok, "icmpTypeCodeIPv4 present")
+	require.Equal(t, uint16(8<<8), binary.BigEndian.Uint16(tc))
+	dp, _ := field(recs[0], 11)
+	require.Equal(t, uint16(0), binary.BigEndian.Uint16(dp), "destinationTransportPort")
 
-			var found bool
-			for _, v := range recs[0].Values {
-				if v.PenProvided && v.Pen == tc.pen {
-					found = true
-					require.Equal(t, tc.ieid, v.Type, "enterprise IE id")
-				}
-			}
-			require.True(t, found, "decoded record must carry enterprise PEN %d", tc.pen)
-		})
-	}
+	tcp := decodeIPFIX(t, NewEncoder(0, nil).Encode(time.Unix(1700000010, 0), []embed.FlowRecord{testFlow()})[0])
+	tc, _ = field(tcp[0], 32)
+	require.Equal(t, uint16(0), binary.BigEndian.Uint16(tc), "non-ICMP carries 0")
 }

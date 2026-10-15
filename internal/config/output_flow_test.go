@@ -36,3 +36,21 @@ func TestFlowOutputVendorFormatMatrix(t *testing.T) {
 		})
 	}
 }
+
+func TestFlowOutputRejectsBadPortAndAgentIP(t *testing.T) {
+	for _, c := range []FlowOutputConfig{
+		{Host: "127.0.0.1", Port: 0},
+		{Host: "127.0.0.1", Port: 65536},
+		{Host: "127.0.0.1", Port: 2055, Protocol: "sflow", AgentIP: "10.0.0.300"},
+	} {
+		if err := c.Validate(); err == nil {
+			t.Errorf("expected error for %+v", c)
+		}
+	}
+	for _, ip := range []string{"", "10.0.0.1", "2001:db8::1"} {
+		c := FlowOutputConfig{Host: "127.0.0.1", Port: 2055, Protocol: "sflow", AgentIP: ip}
+		if err := c.Validate(); err != nil {
+			t.Errorf("agentIP %q: %v", ip, err)
+		}
+	}
+}

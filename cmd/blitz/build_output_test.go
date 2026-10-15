@@ -31,6 +31,7 @@ func defaultOutput(t *testing.T, typ config.OutputType) config.Output {
 		config.OutputTypeSyslog: "  syslog:\n    host: 127.0.0.1\n    port: 9\n",
 		config.OutputTypeFile:   "  file:\n    path: " + filepath.Join(t.TempDir(), "out.log") + "\n",
 		config.OutputTypeHEC:    "  hec:\n    host: 127.0.0.1\n    port: 9\n    token: t\n",
+		config.OutputTypeFlow:   "  flow:\n    host: 127.0.0.1\n    port: 9\n",
 	}
 	cfg, err := blitzconfig.Load([]byte(fmt.Sprintf("output:\n  type: %s\n%s", typ, required[typ])), blitzconfig.LoadOpts{})
 	require.NoError(t, err)
@@ -104,6 +105,10 @@ func TestBuildOutput_EveryType(t *testing.T) {
 		{name: "hec", typ: config.OutputTypeHEC},
 		{name: "hec tls", typ: config.OutputTypeHEC, mutate: func(o *config.Output) { o.HEC.EnableTLS = true }},
 		{name: "hec bad tls", typ: config.OutputTypeHEC, mutate: func(o *config.Output) { o.HEC.EnableTLS, o.HEC.TLS = true, missingCA }, wantErr: "certificate authority"},
+		{name: "flow", typ: config.OutputTypeFlow},
+		{name: "flow bad agent ip", typ: config.OutputTypeFlow, mutate: func(o *config.Output) {
+			o.Flow.Protocol, o.Flow.AgentIP = "sflow", "not-an-ip"
+		}, wantErr: "agent"},
 	}
 	covered := map[config.OutputType]bool{}
 	for _, tc := range cases {

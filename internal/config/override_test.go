@@ -1052,3 +1052,49 @@ func TestOverrideCoverage(t *testing.T) {
 		t.Errorf("%s", report.String())
 	}
 }
+
+func TestCreateFlagInt64(t *testing.T) {
+	flagSet := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	o := NewOverride("test.int64.seed", "an int64 override", int64(-1))
+	flag := o.createFlag(flagSet)
+	require.Equal(t, "int64", flag.Value.Type())
+
+	require.Error(t, flagSet.Parse([]string{"--test-int64-seed=abc"}))
+	require.NoError(t, flagSet.Parse([]string{"--test-int64-seed=-9"}))
+	require.Equal(t, "-9", flag.Value.String())
+}
+
+// TestFlowSeedFlagIsInt64 keeps the flow seed flag the same type as
+// FlowGeneratorConfig.Seed.
+func TestFlowSeedFlagIsInt64(t *testing.T) {
+	flagSet := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	for _, o := range DefaultOverrides() {
+		if o.Field == "generator.flow.seed" {
+			require.Equal(t, "int64", o.createFlag(flagSet).Value.Type())
+			return
+		}
+	}
+	t.Fatal("no generator.flow.seed override")
+}
+
+// TestTypeHelpListsEveryType keeps the --generator-type and --output-type help
+// text in step with Validate: every type Validate accepts is listed.
+func TestTypeHelpListsEveryType(t *testing.T) {
+	for field, err := range map[string]error{
+		"generator.type": (&Generator{Type: "no-such-type"}).Validate(),
+		"output.type":    (&Output{Type: "no-such-type"}).Validate(),
+	} {
+		require.Error(t, err)
+		_, accepted, ok := strings.Cut(err.Error(), "must be one of: ")
+		require.True(t, ok, "unexpected Validate error: %v", err)
+		var help string
+		for _, o := range DefaultOverrides() {
+			if o.Field == field {
+				help = o.Usage
+			}
+		}
+		_, listed, ok := strings.Cut(help, "One of: ")
+		require.True(t, ok, "unexpected %s usage: %q", field, help)
+		require.ElementsMatch(t, strings.Split(accepted, ", "), strings.Split(listed, "|"), field)
+	}
+}
