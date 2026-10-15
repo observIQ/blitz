@@ -4,9 +4,14 @@ import (
 	"math/rand"
 	"regexp"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
-// expandedOSes is the PIPE-1260 additions: ESXi, the hypervisor-host Linux
+// expandedOSes is the OSType additions: ESXi, the hypervisor-host Linux
 // flavors, and the Unix families. semconv is the os.type wire value each emits.
 var expandedOSes = []struct {
 	os      OSType
@@ -117,6 +122,50 @@ func TestGenerateServicesForSystem_Expanded(t *testing.T) {
 		svcs := GenerateServicesForSystem(rand.New(rand.NewSource(1)), os, RoleServer, "h") // #nosec G404
 		if !contains(svcs, "libvirtd") {
 			t.Errorf("%s services missing libvirtd: %+v", os, svcs)
+		}
+	}
+}
+
+// TestExpandedServersHaveApplicationsAndInterfaces pins each expanded OS's
+// application set and primary interface name. Unix servers get their real
+// application stacks; hypervisor hosts run no applications beyond the
+// platform, so they get none, by design and without a warning.
+func TestExpandedServersHaveApplicationsAndInterfaces(t *testing.T) {
+	iface := map[OSType]string{
+		OSESXi: "vmk0", OSAIX: "en0", OSSolaris: "net0", OSFreeBSD: "em0", OSOpenBSD: "em0",
+		OSXenDom0: "xenbr0", OSNutanixAHV: "br0", OSOpenStackKVM: "eth0",
+	}
+	hypervisor := map[OSType]bool{OSESXi: true, OSXenDom0: true, OSNutanixAHV: true, OSOpenStackKVM: true}
+	for _, tc := range expandedOSes {
+		require.Equal(t, iface[tc.os], interfaceName(tc.os), tc.os)
+
+		core, logs := observer.New(zap.WarnLevel)
+		apps := GenerateApplicationsForSystem(rand.New(rand.NewSource(1)), tc.os, RoleServer, "h", zap.New(core))
+		require.Zero(t, logs.Len(), "%s logs no unsupported-combination warning", tc.os)
+		if hypervisor[tc.os] {
+			require.Empty(t, apps, tc.os)
+		} else {
+			require.NotEmpty(t, apps, tc.os)
+		}
+	}
+}
+
+// TestExpandedOSesRunOnTheirArchitectures pins host.arch to what each platform
+// ships on: AIX only on POWER, Solaris, ESXi, Nutanix AHV and XCP-ng on x86-64,
+// and the rest on amd64 or arm64.
+func TestExpandedOSesRunOnTheirArchitectures(t *testing.T) {
+	only := map[OSType]Arch{OSAIX: ArchPPC64, OSSolaris: ArchAMD64, OSESXi: ArchAMD64, OSNutanixAHV: ArchAMD64, OSXenDom0: ArchAMD64}
+	domain := GenerateDomainIdentity(7, "contoso.com", time.Now())
+	for _, e := range expandedOSes {
+		r := rand.New(rand.NewSource(7)) // #nosec G404 -- test
+		for range 200 {
+			sys, err := GenerateSystemIdentity(r, e.os, RoleServer, domain, NorseNames)
+			require.NoError(t, err)
+			if want, ok := only[e.os]; ok {
+				require.Equal(t, want, sys.Arch, "%s", e.os)
+			} else {
+				require.Contains(t, []Arch{ArchAMD64, ArchARM64}, sys.Arch, "%s", e.os)
+			}
 		}
 	}
 }

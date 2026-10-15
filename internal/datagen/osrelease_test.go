@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateOSInfo_Coherent(t *testing.T) {
@@ -97,4 +99,58 @@ func TestGenerateHostID(t *testing.T) {
 	if GenerateHostID(rand.New(rand.NewSource(9)), OSLinux) != GenerateHostID(rand.New(rand.NewSource(9)), OSLinux) { // #nosec G404
 		t.Error("GenerateHostID not deterministic")
 	}
+}
+
+// TestExpandedOSTiersFollowReleaseAge pins the tier bias for the expanded
+// OSes: a pinned (prod) host runs an older release, a non-prod host a newer
+// one. OpenStack KVM spans two distros with no shared age order, so it draws
+// either regardless of tier, as Linux does.
+func TestExpandedOSTiersFollowReleaseAge(t *testing.T) {
+	older := map[OSType][]string{
+		OSESXi:       {"7.0.3", "8.0.0"},
+		OSAIX:        {"7200-05-07-2346"},
+		OSSolaris:    {"11.4.42.0.1.113.1"},
+		OSFreeBSD:    {"13.3-RELEASE-p5"},
+		OSOpenBSD:    {"GENERIC.MP#1125"},
+		OSXenDom0:    {"8.2.1"},
+		OSNutanixAHV: {"20220304.480"},
+	}
+	r := rand.New(rand.NewSource(1)) // #nosec G404
+	for os, want := range older {
+		for range 50 {
+			prod, nonProd := osInfoForTier(r, os, true), osInfoForTier(r, os, false)
+			require.Contains(t, want, tierKey(prod), "%s prod", os)
+			require.NotContains(t, want, tierKey(nonProd), "%s non-prod", os)
+		}
+	}
+	seen := map[string]bool{}
+	for range 100 {
+		seen[osInfoForTier(r, OSOpenStackKVM, true).Name] = true
+	}
+	require.Len(t, seen, 2, "OpenStack KVM prod hosts draw either distro")
+}
+
+// tierKey is the field that tells an expanded OS's releases apart.
+func tierKey(i OSInfo) string {
+	switch i.Type {
+	case OSAIX, OSSolaris, OSFreeBSD, OSOpenBSD:
+		return i.BuildID
+	}
+	return i.Version
+}
+
+// TestExpandedOSBuildIDsAreVendorPublished pins the AIX and Solaris build
+// strings to the vendors' published ones: IBM's oslevel -s for AIX 7.2 TL5
+// SP7, and Oracle's 11.4.<SRU>.0.1.<build>.<nightly> entire branch for each SRU.
+func TestExpandedOSBuildIDsAreVendorPublished(t *testing.T) {
+	ids := map[string]bool{}
+	for _, os := range []OSType{OSAIX, OSSolaris} {
+		for _, rel := range extendedReleases[os] {
+			ids[rel.buildID] = true
+		}
+	}
+	for _, want := range []string{"7300-02-02-2420", "7300-01-03-2346", "7200-05-07-2346", "11.4.42.0.1.113.1", "11.4.54.0.1.138.1", "11.4.66.0.1.164.1"} {
+		require.True(t, ids[want], "missing %s", want)
+	}
+	require.Len(t, ids, 6)
 }

@@ -148,8 +148,7 @@ func TestSyntheticIdentityOSTypeProjection(t *testing.T) {
 
 	g, err := New(cfg)
 	require.NoError(t, err)
-	_, ok := g.static.Record()["os.type"]
-	assert.False(t, ok, "empty OS must not emit an empty os.type")
+	assert.Equal(t, "linux", g.static.Record()["os.type"], "an unset os is linux, never an empty os.type")
 
 	cfg.OS = "windows"
 	g2, err := New(cfg)
@@ -296,4 +295,32 @@ func TestBuildScrapers(t *testing.T) {
 		scrapers := buildScrapers([]string{"cpu", "bogus"})
 		assert.Len(t, scrapers, 1)
 	})
+}
+
+// TestSyntheticIdentityCanonicalizesOS pins the synthetic (no environment)
+// identity to the canonical OS the os knob names: aliases resolve (xen is a
+// Linux dom0, vmware is ESXi), os.type is the semconv value, and the host
+// carries that OS's real name and version.
+func TestSyntheticIdentityCanonicalizesOS(t *testing.T) {
+	for os, want := range map[string]struct{ osType, osName string }{
+		"xen":     {"linux", "XCP-ng"},
+		"kvm":     {"linux", ""},
+		"vmware":  {"esxi", "VMware ESXi"},
+		"aix":     {"aix", "AIX"},
+		"openbsd": {"openbsd", "OpenBSD"},
+		"darwin":  {"darwin", "macOS"},
+		"":        {"linux", ""},
+	} {
+		cfg := baseCfg(t, &mockMetricConsumer{})
+		cfg.OS, cfg.Seed = os, 1
+		g, err := New(cfg)
+		require.NoError(t, err)
+		res := g.static.Record()
+		assert.Equal(t, want.osType, res["os.type"], "os %q", os)
+		assert.NotEmpty(t, res["os.name"], "os %q has no os.name", os)
+		assert.NotEmpty(t, res["os.version"], "os %q has no os.version", os)
+		if want.osName != "" {
+			assert.Equal(t, want.osName, res["os.name"], "os %q", os)
+		}
+	}
 }
