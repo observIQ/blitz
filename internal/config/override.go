@@ -327,7 +327,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.fix.targetCompID", "FIX TargetCompID (tag 56)", "VENUE"),
 		NewOverride("generator.fix.enabledCategories", "FIX asset categories to emit (empty = all)", []string{}),
 		NewOverride("generator.fix.seed", "FIX RNG seed (negative = random per run; 0+ = deterministic)", int64(-1)),
-		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file|hec|flow|prometheus-remote-write", OutputTypeNop),
+		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file|hec|flow|prometheus-remote-write|prometheus-scrape", OutputTypeNop),
 		NewOverride("output.stdout.flushInterval", "stdout output flush interval", DefaultStdoutFlushInterval),
 		NewOverride("output.udp.host", "UDP output target host", ""),
 		NewOverride("output.udp.port", "UDP output target port", 0),

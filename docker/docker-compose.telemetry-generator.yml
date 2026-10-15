@@ -19,6 +19,8 @@
 #   - PROM_RW_ENDPOINT: remote-write receiver URL for blitz-hostmetrics-promrw
 #     (default: http://bdot-collector:19291/api/v1/write)
 #   - PROM_RW_VERSION: remote-write protocol version, 1.0 or 2.0 (default: 1.0)
+#   - PROM_SCRAPE_PORT: host port for blitz-hostmetrics-promscrape's /metrics
+#     (default: 9464)
 
 x-blitz-common: &blitz-common
   image: ghcr.io/observiq/blitz:latest
@@ -264,9 +266,11 @@ services:
 
   # Host metrics served on a Prometheus scrape (pull) endpoint. Point a scraper
   # (the collector prometheusreceiver, or a Prometheus server) at
-  # blitz-hostmetrics-promscrape:9464/metrics to pull the exposition.
+  # blitz-hostmetrics-promscrape:9464/metrics to pull the exposition. Starts
+  # only with --profile prometheus-scrape, since it publishes a host port.
   blitz-hostmetrics-promscrape:
     <<: *blitz-common
+    profiles: ["prometheus-scrape"]
     environment:
       BLITZ_GENERATOR_TYPE: hostmetrics
       BLITZ_GENERATOR_HOSTMETRICS_RATE: ${BLITZ_RATE:-1s}

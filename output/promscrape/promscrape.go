@@ -2,9 +2,11 @@ package promscrape
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -12,20 +14,25 @@ import (
 	"github.com/observiq/blitz/internal/prommap"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
 
-// Output is the prometheus-scrape output: it upserts mapped metric series into
-// an in-memory registry and serves them as Prometheus text exposition on an
+// Output is the prometheus-scrape output: it keeps the latest point per
+// series and serves them as the collector prometheusexporter would, on an
 // HTTP endpoint that a Prometheus server or the collector prometheusreceiver
 // scrapes. Metrics-only.
 type Output struct {
-	emitTimestamps bool
-	reg            *registry
-	srv            *http.Server
-	ln             net.Listener
-	logger         *zap.Logger
-	metrics        *promscrapeMetrics
+	st      *store
+	col     *collector
+	handler http.Handler
+	clock   clockwork.Clock
+	srv     *http.Server
+	ln      net.Listener
+	logger  *zap.Logger
+	metrics *promscrapeMetrics
+	stopped atomic.Bool
 }
 
 // New builds a prometheus-scrape output and starts serving. It binds the
@@ -34,6 +41,10 @@ type Output struct {
 // metricExpiration drops a series not updated within it (0 keeps series
 // forever), matching the collector prometheusexporter's metric_expiration.
 func New(listenAddr, metricsPath string, emitTimestamps bool, metricExpiration time.Duration, tel embed.TelemetrySettings, logger *zap.Logger) (*Output, error) {
+	return newWithClock(listenAddr, metricsPath, emitTimestamps, metricExpiration, tel, logger, clockwork.NewRealClock())
+}
+
+func newWithClock(listenAddr, metricsPath string, emitTimestamps bool, metricExpiration time.Duration, tel embed.TelemetrySettings, logger *zap.Logger, clk clockwork.Clock) (*Output, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -46,11 +57,18 @@ func New(listenAddr, metricsPath string, emitTimestamps bool, metricExpiration t
 		return nil, fmt.Errorf("promscrape: listen on %s: %w", listenAddr, err)
 	}
 
+	st := newStore(clk, metricExpiration)
+	reg := prometheus.NewRegistry()
+	col := newCollector(st, emitTimestamps, clk, metricExpiration, logger)
+	reg.MustRegister(col)
 	o := &Output{
-		emitTimestamps: emitTimestamps,
-		reg:            newRegistry(clockwork.NewRealClock(), metricExpiration),
-		ln:             ln,
-		logger:         logger,
+		st:  st,
+		col: col,
+		// The exporter's handler options: serve what converted, log the rest.
+		handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{ErrorHandling: promhttp.ContinueOnError, ErrorLog: promLogger{logger}}),
+		clock:   clk,
+		ln:      ln,
+		logger:  logger,
 	}
 
 	// Self-telemetry is best-effort: a build failure disables recording rather
@@ -59,11 +77,18 @@ func New(listenAddr, metricsPath string, emitTimestamps bool, metricExpiration t
 		logger.Warn("prometheus-scrape metrics disabled", zap.Error(err))
 	} else {
 		o.metrics = m
+		col.onCollect = func(exposed int64) { m.recordExposed(context.Background(), exposed) }
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc(metricsPath, o.handleScrape)
-	o.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	// Match the path exactly: a ServeMux pattern would read "{" or a trailing
+	// "/" as syntax, and panics on a malformed one.
+	o.srv = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != metricsPath {
+			http.NotFound(w, r)
+			return
+		}
+		o.handleScrape(w, r)
+	}), ReadHeaderTimeout: 5 * time.Second}
 
 	go func() {
 		if err := o.srv.Serve(ln); err != nil && err != http.ErrServerClosed {
@@ -74,37 +99,61 @@ func New(listenAddr, metricsPath string, emitTimestamps bool, metricExpiration t
 	return o, nil
 }
 
-// handleScrape renders the current registry snapshot as text exposition.
-func (o *Output) handleScrape(w http.ResponseWriter, _ *http.Request) {
-	start := time.Now()
-	body := encode(o.reg.snapshot(), o.emitTimestamps)
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	n, _ := w.Write(body)
+// handleScrape serves the exposition and records the scrape.
+func (o *Output) handleScrape(w http.ResponseWriter, r *http.Request) {
+	start := o.clock.Now()
+	cw := &countingWriter{ResponseWriter: w}
+	o.handler.ServeHTTP(cw, r)
 	if o.metrics != nil {
-		o.metrics.recordScrape(context.Background(), int64(o.reg.len()), int64(n), float64(time.Since(start).Milliseconds()))
+		o.metrics.recordScrape(context.Background(), cw.n, output.DurationMillis(o.clock.Since(start)))
 	}
 }
+
+// countingWriter counts the body bytes written.
+type countingWriter struct {
+	http.ResponseWriter
+	n int64
+}
+
+func (w *countingWriter) Write(b []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(b)
+	w.n += int64(n)
+	return n, err
+}
+
+// promLogger routes promhttp's errors to zap at Error, as the exporter does.
+type promLogger struct{ l *zap.Logger }
+
+func (p promLogger) Println(v ...any) { p.l.Error(fmt.Sprint(v...)) }
 
 // Write reports that logs are unsupported: this output is metrics-only.
 func (o *Output) Write(_ context.Context, _ output.LogRecord) error {
 	return output.ErrUnsupportedTelemetryType
 }
 
-// WriteMetric maps a metric record and upserts its series into the registry.
+// errStopped refuses a write after Stop: the endpoint no longer serves it.
+var errStopped = errors.New("promscrape: output stopped")
+
+// WriteMetric stores the point as its series' latest value.
 func (o *Output) WriteMetric(ctx context.Context, data output.MetricRecord) error {
-	fam, err := prommap.Map(data)
-	if err != nil {
+	if o.metrics != nil {
+		o.metrics.recordEntryReceived(ctx)
+	}
+	if o.stopped.Load() {
+		return errStopped
+	}
+	if _, err := prommap.MetricName(data); err != nil {
 		return fmt.Errorf("promscrape: map metric: %w", err)
 	}
-	o.reg.upsert(fam)
-	// target_info shares one registry entry per target, so repeats refresh it
-	// rather than duplicating it.
-	if t, ok := prommap.TargetInfo(data); ok {
-		o.reg.upsert(t)
+	switch data.Type {
+	case embed.MetricTypeGauge, embed.MetricTypeSum, embed.MetricTypeCounter, embed.MetricTypeHistogram:
+	default:
+		return fmt.Errorf("promscrape: unsupported metric type %q for %q", data.Type, data.Name)
 	}
-	if o.metrics != nil {
-		o.metrics.recordSeriesReceived(ctx, int64(len(fam.Samples)))
+	if data.Type == embed.MetricTypeHistogram && len(data.HistogramBucketCounts) != len(data.HistogramBucketBounds)+1 {
+		return fmt.Errorf("promscrape: histogram %q has %d bucket counts, want len(bounds)+1 = %d", data.Name, len(data.HistogramBucketCounts), len(data.HistogramBucketBounds)+1)
 	}
+	o.st.put(data)
 	return nil
 }
 
@@ -113,8 +162,9 @@ func (o *Output) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Metrics}
 }
 
-// Stop shuts down the HTTP server.
+// Stop shuts down the HTTP server; later writes are refused.
 func (o *Output) Stop(ctx context.Context) error {
+	o.stopped.Store(true)
 	return o.srv.Shutdown(ctx)
 }
 

@@ -9,7 +9,9 @@ import (
 
 // Default prometheus-scrape output configuration values.
 const (
-	// DefaultPromScrapeListenAddress is the OTel Prometheus exporter default port.
+	// DefaultPromScrapeListenAddress is the OTel Prometheus exporter default
+	// port on every interface, since Prometheus usually scrapes from another
+	// host. Set a loopback address to keep the endpoint local.
 	DefaultPromScrapeListenAddress = "0.0.0.0:9464"
 	// DefaultPromScrapeMetricsPath is the conventional exposition path.
 	DefaultPromScrapeMetricsPath = "/metrics"

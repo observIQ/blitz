@@ -29,13 +29,17 @@ func newPromscrapeMetrics(tel embed.TelemetrySettings) (*promscrapeMetrics, erro
 	return &promscrapeMetrics{out: out, sc: sc}, nil
 }
 
-func (m *promscrapeMetrics) recordSeriesReceived(ctx context.Context, n int64) {
-	m.out.BlitzOutputEntriesReceivedCounter.Add(ctx, n, outputType, "metrics")
+func (m *promscrapeMetrics) recordEntryReceived(ctx context.Context) {
+	m.out.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "metrics")
 }
 
-func (m *promscrapeMetrics) recordScrape(ctx context.Context, seriesExposed, bytes int64, latencyMS float64) {
-	m.sc.blitzOutputPrometheusScrapeScrapesCounter.Add(ctx, 1)
+// recordExposed records the series one scrape's Collect exposed.
+func (m *promscrapeMetrics) recordExposed(ctx context.Context, seriesExposed int64) {
 	m.sc.blitzOutputPrometheusScrapeSeriesExposedGauge.Record(ctx, seriesExposed)
+}
+
+func (m *promscrapeMetrics) recordScrape(ctx context.Context, bytes int64, latencyMS float64) {
+	m.sc.blitzOutputPrometheusScrapeScrapesCounter.Add(ctx, 1)
 	m.sc.blitzOutputPrometheusScrapeExpositionBytesHistogram.Record(ctx, bytes)
 	m.sc.blitzOutputPrometheusScrapeScrapeLatencyHistogram.Record(ctx, latencyMS)
 }
