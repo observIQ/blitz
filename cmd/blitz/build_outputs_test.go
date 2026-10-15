@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,6 +18,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/config"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -208,8 +210,8 @@ func TestRunRejectsExplicitSingularOutputEqualToDefault(t *testing.T) {
 }
 
 // TestRunIgnoresUnprefixedEnvVars pins that the CLI reads only BLITZ_ env
-// vars: an unrelated OUTPUTS in the environment neither replaces nor breaks a
-// config's outputs.
+// vars: an unrelated OUTPUTS or GENERATORS in the environment neither
+// replaces nor breaks a config's outputs or generators.
 func TestRunIgnoresUnprefixedEnvVars(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "blitz.yaml")
 	// hostmetrics into nop fails signal compatibility, so a run that gets past
@@ -219,6 +221,140 @@ func TestRunIgnoresUnprefixedEnvVars(t *testing.T) {
 	t.Cleanup(func() { configFile = origFile })
 	configFile = path
 	t.Setenv("OUTPUTS", "prod")
+	t.Setenv("GENERATORS", "all")
 
 	require.ErrorContains(t, run(nil, nil), "signal compatibility")
+}
+
+// TestRunRejectsExplicitSingularGeneratorEqualToDefault is the generators:
+// mirror of TestRunRejectsExplicitSingularOutputEqualToDefault.
+func TestRunRejectsExplicitSingularGeneratorEqualToDefault(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "blitz.yaml")
+	// hostmetrics into nop fails signal compatibility, so a run that gets past
+	// the exclusivity check stops there instead of running.
+	require.NoError(t, os.WriteFile(path, []byte("generators:\n  - type: hostmetrics\noutput:\n  type: nop\n"), 0o600))
+	origFile := configFile
+	t.Cleanup(func() { configFile = origFile })
+	configFile = path
+
+	t.Run("env", func(t *testing.T) {
+		t.Setenv("BLITZ_GENERATOR_TYPE", "nop")
+		require.ErrorContains(t, run(nil, nil), "set either generator or generators, not both")
+	})
+	t.Run("flag", func(t *testing.T) {
+		f := cliFlags.Lookup("generator-type")
+		require.NoError(t, f.Value.Set("nop"))
+		f.Changed = true
+		t.Cleanup(func() { _ = f.Value.Set(""); f.Changed = false })
+		require.ErrorContains(t, run(nil, nil), "set either generator or generators, not both")
+	})
+}
+
+// TestRunCompletionLogNamesListGenerators pins that a finite run from a
+// generators: list names the list's generators when it completes, not the
+// unused singular form.
+func TestRunCompletionLogNamesListGenerators(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "blitz.log")
+	path := filepath.Join(dir, "blitz.yaml")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := l.Addr().(*net.TCPAddr).Port
+	require.NoError(t, l.Close())
+	yaml := fmt.Sprintf(`logging:
+  type: file
+  file:
+    path: %s
+generators:
+  - type: json
+    count: 2
+    json:
+      rate: 1ms
+  - type: nginx
+    count: 2
+    nginx:
+      rate: 1ms
+output:
+  type: file
+  file:
+    path: %s
+metrics:
+  port: %d
+`, logPath, filepath.Join(dir, "out.log"), port)
+	require.NoError(t, os.WriteFile(path, []byte(yaml), 0o600))
+	origFile := configFile
+	t.Cleanup(func() { configFile = origFile })
+	configFile = path
+
+	require.NoError(t, run(nil, nil))
+	got, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(got), `"generators":["json","nginx"]`)
+}
+
+// TestRunGeneratorCountBoundsAList pins that generator.count is a run-level
+// limit: --generator-count (or BLITZ_GENERATOR_COUNT) next to a generators:
+// list bounds the run instead of being rejected as the singular generator.
+func TestRunGeneratorCountBoundsAList(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.log")
+	path := filepath.Join(dir, "blitz.yaml")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := l.Addr().(*net.TCPAddr).Port
+	require.NoError(t, l.Close())
+	yaml := fmt.Sprintf(`generators:
+  - type: json
+    json:
+      rate: 1ms
+output:
+  type: file
+  file:
+    path: %s
+metrics:
+  port: %d
+`, out, port)
+	require.NoError(t, os.WriteFile(path, []byte(yaml), 0o600))
+	origFile := configFile
+	t.Cleanup(func() { configFile = origFile })
+	configFile = path
+
+	f := cliFlags.Lookup("generator-count")
+	require.NoError(t, f.Value.Set("3"))
+	f.Changed = true
+	t.Cleanup(func() { _ = f.Value.Set("0"); f.Changed = false })
+
+	require.NoError(t, run(nil, nil))
+	got, err := os.ReadFile(out)
+	require.NoError(t, err)
+	assert.Equal(t, 3, strings.Count(string(got), "\n"))
+}
+
+// TestCountTrackersDoNotDependOnListOrder pins which tracker each generators
+// entry draws from: the run-level one when set, else the tracker the entries
+// with a count share, and none for an entry without a count, wherever it sits
+// in the list.
+func TestCountTrackersDoNotDependOnListOrder(t *testing.T) {
+	var counted countTrackers
+	first, created := counted.forEntry(100)
+	require.NotNil(t, first)
+	assert.True(t, created)
+	none, _ := counted.forEntry(0)
+	assert.Nil(t, none, "an entry without a count after a counted one is unbounded")
+	second, created := counted.forEntry(5)
+	assert.Same(t, first, second, "counted entries share one tracker")
+	assert.False(t, created)
+
+	var reversed countTrackers
+	none, _ = reversed.forEntry(0)
+	assert.Nil(t, none, "an entry without a count before a counted one is unbounded")
+	got, _ := reversed.forEntry(100)
+	assert.NotNil(t, got)
+
+	runLevel := countTrackers{run: count.NewTracker(3)}
+	for _, n := range []int{0, 7} {
+		got, created := runLevel.forEntry(n)
+		assert.Same(t, runLevel.run, got, "a run-level count bounds every entry")
+		assert.False(t, created)
+	}
 }

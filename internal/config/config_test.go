@@ -92,3 +92,15 @@ func TestEffectiveGenerators_Empty(t *testing.T) {
 	gens := cfg.EffectiveGenerators()
 	require.Len(t, gens, 1, "should wrap empty Generator in slice")
 }
+
+// TestRunLevelCountIsValidatedNextToAList pins that a run-level
+// generator.count next to a generators: list is validated like the singular
+// form's: a negative count is rejected, not silently unlimited.
+func TestRunLevelCountIsValidatedNextToAList(t *testing.T) {
+	list := "generators:\n  - type: nop\n"
+	cfg := loadLikeCLI(t, list, map[string]any{"generator.count": -3})
+	require.ErrorContains(t, cfg.Validate(), "generator count must be 0 or greater, got -3")
+
+	cfg = loadLikeCLI(t, list, map[string]any{"generator.count": 3})
+	require.NoError(t, cfg.Validate())
+}
