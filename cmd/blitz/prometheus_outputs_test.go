@@ -40,3 +40,10 @@ func TestRunWritesToPrometheusRemoteWrite(t *testing.T) {
 	require.NoError(t, runCountedHostMetrics(t, fmt.Sprintf("output:\n  type: prometheus-remote-write\n  prometheus-remote-write:\n    endpoint: %s\n", srv.URL)))
 	require.NotZero(t, posts.Load(), "stopping the output flushes the counted points")
 }
+
+func TestRunReportsAPrometheusScrapeListenError(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = l.Close() })
+	require.ErrorContains(t, runCountedHostMetrics(t, fmt.Sprintf("output:\n  type: prometheus-scrape\n  prometheus-scrape:\n    listenAddress: %s\n", l.Addr())), l.Addr().String())
+}
