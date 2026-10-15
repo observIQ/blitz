@@ -53,7 +53,7 @@ func TestOutput_FlushPostsRemoteWriteV1(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(rcv.handler))
 	defer srv.Close()
 
-	o, err := New(srv.URL, "1.0", 1, time.Hour, 5*time.Second, nil, embed.TelemetrySettings{}, zap.NewNop())
+	o, err := New(srv.URL, "1.0", 1, 0, time.Hour, 5*time.Second, nil, embed.TelemetrySettings{}, zap.NewNop())
 	require.NoError(t, err)
 
 	require.NoError(t, o.WriteMetric(context.Background(), metricRecord()))
@@ -86,7 +86,7 @@ func TestOutput_FlushPostsRemoteWriteV1(t *testing.T) {
 }
 
 func TestOutput_LogsUnsupported(t *testing.T) {
-	o, err := New("http://localhost:9090/api/v1/write", "1.0", 500, time.Hour, time.Second, nil, embed.TelemetrySettings{}, zap.NewNop())
+	o, err := New("http://localhost:9090/api/v1/write", "1.0", 500, 0, time.Hour, time.Second, nil, embed.TelemetrySettings{}, zap.NewNop())
 	require.NoError(t, err)
 	defer o.Stop(context.Background())
 	assert.ErrorIs(t, o.Write(context.Background(), output.LogRecord{}), output.ErrUnsupportedTelemetryType)
@@ -103,4 +103,67 @@ func toStrings[T ~string](in []T) []string {
 		out[i] = string(v)
 	}
 	return out
+}
+
+// TestOutput_FlushPostsRemoteWriteV2Headers pins the remote-write 2.0
+// request headers a v2 receiver requires.
+func TestOutput_FlushPostsRemoteWriteV2Headers(t *testing.T) {
+	rcv := &capturingReceiver{}
+	srv := httptest.NewServer(http.HandlerFunc(rcv.handler))
+	defer srv.Close()
+
+	o, err := New(srv.URL, "2.0", 1, 0, time.Hour, 5*time.Second, nil, embed.TelemetrySettings{}, zap.NewNop())
+	require.NoError(t, err)
+	require.NoError(t, o.WriteMetric(context.Background(), metricRecord()))
+	require.NoError(t, o.Stop(context.Background()))
+
+	rcv.mu.Lock()
+	defer rcv.mu.Unlock()
+	require.NotEmpty(t, rcv.headers)
+	h := rcv.headers[0]
+	assert.Equal(t, "application/x-protobuf;proto=io.prometheus.write.v2.Request", h.Get("Content-Type"))
+	assert.Equal(t, "snappy", h.Get("Content-Encoding"))
+	assert.Equal(t, "2.0.0", h.Get("X-Prometheus-Remote-Write-Version"))
+}
+
+// TestNewAcceptsBareMajorVersions pins that "1" and "2" (an unquoted YAML 1.0
+// or 2.0 after viper) select the same protocols as "1.0" and "2.0".
+func TestNewAcceptsBareMajorVersions(t *testing.T) {
+	for ver, want := range map[string]version{"1": versionV1, "2": versionV2} {
+		o, err := New("http://127.0.0.1:9090/api/v1/write", ver, 1, 0, time.Hour, 5*time.Second, nil, embed.TelemetrySettings{}, zap.NewNop())
+		require.NoError(t, err, ver)
+		require.Equal(t, want, o.version, ver)
+		require.NoError(t, o.Stop(context.Background()))
+	}
+}
+
+// TestNewRejectsBatchLargerThanBuffer pins that New, like config validation,
+// refuses a buffer smaller than a batch (defaults applied first): such a
+// batch never fills, so series would drop and wait for Stop.
+func TestNewRejectsBatchLargerThanBuffer(t *testing.T) {
+	for _, c := range []struct{ batch, buffered int }{{500, 100}, {0, 100}, {20000, 0}} {
+		_, err := New("http://127.0.0.1:9090/api/v1/write", "1.0", c.batch, c.buffered, time.Hour, 5*time.Second, nil, embed.TelemetrySettings{}, zap.NewNop())
+		require.ErrorContains(t, err, "at least the batch size", "%+v", c)
+	}
+}
+
+// TestNewCopiesHeaders pins that New keeps its own copy of headers: the
+// sender reads them on every POST, so a caller changing its map afterwards
+// must neither race with it nor change what is sent.
+func TestNewCopiesHeaders(t *testing.T) {
+	rcv := &capturingReceiver{}
+	srv := httptest.NewServer(http.HandlerFunc(rcv.handler))
+	defer srv.Close()
+
+	headers := map[string]string{"X-Scope-OrgID": "tenant-a"}
+	o, err := New(srv.URL, "1.0", 1, 0, time.Hour, 5*time.Second, headers, embed.TelemetrySettings{}, zap.NewNop())
+	require.NoError(t, err)
+	headers["X-Scope-OrgID"] = "tenant-b"
+	require.NoError(t, o.WriteMetric(context.Background(), metricRecord()))
+	require.NoError(t, o.Stop(context.Background()))
+
+	rcv.mu.Lock()
+	defer rcv.mu.Unlock()
+	require.NotEmpty(t, rcv.headers)
+	assert.Equal(t, "tenant-a", rcv.headers[0].Get("X-Scope-OrgID"))
 }

@@ -102,3 +102,37 @@ func TestEncodeV2_SymbolTableRoundTrip(t *testing.T) {
 	}
 	assert.True(t, found, "counter series resolvable through the symbol table")
 }
+
+// TestEncodeV2_CarriesMetadata pins that v2 series carry their metric
+// metadata as the collector's exporter sends it: the Prometheus type, help,
+// and the unit as a Prometheus unit name.
+func TestEncodeV2_CarriesMetadata(t *testing.T) {
+	fams := []prommap.MetricFamily{
+		{Name: "system_cpu_time_seconds_total", Type: prommap.TypeCounter, Help: "CPU time", Unit: "s",
+			Samples: []prommap.Sample{{Name: "system_cpu_time_seconds_total", Value: 1, TimestampMS: 1}}},
+		{Name: "system_cpu_utilization_ratio", Type: prommap.TypeGauge, Unit: "1",
+			Samples: []prommap.Sample{{Name: "system_cpu_utilization_ratio", Value: 1, TimestampMS: 1}}},
+		{Name: "http_server_duration_milliseconds", Type: prommap.TypeHistogram, Unit: "ms",
+			Samples: []prommap.Sample{{Name: "http_server_duration_milliseconds_count", Value: 1, TimestampMS: 1}}},
+	}
+	body, err := encode(versionV2, fams)
+	require.NoError(t, err)
+	raw, err := snappy.Decode(nil, body)
+	require.NoError(t, err)
+	var req writev2.Request
+	require.NoError(t, req.Unmarshal(raw))
+	require.Len(t, req.Timeseries, 3)
+	want := []struct {
+		typ        writev2.Metadata_MetricType
+		help, unit string
+	}{
+		{writev2.Metadata_METRIC_TYPE_COUNTER, "CPU time", "seconds"},
+		{writev2.Metadata_METRIC_TYPE_GAUGE, "", ""},
+		{writev2.Metadata_METRIC_TYPE_HISTOGRAM, "", "milliseconds"},
+	}
+	for i, ts := range req.Timeseries {
+		assert.Equal(t, want[i].typ, ts.Metadata.Type, "series %d", i)
+		assert.Equal(t, want[i].help, req.Symbols[ts.Metadata.HelpRef], "series %d", i)
+		assert.Equal(t, want[i].unit, req.Symbols[ts.Metadata.UnitRef], "series %d", i)
+	}
+}
