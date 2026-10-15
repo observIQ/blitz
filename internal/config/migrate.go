@@ -19,6 +19,7 @@ import (
 //   - generator.paloAlto → generator.palo-alto
 //   - output.otlpGrpc    → output.otlp-grpc
 //   - outputs[].otlpGrpc → outputs[].otlp-grpc
+//   - generators[].paloAlto → generators[].palo-alto
 //
 // Behavior:
 //   - If only the legacy key is set in the config file, its value
@@ -85,6 +86,7 @@ func MigrateDeprecatedKeys(v *viper.Viper) {
 // listRenames are the legacy sub-keys renamed inside each entry of a list.
 var listRenames = []struct{ list, from, to string }{
 	{"outputs", "otlpgrpc", "otlp-grpc"},
+	{"generators", "paloalto", "palo-alto"},
 }
 
 // LogGeneratorDeprecations emits a Warn-level banner once per startup

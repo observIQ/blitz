@@ -30,11 +30,20 @@ func ValidateExclusiveOutputConfig(v *viper.Viper, explicit func(*Override) bool
 }
 
 // ValidateExclusiveGeneratorConfig rejects a config that sets both the
-// singular `generator` and the plural `generators`, the same ambiguity the
-// output check guards against.
-func ValidateExclusiveGeneratorConfig(v *viper.Viper) error {
-	return rejectBothForms(v, "generator", "generators")
+// singular `generator` and the plural `generators`, which are
+// one-or-the-other by design in the same way as `output` and `outputs`. It
+// also rejects a malformed `generators`, as ValidateExclusiveOutputConfig
+// does for `outputs`. explicit is as for ValidateExclusiveOutputConfig.
+func ValidateExclusiveGeneratorConfig(v *viper.Viper, explicit func(*Override) bool) error {
+	if err := rejectBothForms(v, explicit, "generator", "generators"); err != nil {
+		return err
+	}
+	return validateListForm(v, "generator", "generators")
 }
+
+// runLevelKeys sit under the singular generator's prefix but configure the
+// whole run, so they may be set next to a generators: list.
+var runLevelKeys = map[string]bool{"generator.count": true}
 
 // rejectBothForms errors when the plural form is in the config and the
 // singular form is set anywhere: in the config file, by a source explicit
@@ -49,7 +58,7 @@ func rejectBothForms(v *viper.Viper, explicit func(*Override) bool, singular, pl
 	}
 	prefix := singular + "."
 	for _, o := range DefaultOverrides() {
-		if !strings.HasPrefix(o.Field, prefix) {
+		if !strings.HasPrefix(o.Field, prefix) || runLevelKeys[o.Field] {
 			continue
 		}
 		if explicit != nil && explicit(o) {

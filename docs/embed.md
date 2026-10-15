@@ -317,7 +317,9 @@ Two supported paths:
 
   Or use the lower-level `blitzconfig.Load(yamlBytes, blitzconfig.LoadOpts{})` if the host wants the parsed `*Config` to do its own module construction (e.g., a host that only wants to expose a subset of generators).
 
-  Keys the YAML leaves unset resolve to the same defaults the standalone CLI uses (for example, `workers: 1`), for the singular `generator`/`output` forms and for every `outputs:` entry.
+  Keys the YAML leaves unset resolve to the same defaults the standalone CLI uses (for example, `workers: 1`), for the singular `generator`/`output` forms and for every `generators:`/`outputs:` entry.
+
+  `count` (on `generator`, a `generators:` entry, or an override) is accepted but not honored in embedded mode: modules run until the host stops them, and only the standalone CLI stops a run at its count.
 
 ### Environment overlay (host-driven)
 

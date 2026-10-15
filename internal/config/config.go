@@ -12,8 +12,10 @@ type Config struct {
 	Logging Logging `yaml:"logging,omitempty" mapstructure:"logging,omitempty"`
 	// Generator configuration
 	Generator Generator `yaml:"generator,omitempty" mapstructure:"generator,omitempty"`
-	// Generators is the list of generators for multi-generator mode.
-	// If set, takes precedence over the singular Generator field.
+	// Generators is the list of generators for multi-generator mode. It is the
+	// alternative to the singular Generator, never a supplement: setting both
+	// is rejected. Each entry takes only its type's defaults, never values
+	// from Generator.
 	Generators []Generator `yaml:"generators,omitempty" mapstructure:"generators,omitempty"`
 	// Output configuration
 	Output Output `yaml:"output,omitempty" mapstructure:"output,omitempty"`
@@ -41,10 +43,17 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if len(c.Generators) > 0 {
-		// Validate the defaulted entries, since that is what runs.
-		for i, g := range c.EffectiveGenerators() {
-			if err := g.Validate(); err != nil {
-				return fmt.Errorf("generators[%d] validation failed: %w", i, err)
+		// generator.count may sit next to the list as the run's total.
+		if c.Generator.Count < 0 {
+			return fmt.Errorf("generator count must be 0 or greater, got %d", c.Generator.Count)
+		}
+		// Index by YAML position: an entry that expands (comma-separated
+		// hostmetrics OS values) must not shift the entries after it.
+		for i, entry := range c.Generators {
+			for _, g := range expandGenerators([]Generator{entry}) {
+				if err := g.Validate(); err != nil {
+					return fmt.Errorf("generators[%d] validation failed: %w", i, err)
+				}
 			}
 		}
 	} else if err := c.Generator.Validate(); err != nil {
@@ -74,23 +83,16 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// EffectiveGenerators returns the list of generators to use.
-// If Generators is set, it takes precedence over the singular Generator field.
-// The singular Generator carries the defaults applied by the override system,
-// so each list entry inherits any field it leaves unset (workers, and so on)
-// from it, while user-set fields win.
+// EffectiveGenerators returns the list of generators to use: Generators when
+// set, otherwise the singular Generator. Each Generators entry already carries
+// its type's defaults (ApplyListDefaults at load), never values from the
+// singular Generator.
 // Comma-separated HostMetrics OS values are expanded into separate generators.
 func (c *Config) EffectiveGenerators() []Generator {
 	if len(c.Generators) == 0 {
 		return expandGenerators([]Generator{c.Generator})
 	}
-	merged := make([]Generator, len(c.Generators))
-	for i, g := range c.Generators {
-		m := g
-		fillZeroFields(reflect.ValueOf(&m).Elem(), reflect.ValueOf(c.Generator))
-		merged[i] = m
-	}
-	return expandGenerators(merged)
+	return expandGenerators(c.Generators)
 }
 
 // EffectiveOutputs returns the list of outputs to use: Outputs when set,
