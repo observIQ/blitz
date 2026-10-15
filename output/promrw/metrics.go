@@ -29,14 +29,25 @@ func newPromrwMetrics(tel embed.TelemetrySettings) (*promrwMetrics, error) {
 	return &promrwMetrics{out: out, rw: rw}, nil
 }
 
-func (m *promrwMetrics) recordSeriesReceived(ctx context.Context, n int64) {
-	m.out.BlitzOutputEntriesReceivedCounter.Add(ctx, n, outputType, "metrics")
+func (m *promrwMetrics) recordEntryReceived(ctx context.Context) {
+	m.out.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "metrics")
 }
 
-func (m *promrwMetrics) recordBatch(ctx context.Context, series int64, latencyMS float64) {
+func (m *promrwMetrics) recordBatch(ctx context.Context, series int64) {
 	m.rw.blitzOutputPrometheusRemoteWriteBatchSizeHistogram.Record(ctx, series)
-	m.rw.blitzOutputPrometheusRemoteWritePostLatencyHistogram.Record(ctx, latencyMS)
 	m.rw.blitzOutputPrometheusRemoteWriteSeriesSentCounter.Add(ctx, series)
+}
+
+func (m *promrwMetrics) recordPostLatency(ctx context.Context, latencyMS float64) {
+	m.rw.blitzOutputPrometheusRemoteWritePostLatencyHistogram.Record(ctx, latencyMS)
+}
+
+func (m *promrwMetrics) recordSeriesDropped(ctx context.Context, n int64) {
+	m.rw.blitzOutputPrometheusRemoteWriteSeriesDroppedCounter.Add(ctx, n)
+}
+
+func (m *promrwMetrics) recordSeriesFailed(ctx context.Context, n int64) {
+	m.rw.blitzOutputPrometheusRemoteWriteSeriesFailedCounter.Add(ctx, n)
 }
 
 func (m *promrwMetrics) recordPostFailed(ctx context.Context) {

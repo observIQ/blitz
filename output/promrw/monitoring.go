@@ -27,6 +27,10 @@ type Metrics struct {
 	blitzOutputPrometheusRemoteWritePostLatencyHistogram metric.Float64Histogram
 	// total number of remote-write POSTs that failed
 	blitzOutputPrometheusRemoteWritePostsFailedCounter metric.Int64Counter
+	// total number of buffered series dropped, oldest first, when the buffer was full
+	blitzOutputPrometheusRemoteWriteSeriesDroppedCounter metric.Int64Counter
+	// total number of series lost in batches that could not be encoded or that the endpoint rejected after any retries
+	blitzOutputPrometheusRemoteWriteSeriesFailedCounter metric.Int64Counter
 	// total number of series successfully posted
 	blitzOutputPrometheusRemoteWriteSeriesSentCounter metric.Int64Counter
 }
@@ -65,6 +69,22 @@ func NewMetrics(mp metric.MeterProvider) (*Metrics, error) {
 	)
 	errs = errors.Join(errs, err)
 	m.blitzOutputPrometheusRemoteWritePostsFailedCounter = blitzOutputPrometheusRemoteWritePostsFailedCounterRaw
+
+	blitzOutputPrometheusRemoteWriteSeriesDroppedCounterRaw, err := m.promrwMeter.Int64Counter(
+		"blitz.output.prometheus_remote_write.series_dropped",
+		metric.WithDescription("total number of buffered series dropped, oldest first, when the buffer was full"),
+		metric.WithUnit("{series}"),
+	)
+	errs = errors.Join(errs, err)
+	m.blitzOutputPrometheusRemoteWriteSeriesDroppedCounter = blitzOutputPrometheusRemoteWriteSeriesDroppedCounterRaw
+
+	blitzOutputPrometheusRemoteWriteSeriesFailedCounterRaw, err := m.promrwMeter.Int64Counter(
+		"blitz.output.prometheus_remote_write.series_failed",
+		metric.WithDescription("total number of series lost in batches that could not be encoded or that the endpoint rejected after any retries"),
+		metric.WithUnit("{series}"),
+	)
+	errs = errors.Join(errs, err)
+	m.blitzOutputPrometheusRemoteWriteSeriesFailedCounter = blitzOutputPrometheusRemoteWriteSeriesFailedCounterRaw
 
 	blitzOutputPrometheusRemoteWriteSeriesSentCounterRaw, err := m.promrwMeter.Int64Counter(
 		"blitz.output.prometheus_remote_write.series_sent",

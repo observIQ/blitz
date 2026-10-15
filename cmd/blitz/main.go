@@ -607,8 +607,8 @@ func buildOutput(logger *zap.Logger, out config.Output, tel embed.TelemetrySetti
 		}
 	case config.OutputTypePrometheusRemoteWrite:
 		rw := out.PrometheusRemoteWrite
-		inst, err = promrw.New(rw.Endpoint, rw.Version, rw.BatchSize, rw.BatchTimeout, rw.Timeout, rw.Headers, tel, logger)
-		if err != nil {
+		inst, err = promrw.New(rw.Endpoint, rw.Version, rw.BatchSize, rw.MaxBufferedSeries, rw.BatchTimeout, rw.Timeout, rw.Headers, tel, logger)
+		if err != nil { // safety net: config validation rejects what New does
 			logger.Error("Failed to create prometheus-remote-write output", zap.Error(err))
 			return nil, err
 		}

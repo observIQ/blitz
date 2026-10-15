@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang/snappy"
 	"github.com/observiq/blitz/internal/prommap"
+	"github.com/prometheus/otlptranslator"
 	"github.com/prometheus/prometheus/prompb"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 )
@@ -68,10 +69,26 @@ func encodeV1(families []prommap.MetricFamily) ([]byte, error) {
 	return snappy.Encode(nil, raw), nil
 }
 
+// v2Types are the Prometheus types v2 metadata names.
+var v2Types = map[prommap.Type]writev2.Metadata_MetricType{
+	prommap.TypeGauge:     writev2.Metadata_METRIC_TYPE_GAUGE,
+	prommap.TypeCounter:   writev2.Metadata_METRIC_TYPE_COUNTER,
+	prommap.TypeHistogram: writev2.Metadata_METRIC_TYPE_HISTOGRAM,
+}
+
+// unitNamer renders a v2 series' unit as the collector's exporter does
+// (s to seconds, By to bytes, 1 to none).
+var unitNamer = otlptranslator.UnitNamer{}
+
 func encodeV2(families []prommap.MetricFamily) ([]byte, error) {
 	st := newSymbolTable()
 	var req writev2.Request
 	for _, fam := range families {
+		meta := writev2.Metadata{
+			Type:    v2Types[fam.Type],
+			HelpRef: st.intern(fam.Help),
+			UnitRef: st.intern(unitNamer.Build(fam.Unit)),
+		}
 		for _, s := range fam.Samples {
 			pairs := sortedPairs(s)
 			refs := make([]uint32, 0, len(pairs)*2)
@@ -81,6 +98,7 @@ func encodeV2(families []prommap.MetricFamily) ([]byte, error) {
 			req.Timeseries = append(req.Timeseries, writev2.TimeSeries{
 				LabelsRefs: refs,
 				Samples:    []writev2.Sample{{Value: s.Value, Timestamp: s.TimestampMS}},
+				Metadata:   meta,
 			})
 		}
 	}
