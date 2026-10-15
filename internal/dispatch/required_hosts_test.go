@@ -64,9 +64,44 @@ func TestServerSoftwareNeedsApplicationHosts(t *testing.T) {
 	for _, typ := range []config.GeneratorType{
 		config.GeneratorTypeApache, config.GeneratorTypeApacheCombined, config.GeneratorTypeApacheError,
 		config.GeneratorTypeNginx, config.GeneratorTypePostgres, config.GeneratorTypeJSON,
-		config.GeneratorTypeFIX, config.GeneratorTypeTraces,
+		config.GeneratorTypeFIX, config.GeneratorTypeTraces, config.GeneratorTypeF5,
 	} {
 		require.True(t, hostRequirement(config.Generator{Type: typ}).Apps, "%s", typ)
+	}
+}
+
+// TestF5NeedsItsApplianceAndServer pins that the F5 generator, which describes
+// both the F5 device (BIG-IP) and an NGINX server, gets both on every seed.
+func TestF5NeedsItsApplianceAndServer(t *testing.T) {
+	gens := []config.Generator{{Type: config.GeneratorTypeF5}}
+	for seed := int64(0); seed < 50; seed++ {
+		s := seed
+		env, err := BuildEnvironment(zap.NewNop(), config.EnvironmentConfig{
+			SeedConfig: config.EnvironmentSeedConfig{Shared: &s},
+			Counts:     config.EnvironmentCounts{Systems: 1},
+		}, gens)
+		require.NoError(t, err)
+		require.NotNil(t, applianceIdentity(env, gens[0], 0), "seed %d: F5 device", seed)
+		srv := hostIdentity(env, gens[0], 0)
+		require.NotNil(t, srv, "seed %d: NGINX server", seed)
+		require.Equal(t, datagen.RoleServer, srv.Role, "seed %d", seed)
+	}
+}
+
+// TestF5NginxHostIsLinux pins that the F5 generator's NGINX Plus host is a
+// Linux server: NGINX Plus supports only Linux and FreeBSD (NGINX technical
+// specs), so it never lands on Windows.
+func TestF5NginxHostIsLinux(t *testing.T) {
+	gens := []config.Generator{{Type: config.GeneratorTypeF5}}
+	for seed := int64(0); seed < 100; seed++ {
+		s := seed
+		env, err := BuildEnvironment(zap.NewNop(), config.EnvironmentConfig{
+			SeedConfig: config.EnvironmentSeedConfig{Shared: &s},
+		}, gens)
+		require.NoError(t, err)
+		h := hostIdentity(env, gens[0], 0)
+		require.NotNil(t, h, "seed %d", seed)
+		require.Equal(t, datagen.OSLinux, h.OSInfo.Type, "seed %d: %s", seed, h.Hostname)
 	}
 }
 

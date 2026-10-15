@@ -8,26 +8,26 @@ import (
 )
 
 func TestRegisterAndGet(t *testing.T) {
-	ResetForTest()
-	p := Product{Name: "ltm", Build: func(_ *rand.Rand, _ *Ctx) string { return "line" }}
+	resetForTest()
+	p := Product{Name: "asm", Build: func(_ *rand.Rand, _ *Ctx) string { return "line" }}
 	Register(p)
 
-	got, ok := Get("ltm")
+	got, ok := Get("asm")
 	require.True(t, ok)
-	require.Equal(t, "ltm", got.Name)
+	require.Equal(t, "asm", got.Name)
 	require.Equal(t, "line", got.Build(rand.New(rand.NewSource(1)), &Ctx{}))
 }
 
 func TestRegisterDuplicatePanics(t *testing.T) {
-	ResetForTest()
-	Register(Product{Name: "ltm", Build: func(_ *rand.Rand, _ *Ctx) string { return "" }})
+	resetForTest()
+	Register(Product{Name: "asm", Build: func(_ *rand.Rand, _ *Ctx) string { return "" }})
 	require.Panics(t, func() {
-		Register(Product{Name: "ltm", Build: func(_ *rand.Rand, _ *Ctx) string { return "" }})
+		Register(Product{Name: "asm", Build: func(_ *rand.Rand, _ *Ctx) string { return "" }})
 	})
 }
 
 func TestAllProductsSortedByName(t *testing.T) {
-	ResetForTest()
+	resetForTest()
 	Register(Product{Name: "zzz", Build: func(_ *rand.Rand, _ *Ctx) string { return "" }})
 	Register(Product{Name: "aaa", Build: func(_ *rand.Rand, _ *Ctx) string { return "" }})
 
@@ -38,7 +38,14 @@ func TestAllProductsSortedByName(t *testing.T) {
 }
 
 func TestGetMissing(t *testing.T) {
-	ResetForTest()
+	resetForTest()
 	_, ok := Get("nope")
 	require.False(t, ok)
+}
+
+// resetForTest empties the registry.
+func resetForTest() {
+	mu.Lock()
+	defer mu.Unlock()
+	products = map[string]Product{}
 }

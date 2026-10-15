@@ -150,3 +150,33 @@ func TestPicksAreRepeatable(t *testing.T) {
 		require.Equal(t, first, build())
 	}
 }
+
+// TestF5DescribesAnEnvironmentLoadBalancer pins F5 wiring: the environment
+// holds an F5 device, BIG-IP lines name it, and NGINX Plus lines name a
+// server host from the environment.
+func TestF5DescribesAnEnvironmentLoadBalancer(t *testing.T) {
+	cfg := config.Generator{Type: config.GeneratorTypeF5, F5: config.F5GeneratorConfig{Workers: 1, Rate: 5 * time.Millisecond, Seed: 1}}
+	vendors := RequiredAppliances([]config.Generator{cfg})
+	require.Equal(t, []datagen.ApplianceVendor{datagen.VendorF5}, vendors)
+
+	seeds := datagen.NewSeedConfig()
+	seeds.Shared = 3
+	env, err := datagen.GenerateEnvironment(seeds, &datagen.EnvironmentOpts{SystemCount: 8, RequiredVendors: vendors})
+	require.NoError(t, err)
+	lb := env.ApplianceFor(string(cfg.Type), 0, datagen.VendorF5)
+	web := hostIdentity(env, cfg, 0)
+	require.NotNil(t, lb)
+	require.NotNil(t, web)
+
+	for product, want := range map[string]string{"asm": lb.Hostname, "nginx-plus": web.Hostname} {
+		c := cfg
+		c.F5.EnabledProducts = []string{product}
+		cons := &capturingLogConsumer{}
+		mod, err := ForEmbedAt(zap.NewNop(), c, 0, EmbedConsumers{LogConsumer: cons}, nil, env, embed.NopTelemetry())
+		require.NoError(t, err)
+		require.NoError(t, mod.Start(context.Background()))
+		require.Eventually(t, func() bool { return len(cons.snapshot()) > 0 }, 5*time.Second, 5*time.Millisecond)
+		require.NoError(t, mod.Stop(context.Background()))
+		require.Equal(t, want, cons.snapshot()[0].Metadata.Resource["host.name"], product)
+	}
+}
