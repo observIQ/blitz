@@ -70,7 +70,12 @@ func (e EnvironmentConfig) Validate() error {
 // Build resolves the configured Environment, hydrating a datagen.SeedConfig
 // (omitted seeds randomize), initializing it (which logs the effective seeds),
 // and composing the Environment. A nil logger is treated as a no-op logger.
-func (e EnvironmentConfig) Build(logger *zap.Logger) (*datagen.Environment, error) {
+//
+// vendors are appliance vendors and hosts are host requirements the
+// configured generators describe; the environment always holds a device of
+// each vendor and a system meeting each requirement (see
+// dispatch.BuildEnvironment).
+func (e EnvironmentConfig) Build(logger *zap.Logger, vendors []datagen.ApplianceVendor, hosts []datagen.HostRequirement) (*datagen.Environment, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -118,6 +123,8 @@ func (e EnvironmentConfig) Build(logger *zap.Logger) (*datagen.Environment, erro
 		StorageSystemCount: e.Counts.StorageSystems,
 		NetworkSystemCount: e.Counts.NetworkSystems,
 		DomainAdminsCount:  e.Counts.DomainAdmins,
+		RequiredVendors:    vendors,
+		RequiredHosts:      hosts,
 		Logger:             logger,
 	}
 

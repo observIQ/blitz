@@ -78,6 +78,9 @@ type Config struct {
 	// Seed is the base RNG seed. Negative = randomize per worker;
 	// 0+ = deterministic (worker N gets seed Seed+N).
 	Seed int64
+	// Identity is the simulated host every record describes.
+	// Nil falls back to the process hostname.
+	Identity *datagen.SystemIdentity
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -144,7 +147,7 @@ func New(logger *zap.Logger, cfg Config, consumer embed.LogConsumer, tel embed.T
 		logger:   logger,
 		cfg:      cfg,
 		consumer: consumer,
-		static:   resource.FromIdentity(nil, componentName, "fix.version", cfg.Version.String()),
+		static:   resource.FromIdentity(cfg.Identity, componentName, "fix.version", cfg.Version.String()),
 		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
@@ -152,14 +155,6 @@ func New(logger *zap.Logger, cfg Config, consumer embed.LogConsumer, tel embed.T
 
 // Name returns the module identifier.
 func (g *Generator) Name() string { return componentName }
-
-// SetHostIdentity sets the simulated host whose identity every emitted record
-// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
-// be called before Start; the resource it builds is read concurrently by
-// workers thereafter.
-func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
-	g.static = resource.FromIdentity(id, componentName, "fix.version", g.cfg.Version.String())
-}
 
 // Start launches the worker goroutines.
 func (g *Generator) Start(_ context.Context) error {

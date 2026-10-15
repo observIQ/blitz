@@ -375,7 +375,7 @@ func run(cmd *cobra.Command, args []string) error {
 	// Build the simulated identity environment once, up front, so every
 	// generator resolves its host identity from the same fleet (PIPE-1036). A
 	// live-reconfigure path (deferred) would rebuild this and swap it in.
-	env, err := cfg.Environment.Build(logger)
+	env, err := dispatch.BuildEnvironment(logger, cfg.Environment, cfg.EffectiveGenerators())
 	if err != nil {
 		logger.Error("Failed to build simulated environment", zap.Error(err))
 		return err
@@ -386,8 +386,11 @@ func run(cmd *cobra.Command, args []string) error {
 	var generators []any
 	var tracker *count.Tracker
 
+	ordinals := map[config.GeneratorType]int{}
 	for _, genCfg := range effectiveGens {
-		gen, genErr := createGenerator(logger, genCfg, outputInstance, env, tel)
+		// Same-type entries take successive ordinals so each describes its own host.
+		gen, genErr := createGenerator(logger, genCfg, ordinals[genCfg.Type], outputInstance, env, tel)
+		ordinals[genCfg.Type]++
 		if genErr != nil {
 			logger.Error("Failed to create generator",
 				zap.String("type", string(genCfg.Type)),
@@ -473,7 +476,7 @@ shutdown:
 	return nil
 }
 
-func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Output, env *datagen.Environment, tel embed.TelemetrySettings) (any, error) {
+func createGenerator(logger *zap.Logger, genCfg config.Generator, ordinal int, out output.Output, env *datagen.Environment, tel embed.TelemetrySettings) (any, error) {
 	// Standalone-CLI-only generator types that dispatch.ForEmbed does not
 	// construct (winevt is deprecated for embed; nop yields no records).
 	// All other generators delegate to dispatch.ForEmbed so the
@@ -503,7 +506,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	}
 	// Pass the embedded library so an embed_library build resolves package
 	// sources; without the tag FS() is empty and resolution uses disk (PIPE-1445).
-	mod, err := dispatch.ForEmbed(logger, genCfg, consumers, embeddedlibrary.FS(), env, tel)
+	mod, err := dispatch.ForEmbedAt(logger, genCfg, ordinal, consumers, embeddedlibrary.FS(), env, tel)
 	if err != nil {
 		return nil, err
 	}

@@ -40,8 +40,7 @@ func GenerateDomainIdentity(seed int64, domainName string, now time.Time) *Domai
 		domainName = "blitz.local"
 	}
 
-	// Extract NetBIOS name (first label, uppercased)
-	netbios := strings.ToUpper(strings.Split(domainName, ".")[0])
+	netbios := NetBIOSDomainName(domainName)
 
 	// Generate domain SID
 	sid := fmt.Sprintf("S-1-5-21-%d-%d-%d",
@@ -116,4 +115,15 @@ func randomHex(r *rand.Rand, nBytes int) string {
 		fmt.Fprintf(&sb, "%02x", r.Intn(256)) // #nosec G404
 	}
 	return sb.String()
+}
+
+// NetBIOSDomainName returns the pre-Windows 2000 (NetBIOS) name for a DNS
+// domain as Windows defaults it: its first label, uppercased and cut to
+// NetBIOS's 15 characters ("contoso.local" -> "CONTOSO").
+func NetBIOSDomainName(domain string) string {
+	name := strings.ToUpper(strings.Split(domain, ".")[0])
+	if len(name) > 15 {
+		name = name[:15]
+	}
+	return name
 }

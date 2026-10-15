@@ -39,6 +39,10 @@ type LogRecordMetadata struct {
 	Severity   string
 	Attributes map[string]any
 	Resource   map[string]any
+	// SyslogFramed marks a Message that is already a syslog line, with the
+	// device's own timestamp and hostname header. A syslog output sends it
+	// as written, adding only a PRI when it has none.
+	SyslogFramed bool
 }
 
 // MetricType represents the type of a metric data point.

@@ -88,6 +88,52 @@ type SystemIdentity struct {
 	Applications []*ApplicationIdentity
 }
 
+// WithHostname returns the identity with its hostname replaced, for an explicit
+// hostname setting that wins over the resolved identity. Only the host name
+// changes, plus what derives from it: FQDN and the TLS cert's subject and SANs.
+// OS, arch, tier and the rest stay. The receiver is never mutated, since
+// environment identities are shared across generators: a non-empty hostname
+// yields a copy. An empty hostname returns the receiver as-is, and a nil
+// receiver with a hostname yields a minimal identity carrying only that name.
+func (s *SystemIdentity) WithHostname(hostname string) *SystemIdentity {
+	if hostname == "" {
+		return s
+	}
+	if s == nil {
+		return &SystemIdentity{Hostname: hostname}
+	}
+	c := *s
+	c.Hostname = hostname
+	// A workgroup host's FQDN is its bare name, so it follows the rename too.
+	c.FQDN = hostname
+	if c.Domain != "" {
+		c.FQDN = fqdnFor(hostname, c.Domain)
+	}
+	if s.Cert != nil {
+		cert := *s.Cert
+		cert.SubjectCN = c.FQDN
+		cert.SANs = make([]string, len(s.Cert.SANs))
+		for i, san := range s.Cert.SANs {
+			switch san {
+			case s.FQDN:
+				san = c.FQDN
+			case s.Hostname:
+				san = hostname
+			}
+			cert.SANs[i] = san
+		}
+		c.Cert = &cert
+	}
+	return &c
+}
+
+// fqdnFor joins hostname and DNS domain. The host part keeps its case, as
+// Windows does in its DNS name (Microsoft's event samples show
+// WIN-GG82ULGC9GO.contoso.local and DC01.contoso.local).
+func fqdnFor(hostname, domain string) string {
+	return hostname + "." + domain
+}
+
 // HostImage is the OpenTelemetry host.image.* projection source: the VM image
 // or OS install a host was instantiated from. It is not populated by core
 // system generation — a future CloudIdentity source will set it on cloud hosts.
@@ -144,13 +190,10 @@ func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *Do
 	}
 
 	hostname := GenerateHostname(r, style, names)
-	fqdn := hostname + "." + domain.Name
-	if os == OSWindows || role == RoleDC {
-		fqdn = strings.ToLower(hostname) + "." + domain.Name
-	}
+	fqdn := fqdnFor(hostname, domain.Name)
 
 	// Coherent OS release + machine id, from authentic release data.
-	osInfo := GenerateOSInfo(r, os)
+	osInfo := GenerateOSInfo(r, os, role)
 	hostID := GenerateHostID(r, os)
 
 	// Pick arch

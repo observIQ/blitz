@@ -28,11 +28,14 @@ type Config struct {
 	Workers int
 	// Rate is the scrape interval per worker. Required, > 0.
 	Rate time.Duration
-	// OS is the simulated operating system ("linux" or "windows"). Ignored
-	// when Identity is set (the identity's own OS is used instead).
+	// OS is the simulated operating system ("linux" or "windows"). When
+	// Identity is set its own OS is used; dispatch only hands this generator
+	// an identity of the configured OS.
 	OS string
-	// Hostname is the simulated hostname. If empty, a random hostname is
-	// generated per the OS style. Ignored when Identity is set.
+	// Hostname is the simulated hostname. When set it wins: it replaces only
+	// the hostname of Identity (OS, arch and the rest stay), or names the
+	// synthesized host when Identity is nil. When empty, Identity's hostname
+	// is used, or a random hostname in the OS style when Identity is nil.
 	Hostname string
 	// Identity, when non-nil, is the resolved simulated host this generator's
 	// metrics describe (PIPE-1036). Its full host.* / os.* / deployment.*
@@ -105,12 +108,14 @@ func New(cfg Config) (*Generator, error) {
 		return nil, fmt.Errorf("build generator metrics: %w", err)
 	}
 
-	// Resolve the simulated host: an explicit Environment identity when
-	// supplied, otherwise a minimal identity synthesized from the OS/Hostname
-	// knobs. Either way the resource projection is built once here and reused
-	// for the generator's lifetime.
-	sys := cfg.Identity
-	if sys == nil {
+	// Resolve the simulated host: the Environment identity when supplied, with
+	// a set Hostname replacing only its hostname; otherwise a minimal identity
+	// synthesized from the OS/Hostname knobs. Either way the resource
+	// projection is built once here and reused for the generator's lifetime.
+	var sys *datagen.SystemIdentity
+	if cfg.Identity != nil {
+		sys = cfg.Identity.WithHostname(cfg.Hostname)
+	} else {
 		sys = syntheticIdentity(cfg)
 	}
 

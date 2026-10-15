@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -67,6 +68,14 @@ type Config struct {
 	Channels []string
 	Consumer embed.LogConsumer
 
+	// Identity is the simulated host every record describes.
+	// Its hostname is host.name and the payload computer name unless Computer
+	// is set, in which case Computer replaces only the hostname; with
+	// neither, it is BLITZ-WEL. A domain-joined identity writes its FQDN in
+	// <Computer> and its NetBIOS domain as the account domain unless Domain
+	// is set; otherwise <Computer> is the bare name and Domain WORKGROUP.
+	Identity *datagen.SystemIdentity
+
 	// Telemetry supplies the OTel providers blitz routes its own
 	// self-telemetry through. The zero value falls back to the process
 	// global providers.
@@ -78,6 +87,26 @@ type Config struct {
 	Usernames []string
 	IPs       []string
 	Hostnames []string
+}
+
+// workgroup is the account domain of a machine joined to no domain.
+const workgroup = "WORKGROUP"
+
+// roleFor maps the simulated host's role to the WEL event pool it emits, so an
+// unset role follows the host: a DC emits DC events, a workstation workstation
+// events. Servers and a missing identity emit the member-server pool.
+func roleFor(id *datagen.SystemIdentity) catalog.MachineRole {
+	if id == nil {
+		return catalog.RoleMember
+	}
+	switch id.Role {
+	case datagen.RoleDC:
+		return catalog.RoleDC
+	case datagen.RoleWorkstation:
+		return catalog.RoleWorkstation
+	default:
+		return catalog.RoleMember
+	}
 }
 
 // New creates a new WEL generator.
@@ -92,13 +121,36 @@ func New(cfg Config) (*Generator, error) {
 		return nil, fmt.Errorf("workers must be 1 or greater, got %d", cfg.Workers)
 	}
 	if cfg.Role == "" {
-		cfg.Role = catalog.RoleMember
+		cfg.Role = roleFor(cfg.Identity)
 	}
-	if cfg.Domain == "" {
-		cfg.Domain = "WORKGROUP"
+	// Resolve the one hostname: a set Computer wins and replaces only the
+	// identity's hostname; else the identity's; else BLITZ-WEL.
+	sys := cfg.Identity.WithHostname(cfg.Computer)
+	if sys == nil {
+		sys = &datagen.SystemIdentity{Hostname: "BLITZ-WEL"}
 	}
-	if cfg.Computer == "" {
-		cfg.Computer = "BLITZ-WEL"
+	cfg.Computer = sys.Hostname
+	// A domain-joined host writes its FQDN in <Computer> and its NetBIOS
+	// domain as the account domain; a workgroup host its bare name and
+	// WORKGROUP. A set Domain is the DNS domain the host is joined to (so it
+	// drives both), or WORKGROUP for a workgroup machine.
+	dnsDomain := sys.Domain
+	if cfg.Domain != "" {
+		dnsDomain = strings.ToLower(cfg.Domain)
+		switch {
+		case strings.EqualFold(cfg.Domain, workgroup):
+			dnsDomain = ""
+		case !strings.Contains(cfg.Domain, "."):
+			// Earlier releases took a NetBIOS name here.
+			cfg.Logger.Warn("wel domain has no dot; reading it as a single-label DNS domain, not a NetBIOS name",
+				zap.String("domain", cfg.Domain))
+		}
+	}
+	var fqdn string
+	cfg.Domain = workgroup
+	if dnsDomain != "" {
+		fqdn = sys.Hostname + "." + dnsDomain
+		cfg.Domain = datagen.NetBIOSDomainName(dnsDomain)
 	}
 
 	// Build registry filtered by role and channels
@@ -124,6 +176,7 @@ func New(cfg Config) (*Generator, error) {
 	// later mutates the slice would race with the workers otherwise.
 	opts := &catalog.GenerateOpts{
 		Computer:   cfg.Computer,
+		FQDN:       fqdn,
 		DomainName: cfg.Domain,
 		Role:       cfg.Role,
 		Usernames:  cloneStrings(cfg.Usernames),
@@ -141,7 +194,7 @@ func New(cfg Config) (*Generator, error) {
 		role:     cfg.Role,
 		channels: channels,
 		consumer: cfg.Consumer,
-		static: resource.FromIdentity(nil, componentName,
+		static: resource.FromIdentity(sys, componentName,
 			"wel.computer", cfg.Computer,
 			"wel.domain", cfg.Domain,
 			"wel.role", string(cfg.Role),
@@ -156,18 +209,6 @@ func New(cfg Config) (*Generator, error) {
 
 // Name returns the module identifier.
 func (g *Generator) Name() string { return componentName }
-
-// SetHostIdentity sets the simulated host whose identity every emitted record
-// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
-// be called before Start; the resource it builds is read concurrently by
-// workers thereafter.
-func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
-	g.static = resource.FromIdentity(id, componentName,
-		"wel.computer", g.computer,
-		"wel.domain", g.domain,
-		"wel.role", string(g.role),
-	)
-}
 
 // Start launches the worker goroutines that yield generated records
 // to the configured consumer. Start returns once workers are running.

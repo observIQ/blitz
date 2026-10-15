@@ -237,7 +237,7 @@ records parse the way genuine device output does:
 | Cisco NX-OS | `Cisco Nexus Operating System (NX-OS) Software, Version 10.3(4a)` |
 | Arista EOS | `Arista EOS 4.31.2F` |
 | Junos | `Junos: 23.4R1` |
-| PAN-OS | `PAN-OS 11.1.3` |
+| PAN-OS | `PAN-OS 11.0.4` |
 | FortiOS | `FortiOS v7.4.3` |
 
 Each family maps to exactly one vendor, so vendor/family coherence is

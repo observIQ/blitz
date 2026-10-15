@@ -17,7 +17,9 @@ type HostMetricsGeneratorConfig struct {
 	// ("darwin" is accepted as an alias for macos). Empty selects the
 	// default at construction.
 	OS string `yaml:"os,omitempty" mapstructure:"os,omitempty"`
-	// Hostname is the simulated hostname. If empty, a random hostname is generated.
+	// Hostname is the simulated hostname. Set, it wins over the environment
+	// host and replaces only that host's name. Empty uses the environment
+	// host's hostname, or a random hostname when there is no environment host.
 	Hostname string `yaml:"hostname,omitempty" mapstructure:"hostname,omitempty"`
 	// Scrapers is the list of scrapers to enable. If empty, all scrapers are enabled.
 	Scrapers []string `yaml:"scrapers,omitempty" mapstructure:"scrapers,omitempty"`

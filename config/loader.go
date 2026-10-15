@@ -162,7 +162,7 @@ func LoadModules(yamlBytes []byte, opts EmbedOpts) ([]embed.ProducerModule, erro
 
 	// Resolve the simulated identity environment once for the whole config, so
 	// every generator draws its host identity from the same fleet (PIPE-1036).
-	env, err := cfg.Environment.Build(logger)
+	env, err := dispatch.BuildEnvironment(logger, cfg.Environment, gens)
 	if err != nil {
 		return nil, fmt.Errorf("build environment: %w", err)
 	}
@@ -173,8 +173,11 @@ func LoadModules(yamlBytes []byte, opts EmbedOpts) ([]embed.ProducerModule, erro
 		TraceConsumer:  opts.TraceConsumer,
 	}
 	modules := make([]embed.ProducerModule, 0, len(gens))
+	ordinals := map[internalconfig.GeneratorType]int{}
 	for i, gen := range gens {
-		mod, err := dispatch.ForEmbed(logger, gen, consumers, opts.FileGenLibrary, env, opts.Telemetry)
+		// Same-type entries take successive ordinals so each describes its own host.
+		mod, err := dispatch.ForEmbedAt(logger, gen, ordinals[gen.Type], consumers, opts.FileGenLibrary, env, opts.Telemetry)
+		ordinals[gen.Type]++
 		if err != nil {
 			return nil, fmt.Errorf("generator[%d] type=%q: %w", i, gen.Type, err)
 		}

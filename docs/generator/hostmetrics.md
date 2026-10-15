@@ -30,8 +30,8 @@ The generator includes 8 scrapers, each producing metrics for a specific subsyst
 | `generator.type`                   | `--generator-type`                 | `BLITZ_GENERATOR_TYPE`                  | `nop`     | Generator type. Set to `hostmetrics` to use this generator.          |
 | `generator.hostmetrics.workers`    | `--generator-hostmetrics-workers`  | `BLITZ_GENERATOR_HOSTMETRICS_WORKERS`   | `1`       | Number of worker goroutines.                                         |
 | `generator.hostmetrics.rate`       | `--generator-hostmetrics-rate`     | `BLITZ_GENERATOR_HOSTMETRICS_RATE`      | `1s`      | Scrape interval for host metrics.                                    |
-| `generator.hostmetrics.os`         | `--generator-hostmetrics-os`       | `BLITZ_GENERATOR_HOSTMETRICS_OS`        | `linux`   | Simulated operating system. One of: `linux`, `windows`.              |
-| `generator.hostmetrics.hostname`   | `--generator-hostmetrics-hostname` | `BLITZ_GENERATOR_HOSTMETRICS_HOSTNAME`  | (random)  | Simulated hostname. If empty, a random hostname is generated.        |
+| `generator.hostmetrics.os`         | `--generator-hostmetrics-os`       | `BLITZ_GENERATOR_HOSTMETRICS_OS`        | `linux`   | Simulated operating system. One of: `linux`, `windows`. The environment host is chosen among hosts of this OS. |
+| `generator.hostmetrics.hostname`   | `--generator-hostmetrics-hostname` | `BLITZ_GENERATOR_HOSTMETRICS_HOSTNAME`  | `""` | Simulated hostname. Empty uses the simulated host's hostname (see [environment.md](../environment.md)), or a generated name with no environment host. A set value replaces only the host's name. |
 | `generator.hostmetrics.scrapers`   | `--generator-hostmetrics-scrapers` | `BLITZ_GENERATOR_HOSTMETRICS_SCRAPERS`  | (all)     | Scrapers to enable. If empty, all scrapers are enabled.              |
 
 ## Example Configuration

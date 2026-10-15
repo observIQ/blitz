@@ -176,6 +176,15 @@ func (s *Syslog) format(rec output.LogRecord) (string, error) {
 	sev := mapSeverity(rec.Metadata.Severity)
 	pri := s.cfg.Facility*8 + sev
 
+	// A device's own syslog line keeps its frame; only a missing PRI is added.
+	if rec.Metadata.SyslogFramed {
+		msg := sanitizeMessage(rec.Message)
+		if hasPRI(msg) {
+			return msg, nil
+		}
+		return fmt.Sprintf("<%d>%s", pri, msg), nil
+	}
+
 	ts := rec.Metadata.Timestamp
 	if ts.IsZero() {
 		ts = time.Now()
@@ -188,10 +197,7 @@ func (s *Syslog) format(rec output.LogRecord) (string, error) {
 		lt := ts.Local()
 		// Ensure day is space-padded to width 2 (Jan _2 15:04:05)
 		timestamp := lt.Format("Jan _2 15:04:05")
-		hostname := s.cfg.Hostname
-		if strings.TrimSpace(hostname) == "" {
-			hostname = ident.RandomHostname()
-		}
+		hostname := s.hostname(rec)
 		app := s.cfg.AppName
 		if strings.TrimSpace(app) == "" {
 			app = ident.RandomAppName()
@@ -215,10 +221,7 @@ func (s *Syslog) format(rec output.LogRecord) (string, error) {
 		// RFC 5424: <PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID [STRUCTURED-DATA] MSG
 		// Use RFC3339Nano in UTC per spec recommendation.
 		utc := ts.UTC().Format(time.RFC3339Nano)
-		hostname := s.cfg.Hostname
-		if strings.TrimSpace(hostname) == "" {
-			hostname = ident.RandomHostname()
-		}
+		hostname := s.hostname(rec)
 		app := s.cfg.AppName
 		if strings.TrimSpace(app) == "" {
 			app = ident.RandomAppName()
@@ -238,6 +241,34 @@ func (s *Syslog) format(rec output.LogRecord) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported rfc mode: %q", s.cfg.RFC)
 	}
+}
+
+// hostname is the header HOSTNAME: the configured one, else the record's
+// host (its host.name), so one generator's records name one host, else a
+// random name.
+func (s *Syslog) hostname(rec output.LogRecord) string {
+	if h := strings.TrimSpace(s.cfg.Hostname); h != "" {
+		return h
+	}
+	if h, ok := rec.Metadata.Resource["host.name"].(string); ok && h != "" {
+		return h
+	}
+	return ident.RandomHostname()
+}
+
+// hasPRI reports whether msg opens with a syslog PRI, <0> through <191>.
+func hasPRI(msg string) bool {
+	end := strings.IndexByte(msg, '>')
+	if !strings.HasPrefix(msg, "<") || end < 2 || end > 4 {
+		return false
+	}
+	digits := msg[1:end]
+	// RFC 5424 PRIVAL: digits only, no leading zero except PRI 0 itself.
+	if strings.TrimLeft(digits, "0123456789") != "" || (len(digits) > 1 && digits[0] == '0') {
+		return false
+	}
+	n, err := strconv.Atoi(digits)
+	return err == nil && n <= 191
 }
 
 func mapSeverity(sev string) int {
