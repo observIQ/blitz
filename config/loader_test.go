@@ -247,6 +247,53 @@ metrics:
 	assert.Nil(t, mods, "must not return a partial module slice on error")
 }
 
+// TestLoad_ListEntrySeedsFollowTheContract pins the seed contract for
+// generators: list entries: an omitted seed is random (-1), an explicit 0 is
+// deterministic, like the singular form.
+func TestLoad_ListEntrySeedsFollowTheContract(t *testing.T) {
+	cfg, err := config.Load([]byte(`
+generators:
+  - type: hostmetrics
+    hostmetrics: {workers: 1, rate: 1s, os: linux}
+  - type: traces
+    traces: {workers: 1, rate: 1s}
+  - type: hostmetrics
+    hostmetrics: {workers: 1, rate: 1s, os: linux, seed: 0}
+output:
+  type: nop
+logging:
+  type: stdout
+metrics:
+  port: 19000
+`), config.LoadOpts{})
+	require.NoError(t, err)
+	require.Len(t, cfg.Generators, 3)
+	assert.Equal(t, int64(-1), cfg.Generators[0].HostMetrics.Seed, "omitted hostmetrics seed is random")
+	assert.Equal(t, int64(-1), cfg.Generators[1].Traces.Seed, "omitted traces seed is random")
+	assert.Equal(t, int64(0), cfg.Generators[2].HostMetrics.Seed, "explicit 0 is deterministic")
+}
+
+// TestLoad_ExpandedRandomSeedResolvesOnce pins that Load resolves a random
+// seed on an OS-expanded hostmetrics entry once, so its hosts replay.
+func TestLoad_ExpandedRandomSeedResolvesOnce(t *testing.T) {
+	cfg, err := config.Load([]byte(`
+generators:
+  - type: hostmetrics
+    hostmetrics: {workers: 1, rate: 1s, os: "linux,windows", seed: -1}
+output:
+  type: nop
+logging:
+  type: stdout
+metrics:
+  port: 19000
+`), config.LoadOpts{})
+	require.NoError(t, err)
+	gens := cfg.EffectiveGenerators()
+	require.Len(t, gens, 2)
+	assert.GreaterOrEqual(t, gens[0].HostMetrics.Seed, int64(0), "resolved at load")
+	assert.Equal(t, gens, cfg.EffectiveGenerators())
+}
+
 // Load applies the same declared defaults as the CLI, so a singular stanza
 // that omits a key gets that key's default, exactly as a list entry does.
 func TestLoad_SingularGeneratorGetsDefaults(t *testing.T) {

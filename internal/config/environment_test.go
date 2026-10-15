@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/observiq/blitz/internal/datagen"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -149,4 +151,27 @@ func TestEnvironmentConfig_Validate(t *testing.T) {
 	if err := (EnvironmentConfig{Counts: EnvironmentCounts{StorageSystems: -3}}).Validate(); err == nil {
 		t.Error("negative storage-systems count should fail validation")
 	}
+}
+
+// TestBindSeedEnvReadsPrefixedNames pins that each seed key reads its
+// BLITZ_ENVIRONMENT_SEED_CONFIG_* variable, with or without the key in YAML.
+func TestBindSeedEnvReadsPrefixedNames(t *testing.T) {
+	t.Setenv("BLITZ_ENVIRONMENT_SEED_CONFIG_SHARED", "5")
+	t.Setenv("BLITZ_ENVIRONMENT_SEED_CONFIG_NETWORK_SYSTEMS", "0")
+	v := viper.New()
+	v.SetConfigType("yaml")
+	require.NoError(t, v.ReadConfig(strings.NewReader("environment:\n  seed_config:\n    shared: 1\n")))
+	require.NoError(t, BindSeedEnv(v))
+	// Unmarshal the whole tree, as the CLI does: UnmarshalKey skips bound
+	// env values under a nested key.
+	var root struct {
+		Environment EnvironmentConfig `mapstructure:"environment"`
+	}
+	require.NoError(t, v.Unmarshal(&root))
+	cfg := root.Environment
+	require.NotNil(t, cfg.SeedConfig.Shared)
+	require.Equal(t, int64(5), *cfg.SeedConfig.Shared, "the env var beats the YAML value")
+	require.NotNil(t, cfg.SeedConfig.NetworkSystems, "a key absent from YAML still reads its env var")
+	require.Equal(t, int64(0), *cfg.SeedConfig.NetworkSystems)
+	require.Nil(t, cfg.SeedConfig.Users, "an unset variable leaves the key unset")
 }
