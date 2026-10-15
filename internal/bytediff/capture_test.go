@@ -8,6 +8,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/internal/bytediff"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 )
 
 func TestLogCaptureRecordsAllWrites(t *testing.T) {
@@ -38,6 +39,17 @@ func TestLogCaptureReset(t *testing.T) {
 	cap.Reset()
 	if got := len(cap.Messages()); got != 0 {
 		t.Fatalf("expected empty after reset, got %d messages", got)
+	}
+}
+
+func TestLogCaptureAcceptsLogsAndStopsCleanly(t *testing.T) {
+	cap := bytediff.NewLogCapture()
+	got := cap.SupportedTelemetry()
+	if len(got) != 1 || got[0] != telemetry.Logs {
+		t.Fatalf("expected [logs], got %v", got)
+	}
+	if err := cap.Stop(context.Background()); err != nil {
+		t.Fatalf("stop: %v", err)
 	}
 }
 
