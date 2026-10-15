@@ -384,6 +384,20 @@ func interfaceName(os OSType) string {
 		return "Ethernet0"
 	case OSMacOS:
 		return "en0"
+	case OSESXi:
+		return "vmk0" // the management VMkernel adapter
+	case OSAIX:
+		return "en0" // the IP interface over adapter ent0
+	case OSSolaris:
+		return "net0" // Solaris 11 generic link name
+	case OSFreeBSD, OSOpenBSD:
+		// BSD interfaces are named after their driver; em(4)
+		// (Intel PRO/1000) stands in until NIC models are simulated.
+		return "em0"
+	case OSXenDom0:
+		return "xenbr0" // XCP-ng's management bridge over eth0
+	case OSNutanixAHV:
+		return "br0" // the AHV host's OVS management bridge
 	default:
 		return "eth0"
 	}

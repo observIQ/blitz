@@ -81,51 +81,55 @@ var (
 	}
 )
 
-// osRelease is one authentic release for a PIPE-1260 OS: os.name / os.version /
+// osRelease is one authentic release for an added OS: os.name / os.version /
 // os.build_id / os.description, each an internally-consistent real value.
 type osRelease struct{ name, version, buildID, description string }
 
 // extendedReleases holds the authentic release pools for the OSType values added
-// in PIPE-1260. The hypervisor-host Linux flavors carry their real distro in
+// to the base set, each oldest-first for osInfoForTier. The hypervisor-host Linux flavors carry their real distro in
 // os.name and emit os.type=linux via SemconvOSType. Values are real product
 // versions and build strings.
 var extendedReleases = map[OSType][]osRelease{
 	OSESXi: {
-		{"VMware ESXi", "8.0.2", "22380479", "VMware ESXi 8.0 Update 2 (build 22380479)"},
-		{"VMware ESXi", "8.0.1", "21495797", "VMware ESXi 8.0 Update 1 (build 21495797)"},
-		{"VMware ESXi", "8.0.0", "20513097", "VMware ESXi 8.0 GA (build 20513097)"},
 		{"VMware ESXi", "7.0.3", "19193900", "VMware ESXi 7.0 Update 3c (build 19193900)"},
+		{"VMware ESXi", "8.0.0", "20513097", "VMware ESXi 8.0 GA (build 20513097)"},
+		{"VMware ESXi", "8.0.1", "21495797", "VMware ESXi 8.0 Update 1 (build 21495797)"},
+		{"VMware ESXi", "8.0.2", "22380479", "VMware ESXi 8.0 Update 2 (build 22380479)"},
 	},
+	// AIX build IDs are oslevel -s strings.
 	OSAIX: {
-		{"AIX", "7.3", "7300-02-02-2420", "AIX 7.3 TL2 SP2"},
+		{"AIX", "7.2", "7200-05-07-2346", "AIX 7.2 TL5 SP7"},
 		{"AIX", "7.3", "7300-01-03-2346", "AIX 7.3 TL1 SP3"},
-		{"AIX", "7.2", "7200-05-07-2420", "AIX 7.2 TL5 SP7"},
+		{"AIX", "7.3", "7300-02-02-2420", "AIX 7.3 TL2 SP2"},
 	},
+	// Solaris build IDs are the entire package's branch:
+	// 11.4.<SRU>.0.1.<build>.<nightly>.
 	OSSolaris: {
-		{"Oracle Solaris", "11.4", "11.4.54.0.1.135", "Oracle Solaris 11.4 SRU54"},
-		{"Oracle Solaris", "11.4", "11.4.42.0.1.111", "Oracle Solaris 11.4 SRU42"},
-		{"Oracle Solaris", "11.4", "11.4.60.0.1.146", "Oracle Solaris 11.4 SRU60"},
+		{"Oracle Solaris", "11.4", "11.4.42.0.1.113.1", "Oracle Solaris 11.4 SRU42"},
+		{"Oracle Solaris", "11.4", "11.4.54.0.1.138.1", "Oracle Solaris 11.4 SRU54"},
+		{"Oracle Solaris", "11.4", "11.4.66.0.1.164.1", "Oracle Solaris 11.4 SRU66"},
 	},
 	OSFreeBSD: {
-		{"FreeBSD", "14.1-RELEASE", "14.1-RELEASE-p6", "FreeBSD 14.1-RELEASE-p6"},
-		{"FreeBSD", "14.0-RELEASE", "14.0-RELEASE-p8", "FreeBSD 14.0-RELEASE-p8"},
 		{"FreeBSD", "13.3-RELEASE", "13.3-RELEASE-p5", "FreeBSD 13.3-RELEASE-p5"},
+		{"FreeBSD", "14.0-RELEASE", "14.0-RELEASE-p8", "FreeBSD 14.0-RELEASE-p8"},
+		{"FreeBSD", "14.1-RELEASE", "14.1-RELEASE-p6", "FreeBSD 14.1-RELEASE-p6"},
 	},
 	OSOpenBSD: {
+		{"OpenBSD", "7.3", "GENERIC.MP#1125", "OpenBSD 7.3"},
+		{"OpenBSD", "7.4", "GENERIC.MP#1397", "OpenBSD 7.4"},
 		{"OpenBSD", "7.5", "GENERIC.MP#82", "OpenBSD 7.5"},
-		{"OpenBSD", "7.4", "GENERIC.MP#4", "OpenBSD 7.4"},
-		{"OpenBSD", "7.3", "GENERIC.MP#1", "OpenBSD 7.3"},
 	},
 	OSXenDom0: {
-		{"XCP-ng", "8.3", "4.19.0+1", "XCP-ng 8.3"},
 		{"XCP-ng", "8.2.1", "4.19.0+1", "XCP-ng 8.2.1 LTS"},
+		{"XCP-ng", "8.3", "4.19.0+1", "XCP-ng 8.3"},
 	},
 	OSNutanixAHV: {
-		{"Nutanix AHV", "20230302.103003", "5.10.149-2.nutanix.el8", "Nutanix AHV 20230302.103003"},
 		{"Nutanix AHV", "20220304.480", "5.10.149-1.nutanix.el7", "Nutanix AHV 20220304.480"},
+		{"Nutanix AHV", "20230302.103003", "5.10.149-2.nutanix.el8", "Nutanix AHV 20230302.103003"},
 	},
+	// OpenStack KVM hosts run either distro, with no shared age order.
 	OSOpenStackKVM: {
-		{"Red Hat Enterprise Linux", "9.4", "5.14.0-427.el9_4.x86_64", "Red Hat Enterprise Linux 9.4 (Plow)"},
+		{"Red Hat Enterprise Linux", "9.4", "5.14.0-427.13.1.el9_4.x86_64", "Red Hat Enterprise Linux 9.4 (Plow)"},
 		{"Ubuntu", "22.04.4", "5.15.0-105-generic", "Ubuntu 22.04.4 LTS"},
 	},
 }
@@ -162,8 +166,8 @@ func GenerateOSInfo(r *rand.Rand, os OSType) OSInfo {
 
 // osInfoForTier picks a release biased by patch currency: the pinned baseline
 // (older=true) draws from the conservative/older end of an ordered patch
-// timeline, non-prod (older=false) from the newer end. Linux has no
-// cross-distro age ordering, so it draws any release regardless.
+// timeline, non-prod (older=false) from the newer end. Linux and OpenStack
+// KVM have no cross-distro age ordering, so they draw any release regardless.
 func osInfoForTier(r *rand.Rand, os OSType, older bool) OSInfo {
 	switch os {
 	case OSWindows:
@@ -173,6 +177,9 @@ func osInfoForTier(r *rand.Rand, os OSType, older bool) OSInfo {
 		return buildMacOSInfo(macReleases[pickHalfIndex(r, len(macReleases), older)])
 	default:
 		if pool, ok := extendedReleases[os]; ok {
+			if os == OSOpenStackKVM {
+				return buildExtendedOSInfo(os, pool[r.Intn(len(pool))]) // #nosec G404
+			}
 			return buildExtendedOSInfo(os, pool[pickHalfIndex(r, len(pool), older)])
 		}
 		return buildLinuxOSInfo(linuxReleases[r.Intn(len(linuxReleases))]) // #nosec G404

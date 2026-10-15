@@ -9,12 +9,12 @@ import (
 //
 // Two axes are deliberately kept separate:
 //   - Simulate-as (the fake identity): the bounded set of OSes blitz can render
-//     a coherent host for — linux, windows, macos. ParseOSType gates the
-//     user-facing `os:` knob against this set.
+//     a coherent host for (simulatableOSes). ParseOSType gates the user-facing
+//     `os:` knob against this set.
 //   - Run-on (the real host): whatever the process actually runs on, reported
-//     by runtime.GOOS. OSTypeFromGOOS maps that without rejecting values outside
-//     the fake set (freebsd, aix, ...), since blitz may run on and truthfully
-//     report such a host.
+//     by runtime.GOOS. OSTypeFromGOOS maps that without rejecting values
+//     outside the simulate-as set (plan9, netbsd, ...), since blitz may run on
+//     and truthfully report such a host.
 //
 // SemconvOSType bridges internal naming to the wire: blitz names macOS "macos"
 // internally and to the user, but a real OpenTelemetry pipeline stamps
@@ -53,7 +53,7 @@ func ParseOSType(s string) (OSType, error) {
 }
 
 // OSTypeFromGOOS maps a runtime.GOOS value to an OSType for the real-host path.
-// The three simulate-able OSes normalize to their constants; any other GOOS
+// linux, windows, and darwin normalize to their constants; any other GOOS
 // passes through unchanged rather than being rejected.
 func OSTypeFromGOOS(goos string) OSType {
 	switch goos {
@@ -72,7 +72,8 @@ func OSTypeFromGOOS(goos string) OSType {
 // o. It differs from the OSType constant for macOS (macos -> darwin) and for the
 // hypervisor-host Linux flavors, which are Linux under the hood (-> linux). The
 // Unix families (aix, solaris, freebsd, openbsd) are already valid semconv
-// os.type values, so they pass through unchanged.
+// os.type values, so they pass through unchanged. ESXi's VMkernel has no
+// semconv value and is not Linux, so it passes through as esxi.
 func (o OSType) SemconvOSType() string {
 	switch {
 	case o == OSMacOS:

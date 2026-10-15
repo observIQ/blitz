@@ -279,7 +279,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.okta.rate", "rate at which Okta logs are generated per worker", 1*time.Second),
 		NewOverride("generator.hostmetrics.workers", "number of host metrics generator workers", 1),
 		NewOverride("generator.hostmetrics.rate", "scrape interval for host metrics generation", 1*time.Second),
-		NewOverride("generator.hostmetrics.os", "simulated operating system. One of: linux|windows", "linux"),
+		NewOverride("generator.hostmetrics.os", "simulated operating system. One of: linux|windows|macos|esxi|xen-dom0|nutanix-ahv|openstack-kvm|aix|solaris|freebsd|openbsd (aliases: darwin, vmware, vmware-esxi, xen, ahv, kvm)", "linux"),
 		NewOverride("generator.hostmetrics.hostname", "simulated hostname (empty = random)", ""),
 		NewOverride("generator.hostmetrics.scrapers", "scrapers to enable (empty = all). One or more of: cpu|memory|disk|network|filesystem|load|paging|processes", []string{}),
 		NewOverride("generator.traces.workers", "number of traces generator workers", 1),

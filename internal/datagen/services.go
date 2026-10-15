@@ -82,7 +82,7 @@ var linuxWorkstationServices = []serviceTemplate{
 }
 
 // extendedServerServices holds the bespoke server-role daemon sets for the
-// PIPE-1260 OSes. Each is the authentic daemon roster for that platform, so a
+// added OSes. Each is the authentic daemon roster for that platform, so a
 // generated host reads as a real box of its kind (ESXi hostd/vpxa, AIX SRC,
 // Solaris SMF FMRIs, BSD rc daemons, the virtualization stacks).
 var extendedServerServices = map[OSType][]serviceTemplate{

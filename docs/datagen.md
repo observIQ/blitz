@@ -229,12 +229,12 @@ so it is a real OS.
 coherent release pool, an OS-appropriate `host.id`, and a bespoke server-role
 service roster.
 
-| `OSType` | `os.type` (semconv) | Notes |
-|----------|---------------------|-------|
+| `OSType` | `os.type` | Notes |
+|----------|-----------|-------|
 | `linux` | `linux` | general-purpose Linux distros |
 | `windows` | `windows` | |
 | `macos` | `darwin` | |
-| `esxi` | `esxi` | VMware ESXi, a real OS (closed, but installable) |
+| `esxi` | `esxi` | VMware ESXi, a real OS (closed, but installable); custom value, semconv has none |
 | `xen-dom0` | `linux` | Xen dom0 (XCP-ng / Citrix Hypervisor) |
 | `nutanix-ahv` | `linux` | Nutanix AHV host |
 | `openstack-kvm` | `linux` | OpenStack/KVM compute host |
@@ -246,9 +246,18 @@ service roster.
 The three hypervisor-host Linux flavors are distinct simulate-as selectors that
 carry their real distro in `os.name`/`os.version` while reporting `os.type=linux`
 (they are Linux under the hood). The Unix families are already valid semconv
-`os.type` values, so they pass through unchanged. Random environment population
+`os.type` values, so they pass through unchanged. Every `os.type` here is a
+semconv value except `esxi`, which semconv does not define. Random environment population
 draws Linux and Windows hosts; the expanded OSes are selected by explicit
 configuration.
+
+Each expanded OS also names its primary interface the way the platform does:
+`vmk0` (ESXi's management VMkernel adapter), `en0` (AIX), `net0` (Solaris 11),
+`xenbr0` (XCP-ng's management bridge), `br0` (AHV), `eth0` (OpenStack/KVM), and
+`em0` on the BSDs, whose interfaces carry their driver's name. AIX, Solaris, and
+the BSD servers get their platform's application stack. ESXi and the
+hypervisor-host Linux flavors get no applications, since the hypervisor
+platform is the only software they run.
 
 ## Appliance Identities
 

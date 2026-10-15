@@ -28,8 +28,9 @@ type Config struct {
 	Workers int
 	// Rate is the scrape interval per worker. Required, > 0.
 	Rate time.Duration
-	// OS is the simulated operating system ("linux" or "windows"). Ignored
-	// when Identity is set (the identity's own OS is used instead).
+	// OS is the simulated operating system: any value datagen.ParseOSType
+	// accepts, and linux when empty or unrecognized. Ignored when Identity is
+	// set (the identity's own OS is used instead).
 	OS string
 	// Hostname is the simulated hostname. If empty, a random hostname is
 	// generated per the OS style. Ignored when Identity is set.
@@ -133,31 +134,33 @@ func New(cfg Config) (*Generator, error) {
 // Hostname knobs, used when no simulated Environment identity is wired
 // (cfg.Identity == nil). The hostname is generated deterministically from Seed
 // in the OS-appropriate style when cfg.Hostname is empty, preserving the prior
-// standalone-CLI behavior. The style is derived from the datagen.OSType so an
-// empty or non-windows OS renders a Linux-style host.
+// standalone-CLI behavior, and the OS is the canonical one the os knob names
+// (aliases resolved) with a real release's name and version.
 func syntheticIdentity(cfg Config) *datagen.SystemIdentity {
-	osType := datagen.OSType(cfg.OS)
+	// Validate accepts any spelling ParseOSType does; an unset os is linux.
+	osType, err := datagen.ParseOSType(cfg.OS)
+	if err != nil {
+		osType = datagen.OSLinux
+	}
+	// Seeded once at construction, since the identity is fixed for the
+	// lifetime of the generator. The hostname draws first, so a seed keeps
+	// the hostname it had before the OS release was drawn too.
+	seed := cfg.Seed
+	if seed < 0 {
+		seed = time.Now().UnixNano()
+	}
+	r := rand.New(rand.NewSource(seed)) // #nosec G404 -- seeded for determinism contract
 	hostname := cfg.Hostname
 	if hostname == "" {
-		// Hostname-only RNG; intentionally seeded once at construction
-		// since hostname is fixed for the lifetime of the generator.
 		style := datagen.StyleLinux
 		if osType == datagen.OSWindows {
 			style = datagen.StyleWindows
 		}
-		seed := cfg.Seed
-		if seed < 0 {
-			seed = time.Now().UnixNano()
-		}
-		hostname = datagen.GenerateHostname(
-			rand.New(rand.NewSource(seed)), // #nosec G404 -- seeded for determinism contract
-			style,
-			datagen.AllMythologyNames,
-		)
+		hostname = datagen.GenerateHostname(r, style, datagen.AllMythologyNames)
 	}
 	return &datagen.SystemIdentity{
 		Hostname: hostname,
-		OSInfo:   datagen.OSInfo{Type: osType},
+		OSInfo:   datagen.GenerateOSInfo(r, osType),
 	}
 }
 
