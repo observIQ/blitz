@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
+	"strings"
 
 	"github.com/observiq/blitz/embed"
 	internalconfig "github.com/observiq/blitz/internal/config"
@@ -63,12 +64,17 @@ type LoadOpts struct {
 // (or do its own module construction) rather than going through the
 // LoadModules pipeline.
 //
-// This differs from the standalone CLI loader in two intentional ways:
-// (1) blitz does not read os.Environ() directly — see LoadOpts.EnvOverrides
+// Load resolves and checks the config exactly as the standalone CLI does:
+// unset keys get the same declared defaults, for the singular forms and for
+// every `outputs:` entry alike, and a config that sets both the
+// singular and plural form of a key is rejected. The only differences from
+// the CLI loader are where overrides come from:
+// (1) blitz does not read os.Environ() directly; see LoadOpts.EnvOverrides
 // for the host-driven equivalent; (2) cobra/CLI flag bindings are not
 // applied, since embedded hosts have no flags to bind.
 func Load(yamlBytes []byte, opts LoadOpts) (*Config, error) {
 	v := viper.New()
+	internalconfig.SetDefaults(v)
 	v.SetConfigType("yaml")
 	if err := v.ReadConfig(bytes.NewReader(yamlBytes)); err != nil {
 		return nil, fmt.Errorf("parse blitz YAML: %w", err)
@@ -77,9 +83,24 @@ func Load(yamlBytes []byte, opts LoadOpts) (*Config, error) {
 	for k, val := range opts.EnvOverrides {
 		v.Set(k, val)
 	}
+	// After the overrides, so an overridden singular form counts as set.
+	explicit := func(o *internalconfig.Override) bool {
+		for k := range opts.EnvOverrides {
+			if strings.EqualFold(k, o.Field) {
+				return true
+			}
+		}
+		return false
+	}
+	if err := internalconfig.ValidateExclusiveOutputConfig(v, explicit); err != nil {
+		return nil, fmt.Errorf("validate blitz config: %w", err)
+	}
 	cfg := internalconfig.NewConfig()
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal blitz config: %w", err)
+	}
+	if err := internalconfig.ApplyListDefaults(v, cfg); err != nil {
+		return nil, fmt.Errorf("apply blitz list defaults: %w", err)
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate blitz config: %w", err)

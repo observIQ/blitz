@@ -153,3 +153,61 @@ groups:
       requirement_level: required
       brief: "type of output"
       examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+
+- id: output.fanout_dropped
+  type: metric
+  metric_name: "blitz.output.fanout_dropped"
+  stability: stable
+  brief: "number of entries dropped for one fan-out output because its forwarding queue was full"
+  instrument: counter
+  unit: "{entry}"
+  annotations:
+    exported: true
+  attributes:
+    - id: output_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of output"
+      examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+    - id: telemetry_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "telemetry signal type"
+      examples: ["logs", "metrics", "traces"]
+    - id: output
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "position of the output in the outputs list"
+      examples: ["outputs[0]", "outputs[1]"]
+
+- id: output.fanout_write_errors
+  type: metric
+  metric_name: "blitz.output.fanout_write_errors"
+  stability: stable
+  brief: "number of entries a fan-out output failed to write after accepting them into its queue"
+  instrument: counter
+  unit: "{entry}"
+  annotations:
+    exported: true
+  attributes:
+    - id: output_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "type of output"
+      examples: ["tcp", "udp", "file", "otlp-grpc", "hec"]
+    - id: telemetry_type
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "telemetry signal type"
+      examples: ["logs", "metrics", "traces"]
+    - id: output
+      type: string
+      stability: stable
+      requirement_level: required
+      brief: "position of the output in the outputs list"
+      examples: ["outputs[0]", "outputs[1]"]

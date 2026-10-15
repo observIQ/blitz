@@ -41,13 +41,17 @@ import (
 	"github.com/observiq/blitz/output/udp"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
 var (
 	configFile string
-	rootCmd    = &cobra.Command{
+	// cliFlags is rootCmd's flag set, held apart so run can read it without
+	// an initialization cycle through rootCmd.
+	cliFlags *pflag.FlagSet
+	rootCmd  = &cobra.Command{
 		Use:   "blitz",
 		Short: "The last, best, most magnificent telemetry generation/simulation tool anyone will ever need",
 		Long:  "Blitz is the last, best, most magnificent telemetry generation/simulation tool anyone will ever need.",
@@ -56,6 +60,8 @@ var (
 )
 
 func init() {
+	cliFlags = rootCmd.PersistentFlags()
+
 	// Add config file flag
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "path to configuration file")
 
@@ -102,8 +108,10 @@ func run(cmd *cobra.Command, args []string) error {
 	// wiring, and bringing every generator up.
 	startTime := time.Now()
 
-	// Configure Viper to handle env overrides
+	// Configure Viper to handle env overrides. Only BLITZ_ env vars count, so
+	// an unrelated variable such as OUTPUTS cannot replace or break the config.
 	viper.SetConfigType("yaml")
+	viper.SetEnvPrefix("BLITZ")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
@@ -117,13 +125,17 @@ func run(cmd *cobra.Command, args []string) error {
 
 	config.MigrateDeprecatedKeys(viper.GetViper())
 
-	if err := config.ValidateExclusiveOutputConfig(viper.GetViper()); err != nil {
+	if err := config.ValidateExclusiveOutputConfig(viper.GetViper(), config.CLIExplicit(cliFlags)); err != nil {
 		return err
 	}
 
 	cfg := config.NewConfig()
 	if err := viper.Unmarshal(cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	if err := config.ApplyListDefaults(viper.GetViper(), cfg); err != nil {
+		return fmt.Errorf("failed to apply list defaults: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -206,6 +218,19 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Until the service starts and owns the outputs, a failed startup step
+	// stops them here, so no connection or fan-out goroutine outlives it.
+	serviceOwnsOutputs := false
+	defer func() {
+		if serviceOwnsOutputs {
+			return
+		}
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stopCancel()
+		if stopErr := outputInstance.Stop(stopCtx); stopErr != nil {
+			logger.Warn("failed to stop outputs after startup failure", zap.Error(stopErr))
+		}
+	}()
 
 	// Build the simulated identity environment once, up front, so every
 	// generator resolves its host identity from the same fleet (PIPE-1036). A
@@ -272,6 +297,7 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.Error("Failed to start service", zap.Error(err))
 		return err
 	}
+	serviceOwnsOutputs = true
 
 	// Record process-level startup latency (best effort; a metric-build failure
 	// must not fail startup). Per-module and session startup are recorded by the
@@ -334,22 +360,9 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	}
 
 	// All remaining (embed-eligible) types go through the canonical
-	// dispatch.ForEmbed path. Outputs that implement MetricWriter or
-	// TraceWriter get wrapped as the corresponding consumer so
-	// metric-yielding (hostmetrics) and trace-yielding (traces)
-	// generators work standalone; ForEmbed rejects with a clear message
-	// when an output doesn't support a signal the configured generator
-	// needs.
-	consumers := dispatch.EmbedConsumers{}
-	if lw, ok := out.(output.LogWriter); ok {
-		consumers.LogConsumer = output.WriterAsLogConsumer(lw, tel)
-	}
-	if mw, ok := out.(output.MetricWriter); ok {
-		consumers.MetricConsumer = output.WriterAsMetricConsumer(mw, tel)
-	}
-	if tw, ok := out.(output.TraceWriter); ok {
-		consumers.TraceConsumer = output.WriterAsTraceConsumer(tw, tel)
-	}
+	// dispatch.ForEmbed path; ForEmbed rejects with a clear message when an
+	// output doesn't support a signal the configured generator needs.
+	consumers := consumersFor(out, tel)
 	// Pass the embedded library so an embed_library build resolves package
 	// sources; without the tag FS() is empty and resolution uses disk (PIPE-1445).
 	mod, err := dispatch.ForEmbed(logger, genCfg, consumers, embeddedlibrary.FS(), env, tel)
@@ -579,23 +592,74 @@ func buildOutput(logger *zap.Logger, out config.Output, tel embed.TelemetrySetti
 	return inst, nil
 }
 
+// buildOneOutput builds a single output; a var so tests can observe
+// buildOutputs' cleanup of already-built outputs.
+var buildOneOutput = buildOutput
+
 // buildOutputs builds each output; wraps in MultiOutput when >1 (fan-out).
 // It also returns per-output signals so validation sees each destination
-// individually, catching an output that would receive nothing.
+// individually, catching an output that would receive nothing. In fan-out
+// each is named by its list position, e.g. "outputs[1] (file)". If any build
+// fails, the outputs already built are stopped before returning the error.
 func buildOutputs(logger *zap.Logger, outs []config.Output, tel embed.TelemetrySettings) (output.Output, []dispatch.OutputSignals, error) {
-	built := make([]output.Output, 0, len(outs))
+	built := make([]output.FanOutChild, 0, len(outs))
 	signals := make([]dispatch.OutputSignals, 0, len(outs))
-	for _, oc := range outs {
-		o, err := buildOutput(logger, oc, tel)
-		if err != nil {
-			return nil, nil, err
+	fail := func(err error) (output.Output, []dispatch.OutputSignals, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		for _, c := range built {
+			if stopErr := c.Output.Stop(ctx); stopErr != nil {
+				logger.Warn("failed to stop output after build failure", zap.Error(stopErr))
+			}
 		}
-		built = append(built, o)
-		signals = append(signals, dispatch.OutputSignals{Name: string(oc.Type), Signals: o.SupportedTelemetry()})
+		return nil, nil, err
+	}
+	for i, oc := range outs {
+		childTel := tel
+		if len(outs) > 1 {
+			childTel.MeterProvider = output.WithOutputPosition(tel.MeterProvider, fmt.Sprintf("outputs[%d]", i))
+		}
+		o, err := buildOneOutput(logger, oc, childTel)
+		if err != nil {
+			return fail(err)
+		}
+		built = append(built, output.FanOutChild{Type: string(oc.Type), Output: o})
+		name := string(oc.Type)
+		if len(outs) > 1 {
+			name = fmt.Sprintf("outputs[%d] (%s)", i, oc.Type)
+		}
+		signals = append(signals, dispatch.OutputSignals{Name: name, Signals: o.SupportedTelemetry()})
 	}
 	if len(built) == 1 {
-		return built[0], signals, nil
+		return built[0].Output, signals, nil
 	}
 	logger.Info("multi-output fan-out enabled", zap.Int("outputs", len(built)))
-	return output.NewMultiOutput(built...), signals, nil
+	m, err := output.NewMultiOutput(logger, tel, built...)
+	if err != nil {
+		return fail(err)
+	}
+	return m, signals, nil
+}
+
+// consumersFor wraps an output's writers as the consumers ForEmbed takes, so
+// metric-yielding (hostmetrics) and trace-yielding (traces) generators work
+// standalone.
+func consumersFor(out output.Output, tel embed.TelemetrySettings) dispatch.EmbedConsumers {
+	// A fan-out takes whole batches, so one generator batch (a hostmetrics
+	// scrape) is one queue slot per child and a burst never drops points on a
+	// healthy output.
+	if m, ok := out.(*output.MultiOutput); ok {
+		return dispatch.EmbedConsumers{LogConsumer: m, MetricConsumer: m, TraceConsumer: m}
+	}
+	consumers := dispatch.EmbedConsumers{}
+	if lw, ok := out.(output.LogWriter); ok {
+		consumers.LogConsumer = output.WriterAsLogConsumer(lw, tel)
+	}
+	if mw, ok := out.(output.MetricWriter); ok {
+		consumers.MetricConsumer = output.WriterAsMetricConsumer(mw, tel)
+	}
+	if tw, ok := out.(output.TraceWriter); ok {
+		consumers.TraceConsumer = output.WriterAsTraceConsumer(tw, tel)
+	}
+	return consumers
 }

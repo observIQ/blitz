@@ -15,6 +15,7 @@ import (
 
 // Attribute name constants
 const (
+	attrOutput        = "output"
 	attrOutputType    = "output_type"
 	attrTelemetryType = "telemetry_type"
 )
@@ -72,6 +73,48 @@ func (m blitzOutputEntryRateCounterType) Add(ctx context.Context, value float64,
 	attrs := metric.WithAttributeSet(attribute.NewSet(
 		attribute.String(attrOutputType, outputType),
 		attribute.String(attrTelemetryType, telemetryType),
+	))
+
+	if len(opts) == 0 {
+		m.counter.Add(ctx, value, attrs)
+	} else {
+		allOpts := append([]metric.AddOption{attrs}, opts...)
+		m.counter.Add(ctx, value, allOpts...)
+	}
+}
+
+// blitzOutputFanoutDroppedCounterType wraps the blitz.output.fanout_dropped metric with type-safe required attributes
+type blitzOutputFanoutDroppedCounterType struct {
+	counter metric.Int64Counter
+}
+
+// Add records a value for blitz.output.fanout_dropped with required attributes
+func (m blitzOutputFanoutDroppedCounterType) Add(ctx context.Context, value int64, outputType string, telemetryType string, output string, opts ...metric.AddOption) {
+	attrs := metric.WithAttributeSet(attribute.NewSet(
+		attribute.String(attrOutputType, outputType),
+		attribute.String(attrTelemetryType, telemetryType),
+		attribute.String(attrOutput, output),
+	))
+
+	if len(opts) == 0 {
+		m.counter.Add(ctx, value, attrs)
+	} else {
+		allOpts := append([]metric.AddOption{attrs}, opts...)
+		m.counter.Add(ctx, value, allOpts...)
+	}
+}
+
+// blitzOutputFanoutWriteErrorsCounterType wraps the blitz.output.fanout_write_errors metric with type-safe required attributes
+type blitzOutputFanoutWriteErrorsCounterType struct {
+	counter metric.Int64Counter
+}
+
+// Add records a value for blitz.output.fanout_write_errors with required attributes
+func (m blitzOutputFanoutWriteErrorsCounterType) Add(ctx context.Context, value int64, outputType string, telemetryType string, output string, opts ...metric.AddOption) {
+	attrs := metric.WithAttributeSet(attribute.NewSet(
+		attribute.String(attrOutputType, outputType),
+		attribute.String(attrTelemetryType, telemetryType),
+		attribute.String(attrOutput, output),
 	))
 
 	if len(opts) == 0 {
@@ -159,6 +202,10 @@ type Metrics struct {
 	BlitzOutputEntriesReceivedCounter blitzOutputEntriesReceivedCounterType
 	// rate of telemetry entries processed per second
 	BlitzOutputEntryRateCounter blitzOutputEntryRateCounterType
+	// number of entries dropped for one fan-out output because its forwarding queue was full
+	BlitzOutputFanoutDroppedCounter blitzOutputFanoutDroppedCounterType
+	// number of entries a fan-out output failed to write after accepting them into its queue
+	BlitzOutputFanoutWriteErrorsCounter blitzOutputFanoutWriteErrorsCounterType
 	// latency of output requests
 	BlitzOutputRequestLatencyHistogram blitzOutputRequestLatencyHistogramType
 	// size of output requests in bytes
@@ -201,6 +248,22 @@ func NewMetrics(mp metric.MeterProvider) (*Metrics, error) {
 	)
 	errs = errors.Join(errs, err)
 	m.BlitzOutputEntryRateCounter = blitzOutputEntryRateCounterType{counter: BlitzOutputEntryRateCounterRaw}
+
+	BlitzOutputFanoutDroppedCounterRaw, err := m.outputMeter.Int64Counter(
+		"blitz.output.fanout_dropped",
+		metric.WithDescription("number of entries dropped for one fan-out output because its forwarding queue was full"),
+		metric.WithUnit("{entry}"),
+	)
+	errs = errors.Join(errs, err)
+	m.BlitzOutputFanoutDroppedCounter = blitzOutputFanoutDroppedCounterType{counter: BlitzOutputFanoutDroppedCounterRaw}
+
+	BlitzOutputFanoutWriteErrorsCounterRaw, err := m.outputMeter.Int64Counter(
+		"blitz.output.fanout_write_errors",
+		metric.WithDescription("number of entries a fan-out output failed to write after accepting them into its queue"),
+		metric.WithUnit("{entry}"),
+	)
+	errs = errors.Join(errs, err)
+	m.BlitzOutputFanoutWriteErrorsCounter = blitzOutputFanoutWriteErrorsCounterType{counter: BlitzOutputFanoutWriteErrorsCounterRaw}
 
 	BlitzOutputRequestLatencyHistogramRaw, err := m.outputMeter.Float64Histogram(
 		"blitz.output.request_latency",

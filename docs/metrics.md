@@ -59,6 +59,13 @@ For detailed generator metric documentation, see [`generator/monitoring.md`](../
 | `blitz.output.request_latency` | Float64 Histogram | `s` | Latency of output requests |
 | `blitz.output.send_errors` | Counter | `{error}` | Total number of send errors |
 | `blitz.output.queue_size` | Observable Gauge | `{entry}` | Current number of entries in the output queue |
+| `blitz.output.fanout_dropped` | Counter | `{entry}` | Entries dropped for one fan-out output because its forwarding queue was full. Also carries `telemetry_type` and `output` (the list position, e.g. `outputs[1]`) |
+| `blitz.output.fanout_write_errors` | Counter | `{entry}` | Entries a fan-out output accepted into its queue but then failed to write (the error is also logged at Warn). Also carries `telemetry_type` and `output` |
+
+In fan-out, each output's own `blitz.output.*` metrics carry its list position
+(`outputs[0]`, `outputs[1]`, ...) as the `output` instrumentation scope
+attribute, so two outputs of one type stay distinguishable. The Prometheus
+endpoint exposes it as the `otel_scope_output` label.
 
 All output metrics include a required `output_type` attribute with values such as `tcp`, `udp`, `file`, `otlp-grpc`, `hec`, or `stdout`.
 

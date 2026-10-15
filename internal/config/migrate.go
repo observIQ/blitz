@@ -18,6 +18,7 @@ import (
 // Currently migrated keys (all forms case-insensitive in viper):
 //   - generator.paloAlto → generator.palo-alto
 //   - output.otlpGrpc    → output.otlp-grpc
+//   - outputs[].otlpGrpc → outputs[].otlp-grpc
 //
 // Behavior:
 //   - If only the legacy key is set in the config file, its value
@@ -38,20 +39,52 @@ import (
 // reflects only what the parsed config sources contain, which is the
 // semantic this migration actually wants.
 //
+// Values move in place inside the config viper just read, never through
+// v.Set: a Set override would outlive the next config read and shadow it.
+//
 // These deprecated keys will be removed in a future release; users
 // should update their configs to the canonical form.
 func MigrateDeprecatedKeys(v *viper.Viper) {
 	// viper lowercases keys when storing; the lookup tokens here are
 	// pre-lowercased to match what's actually in the settings map.
-	renames := []struct{ from, to string }{
-		{"generator.paloalto", "generator.palo-alto"},
-		{"output.otlpgrpc", "output.otlp-grpc"},
+	renames := []struct{ parent, from, to string }{
+		{"generator", "paloalto", "palo-alto"},
+		{"output", "otlpgrpc", "otlp-grpc"},
 	}
 	for _, r := range renames {
-		if v.InConfig(r.from) && !v.InConfig(r.to) {
-			v.Set(r.to, v.Get(r.from))
+		if v.InConfig(r.parent+"."+r.from) && !v.InConfig(r.parent+"."+r.to) {
+			if m, ok := v.Get(r.parent).(map[string]any); ok {
+				m[r.to] = m[r.from]
+				delete(m, r.from)
+			}
 		}
 	}
+	// List entries carry the same sub-keys, so rename them per entry. viper
+	// lowercases these keys too.
+	for _, r := range listRenames {
+		entries, ok := v.Get(r.list).([]any)
+		if !ok {
+			continue
+		}
+		for _, e := range entries {
+			m, ok := e.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, done := m[r.to]; done {
+				continue
+			}
+			if val, found := m[r.from]; found {
+				m[r.to] = val
+				delete(m, r.from)
+			}
+		}
+	}
+}
+
+// listRenames are the legacy sub-keys renamed inside each entry of a list.
+var listRenames = []struct{ list, from, to string }{
+	{"outputs", "otlpgrpc", "otlp-grpc"},
 }
 
 // LogGeneratorDeprecations emits a Warn-level banner once per startup

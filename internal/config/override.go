@@ -48,12 +48,13 @@ func (o *Override) Bind(flags *pflag.FlagSet) error {
 
 // createFlag creates a flag for the override
 func (o *Override) createFlag(flags *pflag.FlagSet) *pflag.Flag {
+	// Set the default value into Viper; flags act only as overrides. Every
+	// field gets its default, including one that shares an existing flag
+	// (the flattened TLS keys), or it would read the flag's zero value.
+	viper.SetDefault(o.Field, o.Default)
 	if exitingFlag := flags.Lookup(o.Flag); exitingFlag != nil {
 		return exitingFlag
 	}
-
-	// Set the default value into Viper; flags act only as overrides.
-	viper.SetDefault(o.Field, o.Default)
 
 	switch o.Default.(type) {
 	case string:
