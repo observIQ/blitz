@@ -116,6 +116,30 @@ var installDates = NewPool(
 	"2024-09-01", "2024-10-12", "2024-11-25", "2024-12-03",
 )
 
+// appTemplates is the application set an os/role host runs, or nil when that
+// combination runs none.
+func appTemplates(os OSType, role SystemRole) []appTemplate {
+	switch {
+	case role == RoleDC:
+		return dcApps
+	case os == OSWindows && role == RoleServer:
+		return windowsServerApps
+	case os == OSWindows && role == RoleWorkstation:
+		return windowsWorkstationApps
+	case os == OSLinux && (role == RoleServer || role == RoleRouter):
+		return linuxServerApps
+	case os == OSLinux && role == RoleWorkstation:
+		return linuxWorkstationApps
+	case os == OSMacOS && role == RoleWorkstation:
+		return macosWorkstationApps
+	case role == RoleServer && extendedServerApps[os] != nil:
+		return extendedServerApps[os]
+	}
+	// ESXi and the hypervisor-host Linux flavors run no applications: the
+	// platform is the only software.
+	return nil
+}
+
 // GenerateApplicationsForSystem returns applications appropriate for the given OS and role.
 //
 // Supported combinations:
@@ -137,26 +161,11 @@ func GenerateApplicationsForSystem(r *rand.Rand, os OSType, role SystemRole, hos
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	var templates []appTemplate
-
-	switch {
-	case role == RoleDC:
-		templates = dcApps
-	case os == OSWindows && role == RoleServer:
-		templates = windowsServerApps
-	case os == OSWindows && role == RoleWorkstation:
-		templates = windowsWorkstationApps
-	case os == OSLinux && (role == RoleServer || role == RoleRouter):
-		templates = linuxServerApps
-	case os == OSLinux && role == RoleWorkstation:
-		templates = linuxWorkstationApps
-	case os == OSMacOS && role == RoleWorkstation:
-		templates = macosWorkstationApps
-	case role == RoleServer && extendedServerApps[os] != nil:
-		templates = extendedServerApps[os]
-	case role == RoleServer && (os == OSESXi || hypervisorHostLinux[os]):
+	if role == RoleServer && (os == OSESXi || hypervisorHostLinux[os]) {
 		return []*ApplicationIdentity{} // the platform is the only software
-	default:
+	}
+	templates := appTemplates(os, role)
+	if len(templates) == 0 {
 		logger.Warn("GenerateApplicationsForSystem: unsupported os/role combination — returning empty application set",
 			zap.String("os", string(os)),
 			zap.String("role", string(role)),

@@ -21,7 +21,6 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
-	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/generator/ctime"
 	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
@@ -123,7 +122,7 @@ type FileLogGenerator struct {
 // when running blitz embedded inside another binary). When nil, those
 // sources resolve against the on-disk ./data_library/ directory, which
 // is the standalone CLI behavior.
-func New(logger *zap.Logger, workers int, rate time.Duration, source string, cacheEnabled bool, cacheTTL time.Duration, consumer embed.LogConsumer, dataLibrary fs.FS, tel embed.TelemetrySettings) (*FileLogGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, source string, cacheEnabled bool, cacheTTL time.Duration, consumer embed.LogConsumer, dataLibrary fs.FS, tel embed.TelemetrySettings, opts ...generator.Option) (*FileLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -160,7 +159,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string, cac
 		rate:        rate,
 		source:      source,
 		consumer:    consumer,
-		static:      resource.FromIdentity(nil, "filegen", "filegen.source", source),
+		static:      resource.FromIdentity(generator.NewOptions(opts...).Identity, "filegen", "filegen.source", source),
 		dataLibrary: dataLibrary,
 		stopCh:      make(chan struct{}),
 		cache:       cache,
@@ -170,14 +169,6 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string, cac
 
 // Name returns the module identifier.
 func (g *FileLogGenerator) Name() string { return componentName }
-
-// SetHostIdentity sets the simulated host whose identity every emitted record
-// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
-// be called before Start; the resource it builds is read concurrently by
-// workers thereafter.
-func (g *FileLogGenerator) SetHostIdentity(id *datagen.SystemIdentity) {
-	g.static = resource.FromIdentity(id, "filegen", "filegen.source", g.source)
-}
 
 // Start starts the File log generator and launches workers that push
 // records to the configured consumer.

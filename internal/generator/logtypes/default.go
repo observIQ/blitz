@@ -12,14 +12,6 @@ var defaultServices = []string{
 	"event-bus", "analytics-service", "order-service", "inventory-service",
 }
 
-var defaultHosts = []string{
-	"web-prod-01.us-east1.example.com", "web-prod-02.us-east1.example.com",
-	"web-prod-01.us-west1.example.com", "worker-prod-01.eu-west1.example.com",
-	"api-prod-01.us-east1.example.com", "api-prod-02.us-west1.example.com",
-	"db-worker-01.us-east1.example.com", "cache-prod-01.us-east1.example.com",
-	"batch-worker-01.us-east1.example.com", "stream-proc-01.eu-central1.example.com",
-}
-
 var defaultComponents = []string{
 	"http-handler", "database", "cache", "message-queue",
 	"grpc-server", "storage", "scheduler", "auth-middleware",
@@ -198,7 +190,6 @@ func GenerateDefaultLogData() (*DefaultLogData, error) {
 		LocationVal:      locations[r.Intn(len(locations))],             // #nosec G404
 		MessageVal:       logMessages[r.Intn(len(logMessages))],         // #nosec G404
 		ServiceVal:       defaultServices[r.Intn(len(defaultServices))], // #nosec G404
-		HostVal:          defaultHosts[r.Intn(len(defaultHosts))],       // #nosec G404
 		RequestIDVal:     generateUUIDDefault(r),
 		TraceIDVal:       generateTraceIDDefault(r),
 		SpanIDVal:        generateSpanIDDefault(r),

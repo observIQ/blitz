@@ -13,7 +13,6 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
-	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/internal/generator/logtypes"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
@@ -36,13 +35,6 @@ var (
 		"api-gateway", "auth-service", "payment-service", "user-service",
 		"notification-service", "data-pipeline", "cache-service", "search-service",
 		"event-bus", "analytics-service", "order-service", "inventory-service",
-	}
-	jsonHosts = []string{
-		"web-prod-01.us-east1.example.com", "web-prod-02.us-east1.example.com",
-		"web-prod-01.us-west1.example.com", "worker-prod-01.eu-west1.example.com",
-		"api-prod-01.us-east1.example.com", "api-prod-02.us-west1.example.com",
-		"db-worker-01.us-east1.example.com", "cache-prod-01.us-east1.example.com",
-		"batch-worker-01.us-east1.example.com", "stream-proc-01.eu-central1.example.com",
 	}
 	jsonComponents = []string{
 		"http-handler", "database", "cache", "message-queue",
@@ -91,7 +83,7 @@ type JSONLogGenerator struct {
 
 // New creates a new JSON log generator. The consumer receives each
 // generated record as a size-1 batch via ConsumeLogs.
-func New(logger *zap.Logger, workers int, rate time.Duration, logType string, consumer embed.LogConsumer, tel embed.TelemetrySettings) (*JSONLogGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, logType string, consumer embed.LogConsumer, tel embed.TelemetrySettings, opts ...generator.Option) (*JSONLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -125,7 +117,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, logType string, co
 		rate:     rate,
 		logType:  logType,
 		consumer: consumer,
-		static:   resource.FromIdentity(nil, componentName),
+		static:   resource.FromIdentity(generator.NewOptions(opts...).Identity, componentName),
 		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
@@ -133,14 +125,6 @@ func New(logger *zap.Logger, workers int, rate time.Duration, logType string, co
 
 // Name returns the module identifier.
 func (g *JSONLogGenerator) Name() string { return componentName }
-
-// SetHostIdentity sets the simulated host whose identity every emitted record
-// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
-// be called before Start; the resource it builds is read concurrently by
-// workers thereafter.
-func (g *JSONLogGenerator) SetHostIdentity(id *datagen.SystemIdentity) {
-	g.static = resource.FromIdentity(id, componentName)
-}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer.
@@ -291,6 +275,8 @@ func (g *JSONLogGenerator) generateAndWriteLog(_ int) error {
 
 // formatAsJSON converts LogData to a JSON-formatted LogRecord
 func formatAsJSON(data logtypes.LogData, static *resource.StaticResources) (embed.LogRecord, error) {
+	// "host" is the one resolved hostname, the same value as host.name.
+	host, _ := static.Record()["host.name"].(string)
 	var jsonData any
 	var timestamp time.Time
 	var severity string
@@ -305,7 +291,7 @@ func formatAsJSON(data logtypes.LogData, static *resource.StaticResources) (embe
 			"location":       d.LocationVal,
 			"message":        d.MessageVal,
 			"service":        d.ServiceVal,
-			"host":           d.HostVal,
+			"host":           host,
 			"request_id":     d.RequestIDVal,
 			"trace_id":       d.TraceIDVal,
 			"span_id":        d.SpanIDVal,
@@ -319,7 +305,7 @@ func formatAsJSON(data logtypes.LogData, static *resource.StaticResources) (embe
 		severity = d.LevelVal
 		jsonType = LogTypeDefault
 	case *logtypes.PIILogData:
-		jsonData = formatPIILogData(d)
+		jsonData = formatPIILogData(d, host)
 		timestamp = d.TimestampVal
 		severity = d.LevelVal
 		jsonType = LogTypePII
@@ -357,13 +343,13 @@ func (g *JSONLogGenerator) recordWriteError(errorType string, _ error) {
 }
 
 // formatPIILogData formats PII log data with a random selection of 1-5 PII fields
-func formatPIILogData(d *logtypes.PIILogData) map[string]any {
+func formatPIILogData(d *logtypes.PIILogData, host string) map[string]any {
 	r := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404
-	return formatPIILogDataWithRand(r, d)
+	return formatPIILogDataWithRand(r, d, host)
 }
 
 // formatPIILogDataWithRand formats PII log data using the provided rand source
-func formatPIILogDataWithRand(r *rand.Rand, d *logtypes.PIILogData) map[string]any {
+func formatPIILogDataWithRand(r *rand.Rand, d *logtypes.PIILogData, host string) map[string]any {
 	// All available PII fields
 	piiFields := []struct {
 		key   string
@@ -431,7 +417,7 @@ func formatPIILogDataWithRand(r *rand.Rand, d *logtypes.PIILogData) map[string]a
 		"level":          d.LevelVal,
 		"message":        d.MessageVal,
 		"service":        jsonServices[r.Intn(len(jsonServices))], // #nosec G404
-		"host":           jsonHosts[r.Intn(len(jsonHosts))],       // #nosec G404
+		"host":           host,
 		"request_id":     generateUUID(r),
 		"trace_id":       generateTraceID(r),
 		"span_id":        generateSpanID(r),

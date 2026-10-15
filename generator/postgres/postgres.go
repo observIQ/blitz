@@ -13,7 +13,6 @@ import (
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
-	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -231,7 +230,7 @@ var (
 
 // New creates a new PostgreSQL log generator. The consumer receives
 // each generated record as a size-1 batch via ConsumeLogs.
-func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer, tel embed.TelemetrySettings) (*Generator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer, tel embed.TelemetrySettings, opts ...generator.Option) (*Generator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -254,7 +253,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
-		static:   resource.FromIdentity(nil, componentName),
+		static:   resource.FromIdentity(generator.NewOptions(opts...).Identity, componentName),
 		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
@@ -262,14 +261,6 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 
 // Name returns the module identifier.
 func (g *Generator) Name() string { return componentName }
-
-// SetHostIdentity sets the simulated host whose identity every emitted record
-// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
-// be called before Start; the resource it builds is read concurrently by
-// workers thereafter.
-func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
-	g.static = resource.FromIdentity(id, componentName)
-}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer.

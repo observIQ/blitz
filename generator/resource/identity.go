@@ -75,3 +75,31 @@ func putNonEmpty(m map[string]any, key, val string) {
 		m[key] = val
 	}
 }
+
+// FromAppliance builds a StaticResources from a simulated network appliance:
+// host.name is the device hostname, os.name/os.version its appliance OS
+// (PAN-OS 11.0.4, ...), host.ip/host.mac its management interface, and
+// device.manufacturer/device.model.name its vendor and model. A nil n falls
+// back to the running host's name, as FromIdentity(nil) does.
+func FromAppliance(n *datagen.NetworkSystemIdentity, source string) *StaticResources {
+	if n == nil {
+		return NewStaticResources(WithHost(Hostname(), source))
+	}
+	attrs := map[string]any{"telemetry.source": source}
+	putNonEmpty(attrs, "host.name", n.Hostname)
+	putNonEmpty(attrs, "device.manufacturer", string(n.Vendor))
+	putNonEmpty(attrs, "device.model.name", n.Model)
+	if n.OS != nil {
+		putNonEmpty(attrs, "os.name", string(n.OS.Family))
+		putNonEmpty(attrs, "os.version", n.OS.Version)
+	}
+	if m := n.ManagementInterface; m != nil {
+		if m.IPv4 != "" {
+			attrs["host.ip"] = []string{m.IPv4}
+		}
+		if m.MACAddress != "" {
+			attrs["host.mac"] = []string{m.MACAddress}
+		}
+	}
+	return NewStaticResources(attrs)
+}

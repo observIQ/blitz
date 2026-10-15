@@ -77,7 +77,11 @@ type EventDataField struct {
 
 // GenerateOpts carries contextual data for event field generation.
 type GenerateOpts struct {
-	Computer   string
+	// Computer is the host's short (NetBIOS) name, used in event payloads.
+	Computer string
+	// FQDN is the host's DNS name, written in the <Computer> element when the
+	// host is domain-joined. Empty for a workgroup host, which writes Computer.
+	FQDN       string
 	DomainName string
 	Role       MachineRole
 	Usernames  []string

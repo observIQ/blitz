@@ -1,9 +1,12 @@
 package datagen
 
 import (
+	"cmp"
 	"fmt"
 	"hash/fnv"
 	"math/rand"
+	"slices"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -28,6 +31,11 @@ type Environment struct {
 	Systems        []*SystemIdentity
 	StorageSystems []*StorageSystemIdentity
 	NetworkSystems []*NetworkSystemIdentity
+
+	// picks records SystemFor's selections per key, so same-key entries
+	// never share a host. Guarded by picksMu.
+	picksMu sync.Mutex
+	picks   map[string]map[int]*SystemIdentity
 }
 
 // AllStorageSystems returns the environment's storage-array identities.
@@ -36,14 +44,91 @@ func (e *Environment) AllStorageSystems() []*StorageSystemIdentity { return e.St
 // AllNetworkSystems returns the environment's network-hardware identities.
 func (e *Environment) AllNetworkSystems() []*NetworkSystemIdentity { return e.NetworkSystems }
 
-// SystemForKey deterministically selects one of the environment's Systems by a
-// caller-supplied key (typically a generator component name, or a component
-// plus worker index for per-worker host granularity). The same key always maps
-// to the same system for a given Environment, so a generator resolves its host
-// identity once and attributes every record it emits consistently. Returns nil
-// when the environment has no systems.
+// HostRequirement narrows which of the environment's hosts a generator may
+// describe, so an OS-limited generator is never handed a host it could not run
+// on (Windows Event Log on a Linux box, say). The zero value accepts any system.
+//
+// Appliance-backed generators (F5, Palo Alto) extend this with a host kind that
+// selects from NetworkSystems by vendor instead of from Systems; see
+// docs/environment.md.
+type HostRequirement struct {
+	// OS restricts selection to systems of this OS. Empty accepts any OS.
+	OS OSType
+	// Roles restricts selection to systems of one of these roles. Empty
+	// accepts any role.
+	Roles []SystemRole
+	// Apps restricts selection to systems that run applications, for
+	// generators describing server software.
+	Apps bool
+}
+
+// overlaps reports whether some system could meet both r and o.
+func (r HostRequirement) overlaps(o HostRequirement) bool {
+	if r.OS != "" && o.OS != "" && r.OS != o.OS {
+		return false
+	}
+	roles := r.Roles
+	switch {
+	case len(r.Roles) == 0:
+		roles = o.Roles
+	case len(o.Roles) > 0:
+		roles = nil
+		for _, role := range r.Roles {
+			if slices.Contains(o.Roles, role) {
+				roles = append(roles, role)
+			}
+		}
+		if len(roles) == 0 {
+			return false
+		}
+	}
+	osType := cmp.Or(r.OS, o.OS)
+	if !(r.Apps || o.Apps) || osType == "" {
+		return true
+	}
+	if len(roles) == 0 {
+		roles = []SystemRole{RoleServer, RoleWorkstation, RoleDC, RoleRouter}
+	}
+	for _, role := range roles {
+		if len(appTemplates(osType, role)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (r HostRequirement) accepts(s *SystemIdentity) bool {
+	if r.OS != "" && s.OSInfo.Type != r.OS {
+		return false
+	}
+	if r.Apps && len(appTemplates(s.OSInfo.Type, s.Role)) == 0 {
+		return false
+	}
+	return len(r.Roles) == 0 || slices.Contains(r.Roles, s.Role)
+}
+
+// SystemForKey is SystemFor with no requirement.
 func (e *Environment) SystemForKey(key string) *SystemIdentity {
-	if len(e.Systems) == 0 {
+	return e.SystemFor(key, 0, HostRequirement{})
+}
+
+// SystemFor deterministically selects, by a caller-supplied key (typically a
+// generator component name) and ordinal (the entry's position among
+// generators of that key, 0 for the first), one of the environment's Systems
+// that meets req, skipping systems already selected for another ordinal of
+// the same key so same-key entries describe distinct hosts.
+// The same key, ordinal, and requirement always map to the same system for a
+// given Environment and call order (loaders call in config order), so a
+// generator resolves its host identity once and attributes every record it
+// emits consistently. Returns nil when no system meets req.
+func (e *Environment) SystemFor(key string, ordinal int, req HostRequirement) *SystemIdentity {
+	var eligible []*SystemIdentity
+	for _, s := range e.Systems {
+		if req.accepts(s) {
+			eligible = append(eligible, s)
+		}
+	}
+	if len(eligible) == 0 {
 		return nil
 	}
 	h := fnv.New32a()
@@ -51,22 +136,60 @@ func (e *Environment) SystemForKey(key string) *SystemIdentity {
 	// int64 throughout: uint32->int64 and int->int64 are widening (never
 	// negative, never truncating), so this is correct on 32-bit targets and
 	// avoids an int->uint32 narrowing conversion.
-	idx := int64(h.Sum32()) % int64(len(e.Systems))
-	return e.Systems[idx]
+	// ordinal offsets same-key entries (two hostmetrics entries in one
+	// generators: list) onto distinct hosts while eligible hosts remain.
+	idx := (int64(h.Sum32()) + int64(ordinal)) % int64(len(eligible))
+
+	e.picksMu.Lock()
+	defer e.picksMu.Unlock()
+	taken := func(s *SystemIdentity) bool {
+		for o, p := range e.picks[key] {
+			if o != ordinal && p == s {
+				return true
+			}
+		}
+		return false
+	}
+	if p := e.picks[key][ordinal]; p != nil && req.accepts(p) {
+		return p
+	}
+	pick := eligible[idx] // every eligible host taken: share rather than fail
+	for i := range int64(len(eligible)) {
+		if s := eligible[(idx+i)%int64(len(eligible))]; !taken(s) {
+			pick = s
+			break
+		}
+	}
+	if e.picks == nil {
+		e.picks = map[string]map[int]*SystemIdentity{}
+	}
+	if e.picks[key] == nil {
+		e.picks[key] = map[int]*SystemIdentity{}
+	}
+	e.picks[key][ordinal] = pick
+	return pick
 }
 
 // EnvironmentOpts controls the size and shape of the generated environment.
 type EnvironmentOpts struct {
-	DomainName         string      // e.g., "contoso.com". Default: "blitz.local"
-	SystemCount        int         // number of machines. Default: 20
-	UserCount          int         // number of users. Default: 50
-	GroupCount         int         // number of groups. Default: 10
-	NetworkCount       int         // number of subnets. Default: 4. Values beyond the built-in default catalog are synthesized using IdentityNetworks.
-	StorageSystemCount int         // number of storage arrays. Default: 2.
-	NetworkSystemCount int         // number of network devices. Default: 4.
-	DomainAdminsCount  int         // exact Domain Admins membership; 0 (or negative) = use the user-count-scaled default in the datagen package.
-	Now                time.Time   // wall-clock anchor for time-dependent fields (e.g. CertAuthority validity window). Zero value = time.Now() at GenerateEnvironment call; see Environment docstring for determinism implications.
-	Logger             *zap.Logger // logger for datagen diagnostics; nil disables logging (no global-logger fallback).
+	DomainName         string // e.g., "contoso.com". Default: "blitz.local"
+	SystemCount        int    // number of machines. Default: 20
+	UserCount          int    // number of users. Default: 50
+	GroupCount         int    // number of groups. Default: 10
+	NetworkCount       int    // number of subnets. Default: 4. Values beyond the built-in default catalog are synthesized using IdentityNetworks.
+	StorageSystemCount int    // number of storage arrays. Default: 2.
+	NetworkSystemCount int    // number of network devices. Default: 4.
+	// RequiredVendors are appliance vendors the configured generators
+	// describe, one per entry; the environment holds at least as many devices
+	// of each vendor as it is listed.
+	RequiredVendors []ApplianceVendor
+	// RequiredHosts are hosts the configured generators describe (a domain
+	// controller, a macOS host), one per entry; the environment holds at least
+	// as many hosts meeting each requirement as it is listed.
+	RequiredHosts     []HostRequirement
+	DomainAdminsCount int         // exact Domain Admins membership; 0 (or negative) = use the user-count-scaled default in the datagen package.
+	Now               time.Time   // wall-clock anchor for time-dependent fields (e.g. CertAuthority validity window). Zero value = time.Now() at GenerateEnvironment call; see Environment docstring for determinism implications.
+	Logger            *zap.Logger // logger for datagen diagnostics; nil disables logging (no global-logger fallback).
 }
 
 // defaultOpts returns EnvironmentOpts with defaults applied.
@@ -161,7 +284,7 @@ func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) (*Environment
 	systemSeed := seeds.ResolveSeed(IdentitySystems)
 	servicesSeed := seeds.ResolveSeed(IdentityServices)
 	applicationsSeed := seeds.ResolveSeed(IdentityApplications)
-	systems, err := genSystems(systemSeed, servicesSeed, applicationsSeed, opts.SystemCount, domain, networks, opts.Logger)
+	systems, err := genSystems(systemSeed, servicesSeed, applicationsSeed, opts.SystemCount, opts.RequiredHosts, domain, networks, opts.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +295,10 @@ func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) (*Environment
 	storageSystems := generateStorageSystems(storageSeed, opts.StorageSystemCount, networks)
 
 	networkSystemSeed := seeds.ResolveSeed(IdentityNetworkSystems)
-	networkSystems := generateNetworkSystems(networkSystemSeed, opts.NetworkSystemCount, networks)
+	networkSystems := generateNetworkSystems(networkSystemSeed, opts.NetworkSystemCount, networks, opts.RequiredVendors)
+	for _, n := range networkSystems {
+		n.FQDN = fqdnFor(n.Hostname, domain.Name)
+	}
 
 	return &Environment{
 		Domain:         domain,
@@ -226,16 +352,40 @@ func generateStorageSystems(seed int64, count int, networks []*NetworkIdentity) 
 
 // generateNetworkSystems builds count network devices from seed, binding each
 // management interface to a management subnet.
-func generateNetworkSystems(seed int64, count int, networks []*NetworkIdentity) []*NetworkSystemIdentity {
+// Devices for required vendors the random draw is short of are appended from
+// the same RNG after the drawn fleet is bound, so the fleet stays
+// deterministic per seed and requiring a vendor never moves a drawn device.
+// Every device then gets a unique hostname.
+func generateNetworkSystems(seed int64, count int, networks []*NetworkIdentity, required []ApplianceVendor) []*NetworkSystemIdentity {
 	r := rand.New(rand.NewSource(seed)) // #nosec G404
 	mgmt := managementNetwork(networks)
-	out := make([]*NetworkSystemIdentity, count)
-	for i := range out {
-		n := RandomNetworkSystemIdentity(r)
+	out := make([]*NetworkSystemIdentity, 0, count+len(required))
+	add := func(n *NetworkSystemIdentity) {
 		bindManagementInterface(r, n.ManagementInterface, mgmt)
-		out[i] = n
+		out = append(out, n)
 	}
+	for i := 0; i < count; i++ {
+		add(RandomNetworkSystemIdentity(r))
+	}
+	need := map[ApplianceVendor]int{}
+	for _, v := range required {
+		need[v]++
+		if vendorCount(out, v) < need[v] {
+			add(NetworkSystemIdentityFor(r, v))
+		}
+	}
+	assignApplianceHostnames(out)
 	return out
+}
+
+func vendorCount(ns []*NetworkSystemIdentity, v ApplianceVendor) int {
+	n := 0
+	for _, s := range ns {
+		if s.Vendor == v {
+			n++
+		}
+	}
+	return n
 }
 
 // generateNetworksList returns the requested number of NetworkIdentity entries,
@@ -273,39 +423,44 @@ func generateNetworksList(seed int64, count int) []*NetworkIdentity {
 	return networks
 }
 
-// generateSystems creates systems with a realistic OS/role distribution.
-// systemSeed seeds the core identity RNG (OS choice, hostname, interface,
-// resource specs). servicesSeed and applicationsSeed seed independent RNGs
-// for service and application generation so changes to either seed only
-// re-randomize that slice.
-func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int, domain *DomainIdentity, networks []*NetworkIdentity, logger *zap.Logger) ([]*SystemIdentity, error) {
-	r := rand.New(rand.NewSource(systemSeed))                   // #nosec G404
-	rServices := rand.New(rand.NewSource(servicesSeed))         // #nosec G404
-	rApplications := rand.New(rand.NewSource(applicationsSeed)) // #nosec G404
-
-	// Distribution: ~10% DC, ~40% Windows server, ~30% Linux server, ~15% workstation, ~5% router
-	specs := []osRoleSpec{
+// fleetSpecs and fleetWeights are the drawn fleet's OS/role distribution:
+// ~10% DC, ~40% Windows server, ~30% Linux server, ~15% workstation, ~5%
+// router.
+var (
+	fleetSpecs = []osRoleSpec{
 		{OSWindows, RoleDC, GreekNames},
 		{OSWindows, RoleServer, RomanNames},
 		{OSLinux, RoleServer, NorseNames},
 		{OSWindows, RoleWorkstation, RomanNames},
 		{OSLinux, RoleRouter, EgyptianNames},
 	}
-	weights := []float64{0.10, 0.40, 0.30, 0.15, 0.05}
+	fleetWeights = []float64{0.10, 0.40, 0.30, 0.15, 0.05}
+)
+
+// generateSystems creates systems with a realistic OS/role distribution.
+// systemSeed seeds the core identity RNG (OS choice, hostname, interface,
+// resource specs). servicesSeed and applicationsSeed seed independent RNGs
+// for service and application generation so changes to either seed only
+// re-randomize that slice.
+func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int, required []HostRequirement, domain *DomainIdentity, networks []*NetworkIdentity, logger *zap.Logger) ([]*SystemIdentity, error) {
+	r := rand.New(rand.NewSource(systemSeed))                   // #nosec G404
+	rServices := rand.New(rand.NewSource(servicesSeed))         // #nosec G404
+	rApplications := rand.New(rand.NewSource(applicationsSeed)) // #nosec G404
+
+	specs, weights := fleetSpecs, fleetWeights
 
 	// Prod-tier baseline OS release per family, chosen once so every prod host
 	// of a family is pinned to the same conservative release (real fleets keep
 	// prod uniform). Non-prod hosts roll newer and vary per host.
 	prodBaseline := map[OSType]OSInfo{
-		OSLinux:   osInfoForTier(r, OSLinux, true),
-		OSWindows: osInfoForTier(r, OSWindows, true),
-		OSMacOS:   osInfoForTier(r, OSMacOS, true),
+		OSLinux:   osInfoForTier(r, OSLinux, RoleServer, true),
+		OSWindows: osInfoForTier(r, OSWindows, RoleServer, true),
+		OSMacOS:   osInfoForTier(r, OSMacOS, RoleWorkstation, true),
 	}
+	// Domain controllers run Windows Server, so they get their own baseline.
+	prodDCBaseline := osInfoForTier(r, OSWindows, RoleDC, true)
 
-	systems := make([]*SystemIdentity, count)
-	for i := 0; i < count; i++ {
-		// Pick OS/role using weighted selection
-		spec := weightedSelect(r, specs, weights)
+	build := func(spec osRoleSpec) (*SystemIdentity, error) {
 		sys, err := GenerateSystemIdentity(r, spec.os, spec.role, domain, spec.pool)
 		if err != nil {
 			return nil, err
@@ -314,10 +469,20 @@ func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int
 		// Assign a deployment tier and cluster the OS release by it: prod hosts
 		// share the pinned family baseline; non-prod hosts roll newer and vary.
 		sys.Tier = weightedSelect(r, DeploymentTiers, deploymentTierWeights)
-		if sys.Tier == TierProd {
-			sys.OSInfo = prodBaseline[spec.os]
-		} else {
-			sys.OSInfo = osInfoForTier(r, spec.os, false)
+		switch {
+		case sys.Tier == TierProd && spec.role == RoleDC:
+			sys.OSInfo = prodDCBaseline
+		case sys.Tier == TierProd:
+			info, ok := prodBaseline[spec.os]
+			if !ok {
+				// safety net: the baseline covers every OS this package
+				// defines; one added later gets its baseline on first use.
+				info = osInfoForTier(r, spec.os, spec.role, true)
+				prodBaseline[spec.os] = info
+			}
+			sys.OSInfo = info
+		default:
+			sys.OSInfo = osInfoForTier(r, spec.os, spec.role, false)
 		}
 
 		// Services and applications use their own RNGs so the seeds in
@@ -338,16 +503,105 @@ func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int
 			}
 			sys.Interfaces = []NetworkInterface{iface}
 		}
+		return sys, nil
+	}
 
-		systems[i] = sys
+	systems := make([]*SystemIdentity, 0, count+len(required))
+	for i := 0; i < count; i++ {
+		// Pick OS/role using weighted selection
+		sys, err := build(weightedSelect(r, specs, weights))
+		if err != nil {
+			return nil, err
+		}
+		systems = append(systems, sys)
+	}
+	// Each entry's requirement needs its own host: an entry needs one host
+	// beyond every earlier entry whose requirement overlaps its own, since
+	// any of those may have taken a host it accepts. Hosts the random draw is short of
+	// are appended from the same RNGs, so the drawn systems stay unchanged and
+	// the fleet stays deterministic per seed.
+	for i, req := range required {
+		need := 1
+		for _, prev := range required[:i] {
+			if prev.overlaps(req) {
+				need++
+			}
+		}
+		have := 0
+		for _, s := range systems {
+			if req.accepts(s) {
+				have++
+			}
+		}
+		for ; have < need; have++ {
+			sys, err := build(specFor(r, req))
+			if err != nil {
+				return nil, err
+			}
+			systems = append(systems, sys)
+		}
 	}
 
 	return systems, nil
 }
 
+// specFor is the OS, role, and hostname pool of a host that meets req. When
+// fleet specs fit req (OS, roles, and applications), it draws one by the
+// fleet's weights, so a requirement allowing several roles gets them in fleet
+// proportions. Otherwise it builds one: req's first role (a server by
+// default, a workstation for macOS) and OS (by default Windows for a DC or
+// workstation, Linux otherwise).
+func specFor(r *rand.Rand, req HostRequirement) osRoleSpec {
+	var specs []osRoleSpec
+	var weights []float64
+	for i, spec := range fleetSpecs {
+		if (req.OS == "" || req.OS == spec.os) &&
+			(len(req.Roles) == 0 || slices.Contains(req.Roles, spec.role)) &&
+			(!req.Apps || len(appTemplates(spec.os, spec.role)) > 0) {
+			specs = append(specs, spec)
+			weights = append(weights, fleetWeights[i])
+		}
+	}
+	if len(specs) > 0 {
+		return weightedSelect(r, specs, weights)
+	}
+	role := RoleServer
+	if len(req.Roles) > 0 {
+		role = req.Roles[0]
+	} else if req.OS == OSMacOS {
+		role = RoleWorkstation
+	}
+	os := req.OS
+	// Safety net, unreachable today: every role has a fleet spec that runs
+	// applications, so a requirement without an OS always fits one. Kept so a
+	// future role or application rule still gets a sensible host.
+	if os == "" {
+		os = OSLinux
+		if role == RoleDC || role == RoleWorkstation {
+			os = OSWindows
+		}
+	}
+	switch {
+	case role == RoleDC:
+		return osRoleSpec{os, role, GreekNames}
+	case role == RoleRouter:
+		return osRoleSpec{os, role, EgyptianNames}
+	case role == RoleServer && os == OSLinux:
+		// Safety net, unreachable today: the fleet table has a Linux server,
+		// which the draw above returns. Kept for a future table change.
+		return osRoleSpec{os, role, NorseNames}
+	default:
+		return osRoleSpec{os, role, RomanNames}
+	}
+}
+
 // weightedSelect picks an item using weighted random selection.
 func weightedSelect[T any](r *rand.Rand, items []T, weights []float64) T {
-	roll := r.Float64() // #nosec G404
+	total := 0.0
+	for _, w := range weights {
+		total += w
+	}
+	roll := r.Float64() * total // #nosec G404 -- weights need not sum to 1
 	cumulative := 0.0
 	for i, w := range weights {
 		cumulative += w
@@ -355,6 +609,8 @@ func weightedSelect[T any](r *rand.Rand, items []T, weights []float64) T {
 			return items[i]
 		}
 	}
+	// Safety net: float rounding can leave roll at the total, past the last
+	// cumulative weight.
 	return items[len(items)-1]
 }
 
@@ -401,4 +657,23 @@ func interfaceName(os OSType) string {
 	default:
 		return "eth0"
 	}
+}
+
+// ApplianceFor deterministically selects, by key, one of the environment's
+// network devices of vendor, the appliance an appliance generator (Palo Alto,
+// F5) describes. Returns nil when the environment has none; build it with
+// EnvironmentOpts.RequiredVendors to guarantee one.
+func (e *Environment) ApplianceFor(key string, ordinal int, vendor ApplianceVendor) *NetworkSystemIdentity {
+	var eligible []*NetworkSystemIdentity
+	for _, n := range e.NetworkSystems {
+		if n.Vendor == vendor {
+			eligible = append(eligible, n)
+		}
+	}
+	if len(eligible) == 0 {
+		return nil
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key))
+	return eligible[(int64(h.Sum32())+int64(ordinal))%int64(len(eligible))]
 }

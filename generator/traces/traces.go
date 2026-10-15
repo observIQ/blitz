@@ -41,13 +41,14 @@ type Config struct {
 	Workers int
 	// Rate is the per-worker trace-start interval. Required, > 0.
 	Rate time.Duration
-	// Hostname is the simulated hostname this generator's traces
-	// describe (populates Span.Metadata.Resource["host.name"]). If empty,
-	// a deterministic Linux-style hostname is generated from Seed via
-	// datagen.GenerateHostname, matching the hostmetrics convention so
-	// records from both signals attribute consistently to the same
-	// simulated machine when configured with the same Seed. Ignored when
-	// Identity is set.
+	// Hostname is the simulated hostname these traces describe (populates
+	// Span.Metadata.Resource["host.name"]). When set it wins: it replaces
+	// only the hostname of Identity (OS, arch and the rest stay), or names
+	// the synthesized host when Identity is nil. When empty, Identity's
+	// hostname is used; with no Identity a deterministic Linux-style
+	// hostname is generated from Seed via datagen.GenerateHostname, matching
+	// the hostmetrics convention so both signals attribute to the same
+	// simulated machine under the same Seed.
 	Hostname string
 	// Identity, when non-nil, is the resolved simulated host these traces
 	// describe (PIPE-1036). Its full host.* / os.* / deployment.* projection
@@ -142,12 +143,14 @@ func New(cfg Config) (*Generator, error) {
 	if cfg.Seed < 0 {
 		cfg.Seed = time.Now().UnixNano()
 	}
-	// Resolve the simulated host: an explicit Environment identity when
-	// supplied, otherwise a minimal Linux-style identity synthesized from the
-	// Hostname knob. The resource projection is built once here and reused for
-	// every span.
-	sys := cfg.Identity
-	if sys == nil {
+	// Resolve the simulated host: the Environment identity when supplied, with
+	// a set Hostname replacing only its hostname; otherwise a minimal
+	// Linux-style identity synthesized from the Hostname knob. The resource
+	// projection is built once here and reused for every span.
+	var sys *datagen.SystemIdentity
+	if cfg.Identity != nil {
+		sys = cfg.Identity.WithHostname(cfg.Hostname)
+	} else {
 		sys = syntheticIdentity(cfg)
 	}
 

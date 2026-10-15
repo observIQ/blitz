@@ -13,11 +13,13 @@ type WelGeneratorConfig struct {
 	Rate time.Duration `yaml:"rate,omitempty" mapstructure:"rate,omitempty"`
 	// Channels is the list of channels to generate events for (empty = all)
 	Channels []string `yaml:"channels,omitempty" mapstructure:"channels,omitempty"`
-	// Computer is the computer name for generated events
+	// Computer is the computer name; empty follows the environment host
 	Computer string `yaml:"computer,omitempty" mapstructure:"computer,omitempty"`
-	// Domain is the domain name for Active Directory-related events
+	// Domain is the host's DNS domain, or WORKGROUP for a workgroup machine;
+	// empty follows the environment host
 	Domain string `yaml:"domain,omitempty" mapstructure:"domain,omitempty"`
-	// Role controls which event pool is eligible (workstation, member, dc)
+	// Role controls which event pool is eligible (workstation, member, dc);
+	// empty follows the environment host
 	Role string `yaml:"role,omitempty" mapstructure:"role,omitempty"`
 	// ManageEventSources controls whether event sources are registered/deregistered automatically
 	ManageEventSources bool `yaml:"manageEventSources,omitempty" mapstructure:"manageEventSources,omitempty"`

@@ -4,6 +4,8 @@
 
 The JSON generator creates structured JSON log entries with configurable fields. Two log types are supported: default logs with standard fields, and PII logs with personally identifiable information fields suitable for testing PII detection and redaction systems.
 
+In both log types the `host` field is the generator's one resolved hostname, the same value as the `host.name` resource attribute (see [environment.md](../environment.md)).
+
 ## Example Logs
 
 ### Default Log Type

@@ -146,13 +146,35 @@ func buildExtendedOSInfo(os OSType, rel osRelease) OSInfo {
 	}
 }
 
-// GenerateOSInfo returns a coherent OSInfo for the given OS type, drawn from the
-// authentic release pools. Windows picks one real UBR per selection.
-// Deterministic for a given (r, os).
-func GenerateOSInfo(r *rand.Rand, os OSType) OSInfo {
+// windowsServerReleases are the Windows Server releases: a domain controller
+// runs only these. Any other role may run any release (a server OS on a
+// workstation is rare but real).
+var windowsServerReleases = func() []windowsRelease {
+	var out []windowsRelease
+	for _, rel := range windowsReleases {
+		if strings.Contains(rel.name, "Windows Server") {
+			out = append(out, rel)
+		}
+	}
+	return out
+}()
+
+// windowsReleasesFor is the Windows release pool for a role.
+func windowsReleasesFor(role SystemRole) []windowsRelease {
+	if role == RoleDC {
+		return windowsServerReleases
+	}
+	return windowsReleases
+}
+
+// GenerateOSInfo returns a coherent OSInfo for the given OS type and role,
+// drawn from the authentic release pools. Windows picks one real UBR per
+// selection. Deterministic for a given (r, os, role).
+func GenerateOSInfo(r *rand.Rand, os OSType, role SystemRole) OSInfo {
 	switch os {
 	case OSWindows:
-		rel := windowsReleases[r.Intn(len(windowsReleases))]            // #nosec G404
+		pool := windowsReleasesFor(role)
+		rel := pool[r.Intn(len(pool))]                                  // #nosec G404
 		return buildWindowsOSInfo(rel, rel.ubrs[r.Intn(len(rel.ubrs))]) // #nosec G404
 	case OSMacOS:
 		return buildMacOSInfo(macReleases[r.Intn(len(macReleases))]) // #nosec G404
@@ -168,10 +190,11 @@ func GenerateOSInfo(r *rand.Rand, os OSType) OSInfo {
 // (older=true) draws from the conservative/older end of an ordered patch
 // timeline, non-prod (older=false) from the newer end. Linux and OpenStack
 // KVM have no cross-distro age ordering, so they draw any release regardless.
-func osInfoForTier(r *rand.Rand, os OSType, older bool) OSInfo {
+func osInfoForTier(r *rand.Rand, os OSType, role SystemRole, older bool) OSInfo {
 	switch os {
 	case OSWindows:
-		rel := windowsReleases[r.Intn(len(windowsReleases))] // #nosec G404
+		pool := windowsReleasesFor(role)
+		rel := pool[r.Intn(len(pool))] // #nosec G404
 		return buildWindowsOSInfo(rel, rel.ubrs[pickHalfIndex(r, len(rel.ubrs), older)])
 	case OSMacOS:
 		return buildMacOSInfo(macReleases[pickHalfIndex(r, len(macReleases), older)])

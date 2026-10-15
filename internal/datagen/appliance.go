@@ -130,8 +130,11 @@ var applianceOSVersions = map[ApplianceOSFamily][]string{
 	FamilyNXOS:        {"10.3(4a)", "10.2(5)", "9.3(12)"},
 	FamilyEOS:         {"4.31.2F", "4.30.4M", "4.29.6M"},
 	FamilyJunos:       {"23.4R1", "22.4R3", "21.4R3"},
-	FamilyPANOS:       {"11.1.3", "11.0.4", "10.2.9"},
-	FamilyFortiOS:     {"7.4.3", "7.2.8", "7.0.14"},
+	// 11.0.x only, since the palo-alto generator emits the PAN-OS
+	// 11.0 field set; add 10.2 and 11.1+ once it derives the format from the
+	// device's version.
+	FamilyPANOS:   {"11.0.4", "11.0.3", "11.0.2"},
+	FamilyFortiOS: {"7.4.3", "7.2.8", "7.0.14"},
 }
 
 // GenerateApplianceOS returns a valid ApplianceOS for the given family with a

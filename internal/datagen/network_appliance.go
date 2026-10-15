@@ -56,6 +56,11 @@ type WirelessCapability struct {
 // vendor/model/serial box running an embedded ApplianceOS, with a set of
 // composable capability facets, data interfaces, and a management interface.
 type NetworkSystemIdentity struct {
+	// Hostname is the device's name, as its own logs carry it.
+	Hostname string
+	// FQDN is Hostname in the environment's domain, the name a device's
+	// syslog header carries by default (e.g. PAN-OS "Syslog HOSTNAME Format").
+	FQDN   string
 	Vendor ApplianceVendor
 	Model  string
 	Serial string
@@ -196,6 +201,69 @@ func generateNetworkSystem(r *rand.Rand, spec networkModelSpec) *NetworkSystemId
 func RandomNetworkSystemIdentity(r *rand.Rand) *NetworkSystemIdentity {
 	spec := networkModels[r.Intn(len(networkModels))] // #nosec G404
 	return generateNetworkSystem(r, spec)
+}
+
+// NetworkSystemIdentityFor returns a device of vendor, drawn from that
+// vendor's models. It falls back to a random device for a vendor with no
+// modeled hardware.
+func NetworkSystemIdentityFor(r *rand.Rand, vendor ApplianceVendor) *NetworkSystemIdentity {
+	var specs []networkModelSpec
+	for _, spec := range networkModels {
+		if spec.vendor == vendor {
+			specs = append(specs, spec)
+		}
+	}
+	if len(specs) == 0 {
+		return RandomNetworkSystemIdentity(r)
+	}
+	return generateNetworkSystem(r, specs[r.Intn(len(specs))]) // #nosec G404
+}
+
+// assignApplianceHostnames names each device <vendor>-<role>-NN (pa-fw-01,
+// f5-lb-01, cat-sw-02), numbering per prefix in fleet order so names are
+// unique and deterministic.
+func assignApplianceHostnames(ns []*NetworkSystemIdentity) {
+	next := map[string]int{}
+	for _, n := range ns {
+		prefix := applianceVendorShort(n.Vendor) + "-" + applianceRole(n)
+		next[prefix]++
+		n.Hostname = fmt.Sprintf("%s-%02d", prefix, next[prefix])
+	}
+}
+
+func applianceVendorShort(v ApplianceVendor) string {
+	switch v {
+	case VendorPaloAlto:
+		return "pa"
+	case VendorF5:
+		return "f5"
+	case VendorFortinet:
+		return "fgt"
+	case VendorJuniper:
+		return "jnpr"
+	case VendorArista:
+		return "arista"
+	case VendorCisco:
+		return "cisco"
+	default:
+		return "net"
+	}
+}
+
+// applianceRole is the device's primary role from its capability facets.
+func applianceRole(n *NetworkSystemIdentity) string {
+	switch {
+	case n.LoadBalancing != nil:
+		return "lb"
+	case n.Firewall != nil:
+		return "fw"
+	case n.Wireless != nil:
+		return "wlc"
+	case n.L2Switching != nil:
+		return "sw"
+	default:
+		return "rtr"
+	}
 }
 
 func generateL2Switching(r *rand.Rand) *L2SwitchingCapability {

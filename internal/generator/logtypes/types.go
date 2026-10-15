@@ -31,7 +31,6 @@ type DefaultLogData struct {
 
 	// Operational context fields
 	ServiceVal       string
-	HostVal          string
 	RequestIDVal     string
 	TraceIDVal       string
 	SpanIDVal        string

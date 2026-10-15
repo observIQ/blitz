@@ -62,11 +62,73 @@ generator's component name (`hostmetrics`, `traces`, `apache`, `nginx`, `wel`,
 …). The mapping is deterministic — the same component always resolves to the
 same host for a given environment — so a component attributes every record it
 emits to one consistent machine, and distinct components spread across the
-fleet.
+fleet. Several entries of one type in a `generators:` list take successive
+hosts (entry 0, entry 1, ...), so two `hostmetrics` entries describe two
+machines while the environment has enough eligible ones.
 
-When no environment is available, generators fall back to the running process's
-`os.Hostname()` (or `blitz` if that fails), exactly as before — so nothing about
-the default output shape changes when the environment is absent.
+### Host-limited generators
+
+A generator is only ever handed a host that could emit its telemetry: the right
+OS and the right role. Selection stays deterministic per environment seed: the
+component name picks among the eligible hosts only.
+
+| Generator      | Eligible hosts                  | Why                                             |
+|----------------|---------------------------------|-------------------------------------------------|
+| `wel`          | Windows; role per `role` (unset: DC, server, or workstation) | Windows Event Log exists only on Windows; the event pool follows the host's role |
+| `kubernetes`   | Linux servers                   | CRI-O container logs come from Linux nodes      |
+| `hostmetrics`  | the configured `os` (unset: linux), any role | it emits that OS's metric set       |
+| `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `json`, `fix`, `traces` | servers that run applications, any OS | server software never runs on a router, workstation, or DC, or on a server whose OS runs no applications |
+| `okta`, `filegen` | any                          | the source is not host-bound                    |
+| `palo-alto`    | a Palo Alto device from `network_systems` | it describes a firewall, not a host (see below) |
+
+Entries of the same generator type get their own hosts, even when their
+requirements differ (`wel` with any role and `wel` `role: dc`). When the random
+fleet has fewer eligible hosts than the entries need (no domain controller for a `wel`
+`role: dc` entry, one macOS host for two `hostmetrics` `os: macos` entries),
+the environment adds the rest, deterministically per seed and after the drawn
+hosts, so the drawn fleet is unchanged and every entry describes a real
+environment host of its own.
+
+### Appliance generators
+
+A generator that describes a network appliance (`palo-alto`) takes a device
+from the environment's `network_systems` instead of a host. Every device has a
+hostname in the form `<vendor>-<role>-NN` (`pa-fw-01`, `f5-lb-01`,
+`cisco-sw-02`), unique within the fleet, and an FQDN in the environment's
+domain (`pa-fw-01.blitz.local`) that a device's syslog header carries. Each
+appliance generator entry gets its own device: when the random fleet holds
+fewer devices of a vendor than the entries need, the environment appends the
+rest, deterministically per seed and without moving any drawn device, so every
+entry describes a real device of its own. PAN-OS devices run an 11.0.x release,
+matching the PAN-OS 11.0 log format the `palo-alto` generator emits.
+The device's hostname is the generator's one name; its resource also carries
+`device.manufacturer`, `device.model.name`, `os.name`/`os.version` (the
+appliance OS, such as PAN-OS), and its management interface as `host.ip` and
+`host.mac`.
+
+A generator resolves one hostname at construction and uses it everywhere: in
+`host.name` and in any hostname it writes inside the message (for example the
+`wel` `<Computer>` element or the `json` `host` field), so they never disagree.
+
+The hostname is resolved in this order:
+
+1. An explicit hostname setting (`wel` `computer`, `hostmetrics` and `traces`
+   `hostname`). It replaces only the resolved host's name; the host's OS, arch,
+   tier and other identity attributes stay.
+2. The environment host's hostname.
+3. With no environment, the generator's own fallback (`BLITZ-WEL` for `wel`, a
+   generated name for `hostmetrics` and `traces`), or the running process's
+   `os.Hostname()` (or `blitz` if that fails) for generators with no hostname
+   setting.
+
+The hostname settings default to empty, so the environment host is used unless
+you set one.
+
+`wel` also follows the host's domain membership, as real Windows does. A
+domain-joined host writes its FQDN in `<Computer>` (`DC01.contoso.local`) and
+its NetBIOS domain as the account domain (`CONTOSO`), while payload fields keep
+the short name. A workgroup host writes its bare name and `WORKGROUP`. A set
+`domain` wins over the host's domain.
 
 > Finer per-worker granularity — one distinct host per worker within a single
 > generator — is a planned opt-in. Today the granularity is one host per
@@ -83,7 +145,7 @@ resolved host's identity, following OpenTelemetry semantic conventions:
 | `host.id`                     | OS-appropriate machine id (machine-id / GUID / UUID)       |
 | `host.arch`                   | CPU architecture (semconv `host.arch` value)               |
 | `os.type`                     | semconv value — macOS is reported as `darwin`              |
-| `os.name`                     | e.g. `Ubuntu`, `Microsoft Windows Server 2022`, `macOS`    |
+| `os.name`                     | e.g. `Ubuntu`, `Microsoft Windows Server 2022`, `macOS`; a domain controller always runs Windows Server |
 | `os.version`                  | e.g. `22.04.5`, `10.0.20348.2762`, `14.6.1`                |
 | `os.build_id`                 | kernel release / Windows build number / macOS build        |
 | `os.description`              | e.g. `Ubuntu 22.04.5 LTS`                                   |
