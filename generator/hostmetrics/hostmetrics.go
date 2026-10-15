@@ -49,10 +49,10 @@ type Config struct {
 	ScraperNames []string
 	// Consumer receives every scraped batch. Required.
 	Consumer embed.MetricConsumer
-	// Seed controls per-worker RNG seeding for scrape values.
-	// Negative → randomize: resolved once in New to time.Now().UnixNano(),
-	// logged as "seed" at Start, then worker N gets that seed+N.
-	// 0 or positive → deterministic (worker N gets seed Seed+N).
+	// Seed seeds the scrape-value RNG.
+	// Negative → randomize: resolved once in New to time.Now().UnixNano()
+	// and logged as "seed" at Start.
+	// 0 or positive → deterministic (the RNG uses Seed as given).
 	//
 	// Programmatic Go callers see the literal value here. The config
 	// layer defaults an omitted `seed:` to -1, so YAML, env, and flag
@@ -194,7 +194,7 @@ func (g *Generator) Start(_ context.Context) error {
 	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, generatorType)
 
 	g.wg.Add(1)
-	go g.worker(0)
+	go g.worker()
 
 	return nil
 }
@@ -227,11 +227,11 @@ func (g *Generator) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Metrics}
 }
 
-func (g *Generator) worker(id int) {
+func (g *Generator) worker() {
 	defer g.wg.Done()
 
 	// g.seed was resolved to a non-negative value in New.
-	seed := g.seed + int64(id)
+	seed := g.seed
 	r := rand.New(rand.NewSource(seed)) // #nosec G404 -- seeded for determinism contract
 
 	ticker := time.NewTicker(g.rate)

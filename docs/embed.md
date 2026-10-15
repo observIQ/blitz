@@ -112,7 +112,6 @@ func main() {
     apacheGen, _ := apache.New(logger, /*workers*/ 1, /*rate*/ time.Second, host.Logs, tel)
     hmGen, _ := hostmetrics.New(hostmetrics.Config{
         Logger:    logger,
-        Workers:   1,
         Rate:      10 * time.Second,
         OS:        "linux",
         Consumer:  host.Metrics,

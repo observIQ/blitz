@@ -7,8 +7,14 @@ package prommap
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"math"
+	"slices"
 	"sort"
 	"strconv"
+	"time"
+
+	"github.com/prometheus/otlptranslator"
 
 	"github.com/observiq/blitz/embed"
 )
@@ -55,9 +61,15 @@ type MetricFamily struct {
 // counter yields one sample; a histogram yields cumulative _bucket series (with
 // le labels, including +Inf), plus _sum and _count.
 func Map(mp embed.MetricPoint) (MetricFamily, error) {
-	base := sanitizeName(mp.Name)
-	labels := sortedLabels(mp.Metadata.Attributes, targetLabels(mp.Metadata.Resource))
-	tsMS := mp.Metadata.Timestamp.UnixMilli()
+	base, err := promName(mp)
+	if err != nil {
+		return MetricFamily{}, err
+	}
+	labels, err := sortedLabels(mp.Metadata.Attributes, targetLabels(mp.Metadata.Resource))
+	if err != nil {
+		return MetricFamily{}, err
+	}
+	tsMS := SampleTime(mp.Metadata.Timestamp).UnixMilli()
 
 	fam := MetricFamily{Help: mp.Description, Unit: mp.Unit}
 
@@ -68,7 +80,7 @@ func Map(mp embed.MetricPoint) (MetricFamily, error) {
 		fam.Samples = []Sample{{Name: base, Labels: labels, Value: scalarValue(mp), TimestampMS: tsMS}}
 	case embed.MetricTypeCounter:
 		fam.Type = TypeCounter
-		fam.Name = withTotal(base)
+		fam.Name = base
 		fam.Samples = []Sample{{Name: fam.Name, Labels: labels, Value: scalarValue(mp), TimestampMS: tsMS}}
 	case embed.MetricTypeHistogram:
 		fam.Type = TypeHistogram
@@ -82,6 +94,27 @@ func Map(mp embed.MetricPoint) (MetricFamily, error) {
 		return MetricFamily{}, fmt.Errorf("prommap: unsupported metric type %q for %q", mp.Type, mp.Name)
 	}
 	return fam, nil
+}
+
+// namer names metrics as the collector's prometheusremotewrite exporter does
+// by default: escaped to underscores, with unit, _total, and _ratio suffixes.
+var namer = otlptranslator.NewMetricNamer("", otlptranslator.UnderscoreEscapingWithSuffixes)
+
+// promTypes are the OTel kinds the namer suffixes by: a Sum is non-monotonic.
+var promTypes = map[embed.MetricType]otlptranslator.MetricType{
+	embed.MetricTypeGauge:     otlptranslator.MetricTypeGauge,
+	embed.MetricTypeSum:       otlptranslator.MetricTypeNonMonotonicCounter,
+	embed.MetricTypeCounter:   otlptranslator.MetricTypeMonotonicCounter,
+	embed.MetricTypeHistogram: otlptranslator.MetricTypeHistogram,
+}
+
+// promName is mp's Prometheus metric name (a histogram's base name).
+func promName(mp embed.MetricPoint) (string, error) {
+	name, err := namer.Build(otlptranslator.Metric{Name: mp.Name, Unit: mp.Unit, Type: promTypes[mp.Type]})
+	if err != nil {
+		return "", fmt.Errorf("prommap: %w", err)
+	}
+	return name, nil
 }
 
 // scalarValue returns the gauge/sum/counter value as a float64, preferring
@@ -118,32 +151,57 @@ func histogramSamples(base string, labels []Label, mp embed.MetricPoint, tsMS in
 			TimestampMS: tsMS,
 		})
 	}
-	// The overflow bucket becomes le="+Inf" and holds the full count.
-	cumulative += counts[len(counts)-1]
+	// le="+Inf" and _count both carry HistogramCount, as the collector does.
 	samples = append(samples,
-		Sample{Name: base + "_bucket", Labels: withLE(labels, "+Inf"), Value: float64(cumulative), TimestampMS: tsMS},
+		Sample{Name: base + "_bucket", Labels: withLE(labels, "+Inf"), Value: float64(mp.HistogramCount), TimestampMS: tsMS},
 		Sample{Name: base + "_sum", Labels: labels, Value: mp.HistogramSum, TimestampMS: tsMS},
-		// _count must equal the +Inf bucket, so derive it from the buckets
-		// rather than trusting HistogramCount to agree.
-		Sample{Name: base + "_count", Labels: labels, Value: float64(cumulative), TimestampMS: tsMS},
+		Sample{Name: base + "_count", Labels: labels, Value: float64(mp.HistogramCount), TimestampMS: tsMS},
 	)
 	return samples, nil
 }
 
-// sortedLabels converts metric attributes to sanitized, name-sorted labels.
-// Target labels (job, instance) win over a same-named attribute.
-func sortedLabels(attrs map[string]string, target []Label) []Label {
+// sortedLabels converts metric attributes to name-sorted labels. Target
+// labels (job, instance) win over a same-named attribute.
+func sortedLabels(attrs map[string]string, target []Label) ([]Label, error) {
 	if len(attrs) == 0 && len(target) == 0 {
-		return nil
+		return nil, nil
 	}
 	byName := make(map[string]string, len(attrs)+len(target))
-	for k, v := range attrs {
-		byName[sanitizeLabelName(k)] = v
+	if err := mergeLabels(byName, attrs); err != nil {
+		return nil, err
 	}
 	for _, l := range target {
 		byName[l.Name] = l.Value
 	}
-	return sortLabels(byName)
+	return sortLabels(byName), nil
+}
+
+// labelNamer names labels as the collector's prometheusremotewrite exporter
+// does by default.
+var labelNamer = otlptranslator.LabelNamer{UnderscoreLabelSanitization: true} //nolint:staticcheck // the exporter's default
+
+// mergeLabels adds attrs to byName as the collector's createAttributes does:
+// keys in sorted order, empty values dropped, and keys that name one label
+// joined with ";".
+func mergeLabels(byName, attrs map[string]string) error {
+	for _, k := range slices.Sorted(maps.Keys(attrs)) {
+		v := attrs[k]
+		if v == "" {
+			continue
+		}
+		name, err := labelNamer.Build(k)
+		if err != nil {
+			return fmt.Errorf("prommap: %w", err)
+		}
+		if old, ok := byName[name]; ok {
+			if old != v {
+				byName[name] = old + ";" + v
+			}
+			continue
+		}
+		byName[name] = v
+	}
+	return nil
 }
 
 func sortLabels(byName map[string]string) []Label {
@@ -165,24 +223,26 @@ const (
 	keyTelemetrySource   = "telemetry.source"
 )
 
-// targetLabels derives job and instance from a resource. It follows the spec
-// (job = [service.namespace/]service.name, instance = service.instance.id)
-// and falls back to telemetry.source and host.name, which blitz generators
-// set in place of service.*. Empty values are omitted.
+// targetLabels derives job and instance from a resource as the collector's
+// remote-write createAttributes does (job = [service.namespace/]service.name,
+// instance = service.instance.id, each only when non-empty; a present
+// service.namespace is prefixed even when empty). When service.name or
+// service.instance.id is absent, it falls back to telemetry.source or
+// host.name, which blitz generators set in place of service.*.
 func targetLabels(res map[string]any) []Label {
 	if len(res) == 0 {
 		return nil
 	}
-	job := resourceString(res, keyServiceName)
-	if ns := resourceString(res, keyServiceNamespace); job != "" && ns != "" {
-		job = ns + "/" + job
+	job := resourceString(res, keyTelemetrySource)
+	if _, ok := res[keyServiceName]; ok {
+		job = resourceString(res, keyServiceName)
+		if _, ok := res[keyServiceNamespace]; ok && job != "" {
+			job = resourceString(res, keyServiceNamespace) + "/" + job
+		}
 	}
-	if job == "" {
-		job = resourceString(res, keyTelemetrySource)
-	}
-	instance := resourceString(res, keyServiceInstanceID)
-	if instance == "" {
-		instance = resourceString(res, keyHostName)
+	instance := resourceString(res, keyHostName)
+	if _, ok := res[keyServiceInstanceID]; ok {
+		instance = resourceString(res, keyServiceInstanceID)
 	}
 	var labels []Label
 	if instance != "" {
@@ -195,20 +255,32 @@ func targetLabels(res map[string]any) []Label {
 }
 
 // TargetInfo builds the target_info series for a point's resource: a gauge
-// of 1 labeled with job, instance, and every other resource attribute. It
-// reports false when the resource yields neither job nor instance.
+// of 1 labeled with job, instance, and every other resource attribute. Like
+// the collector, it reports false when the point has no timestamp, the
+// resource yields neither job nor instance, has nothing beyond the identifying
+// service.* attributes, or has a key no label can name.
 func TargetInfo(mp embed.MetricPoint) (MetricFamily, bool) {
+	if mp.Metadata.Timestamp.IsZero() {
+		return MetricFamily{}, false
+	}
 	target := targetLabels(mp.Metadata.Resource)
 	if len(target) == 0 {
 		return MetricFamily{}, false
 	}
-	byName := make(map[string]string, len(mp.Metadata.Resource)+len(target))
+	attrs := make(map[string]string, len(mp.Metadata.Resource))
 	for k, v := range mp.Metadata.Resource {
 		switch k {
 		case keyServiceName, keyServiceNamespace, keyServiceInstanceID:
 			continue
 		}
-		byName[sanitizeLabelName(k)] = attrString(v)
+		attrs[k] = attrString(v)
+	}
+	if len(attrs) == 0 {
+		return MetricFamily{}, false
+	}
+	byName := make(map[string]string, len(attrs)+len(target))
+	if err := mergeLabels(byName, attrs); err != nil {
+		return MetricFamily{}, false
 	}
 	for _, l := range target {
 		byName[l.Name] = l.Value
@@ -242,7 +314,11 @@ func attrString(v any) string {
 		return t
 	case nil:
 		return ""
-	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+	case float32:
+		return float64AsString(float64(t)) // pcommon has no float32: it widens
+	case float64:
+		return float64AsString(t)
+	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return fmt.Sprint(t)
 	default:
 		b, err := json.Marshal(t)
@@ -260,45 +336,37 @@ func withLE(base []Label, le string) []Label {
 	return append(out, Label{Name: "le", Value: le})
 }
 
-// withTotal appends _total to a counter name unless it is already present.
-func withTotal(name string) string {
-	if len(name) >= len("_total") && name[len(name)-len("_total"):] == "_total" {
-		return name
-	}
-	return name + "_total"
-}
-
-// formatFloat renders a bucket boundary as the shortest round-trippable decimal.
+// formatFloat renders a bucket boundary as the collector does: the shortest
+// round-trippable decimal, never in exponent notation.
 func formatFloat(f float64) string {
-	return strconv.FormatFloat(f, 'g', -1, 64)
+	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
-// sanitizeName maps a name to a valid Prometheus metric name (colons allowed).
-func sanitizeName(s string) string { return sanitize(s, true) }
-
-// sanitizeLabelName maps a key to a valid Prometheus label name (no colons).
-func sanitizeLabelName(s string) string { return sanitize(s, false) }
-
-func sanitize(s string, allowColon bool) string {
-	if s == "" {
-		return s
+// float64AsString is pcommon's float64AsString (pdata v1.56): ES6 number
+// formatting, plain from 1e-6 up to 1e21 and exponent outside that range.
+func float64AsString(f float64) string {
+	if math.IsInf(f, 0) || math.IsNaN(f) {
+		return "json: unsupported value: " + strconv.FormatFloat(f, 'g', -1, 64)
 	}
-	out := make([]byte, 0, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c == '_':
-			out = append(out, c)
-		case c == ':' && allowColon:
-			out = append(out, c)
-		case c >= '0' && c <= '9':
-			if i == 0 {
-				out = append(out, '_')
-			}
-			out = append(out, c)
-		default:
-			out = append(out, '_')
-		}
+	format := byte('f')
+	if abs := math.Abs(f); abs != 0 && (abs < 1e-6 || abs >= 1e21) {
+		format = 'e'
 	}
-	return string(out)
+	b := strconv.AppendFloat(nil, f, format, -1, 64)
+	// Trim the exponent's leading zero: e-09 becomes e-9.
+	if n := len(b); format == 'e' && n >= 4 && b[n-4] == 'e' && b[n-3] == '-' && b[n-2] == '0' {
+		b[n-2] = b[n-1]
+		b = b[:n-1]
+	}
+	return string(b)
+}
+
+// SampleTime is the time a point's samples carry. A point with no timestamp
+// is stamped at the Unix epoch, as the collector stamps an unset OTLP
+// timestamp, instead of at year 1.
+func SampleTime(t time.Time) time.Time {
+	if t.IsZero() {
+		return time.Unix(0, 0)
+	}
+	return t
 }

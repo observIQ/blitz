@@ -26,12 +26,12 @@ type HostMetricsGeneratorConfig struct {
 	Hostname string `yaml:"hostname,omitempty" mapstructure:"hostname,omitempty"`
 	// Scrapers is the list of scrapers to enable. If empty, all scrapers are enabled.
 	Scrapers []string `yaml:"scrapers,omitempty" mapstructure:"scrapers,omitempty"`
-	// Seed seeds scrape values per the contract in docs/datagen.md:
+	// Seed seeds the scrape-value RNG per the contract in docs/datagen.md:
 	// negative randomizes (the resolved seed is logged), 0 or positive is
-	// deterministic (worker N uses Seed+N), and an omitted key defaults to
-	// -1. Host identity is not governed by this seed: the loaders always
-	// build the simulated environment, which picks the host from
-	// `environment.seed_config`.
+	// deterministic (the RNG uses Seed as given), and an omitted key
+	// defaults to -1. Host identity is not governed by this seed: the
+	// loaders always build the simulated environment, which picks the host
+	// from `environment.seed_config`.
 	Seed int64 `yaml:"seed,omitempty" mapstructure:"seed,omitempty"`
 }
 

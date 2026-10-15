@@ -42,6 +42,8 @@ func (o *Override) Bind(flags *pflag.FlagSet) error {
 	flag := o.createFlag(flags)
 	if o.Deprecated != "" {
 		if err := flags.MarkDeprecated(o.Flag, o.Deprecated); err != nil {
+			// Safety net: it fails only for an unknown flag or empty message,
+			// and the flag was just created with a non-empty one.
 			return err
 		}
 	}

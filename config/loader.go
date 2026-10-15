@@ -187,6 +187,7 @@ func LoadModules(yamlBytes []byte, opts EmbedOpts) ([]embed.ProducerModule, erro
 	if err != nil {
 		return nil, err
 	}
+	internalconfig.LogRemovedSettings(logger, cfg)
 	gens := cfg.EffectiveGenerators()
 
 	// Resolve the simulated identity environment once for the whole config, so

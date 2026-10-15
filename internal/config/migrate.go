@@ -130,7 +130,13 @@ func LogRemovedSettings(logger *zap.Logger, cfg *Config) {
 	if logger == nil || cfg == nil {
 		return
 	}
-	for _, g := range cfg.EffectiveGenerators() {
+	// The configured entries, not EffectiveGenerators: an entry with several
+	// OSes is one setting, so it warns once.
+	gens := cfg.Generators
+	if len(gens) == 0 {
+		gens = []Generator{cfg.Generator}
+	}
+	for _, g := range gens {
 		if g.Type == GeneratorTypeHostMetrics && g.HostMetrics.Workers != 0 {
 			logger.Warn(HostMetricsWorkersRemoved)
 		}
