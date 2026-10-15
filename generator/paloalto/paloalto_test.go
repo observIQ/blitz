@@ -3,6 +3,8 @@ package paloalto
 import (
 	"context"
 	"errors"
+	mrand "math/rand"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -220,7 +222,7 @@ func TestGeneratePaloAltoLog_Format(t *testing.T) {
 	// Generate multiple logs to test variety
 	logs := make([]string, 100)
 	for i := range 100 {
-		logs[i] = generatePaloAltoLog()
+		logs[i], _ = generatePaloAltoLog(fallbackDevice())
 	}
 
 	// Verify all logs have expected format
@@ -228,8 +230,8 @@ func TestGeneratePaloAltoLog_Format(t *testing.T) {
 		// Should start with timestamp (no priority tag in new format)
 		assert.True(t, len(log) > 0, "Log should not be empty")
 		assert.Contains(t, log, "1,", "Log should contain log type indicator")
-		// Should contain a timestamp in format like "Nov 06 15:39:29"
-		assert.Regexp(t, `^[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2}`, log, "Log should start with timestamp")
+		// Should start with a BSD timestamp like "Nov  6 15:39:29" and the host
+		assert.Regexp(t, `^[A-Z][a-z]{2} [ 1-3]\d \d{2}:\d{2}:\d{2} PA-VM 1,`, log, "Log should start with timestamp and hostname")
 	}
 
 	// Verify we get different log types
@@ -257,35 +259,6 @@ func TestGenerateRandomIP(t *testing.T) {
 	}
 	// Should generate some variety
 	assert.Greater(t, len(ips), 1, "Should generate different IPs")
-}
-
-func TestGenerateRandomPort(t *testing.T) {
-	ports := make(map[string]bool)
-	for range 100 {
-		port := generateRandomPort()
-		// Port should be a valid string representation of a number
-		assert.NotEmpty(t, port, "Port should not be empty")
-		ports[port] = true
-	}
-	// Should generate some variety
-	assert.Greater(t, len(ports), 1, "Should generate different ports")
-}
-
-func TestGenerateRandomSessionID(t *testing.T) {
-	sessionIDs := make(map[string]bool)
-	for range 100 {
-		sessionID := generateRandomSessionID()
-		// Session ID should be 12 characters (6 bytes hex encoded)
-		assert.Equal(t, 12, len(sessionID), "Session ID should be 12 characters")
-		// Should be uppercase hex
-		for _, char := range sessionID {
-			assert.True(t, (char >= '0' && char <= '9') || (char >= 'A' && char <= 'F'),
-				"Session ID should contain only hex characters")
-		}
-		sessionIDs[sessionID] = true
-	}
-	// Should generate unique session IDs
-	assert.Greater(t, len(sessionIDs), 1, "Should generate different session IDs")
 }
 
 func TestGenerator_MultipleStartStop(t *testing.T) {
@@ -382,4 +355,85 @@ func TestGenerator_CountLimited(t *testing.T) {
 
 	writes := writer.getWrites()
 	assert.Equal(t, 5, len(writes), "Expected exactly 5 logs with count tracker")
+}
+
+// zeroSource is a math/rand source that always yields 0, so every draw from it
+// is the same no matter how many other goroutines draw too.
+type zeroSource struct{}
+
+func (zeroSource) Int63() int64 { return 0 }
+func (zeroSource) Seed(int64)   {}
+
+// TestAddressDrawsShareOneSource pins that every address draw comes from the
+// shared addrRand source, rather than a fresh math/rand source per call.
+func TestAddressDrawsShareOneSource(t *testing.T) {
+	addrRand.mu.Lock()
+	orig := addrRand.r
+	addrRand.r = mrand.New(zeroSource{}) // #nosec G404 -- test source
+	addrRand.mu.Unlock()
+	t.Cleanup(func() {
+		addrRand.mu.Lock()
+		addrRand.r = orig
+		addrRand.mu.Unlock()
+	})
+
+	for name, tc := range map[string]struct {
+		draw func() string
+		want string
+	}{
+		"public":  {generatePublicIP, "1.0.0.1"},
+		"private": {generatePrivateIP, "10.0.0.1"},
+		"random":  {generateRandomIP, "10.0.0.1"},
+	} {
+		for range 3 {
+			assert.Equal(t, tc.want, tc.draw(), name)
+		}
+	}
+}
+
+// TestSourceUserFollowsTheHostMapping pins the capture's User-ID behavior: a
+// source address's user comes from the device's mapping for that address, so
+// every record from one host, THREAT included, names the same user, and a
+// User-ID record for the host names it too.
+func TestSourceUserFollowsTheHostMapping(t *testing.T) {
+	addrRand.mu.Lock()
+	orig := addrRand.r
+	addrRand.r = mrand.New(zeroSource{}) // #nosec G404 -- test source: every private draw is 10.0.0.1
+	addrRand.mu.Unlock()
+	t.Cleanup(func() {
+		addrRand.mu.Lock()
+		addrRand.r = orig
+		addrRand.mu.Unlock()
+	})
+
+	dev := newDevice("pa-fw-01", generateSerial())
+	users := map[string]bool{}
+	for _, lt := range []string{"TRAFFIC", "THREAT", "DECRYPTION", "USERID"} {
+		field := "Source User"
+		if lt == "USERID" {
+			field = "User"
+		}
+		for range 30 {
+			rec := buildLogFields(lt, dev)
+			require.Equal(t, "10.0.0.1", rec[indexOf(logFieldNames[lt], map[bool]string{true: "Source IP", false: "Source Address"}[lt == "USERID"])], lt)
+			users[rec[indexOf(logFieldNames[lt], field)]] = true
+		}
+	}
+	require.Len(t, users, 1, "one host maps to one user: %v", users)
+	require.False(t, users[""], "the host is mapped")
+}
+
+// TestUserForIsStablePerHostAndVariesAcrossHosts pins userFor's mapping: one
+// address always maps to one user, and addresses across a subnet map to every
+// kind of user (two domain users and the bare GlobalProtect-style one).
+func TestUserForIsStablePerHostAndVariesAcrossHosts(t *testing.T) {
+	dev := newDevice("pa-fw-01", generateSerial())
+	seen := map[string]bool{}
+	for i := 1; i <= 254; i++ {
+		addr := "10.0.0." + strconv.Itoa(i)
+		u := dev.userFor(addr)
+		require.Equal(t, u, dev.userFor(addr), addr)
+		seen[u] = true
+	}
+	require.Equal(t, map[string]bool{`corp\jdoe`: true, `corp\asmith`: true, "jdoe": true}, seen)
 }
