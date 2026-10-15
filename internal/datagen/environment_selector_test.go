@@ -41,3 +41,28 @@ func TestEnvironmentSystemForKey(t *testing.T) {
 		t.Error("SystemForKey on an empty environment should return nil")
 	}
 }
+
+func TestEnvironmentSystemForRequirement(t *testing.T) {
+	env := &Environment{Systems: []*SystemIdentity{
+		{Hostname: "lin-a", OSInfo: OSInfo{Type: OSLinux}},
+		{Hostname: "win-a", OSInfo: OSInfo{Type: OSWindows}},
+		{Hostname: "lin-b", OSInfo: OSInfo{Type: OSLinux}},
+		{Hostname: "win-b", OSInfo: OSInfo{Type: OSWindows}},
+	}}
+
+	for _, key := range []string{"wel", "hostmetrics", "kubernetes", "json", "x", "y", "z"} {
+		got := env.SystemFor(key, 0, HostRequirement{OS: OSWindows})
+		if got == nil || got.OSInfo.Type != OSWindows {
+			t.Fatalf("SystemFor(%q, windows) = %+v, want a windows system", key, got)
+		}
+		if env.SystemFor(key, 0, HostRequirement{OS: OSWindows}) != got {
+			t.Fatalf("SystemFor(%q, windows) is not deterministic", key)
+		}
+	}
+	if got := env.SystemFor("wel", 0, HostRequirement{OS: OSMacOS}); got != nil {
+		t.Errorf("SystemFor with no eligible system = %+v, want nil", got)
+	}
+	if env.SystemFor("k", 0, HostRequirement{}) != env.SystemForKey("k") {
+		t.Error("zero requirement must match SystemForKey")
+	}
+}

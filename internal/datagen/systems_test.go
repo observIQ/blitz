@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestOSTypes(t *testing.T) {
@@ -210,5 +212,45 @@ func TestSystemResourceRanges(t *testing.T) {
 				t.Errorf("role %s: DiskGB %d out of [%d,%d]", role, sys.DiskGB, spec.minDisk, spec.maxDisk)
 			}
 		}
+	}
+}
+
+func TestWithHostname(t *testing.T) {
+	orig := &SystemIdentity{
+		Hostname: "ORIG",
+		FQDN:     "orig.contoso.com",
+		Domain:   "contoso.com",
+		HostID:   "id-1",
+		OSInfo:   OSInfo{Type: OSWindows},
+		Cert:     &CertInfo{SubjectCN: "orig.contoso.com", SANs: []string{"orig.contoso.com", "ORIG"}},
+	}
+
+	got := orig.WithHostname("NEW-01")
+	assert.Equal(t, "NEW-01", got.Hostname)
+	// Windows keeps the host part's case in its DNS name, e.g.
+	// WIN-GG82ULGC9GO.contoso.local in Microsoft's 4688 sample.
+	assert.Equal(t, "NEW-01.contoso.com", got.FQDN)
+	assert.Equal(t, "NEW-01.contoso.com", got.Cert.SubjectCN)
+	assert.Equal(t, []string{"NEW-01.contoso.com", "NEW-01"}, got.Cert.SANs)
+	assert.Equal(t, "orig.contoso.com", orig.Cert.SubjectCN, "receiver cert must not be mutated")
+	assert.Equal(t, "id-1", got.HostID)
+	assert.Equal(t, OSWindows, got.OSInfo.Type)
+	assert.Equal(t, "ORIG", orig.Hostname, "receiver must not be mutated")
+	assert.Equal(t, "orig.contoso.com", orig.FQDN)
+
+	assert.Same(t, orig, orig.WithHostname(""))
+
+	var none *SystemIdentity
+	assert.Nil(t, none.WithHostname(""))
+	assert.Equal(t, &SystemIdentity{Hostname: "NEW-01"}, none.WithHostname("NEW-01"))
+}
+
+// TestWithHostnameWithoutDomain pins that a workgroup host's FQDN and cert
+// follow a new hostname too, rather than keeping the old name.
+func TestWithHostnameWithoutDomain(t *testing.T) {
+	s := &SystemIdentity{Hostname: "old", FQDN: "old", Cert: &CertInfo{SubjectCN: "old", SANs: []string{"old"}}}
+	c := s.WithHostname("new")
+	if c.FQDN != "new" || c.Cert.SubjectCN != "new" || c.Cert.SANs[0] != "new" {
+		t.Fatalf("FQDN %q, SubjectCN %q, SANs %v still name the old host", c.FQDN, c.Cert.SubjectCN, c.Cert.SANs)
 	}
 }

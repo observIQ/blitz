@@ -221,3 +221,56 @@ func TestRandomDefaultsRFC3164(t *testing.T) {
 		t.Fatalf("expected RFC3164 tag separator ': ' in message: %q", stub.lastWrite)
 	}
 }
+
+// TestHostnameFollowsTheRecord pins that with no configured hostname the
+// header names the record's host (its host.name), in both RFC modes, so one
+// generator's records all come from one host.
+func TestHostnameFollowsTheRecord(t *testing.T) {
+	for _, mode := range []RFCMode{RFC3164Mode, RFC5424Mode} {
+		stub := &stubOutput{}
+		s := newWithTransport(zaptest.NewLogger(t), Config{Transport: TransportUDP, RFC: mode, Facility: 1, AppName: "app", ProcID: "1", MsgID: "id"}, stub)
+		for i := 0; i < 3; i++ {
+			if err := s.Write(context.Background(), output.LogRecord{Message: "hi", Metadata: output.LogRecordMetadata{
+				Timestamp: time.Now(), Resource: map[string]any{"host.name": "web-01"}}}); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(stub.lastWrite, " web-01 ") {
+				t.Fatalf("%s header does not name the record's host: %q", mode, stub.lastWrite)
+			}
+		}
+	}
+}
+
+// TestSyslogFramedRecordsKeepTheirFrame pins that a record whose message is
+// already a syslog line (a device's own BSD header) is sent as written: a
+// PRI is added when the line has none, and nothing else.
+func TestSyslogFramedRecordsKeepTheirFrame(t *testing.T) {
+	stub := &stubOutput{}
+	s := newWithTransport(zaptest.NewLogger(t), Config{Transport: TransportUDP, RFC: RFC5424Mode, Facility: 1, Hostname: "host", AppName: "app"}, stub)
+	write := func(msg string) string {
+		if err := s.Write(context.Background(), output.LogRecord{Message: msg, Metadata: output.LogRecordMetadata{
+			Timestamp: time.Now(), Severity: "info", SyslogFramed: true}}); err != nil {
+			t.Fatal(err)
+		}
+		return stub.lastWrite
+	}
+	if got := write("Sep 30 16:18:12 pa-fw-01.blitz.local 1,2026/09/30 16:18:12,013201001234,SYSTEM"); got != "<14>Sep 30 16:18:12 pa-fw-01.blitz.local 1,2026/09/30 16:18:12,013201001234,SYSTEM" {
+		t.Fatalf("frame without PRI: %q", got)
+	}
+	if got := write("<134>Sep 29 10:10:46 bigip1 info tmm1[34750]: GET /"); got != "<134>Sep 29 10:10:46 bigip1 info tmm1[34750]: GET /" {
+		t.Fatalf("frame with PRI: %q", got)
+	}
+}
+
+// TestHasPRIFollowsRFC5424 pins the PRI grammar: 1-3 digits, 0-191, with no
+// leading zero (except PRI 0 itself) and no sign.
+func TestHasPRIFollowsRFC5424(t *testing.T) {
+	for msg, want := range map[string]bool{
+		"<0>x": true, "<14>x": true, "<191>x": true,
+		"<01>x": false, "<+1>x": false, "<-1>x": false, "<192>x": false, "<>x": false, "14>x": false, "<1a>x": false,
+	} {
+		if got := hasPRI(msg); got != want {
+			t.Errorf("hasPRI(%q) = %v, want %v", msg, got, want)
+		}
+	}
+}

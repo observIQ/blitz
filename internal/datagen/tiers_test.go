@@ -21,14 +21,15 @@ func TestGenerateSystems_Tiers(t *testing.T) {
 	}
 
 	counts := map[DeploymentTier]int{}
-	prodWindows := map[OSInfo]struct{}{}
+	// Prod Windows releases, keyed by whether the host is a domain controller.
+	prodWindows := map[bool]map[OSInfo]struct{}{false: {}, true: {}}
 	for _, s := range env.Systems {
 		if s.Tier == "" {
 			t.Fatal("system has no deployment tier assigned")
 		}
 		counts[s.Tier]++
 		if s.Tier == TierProd && s.OSInfo.Type == OSWindows {
-			prodWindows[s.OSInfo] = struct{}{}
+			prodWindows[s.Role == RoleDC][s.OSInfo] = struct{}{}
 		}
 	}
 
@@ -42,11 +43,11 @@ func TestGenerateSystems_Tiers(t *testing.T) {
 	if counts[TierProd] <= counts[TierStaging] {
 		t.Errorf("prod (%d) should dominate staging (%d)", counts[TierProd], counts[TierStaging])
 	}
-	// Prod Windows hosts are pinned to a single OS release (uniform fleet).
-	if len(prodWindows) > 1 {
-		t.Errorf("prod Windows hosts should share one release, got %d distinct", len(prodWindows))
-	}
-	if len(prodWindows) == 0 {
-		t.Error("expected at least one prod Windows host in a fleet of 300")
+	// Prod Windows hosts are pinned to a single OS release (uniform fleet),
+	// one for domain controllers (Windows Server) and one for the rest.
+	for dc, releases := range prodWindows {
+		if len(releases) != 1 {
+			t.Errorf("prod Windows hosts (domain controllers: %v) should share one release, got %d distinct", dc, len(releases))
+		}
 	}
 }

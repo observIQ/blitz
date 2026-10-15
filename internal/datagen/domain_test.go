@@ -132,3 +132,17 @@ func TestDomainToDC(t *testing.T) {
 		}
 	}
 }
+
+// TestNetBIOSDomainName pins the pre-Windows 2000 name Windows derives: the
+// first DNS label, uppercased and cut to NetBIOS's 15 characters.
+func TestNetBIOSDomainName(t *testing.T) {
+	for in, want := range map[string]string{
+		"contoso.local":           "CONTOSO",
+		"corporateholdings.local": "CORPORATEHOLDIN",
+		"workgroup":               "WORKGROUP",
+	} {
+		if got := NetBIOSDomainName(in); got != want {
+			t.Errorf("NetBIOSDomainName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package datagen
 
 import (
 	"math/rand"
+	"strings"
 	"testing"
 )
 
@@ -91,5 +92,17 @@ func TestGenerateApplianceOS_VendorCoherence(t *testing.T) {
 	}
 	if os.Family == FamilyBIGIP {
 		t.Error("NimbleOS family drifted to BIG-IP")
+	}
+}
+
+// TestPANOSVersionsAre11_0 pins PAN-OS appliances to 11.0.x releases: the
+// palo-alto generator emits the PAN-OS 11.0 field set, so a device must not
+// claim a release whose log format differs.
+func TestPANOSVersionsAre11_0(t *testing.T) {
+	for seed := int64(0); seed < 100; seed++ {
+		v := GenerateApplianceOS(rand.New(rand.NewSource(seed)), FamilyPANOS).Version // #nosec G404 -- test
+		if !strings.HasPrefix(v, "11.0.") {
+			t.Fatalf("seed %d: PAN-OS version %s is not 11.0.x", seed, v)
+		}
 	}
 }

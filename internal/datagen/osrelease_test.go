@@ -10,7 +10,7 @@ import (
 func TestGenerateOSInfo_Coherent(t *testing.T) {
 	for _, os := range []OSType{OSLinux, OSWindows, OSMacOS} {
 		r := rand.New(rand.NewSource(1)) // #nosec G404
-		info := GenerateOSInfo(r, os)
+		info := GenerateOSInfo(r, os, RoleServer)
 		if info.Type != os {
 			t.Errorf("%s: Type = %q, want %q", os, info.Type, os)
 		}
@@ -21,8 +21,8 @@ func TestGenerateOSInfo_Coherent(t *testing.T) {
 }
 
 func TestGenerateOSInfo_Deterministic(t *testing.T) {
-	a := GenerateOSInfo(rand.New(rand.NewSource(7)), OSWindows) // #nosec G404
-	b := GenerateOSInfo(rand.New(rand.NewSource(7)), OSWindows) // #nosec G404
+	a := GenerateOSInfo(rand.New(rand.NewSource(7)), OSWindows, RoleServer) // #nosec G404
+	b := GenerateOSInfo(rand.New(rand.NewSource(7)), OSWindows, RoleServer) // #nosec G404
 	if a != b {
 		t.Errorf("GenerateOSInfo not deterministic: %+v vs %+v", a, b)
 	}
@@ -31,7 +31,7 @@ func TestGenerateOSInfo_Deterministic(t *testing.T) {
 func TestGenerateOSInfo_WindowsUBR(t *testing.T) {
 	// Windows os.description is the ver-string carrying a real UBR, and
 	// os.build_id is the bare build number.
-	info := GenerateOSInfo(rand.New(rand.NewSource(3)), OSWindows) // #nosec G404
+	info := GenerateOSInfo(rand.New(rand.NewSource(3)), OSWindows, RoleServer) // #nosec G404
 	if !strings.HasPrefix(info.Description, "Microsoft Windows [Version 10.0.") {
 		t.Errorf("Windows description = %q, want ver-string form", info.Description)
 	}
@@ -45,7 +45,7 @@ func TestGenerateOSInfo_WindowsUBR(t *testing.T) {
 }
 
 func TestGenerateOSInfo_MacOS(t *testing.T) {
-	info := GenerateOSInfo(rand.New(rand.NewSource(2)), OSMacOS) // #nosec G404
+	info := GenerateOSInfo(rand.New(rand.NewSource(2)), OSMacOS, RoleWorkstation) // #nosec G404
 	if info.Name != "macOS" {
 		t.Errorf("macOS name = %q, want macOS", info.Name)
 	}

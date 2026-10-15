@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/observiq/blitz/config"
 	"github.com/observiq/blitz/embed"
@@ -245,4 +246,53 @@ metrics:
 	mods, err := config.LoadModules(yaml, config.EmbedOpts{LogConsumer: &mockConsumer{}})
 	require.Error(t, err)
 	assert.Nil(t, mods, "must not return a partial module slice on error")
+}
+
+type recordingConsumer struct {
+	mu   sync.Mutex
+	recs []embed.LogRecord
+}
+
+func (r *recordingConsumer) ConsumeLogs(_ context.Context, recs []embed.LogRecord) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.recs = append(r.recs, recs...)
+	return nil
+}
+
+func (r *recordingConsumer) first() (embed.LogRecord, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.recs) == 0 {
+		return embed.LogRecord{}, false
+	}
+	return r.recs[0], true
+}
+
+// TestLoadModules_PaloAltoGetsEnvironmentFirewall pins the embedded path end
+// to end: the environment is built to hold a Palo Alto device, and the
+// generator describes it.
+func TestLoadModules_PaloAltoGetsEnvironmentFirewall(t *testing.T) {
+	yaml := []byte(`
+generator:
+  type: palo-alto
+  palo-alto:
+    workers: 1
+    rate: 10ms
+output:
+  type: nop
+logging:
+  type: stdout
+metrics:
+  port: 19000
+`)
+	cons := &recordingConsumer{}
+	mods, err := config.LoadModules(yaml, config.EmbedOpts{LogConsumer: cons})
+	require.NoError(t, err)
+	require.Len(t, mods, 1)
+	require.NoError(t, mods[0].Start(context.Background()))
+	require.Eventually(t, func() bool { _, ok := cons.first(); return ok }, 5*time.Second, 10*time.Millisecond)
+	require.NoError(t, mods[0].Stop(context.Background()))
+	rec, _ := cons.first()
+	assert.Regexp(t, `^pa-fw-\d{2}$`, rec.Metadata.Resource["host.name"])
 }

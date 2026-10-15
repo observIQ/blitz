@@ -108,3 +108,9 @@ func TestRandomNetworkSystemIdentity_Deterministic(t *testing.T) {
 		t.Errorf("RandomNetworkSystemIdentity produced invalid system: %v", err)
 	}
 }
+
+func TestApplianceVendorShortFallsBackToNet(t *testing.T) {
+	if got := applianceVendorShort(ApplianceVendor("unlisted")); got != "net" {
+		t.Fatalf("applianceVendorShort(unlisted) = %q, want net", got)
+	}
+}

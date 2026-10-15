@@ -54,7 +54,7 @@ func TestEnvironmentConfig_Build_RejectsInvalidNetworkCIDR(t *testing.T) {
 		}, nil
 	}
 
-	_, err := EnvironmentConfig{}.Build(zap.NewNop())
+	_, err := EnvironmentConfig{}.Build(zap.NewNop(), nil, nil)
 	if err == nil {
 		t.Fatal("Build with an invalid network CIDR should fail, got nil")
 	}
@@ -73,7 +73,7 @@ func TestEnvironmentConfig_Build_PropagatesGenerateError(t *testing.T) {
 		return nil, sentinel
 	}
 
-	_, err := EnvironmentConfig{}.Build(zap.NewNop())
+	_, err := EnvironmentConfig{}.Build(zap.NewNop(), nil, nil)
 	if !errors.Is(err, sentinel) {
 		t.Errorf("Build error = %v, want the sentinel generation error", err)
 	}
@@ -84,7 +84,7 @@ func TestEnvironmentConfig_Build_Counts(t *testing.T) {
 		SeedConfig: EnvironmentSeedConfig{Shared: i64(42)},
 		Counts:     EnvironmentCounts{Systems: 3, StorageSystems: 2, NetworkSystems: 4},
 	}
-	env, err := cfg.Build(zap.NewNop())
+	env, err := cfg.Build(zap.NewNop(), nil, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -113,11 +113,11 @@ func TestEnvironmentConfig_Build_DeterministicIncludingSeedZero(t *testing.T) {
 		},
 		Counts: EnvironmentCounts{Systems: 2, StorageSystems: 1, NetworkSystems: 1},
 	}
-	a, err := cfg.Build(zap.NewNop())
+	a, err := cfg.Build(zap.NewNop(), nil, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	b, err := cfg.Build(zap.NewNop())
+	b, err := cfg.Build(zap.NewNop(), nil, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestEnvironmentConfig_Build_DeterministicIncludingSeedZero(t *testing.T) {
 }
 
 func TestEnvironmentConfig_Build_NilLoggerNoPanic(t *testing.T) {
-	env, err := EnvironmentConfig{Counts: EnvironmentCounts{Systems: 1}}.Build(nil)
+	env, err := EnvironmentConfig{Counts: EnvironmentCounts{Systems: 1}}.Build(nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Build(nil logger): %v", err)
 	}
