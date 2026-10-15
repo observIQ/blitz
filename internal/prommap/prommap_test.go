@@ -40,13 +40,13 @@ func TestMap_Gauge(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "system_cpu_utilization", fam.Name)
+	assert.Equal(t, "system_cpu_utilization_ratio", fam.Name)
 	assert.Equal(t, TypeGauge, fam.Type)
 	assert.Equal(t, "CPU utilization", fam.Help)
 	assert.Equal(t, "1", fam.Unit)
 	require.Len(t, fam.Samples, 1)
 	s := fam.Samples[0]
-	assert.Equal(t, "system_cpu_utilization", s.Name)
+	assert.Equal(t, "system_cpu_utilization_ratio", s.Name)
 	assert.Equal(t, 0.5, s.Value)
 	assert.Equal(t, tsMS, s.TimestampMS)
 	// Labels sorted by name.
@@ -129,7 +129,7 @@ func TestMap_Histogram(t *testing.T) {
 	assert.Equal(t, 6.0, le("1").Value)     // 1+2+3
 	assert.Equal(t, 10.0, le("+Inf").Value) // 1+2+3+4
 
-	// le buckets carry the base labels too, sorted (le sorts after route).
+	// le buckets carry the base labels too, with le appended last.
 	assert.Equal(t, []Label{{"route", "/x"}, {"le", "0.1"}}, le("0.1").Labels)
 
 	assert.Equal(t, 3.3, find(t, fam, "request_duration_sum").Value)
@@ -164,7 +164,7 @@ func TestMap_NameAndLabelSanitization(t *testing.T) {
 		got[l.Name] = l.Value
 	}
 	assert.Equal(t, "GET", got["http_method"], "dotted label name sanitized")
-	assert.Equal(t, "x", got["_1bad"], "label name starting with a digit gets a leading underscore")
+	assert.Equal(t, "x", got["key_1bad"], "label name starting with a digit gets a key_ prefix, as the collector's LabelNamer does")
 }
 
 func TestMap_Deterministic(t *testing.T) {
@@ -183,4 +183,98 @@ func TestMap_Deterministic(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, a, b)
 	assert.Equal(t, []Label{{"a", "1"}, {"b", "2"}, {"c", "3"}}, a.Samples[0].Labels)
+}
+
+// TestMap_NamesFollowTheCollector pins metric names to the collector's
+// prometheusremotewrite exporter default (otlptranslator
+// UnderscoreEscapingWithSuffixes): a unit suffix, _total on counters, and
+// _ratio on unit-1 gauges.
+func TestMap_NamesFollowTheCollector(t *testing.T) {
+	for _, tc := range []struct {
+		name, unit string
+		typ        embed.MetricType
+		want       string
+	}{
+		{"system.cpu.time", "s", embed.MetricTypeCounter, "system_cpu_time_seconds_total"},
+		{"system.memory.usage", "By", embed.MetricTypeSum, "system_memory_usage_bytes"},
+		{"system.cpu.utilization", "1", embed.MetricTypeGauge, "system_cpu_utilization_ratio"},
+		{"system.disk.operations", "{operations}", embed.MetricTypeCounter, "system_disk_operations_total"},
+		{"system.network.io", "By/s", embed.MetricTypeGauge, "system_network_io_bytes_per_second"},
+	} {
+		fam, err := Map(embed.MetricPoint{Name: tc.name, Unit: tc.unit, Type: tc.typ, DoubleValue: f64(1), Metadata: embed.MetricPointMetadata{Timestamp: ts()}})
+		require.NoError(t, err)
+		assert.Equal(t, tc.want, fam.Name, "%s (%s)", tc.name, tc.unit)
+		assert.Equal(t, tc.want, fam.Samples[0].Name)
+	}
+
+	h, err := Map(embed.MetricPoint{
+		Name: "http.server.duration", Unit: "ms", Type: embed.MetricTypeHistogram,
+		HistogramBucketBounds: []float64{10}, HistogramBucketCounts: []uint64{1, 1},
+		Metadata: embed.MetricPointMetadata{Timestamp: ts()},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "http_server_duration_milliseconds", h.Name)
+	find(t, h, "http_server_duration_milliseconds_bucket")
+	find(t, h, "http_server_duration_milliseconds_count")
+}
+
+// TestMap_LabelsFollowTheCollector pins attribute-to-label mapping to the
+// collector's prometheusremotewrite createAttributes: keys are taken in sorted
+// order, keys that sanitize to one name join their distinct values with ";",
+// a leading digit or single underscore gets a "key" prefix, and empty values
+// are dropped.
+func TestMap_LabelsFollowTheCollector(t *testing.T) {
+	for range 50 {
+		fam, err := Map(embed.MetricPoint{
+			Name:        "m",
+			Type:        embed.MetricTypeGauge,
+			DoubleValue: f64(1),
+			Metadata: embed.MetricPointMetadata{
+				Timestamp: ts(),
+				Attributes: map[string]string{
+					"a.b": "1", "a_b": "2", "c.d": "3", "c_d": "3",
+					"1st": "x", "_hidden": "y", "empty": "",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, []Label{{"a_b", "1;2"}, {"c_d", "3"}, {"key_1st", "x"}, {"key_hidden", "y"}}, fam.Samples[0].Labels)
+	}
+}
+
+// TestMap_BucketBoundsUseFixedNotation pins le values to the collector's
+// FormatFloat(bound, 'f', -1, 64): no exponent notation.
+func TestMap_BucketBoundsUseFixedNotation(t *testing.T) {
+	fam, err := Map(embed.MetricPoint{
+		Name:                  "m",
+		Type:                  embed.MetricTypeHistogram,
+		HistogramBucketBounds: []float64{0.00001, 1000000},
+		HistogramBucketCounts: []uint64{1, 1, 1},
+		Metadata:              embed.MetricPointMetadata{Timestamp: ts()},
+	})
+	require.NoError(t, err)
+	var les []string
+	for _, s := range fam.Samples {
+		for _, l := range s.Labels {
+			if l.Name == "le" {
+				les = append(les, l.Value)
+			}
+		}
+	}
+	assert.Equal(t, []string{"0.00001", "1000000", "+Inf"}, les)
+}
+
+// A point with no timestamp is stamped at the Unix epoch, as the collector
+// stamps an unset OTLP timestamp, not at year 1, and yields no target_info
+// (prometheusremotewrite skips it when the timestamp is 0).
+func TestMap_ZeroTimestampIsEpoch(t *testing.T) {
+	mp := embed.MetricPoint{Name: "g", Type: embed.MetricTypeGauge,
+		Metadata: embed.MetricPointMetadata{Resource: map[string]any{"service.name": "s", "k": "v"}}}
+	fam, err := Map(mp)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), fam.Samples[0].TimestampMS)
+	_, ok := TargetInfo(mp)
+	assert.False(t, ok, "the collector sends no target_info for a point with no timestamp")
+	assert.Equal(t, time.Unix(0, 0), SampleTime(time.Time{}))
+	assert.Equal(t, ts(), SampleTime(ts()))
 }

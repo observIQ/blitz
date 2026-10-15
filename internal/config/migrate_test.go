@@ -255,12 +255,14 @@ func TestLogRemovedSettings_GeneratorsList(t *testing.T) {
 		Generators: []config.Generator{
 			{Type: config.GeneratorTypeHostMetrics, HostMetrics: config.HostMetricsGeneratorConfig{Workers: 2, Rate: time.Second}},
 			{Type: config.GeneratorTypeHostMetrics, HostMetrics: config.HostMetricsGeneratorConfig{Rate: time.Second}},
+			// One entry with two OSes is still one entry: one Warn.
+			{Type: config.GeneratorTypeHostMetrics, HostMetrics: config.HostMetricsGeneratorConfig{Workers: 4, OS: "linux,windows", Rate: time.Second}},
 		},
 	}
 
 	config.LogRemovedSettings(logger, cfg)
 
-	assert.Len(t, recorded.FilterMessageSnippet("generator.hostmetrics.workers").All(), 1)
+	assert.Len(t, recorded.FilterMessageSnippet("generator.hostmetrics.workers").All(), 2)
 }
 
 // TestLogRemovedSettings_NotSetNoWarn confirms no warning when workers is unset.

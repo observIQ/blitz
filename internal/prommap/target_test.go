@@ -61,6 +61,36 @@ func TestMap_ServiceAttributesTakePrecedence(t *testing.T) {
 	}, fam.Samples[0].Labels)
 }
 
+// The collector prefixes the namespace whenever the key is present, so an
+// empty service.namespace still yields "/cart".
+func TestMap_EmptyServiceNamespaceKeepsSlash(t *testing.T) {
+	fam, err := Map(gaugeWithResource(map[string]any{
+		"service.namespace": "",
+		"service.name":      "cart",
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, []Label{
+		{"job", "/cart"},
+		{"state", "used"},
+	}, fam.Samples[0].Labels)
+}
+
+// A present but empty service.name or service.instance.id yields no job or
+// instance label and no fallback, as in the collector's remote-write
+// createAttributes: telemetry.source and host.name fill in only when those
+// keys are absent.
+func TestMap_PresentButEmptyServiceKeysSetNoLabel(t *testing.T) {
+	fam, err := Map(gaugeWithResource(map[string]any{
+		"service.namespace":   "ns",
+		"service.name":        "",
+		"service.instance.id": "",
+		"telemetry.source":    "src",
+		"host.name":           "h",
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, []Label{{"state", "used"}}, fam.Samples[0].Labels)
+}
+
 // No resource means no job/instance labels (existing behavior preserved).
 func TestMap_NoResourceNoTargetLabels(t *testing.T) {
 	fam, err := Map(gaugeWithResource(nil))
@@ -113,9 +143,9 @@ func TestTargetInfo_NoResource(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// _count must equal the le="+Inf" bucket even when HistogramCount disagrees
-// with the bucket counts (Prometheus invariant).
-func TestMap_Histogram_CountMatchesInf(t *testing.T) {
+// _count and the le="+Inf" bucket both carry HistogramCount, as the collector
+// writes pt.Count(), even when the bucket counts sum to something else.
+func TestMap_Histogram_CountIsHistogramCount(t *testing.T) {
 	fam, err := Map(embed.MetricPoint{
 		Name:                  "latency",
 		Type:                  embed.MetricTypeHistogram,
@@ -132,6 +162,29 @@ func TestMap_Histogram_CountMatchesInf(t *testing.T) {
 			inf = s.Value
 		}
 	}
-	assert.Equal(t, 9.0, inf)
-	assert.Equal(t, 9.0, find(t, fam, "latency_count").Value)
+	assert.Equal(t, 99.0, inf)
+	assert.Equal(t, 99.0, find(t, fam, "latency_count").Value)
+}
+
+// TestTargetInfo_LabelsFollowTheCollector pins target_info's labels to the
+// same collector rules as a series' labels: sorted keys, ";"-joined clashes,
+// and no empty values.
+func TestTargetInfo_LabelsFollowTheCollector(t *testing.T) {
+	for range 50 {
+		fam, ok := TargetInfo(gaugeWithResource(map[string]any{
+			"host.name": "athena", "a.b": "1", "a_b": "2", "empty": "",
+		}))
+		require.True(t, ok)
+		require.Equal(t, []Label{{"a_b", "1;2"}, {"host_name", "athena"}, {"instance", "athena"}}, fam.Samples[0].Labels)
+	}
+}
+
+// TestTargetInfo_SkippedWithOnlyIdentifyingAttributes pins the collector's
+// rule that target_info is not sent when the resource has nothing beyond
+// service.namespace, service.name, and service.instance.id.
+func TestTargetInfo_SkippedWithOnlyIdentifyingAttributes(t *testing.T) {
+	_, ok := TargetInfo(gaugeWithResource(map[string]any{
+		"service.namespace": "shop", "service.name": "cart", "service.instance.id": "cart-7",
+	}))
+	assert.False(t, ok)
 }
