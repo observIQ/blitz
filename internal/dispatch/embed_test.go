@@ -80,13 +80,14 @@ func (c *capturingLogConsumer) snapshot() []embed.LogRecord {
 	return out
 }
 
-// TestForEmbedLogGeneratorWiresEnvironmentIdentity proves the setter path: a log
+// TestForEmbedLogGeneratorWiresEnvironmentIdentity proves a log
 // generator built through ForEmbed with an environment has its host identity
-// applied (via SetHostIdentity), so emitted records carry the simulated host.
+// applied at construction, so emitted records carry the simulated host.
 func TestForEmbedLogGeneratorWiresEnvironmentIdentity(t *testing.T) {
 	env := &datagen.Environment{
 		Systems: []*datagen.SystemIdentity{{
 			Hostname: "PANTHEON-LOG-01",
+			Role:     datagen.RoleServer,
 			OSInfo:   datagen.OSInfo{Type: datagen.OSLinux, Name: "Ubuntu"},
 		}},
 	}
@@ -108,9 +109,9 @@ func TestForEmbedLogGeneratorWiresEnvironmentIdentity(t *testing.T) {
 	assert.Equal(t, "nginx", recs[0].Metadata.Resource["telemetry.source"])
 }
 
-// TestForEmbedPropagatesConstructorError confirms applyHostIdentity forwards a
-// constructor error (here nginx.New rejecting Workers=0) rather than trying to
-// apply an identity to a nil module.
+// TestForEmbedPropagatesConstructorError confirms module forwards a
+// constructor error (here nginx.New rejecting Workers=0) as a nil module rather
+// than a typed-nil pointer wrapped in a non-nil interface.
 func TestForEmbedPropagatesConstructorError(t *testing.T) {
 	cfg := config.Generator{
 		Type:  config.GeneratorTypeNginx,
@@ -123,16 +124,16 @@ func TestForEmbedPropagatesConstructorError(t *testing.T) {
 
 // TestHostIdentityResolvesFromEnvironment covers the component-keyed identity
 // resolution: a nil environment yields nil (process-hostname fallback), and a
-// populated environment returns a deterministic SystemForKey selection.
+// populated environment returns a deterministic SystemFor selection.
 func TestHostIdentityResolvesFromEnvironment(t *testing.T) {
-	assert.Nil(t, hostIdentity(nil, config.GeneratorTypeHostMetrics))
+	assert.Nil(t, hostIdentity(nil, config.Generator{Type: config.GeneratorTypeHostMetrics}, 0))
 
 	env := &datagen.Environment{
 		Systems: []*datagen.SystemIdentity{
 			{Hostname: "PANTHEON-01", OSInfo: datagen.OSInfo{Type: datagen.OSLinux}},
 		},
 	}
-	got := hostIdentity(env, config.GeneratorTypeHostMetrics)
+	got := hostIdentity(env, config.Generator{Type: config.GeneratorTypeHostMetrics}, 0)
 	require.NotNil(t, got)
 	assert.Equal(t, "PANTHEON-01", got.Hostname)
 }

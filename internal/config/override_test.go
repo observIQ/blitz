@@ -448,9 +448,9 @@ func TestOverrideDefaults(t *testing.T) {
 				Workers:            1,
 				Rate:               1 * time.Second,
 				Channels:           []string{},
-				Domain:             "WORKGROUP",
-				Role:               "member",
-				ManageEventSources: true,
+				Domain:             "",
+				Role:               "",
+				ManageEventSources: false,
 			},
 			FIX: FIXGeneratorConfig{
 				Workers:           fixDefaults.Workers,

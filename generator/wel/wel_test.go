@@ -2,6 +2,7 @@ package wel
 
 import (
 	"context"
+	"math/rand"
 	"strings"
 	"sync"
 	"testing"
@@ -12,8 +13,10 @@ import (
 	"github.com/observiq/blitz/generator/wel/catalog"
 	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/telemetry"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // mockConsumer implements embed.LogConsumer for tests.
@@ -253,22 +256,150 @@ func TestGeneratorSupportedTelemetry(t *testing.T) {
 	}
 }
 
-func TestSetHostIdentity(t *testing.T) {
-	gen, err := New(Config{
-		Logger:    zap.NewNop(),
-		Workers:   1,
-		Rate:      time.Second,
-		Usernames: []string{"test"},
-		Consumer:  &mockConsumer{},
-	})
-	require.NoError(t, err)
+func TestIdentityResolvesOneHostname(t *testing.T) {
+	newGen := func(computer string, id *datagen.SystemIdentity) *Generator {
+		gen, err := New(Config{
+			Logger:    zap.NewNop(),
+			Workers:   1,
+			Rate:      time.Second,
+			Computer:  computer,
+			Usernames: []string{"test"},
+			Consumer:  &mockConsumer{},
+			Identity:  id,
+		})
+		require.NoError(t, err)
+		return gen
+	}
+	id := &datagen.SystemIdentity{Hostname: "IDENTITY-HOST", OSInfo: datagen.OSInfo{Type: datagen.OSWindows}}
 
-	gen.SetHostIdentity(&datagen.SystemIdentity{
-		Hostname: "IDENTITY-HOST",
-		OSInfo:   datagen.OSInfo{Type: datagen.OSLinux},
-	})
-	require.Equal(t, "IDENTITY-HOST", gen.static.Record()["host.name"])
+	cases := []struct {
+		name, computer string
+		id             *datagen.SystemIdentity
+		want           string
+	}{
+		{"identity", "", id, "IDENTITY-HOST"},
+		{"explicit over identity", "CFG-HOST", id, "CFG-HOST"},
+		{"explicit, no identity", "CFG-HOST", nil, "CFG-HOST"},
+		{"fallback", "", nil, "BLITZ-WEL"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gen := newGen(tc.computer, tc.id)
+			require.Equal(t, tc.want, gen.static.Record()["host.name"])
+			require.Equal(t, tc.want, gen.static.Record()["wel.computer"])
+			require.Equal(t, tc.want, gen.opts.Computer)
+			if tc.id != nil {
+				require.Equal(t, "windows", gen.static.Record()["os.type"])
+			}
+		})
+	}
+	require.Equal(t, "IDENTITY-HOST", id.Hostname, "shared identity must not be mutated")
+}
 
-	gen.SetHostIdentity(nil)
-	require.NotEmpty(t, gen.static.Record()["host.name"])
+// TestComputerAndDomainFollowDomainMembership pins real Windows behavior: a
+// domain-joined host writes its FQDN in <Computer> and its NetBIOS domain as
+// the account domain, while a workgroup host writes its bare name and
+// WORKGROUP. Payload fields keep the short computer name.
+func TestComputerAndDomainFollowDomainMembership(t *testing.T) {
+	joined := &datagen.SystemIdentity{Hostname: "WIN-01", Domain: "contoso.local", OSInfo: datagen.OSInfo{Type: datagen.OSWindows}}
+	workgroup := &datagen.SystemIdentity{Hostname: "WIN-02", OSInfo: datagen.OSInfo{Type: datagen.OSWindows}}
+
+	cases := []struct {
+		name, computer, domain string
+		id                     *datagen.SystemIdentity
+		wantXML, wantShort     string
+		wantDomain             string
+	}{
+		{name: "domain-joined", id: joined, wantXML: "WIN-01.contoso.local", wantShort: "WIN-01", wantDomain: "CONTOSO"},
+		{name: "explicit computer, joined", computer: "PC-9", id: joined, wantXML: "PC-9.contoso.local", wantShort: "PC-9", wantDomain: "CONTOSO"},
+		// An explicit domain is the DNS domain the host is joined to, so it
+		// drives both <Computer> and the NetBIOS account domain.
+		{name: "explicit domain wins", domain: "fabrikam.com", id: joined, wantXML: "WIN-01.fabrikam.com", wantShort: "WIN-01", wantDomain: "FABRIKAM"},
+		{name: "explicit workgroup", domain: "WORKGROUP", id: joined, wantXML: "WIN-01", wantShort: "WIN-01", wantDomain: "WORKGROUP"},
+		{name: "workgroup", id: workgroup, wantXML: "WIN-02", wantShort: "WIN-02", wantDomain: "WORKGROUP"},
+		{name: "no identity", wantXML: "BLITZ-WEL", wantShort: "BLITZ-WEL", wantDomain: "WORKGROUP"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cons := &mockConsumer{}
+			gen, err := New(Config{
+				Logger:    zap.NewNop(),
+				Workers:   1,
+				Rate:      time.Second,
+				Computer:  tc.computer,
+				Domain:    tc.domain,
+				Usernames: []string{"test"},
+				Consumer:  cons,
+				Identity:  tc.id,
+			})
+			require.NoError(t, err)
+			require.NoError(t, gen.generateAndWrite(rand.New(rand.NewSource(1))))
+
+			require.Len(t, cons.messages, 1)
+			assert.Contains(t, cons.messages[0], "<Computer>"+tc.wantXML+"</Computer>")
+			assert.Equal(t, tc.wantShort, gen.opts.Computer)
+			assert.Equal(t, tc.wantShort, gen.static.Record()["host.name"])
+			assert.Equal(t, tc.wantDomain, gen.opts.DomainName)
+			assert.Equal(t, tc.wantDomain, gen.static.Record()["wel.domain"])
+		})
+	}
+}
+
+// TestRoleFollowsIdentity pins that an unset role takes the event pool of the
+// host the generator lands on, so a DC emits DC events and a workstation
+// workstation events; a set role always wins.
+func TestRoleFollowsIdentity(t *testing.T) {
+	host := func(role datagen.SystemRole) *datagen.SystemIdentity {
+		return &datagen.SystemIdentity{Hostname: "H", Role: role, OSInfo: datagen.OSInfo{Type: datagen.OSWindows}}
+	}
+	cases := []struct {
+		name string
+		set  catalog.MachineRole
+		id   *datagen.SystemIdentity
+		want catalog.MachineRole
+	}{
+		{"dc host", "", host(datagen.RoleDC), catalog.RoleDC},
+		{"server host", "", host(datagen.RoleServer), catalog.RoleMember},
+		{"workstation host", "", host(datagen.RoleWorkstation), catalog.RoleWorkstation},
+		{"no identity", "", nil, catalog.RoleMember},
+		{"set role wins", catalog.RoleWorkstation, host(datagen.RoleDC), catalog.RoleWorkstation},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gen, err := New(Config{
+				Logger:    zap.NewNop(),
+				Workers:   1,
+				Rate:      time.Second,
+				Role:      tc.set,
+				Usernames: []string{"test"},
+				Consumer:  &mockConsumer{},
+				Identity:  tc.id,
+			})
+			require.NoError(t, err)
+			require.Equal(t, tc.want, gen.role)
+			require.Equal(t, string(tc.want), gen.static.Record()["wel.role"])
+		})
+	}
+}
+
+// TestSingleLabelDomainWarns pins that a domain with no dot, such as a NetBIOS
+// name from a config written for earlier releases, is still read as the DNS
+// domain but logged at Warn, since <Computer> then ends in that bare label.
+func TestSingleLabelDomainWarns(t *testing.T) {
+	for _, tc := range []struct {
+		domain string
+		warns  bool
+	}{{"CONTOSO", true}, {"contoso.local", false}, {"WORKGROUP", false}, {"", false}} {
+		core, logs := observer.New(zap.WarnLevel)
+		_, err := New(Config{
+			Logger:    zap.New(core),
+			Workers:   1,
+			Rate:      time.Second,
+			Domain:    tc.domain,
+			Usernames: []string{"test"},
+			Consumer:  &mockConsumer{},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, tc.warns, logs.Len() == 1, "domain %q", tc.domain)
+	}
 }

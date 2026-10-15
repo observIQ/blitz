@@ -91,6 +91,30 @@ func TestNewProjectsIdentityResource(t *testing.T) {
 	assert.Equal(t, "odin-api-01", g.hostname)
 }
 
+// TestExplicitHostnameOverridesIdentityHostname confirms a set Hostname
+// replaces only the resolved identity's hostname: the OS and other identity
+// attributes stay, and the shared identity is not mutated.
+func TestExplicitHostnameOverridesIdentityHostname(t *testing.T) {
+	cfg := baseCfg(t, &mockTraceConsumer{})
+	cfg.Hostname = "explicit-01"
+	id := &datagen.SystemIdentity{
+		Hostname: "identity-01",
+		HostID:   "id-9",
+		OSInfo:   datagen.OSInfo{Type: datagen.OSLinux},
+	}
+	cfg.Identity = id
+
+	g, err := New(cfg)
+	require.NoError(t, err)
+
+	res := g.static.Record()
+	assert.Equal(t, "explicit-01", res["host.name"])
+	assert.Equal(t, "id-9", res["host.id"])
+	assert.Equal(t, "linux", res["os.type"])
+	assert.Equal(t, "explicit-01", g.hostname)
+	assert.Equal(t, "identity-01", id.Hostname, "shared identity must not be mutated")
+}
+
 // TestSyntheticIdentityRandomSeed exercises the randomize branch of the
 // synthetic-identity hostname generation (Seed < 0 → wall-clock seed).
 func TestSyntheticIdentityRandomSeed(t *testing.T) {
