@@ -133,13 +133,19 @@ type Service struct {
 
 The generator package creates realistic telemetry data with configurable patterns and rates.
 
-#### Generator Interface:
+#### Generator Lifecycle:
+A generator is an `embed.Module`:
 ```go
-type Generator interface {
-    Start(writer output.Writer) error
+type Module interface {
+    Name() string
+    Start(ctx context.Context) error
     Stop(ctx context.Context) error
 }
 ```
+
+A generator takes its consumer (`embed.LogConsumer`, `MetricConsumer`, or
+`TraceConsumer`) at construction and writes records to it; the CLI hands it
+an output through the `output.WriterAsLogConsumer` family of adapters.
 
 #### NOP Generator Implementation (`nop.go`):
 
@@ -186,13 +192,35 @@ type Generator interface {
 
 The output package handles forwarding generated telemetry to external destinations.
 
-#### Output Interface:
+#### Output Interfaces:
 ```go
-type Output interface {
-    Write(ctx context.Context, data []byte) error
+// Writer is the base every output implements.
+type Writer interface {
     Stop(ctx context.Context) error
+    SupportedTelemetry() []telemetry.Type
 }
+
+// One extension per signal the output accepts.
+type LogWriter interface {
+    Writer
+    WriteLog(ctx context.Context, data LogRecord) error
+}
+type MetricWriter interface {
+    Writer
+    WriteMetric(ctx context.Context, data MetricRecord) error
+}
+type TraceWriter interface {
+    Writer
+    WriteTrace(ctx context.Context, data TraceRecord) error
+}
+
+type Output = Writer
 ```
+
+An output implements only the writers for the signals it accepts. This
+replaced the single `Output` interface: its `Write` method is now
+`LogWriter.WriteLog`, and `Output` is an alias of the lifecycle-only `Writer`.
+Code that implemented or called `output.Output` moves to `LogWriter`.
 
 #### NOP Output Implementation (`nop.go`):
 

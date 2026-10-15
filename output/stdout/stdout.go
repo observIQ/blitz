@@ -69,7 +69,7 @@ func New(logger *zap.Logger, opts ...Option) (*StdoutOutput, error) {
 	return o, nil
 }
 
-// Write buffers the log record for the next flush.
+// WriteLog buffers the log record for the next flush.
 func (o *StdoutOutput) WriteLog(ctx context.Context, data output.LogRecord) error {
 	o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 

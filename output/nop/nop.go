@@ -40,7 +40,7 @@ func New(logger *zap.Logger, tel embed.TelemetrySettings) (*NopOutput, error) {
 	}, nil
 }
 
-// Write discards the record after counting it. The write is a synchronous
+// WriteLog discards the record after counting it. The write is a synchronous
 // no-op, already bracketed by the consumer adapter's emit span, so it gets no
 // span of its own.
 func (o *NopOutput) WriteLog(ctx context.Context, data output.LogRecord) error {

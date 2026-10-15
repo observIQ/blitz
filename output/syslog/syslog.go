@@ -149,7 +149,7 @@ func newWithTransport(logger *zap.Logger, cfg Config, transport output.LogWriter
 	}
 }
 
-// Write formats a record as syslog and delegates to the underlying transport.
+// WriteLog formats a record as syslog and delegates to the underlying transport.
 func (s *Syslog) WriteLog(ctx context.Context, rec output.LogRecord) error {
 	formatted, err := s.format(rec)
 	if err != nil {
@@ -287,5 +287,5 @@ func (s *Syslog) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Logs}
 }
 
-// Ensure Syslog implements output.Output
+// Ensure Syslog implements output.LogWriter
 var _ output.LogWriter = (*Syslog)(nil)

@@ -116,9 +116,9 @@ func (u *UDP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 	return nil
 }
 
-// Write sends data to the UDP output channel for processing by workers.
-// Write shall not be called after Stop is called.
-// If the provided context is done, Write will return immediately
+// WriteLog sends data to the UDP output channel for processing by workers.
+// WriteLog shall not be called after Stop is called.
+// If the provided context is done, WriteLog will return immediately
 // even if the data is not written to the channel.
 func (u *UDP) WriteLog(ctx context.Context, data output.LogRecord) error {
 	select {
