@@ -17,6 +17,7 @@ package equities
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -34,11 +35,9 @@ const (
 
 // SecurityIDSource values (tag 22).
 const (
-	SecurityIDSourceCUSIP   = "1" // North American CUSIP
-	SecurityIDSourceSEDOL   = "2" // UK SEDOL
-	SecurityIDSourceISIN    = "4" // ISO ISIN
-	SecurityIDSourceRIC     = "5" // Reuters RIC
-	SecurityIDSourceBBGLOBL = "A" // Bloomberg GlobalID
+	SecurityIDSourceCUSIP = "1" // North American CUSIP
+	SecurityIDSourceSEDOL = "2" // UK SEDOL
+	SecurityIDSourceISIN  = "4" // ISO ISIN
 )
 
 // AccountType values (tag 581).
@@ -60,8 +59,9 @@ type instrument struct {
 
 // equityInstruments is the source-of-truth table mapping each
 // AssetCategoryEquities SecurityType to a list of realistic
-// instruments. Symbols and IDs are illustrative; CFICodes are
-// ISO-10962-correct.
+// instruments. Listed symbols carry their real CUSIPs; warrants and rights
+// use Nasdaq test symbols with private-use CUSIPs (issue 90-99), which name
+// no real security. CFICodes are ISO-10962-correct.
 //
 // Sized small (5-10 entries per type) for v1; can grow without
 // affecting wire compatibility.
@@ -78,10 +78,10 @@ var equityInstruments = map[catalog.SecurityType][]instrument{
 	},
 	catalog.SecPFD: {
 		// CFI: E (equity) P (preferred) ...
-		{"BAC.PB", "EPVUFR", "060505EM4", SecurityIDSourceCUSIP},
-		{"JPM.PD", "EPVUFR", "46625H803", SecurityIDSourceCUSIP},
-		{"GS.PA", "EPVUFR", "38141GFE7", SecurityIDSourceCUSIP},
-		{"WFC.PL", "EPVUFR", "94986RAH4", SecurityIDSourceCUSIP},
+		{"BAC.PB", "EPVUFR", "060505229", SecurityIDSourceCUSIP},
+		{"JPM.PD", "EPVUFR", "48128B655", SecurityIDSourceCUSIP},
+		{"GS.PA", "EPVUFR", "38143Y665", SecurityIDSourceCUSIP},
+		{"WFC.PL", "EPVUFR", "949746804", SecurityIDSourceCUSIP},
 	},
 	catalog.SecETF: {
 		// CFI: E (equity) U (unit) ...
@@ -89,15 +89,15 @@ var equityInstruments = map[catalog.SecurityType][]instrument{
 		{"IVV", "EUOPNR", "464287200", SecurityIDSourceCUSIP},
 		{"VOO", "EUOPNR", "922908363", SecurityIDSourceCUSIP},
 		{"QQQ", "EUOPNR", "46090E103", SecurityIDSourceCUSIP},
-		{"DIA", "EUOPNR", "73935A104", SecurityIDSourceCUSIP},
+		{"DIA", "EUOPNR", "78467X109", SecurityIDSourceCUSIP},
 		{"IWM", "EUOPNR", "464287655", SecurityIDSourceCUSIP},
 	},
 	catalog.SecMF: {
 		// CFI: E (equity) U (unit) — mutual funds reuse equity-unit CFI
-		{"VFINX", "EUOPNR", "922908793", SecurityIDSourceCUSIP},
+		{"VFINX", "EUOPNR", "922908108", SecurityIDSourceCUSIP},
 		{"FXAIX", "EUOPNR", "315911750", SecurityIDSourceCUSIP},
-		{"VTSAX", "EUOPNR", "922908769", SecurityIDSourceCUSIP},
-		{"SWPPX", "EUOPNR", "808509400", SecurityIDSourceCUSIP},
+		{"VTSAX", "EUOPNR", "922908728", SecurityIDSourceCUSIP},
+		{"SWPPX", "EUOPNR", "808509855", SecurityIDSourceCUSIP},
 	},
 	catalog.SecADR: {
 		// CFI: E (equity) D (depositary receipt)
@@ -108,13 +108,13 @@ var equityInstruments = map[catalog.SecurityType][]instrument{
 	},
 	catalog.SecWAR: {
 		// CFI: R (right/warrant) W (warrant)
-		{"SOFI.WS", "RWXXXX", "83406F309", SecurityIDSourceCUSIP},
-		{"BBAI.WS", "RWXXXX", "08862E207", SecurityIDSourceCUSIP},
+		{"ZVZZT.WS", "RWXXXX", "000000950", SecurityIDSourceCUSIP},
+		{"ZWZZT.WS", "RWXXXX", "000000968", SecurityIDSourceCUSIP},
 	},
 	catalog.SecRGT: {
 		// CFI: R (right/warrant) S (subscription right)
-		{"XYZ.R", "RSXXXX", "98432N109", SecurityIDSourceCUSIP},
-		{"ABC.RT", "RSXXXX", "01234R107", SecurityIDSourceCUSIP},
+		{"ZXZZT.R", "RSXXXX", "000000976", SecurityIDSourceCUSIP},
+		{"ZBZZT.RT", "RSXXXX", "000000984", SecurityIDSourceCUSIP},
 	},
 }
 
@@ -154,12 +154,8 @@ func registerAll() {
 //
 // The Instrument component block (Symbol, SecurityID,
 // SecurityIDSource, SecurityType, CFICode) is emitted as five
-// independent generators that each pick from the equityInstruments
-// table. v1 accepts that the picks are independent, so a single
-// message's tag-55 may not correspond to the same instrument as its
-// tag-48 / tag-167 / tag-461 — wire-WELL-FORMED but cross-tag
-// inconsistent. Tightening to per-message coherence is PR #16's
-// (StateTracker) job.
+// generators that share one memoized equityInstruments pick per
+// message, so every tag describes the same instrument.
 func fieldsFor(msgType string) []catalog.FieldGenerator {
 	switch msgType {
 	case app.MsgTypeNewOrderSingle:
@@ -221,9 +217,7 @@ func concat(parts ...[]catalog.FieldGenerator) []catalog.FieldGenerator {
 
 // instrumentBlock returns the five Instrument-component generators in
 // FIX wire order: Symbol (55), SecurityID (48), SecurityIDSource (22),
-// SecurityType (167), CFICode (461). Each picks independently from
-// equityInstruments — see fieldsFor comment for the v1 cross-tag-
-// inconsistency note.
+// SecurityType (167), CFICode (461), all from one memoized pick.
 func instrumentBlock() []catalog.FieldGenerator {
 	return []catalog.FieldGenerator{
 		symbolField(),
@@ -235,36 +229,36 @@ func instrumentBlock() []catalog.FieldGenerator {
 }
 
 func symbolField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		inst := pickInstrument(r, pickSecurityType(r))
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		inst := pickedInstrument(r, ctx).Inst
 		return catalog.Field{Tag: app.TagSymbol, Value: inst.Symbol}
 	}
 }
 
 func securityIDField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		inst := pickInstrument(r, pickSecurityType(r))
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		inst := pickedInstrument(r, ctx).Inst
 		return catalog.Field{Tag: TagSecurityID, Value: inst.ID}
 	}
 }
 
 func securityIDSourceField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		inst := pickInstrument(r, pickSecurityType(r))
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		inst := pickedInstrument(r, ctx).Inst
 		return catalog.Field{Tag: TagSecurityIDSource, Value: inst.IDSource}
 	}
 }
 
 func securityTypeField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		st := pickSecurityType(r)
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		st := pickedInstrument(r, ctx).SecType
 		return catalog.Field{Tag: app.TagSecurityType, Value: string(st)}
 	}
 }
 
 func cfiCodeField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		inst := pickInstrument(r, pickSecurityType(r))
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		inst := pickedInstrument(r, ctx).Inst
 		return catalog.Field{Tag: TagCFICode, Value: inst.CFICode}
 	}
 }
@@ -280,9 +274,31 @@ func pickSecurityType(r *rand.Rand) catalog.SecurityType {
 func pickInstrument(r *rand.Rand, st catalog.SecurityType) instrument {
 	insts := equityInstruments[st]
 	if len(insts) == 0 {
-		return instrument{Symbol: "UNKNOWN", CFICode: "ESVUFR", ID: "000000000", IDSource: SecurityIDSourceCUSIP}
+		return instrument{Symbol: "UNKNOWN", CFICode: "ESVUFR", ID: "000000943", IDSource: SecurityIDSourceCUSIP}
 	}
 	return insts[r.Intn(len(insts))] // #nosec G404 -- seeded *rand.Rand
+}
+
+// pickKey is the GenerateCtx.Memo key for the message's picked
+// (SecurityType, instrument) pair, so every instrument field describes one row.
+type pickKey struct{}
+
+type pickedPair struct {
+	SecType catalog.SecurityType
+	Inst    instrument
+}
+
+func pickedInstrument(r *rand.Rand, ctx *catalog.GenerateCtx) pickedPair {
+	if ctx.Memo == nil {
+		ctx.Memo = map[any]any{}
+	}
+	if v, ok := ctx.Memo[pickKey{}]; ok {
+		return v.(pickedPair)
+	}
+	st := pickSecurityType(r)
+	p := pickedPair{SecType: st, Inst: pickInstrument(r, st)}
+	ctx.Memo[pickKey{}] = p
+	return p
 }
 
 // --- per-field generators ---
@@ -367,28 +383,46 @@ func tif() catalog.FieldGenerator {
 }
 
 func orderQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		// Realistic equity order sizing: 100-10,000 shares in round lots.
-		qty := 100 * (1 + r.Intn(100)) // #nosec G404
-		return catalog.Field{Tag: app.TagOrderQty, Value: fmt.Sprintf("%d", qty)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagOrderQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
+}
+
+func drawQty(r *rand.Rand) string {
+	// Realistic equity order sizing: 100-10,000 shares in round lots.
+	qty := 100 * (1 + r.Intn(100)) // #nosec G404
+	return fmt.Sprintf("%d", qty)
 }
 
 func leavesQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		qty := 100 * (1 + r.Intn(100)) // #nosec G404
-		return catalog.Field{Tag: app.TagLeavesQty, Value: fmt.Sprintf("%d", qty)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagLeavesQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
 
+// mids are static reference prices per symbol; each price jitters within
+// +/-1% of its mid, in whole cents. Feed live or configured mids if absolute
+// levels matter.
+var mids = map[string]float64{
+	"AAPL": 230, "MSFT": 420, "GOOGL": 175, "AMZN": 200,
+	"JPM": 240, "JNJ": 160, "V": 300, "MA": 520,
+	"BAC.PB": 25, "JPM.PD": 25, "GS.PA": 21, "WFC.PL": 1240,
+	"SPY": 580, "IVV": 585, "VOO": 535, "QQQ": 500, "DIA": 430, "IWM": 225,
+	"VFINX": 540, "FXAIX": 205, "VTSAX": 140, "SWPPX": 95,
+	"BABA": 110, "TSM": 200, "NVS": 110, "BP": 31,
+	"ZVZZT.WS": 1.50, "ZWZZT.WS": 1.50, "ZXZZT.R": 1.10, "ZBZZT.RT": 1.10,
+}
+
 func price() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		// Realistic equity price: $1.00 - $1,000.00, 2dp.
-		cents := 100 + r.Intn(99900) // #nosec G404
-		return catalog.Field{
-			Tag:   app.TagPrice,
-			Value: fmt.Sprintf("%d.%02d", cents/100, cents%100),
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		mid, ok := mids[pickedInstrument(r, ctx).Inst.Symbol]
+		if !ok {
+			// Safety net: every symbol has a mid; one added without it still
+			// prices instead of emitting 0.
+			mid = 100
 		}
+		px := mid * (1 + (r.Float64()*2-1)*0.01) // #nosec G404
+		return catalog.Field{Tag: app.TagPrice, Value: strconv.FormatFloat(px, 'f', 2, 64)}
 	}
 }
 

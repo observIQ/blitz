@@ -317,11 +317,15 @@ func tifField() catalog.FieldGenerator {
 }
 
 func orderQtyField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		// Realistic order quantity: 100 to 10,000 share lots.
-		qty := 100 * (1 + r.Intn(100)) // #nosec G404 -- seeded *rand.Rand
-		return catalog.Field{Tag: TagOrderQty, Value: fmt.Sprintf("%d", qty)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagOrderQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
+}
+
+func drawQty(r *rand.Rand) string {
+	// Realistic order quantity: 100 to 10,000 share lots.
+	qty := 100 * (1 + r.Intn(100)) // #nosec G404 -- seeded *rand.Rand
+	return fmt.Sprintf("%d", qty)
 }
 
 func priceField() catalog.FieldGenerator {
@@ -339,9 +343,8 @@ func cumQtyField(value int) catalog.FieldGenerator {
 }
 
 func leavesQtyField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		qty := 100 * (1 + r.Intn(100)) // #nosec G404 -- seeded *rand.Rand
-		return catalog.Field{Tag: TagLeavesQty, Value: fmt.Sprintf("%d", qty)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagLeavesQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
 

@@ -10,6 +10,10 @@ package govbonds
 import (
 	"fmt"
 	"math/rand"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -38,44 +42,100 @@ const (
 	YieldTypeREALYIELD      = "REAL" // real yield (TIPS)
 )
 
-// bond is one row in the gov-bonds table. Cusip is the US 9-char
-// CUSIP; CouponPct is the bond's coupon rate (0 for bills).
+// bond is one row in the gov-bonds table. A bill's term is TermWeeks; every
+// other row's is MaturityYrs. Symbol may hold {Y}, the maturity year (a STRIP
+// is named for when it pays).
+//
+// Real is the row's latest original issue on TreasuryDirect: while it is
+// outstanding on the trade date, a message carries its real CUSIP, coupon,
+// and dates. Otherwise (and always for bills, which mature within weeks) the
+// message describes a synthetic issue: dates on the term's real maturity
+// calendar (Months, EOM) and a CUSIP with Prefix, a private-use issue number,
+// and a valid check digit, so it names no real security. Real ages as issues
+// mature; refresh it from TreasuryDirect's securities search to keep current
+// issues real.
 type bond struct {
 	Symbol      string
-	Cusip       string
-	CouponPct   string // e.g. "4.250"; empty for TBILL/TINT
+	Prefix      string // CUSIP issuer prefix for a synthetic issue
+	CouponPct   string // synthetic issue's coupon; empty for TBILL/TINT
 	MaturityYrs int    // years to maturity at issue
 	YieldType   string
 	CFICode     string
+	TermWeeks   int          // bills only
+	Months      []time.Month // maturity months; nil means every month
+	EOM         bool         // matures on the month's last day, else the 15th
+	IssueAt     issueRule
+	Real        *issue
 }
 
+// issueRule is when an issue settles relative to its dated date (maturity
+// minus term), as TreasuryDirect's original issues show.
+type issueRule int
+
+const (
+	issueOnDated     issueRule = iota // the dated date, or the next weekday
+	issueMonthEnd                     // the dated month's last day, or the next weekday (20-year bonds)
+	issueLastWeekday                  // the dated month's last weekday (TIPS)
+)
+
+// issue is one real Treasury security, from TreasuryDirect. A STRIP's issue
+// date is its parent security's.
+type issue struct {
+	Cusip, CouponPct string
+	Issue, Maturity  time.Time
+}
+
+func day(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+
+// quarterly is the Feb/May/Aug/Nov 15 cycle of 10-year notes, 20- and
+// 30-year bonds, and their coupon STRIPS.
+var quarterly = []time.Month{time.February, time.May, time.August, time.November}
+
+// Maturity calendars and real issues: TreasuryDirect original issues,
+// 2023-01-01 to 2026-10-06.
 var govBondsByType = map[catalog.SecurityType][]bond{
 	catalog.SecTBILL: {
-		{"T-BILL-4W", "912797GZ7", "", 0, YieldTypeDiscount, "DBTGFR"},
-		{"T-BILL-13W", "912797HA1", "", 0, YieldTypeDiscount, "DBTGFR"},
-		{"T-BILL-26W", "912797HB9", "", 0, YieldTypeDiscount, "DBTGFR"},
-		{"T-BILL-52W", "912797HC7", "", 0, YieldTypeDiscount, "DBTGFR"},
+		{Symbol: "T-BILL-4W", Prefix: "912797", YieldType: YieldTypeDiscount, CFICode: "DBTGFR", TermWeeks: 4},
+		{Symbol: "T-BILL-13W", Prefix: "912797", YieldType: YieldTypeDiscount, CFICode: "DBTGFR", TermWeeks: 13},
+		{Symbol: "T-BILL-26W", Prefix: "912797", YieldType: YieldTypeDiscount, CFICode: "DBTGFR", TermWeeks: 26},
+		{Symbol: "T-BILL-52W", Prefix: "912797", YieldType: YieldTypeDiscount, CFICode: "DBTGFR", TermWeeks: 52},
 	},
 	catalog.SecTNOTE: {
-		{"T-NOTE-2Y", "91282CKL5", "4.500", 2, YieldTypeBondEquivalent, "DBTGFR"},
-		{"T-NOTE-3Y", "91282CKM3", "4.375", 3, YieldTypeBondEquivalent, "DBTGFR"},
-		{"T-NOTE-5Y", "91282CKN1", "4.250", 5, YieldTypeBondEquivalent, "DBTGFR"},
-		{"T-NOTE-7Y", "91282CKP6", "4.250", 7, YieldTypeBondEquivalent, "DBTGFR"},
-		{"T-NOTE-10Y", "91282CKQ4", "4.375", 10, YieldTypeBondEquivalent, "DBTGFR"},
+		{Symbol: "T-NOTE-2Y", Prefix: "91282C", CouponPct: "4.750", MaturityYrs: 2, YieldType: YieldTypeBondEquivalent, CFICode: "DBTGFR", EOM: true,
+			Real: &issue{"91282CRP8", "4.750", day(2026, 9, 30), day(2028, 9, 30)}},
+		{Symbol: "T-NOTE-3Y", Prefix: "91282C", CouponPct: "4.375", MaturityYrs: 3, YieldType: YieldTypeBondEquivalent, CFICode: "DBTGFR",
+			Real: &issue{"91282CRL7", "4.375", day(2026, 9, 15), day(2029, 9, 15)}},
+		{Symbol: "T-NOTE-5Y", Prefix: "91282C", CouponPct: "5.000", MaturityYrs: 5, YieldType: YieldTypeBondEquivalent, CFICode: "DBTGFR", EOM: true,
+			Real: &issue{"91282CRN3", "5.000", day(2026, 9, 30), day(2031, 9, 30)}},
+		{Symbol: "T-NOTE-7Y", Prefix: "91282C", CouponPct: "5.000", MaturityYrs: 7, YieldType: YieldTypeBondEquivalent, CFICode: "DBTGFR", EOM: true,
+			Real: &issue{"91282CRM5", "5.000", day(2026, 9, 30), day(2033, 9, 30)}},
+		{Symbol: "T-NOTE-10Y", Prefix: "91282C", CouponPct: "4.625", MaturityYrs: 10, YieldType: YieldTypeBondEquivalent, CFICode: "DBTGFR", Months: quarterly,
+			Real: &issue{"91282CRF0", "4.625", day(2026, 8, 17), day(2036, 8, 15)}},
 	},
 	catalog.SecTBOND: {
-		{"T-BOND-20Y", "912810TC8", "4.625", 20, YieldTypeBondEquivalent, "DBTGFR"},
-		{"T-BOND-30Y", "912810TD6", "4.500", 30, YieldTypeBondEquivalent, "DBTGFR"},
+		{Symbol: "T-BOND-20Y", Prefix: "912810", CouponPct: "5.125", MaturityYrs: 20, YieldType: YieldTypeBondEquivalent, CFICode: "DBTGFR", Months: quarterly, IssueAt: issueMonthEnd,
+			Real: &issue{"912810UX4", "5.125", day(2026, 8, 31), day(2046, 8, 15)}},
+		{Symbol: "T-BOND-30Y", Prefix: "912810", CouponPct: "5.125", MaturityYrs: 30, YieldType: YieldTypeBondEquivalent, CFICode: "DBTGFR", Months: quarterly,
+			Real: &issue{"912810UW6", "5.125", day(2026, 8, 17), day(2056, 8, 15)}},
 	},
 	catalog.SecTIPS: {
-		{"TIPS-5Y", "91282CLR0", "1.625", 5, YieldTypeREALYIELD, "DBTGXR"},
-		{"TIPS-10Y", "91282CLS8", "2.000", 10, YieldTypeREALYIELD, "DBTGXR"},
-		{"TIPS-30Y", "91282CLT6", "2.125", 30, YieldTypeREALYIELD, "DBTGXR"},
+		{Symbol: "TIPS-5Y", Prefix: "91282C", CouponPct: "1.250", MaturityYrs: 5, YieldType: YieldTypeREALYIELD, CFICode: "DBTGXR", IssueAt: issueLastWeekday,
+			Months: []time.Month{time.April, time.October},
+			Real:   &issue{"91282CQP9", "1.250", day(2026, 4, 30), day(2031, 4, 15)}},
+		{Symbol: "TIPS-10Y", Prefix: "91282C", CouponPct: "2.375", MaturityYrs: 10, YieldType: YieldTypeREALYIELD, CFICode: "DBTGXR", IssueAt: issueLastWeekday,
+			Months: []time.Month{time.January, time.July},
+			Real:   &issue{"91282CRE3", "2.375", day(2026, 7, 31), day(2036, 7, 15)}},
+		{Symbol: "TIPS-30Y", Prefix: "912810", CouponPct: "2.375", MaturityYrs: 30, YieldType: YieldTypeREALYIELD, CFICode: "DBTGXR", IssueAt: issueLastWeekday,
+			Months: []time.Month{time.February},
+			Real:   &issue{"912810US5", "2.375", day(2026, 2, 27), day(2056, 2, 15)}},
 	},
 	catalog.SecTINT: {
-		// Stripped interest payments — symbols vary; CFI: DBTGZR
-		{"STRIP-INT-2030", "912833NK4", "", 0, YieldTypeBondEquivalent, "DBTGZR"},
-		{"STRIP-INT-2040", "912833NL2", "", 0, YieldTypeBondEquivalent, "DBTGZR"},
+		// Stripped interest payments (CFI DBTGZR) of a 7-year note and a
+		// 30-year bond.
+		{Symbol: "STRIP-INT-{Y}", Prefix: "912834", MaturityYrs: 7, YieldType: YieldTypeBondEquivalent, CFICode: "DBTGZR", EOM: true,
+			Real: &issue{"912834K80", "", day(2026, 6, 30), day(2033, 6, 30)}},
+		{Symbol: "STRIP-INT-{Y}", Prefix: "912834", MaturityYrs: 30, YieldType: YieldTypeBondEquivalent, CFICode: "DBTGZR", Months: quarterly,
+			Real: &issue{"912834ZX9", "", day(2026, 5, 15), day(2056, 5, 15)}},
 	},
 }
 
@@ -177,36 +237,137 @@ func pickSecurityType(r *rand.Rand) catalog.SecurityType {
 
 func pickBond(r *rand.Rand, st catalog.SecurityType) bond {
 	bs := govBondsByType[st]
-	if len(bs) == 0 {
-		return bond{Symbol: "T-FALLBACK", Cusip: "912828AAA", YieldType: YieldTypeBondEquivalent, CFICode: "DBTGFR"}
+	return bs[r.Intn(len(bs))] // #nosec G404 -- every SecurityType has rows (TestEveryGovBondSecurityTypeHasInstruments)
+}
+
+// pickKey is the GenerateCtx.Memo key for the message's picked
+// (SecurityType, bond) pair, so every instrument field describes one row.
+type pickKey struct{}
+
+type pickedPair struct {
+	SecType          catalog.SecurityType
+	Bond             bond
+	Cusip, CouponPct string
+	Issue, Maturity  time.Time
+}
+
+// symbol is the bond's symbol with {Y} rendered as its maturity year.
+func (p pickedPair) symbol() string {
+	return strings.ReplaceAll(p.Bond.Symbol, "{Y}", strconv.Itoa(p.Maturity.Year()))
+}
+
+func pickedBond(r *rand.Rand, ctx *catalog.GenerateCtx) pickedPair {
+	if ctx.Memo == nil {
+		ctx.Memo = map[any]any{}
 	}
-	return bs[r.Intn(len(bs))] // #nosec G404
+	if v, ok := ctx.Memo[pickKey{}]; ok {
+		return v.(pickedPair)
+	}
+	st := pickSecurityType(r)
+	p := pickedPair{SecType: st, Bond: pickBond(r, st)}
+	trade := ctx.TradeDate()
+	switch b := p.Bond; {
+	case b.Real != nil && b.Real.Issue.Before(trade) && b.Real.Maturity.After(trade):
+		p.Cusip, p.CouponPct, p.Issue, p.Maturity = b.Real.Cusip, b.Real.CouponPct, b.Real.Issue, b.Real.Maturity
+	case b.TermWeeks > 0:
+		// A bill is issued and matures on its auction weekday.
+		day := time.Thursday
+		if b.TermWeeks == 4 {
+			day = time.Tuesday
+		}
+		p.Issue, p.Maturity = catalog.BillDates(r, trade, b.TermWeeks, day)
+		p.Cusip = syntheticCUSIP(r, b.Prefix)
+	default:
+		p.Issue, p.Maturity = calendarDates(r, trade, b)
+		p.Cusip, p.CouponPct = syntheticCUSIP(r, b.Prefix), b.CouponPct
+	}
+	ctx.Memo[pickKey{}] = p
+	return p
+}
+
+// calendarDates draws a synthetic issue of b outstanding on trade: it
+// matures on b's maturity calendar within its term after trade and settled
+// (issueDate) before trade.
+func calendarDates(r *rand.Rand, trade time.Time, b bond) (issue, maturity time.Time) {
+	months := 12 * max(b.MaturityYrs, 1)
+	var dates []time.Time
+	for k := 1; k <= months; k++ {
+		m := time.Date(trade.Year(), trade.Month()+time.Month(k), 1, 0, 0, 0, 0, time.UTC)
+		if b.Months != nil && !slices.Contains(b.Months, m.Month()) {
+			continue
+		}
+		d := m.AddDate(0, 0, 14)
+		if b.EOM {
+			d = m.AddDate(0, 1, -1)
+		}
+		if d.After(trade) && issueDate(b, d).Before(trade) {
+			dates = append(dates, d)
+		}
+	}
+	maturity = dates[r.Intn(len(dates))] // #nosec G404 -- seeded *rand.Rand
+	return issueDate(b, maturity), maturity
+}
+
+// issueDate is when an issue of b maturing on maturity settled, by b's
+// IssueAt rule from its dated date one term earlier (the matching month-end
+// for a month-end issue). Market holidays are not skipped.
+func issueDate(b bond, maturity time.Time) time.Time {
+	months := 12 * max(b.MaturityYrs, 1)
+	dated := maturity.AddDate(0, -months, 0)
+	monthEnd := time.Date(maturity.Year(), maturity.Month()-time.Month(months)+1, 0, 0, 0, 0, 0, time.UTC)
+	if b.EOM {
+		dated = monthEnd
+	}
+	switch b.IssueAt {
+	case issueMonthEnd:
+		return nextWeekday(monthEnd)
+	case issueLastWeekday:
+		for monthEnd.Weekday() == time.Saturday || monthEnd.Weekday() == time.Sunday {
+			monthEnd = monthEnd.AddDate(0, 0, -1)
+		}
+		return monthEnd
+	}
+	return nextWeekday(dated)
+}
+
+// nextWeekday is d, or the Monday after when d falls on a weekend.
+func nextWeekday(d time.Time) time.Time {
+	for d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
+		d = d.AddDate(0, 0, 1)
+	}
+	return d
+}
+
+// syntheticCUSIP is prefix plus a private-use issue number and the CUSIP
+// check digit: well formed, but never a real security, since CUSIP reserves
+// issue numbers 90-99 and 9A-9Y for private use.
+func syntheticCUSIP(r *rand.Rand, prefix string) string {
+	const second = "0123456789ABCDEFGHJKLMNPQRSTUVWXY"      // CUSIPs skip I and O
+	c := prefix + "9" + string(second[r.Intn(len(second))]) // #nosec G404
+	return c + string(catalog.CUSIPCheckDigit(c))
 }
 
 func symbolField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		b := pickBond(r, pickSecurityType(r))
-		return catalog.Field{Tag: app.TagSymbol, Value: b.Symbol}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagSymbol, Value: pickedBond(r, ctx).symbol()}
 	}
 }
 
 func securityTypeField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: app.TagSecurityType, Value: string(pickSecurityType(r))}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagSecurityType, Value: string(pickedBond(r, ctx).SecType)}
 	}
 }
 
 func securityIDField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		b := pickBond(r, pickSecurityType(r))
-		return catalog.Field{Tag: TagSecurityID, Value: b.Cusip}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagSecurityID, Value: pickedBond(r, ctx).Cusip}
 	}
 }
 
 func couponRateField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		b := pickBond(r, pickSecurityType(r))
-		v := b.CouponPct
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		v := pickedBond(r, ctx).CouponPct
 		if v == "" {
 			v = "0.000" // T-bills and strips have no coupon
 		}
@@ -215,29 +376,22 @@ func couponRateField() catalog.FieldGenerator {
 }
 
 func maturityDateField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		yrs := 1 + r.Intn(30) // #nosec G404
-		year := 2026 + yrs
-		month := 1 + r.Intn(12) // #nosec G404
-		day := 15
-		return catalog.Field{Tag: TagMaturityDate, Value: fmt.Sprintf("%d%02d%02d", year, month, day)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagMaturityDate, Value: pickedBond(r, ctx).Maturity.Format("20060102")}
 	}
 }
 
 func issueDateField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		year := 2024 + r.Intn(3) // #nosec G404
-		month := 1 + r.Intn(12)  // #nosec G404
-		day := 15
-		return catalog.Field{Tag: TagIssueDate, Value: fmt.Sprintf("%d%02d%02d", year, month, day)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagIssueDate, Value: pickedBond(r, ctx).Issue.Format("20060102")}
 	}
 }
 
 func factorField() catalog.FieldGenerator {
 	// For TIPS, factor reflects CPI accumulation since issue (typically
 	// 1.000 - 1.250). For non-indexed, 1.000.
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		st := pickSecurityType(r)
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		st := pickedBond(r, ctx).SecType
 		if st == catalog.SecTIPS {
 			// Range 1.000 - 1.250.
 			tenThousandths := 10000 + r.Intn(2500) // #nosec G404
@@ -251,15 +405,15 @@ func factorField() catalog.FieldGenerator {
 }
 
 func yieldTypeField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		b := pickBond(r, pickSecurityType(r))
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		b := pickedBond(r, ctx).Bond
 		return catalog.Field{Tag: TagYieldType, Value: b.YieldType}
 	}
 }
 
 func cfiCodeField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		b := pickBond(r, pickSecurityType(r))
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		b := pickedBond(r, ctx).Bond
 		return catalog.Field{Tag: TagCFICode, Value: b.CFICode}
 	}
 }
@@ -305,16 +459,19 @@ func tif() catalog.FieldGenerator {
 	}
 }
 func orderQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		// Treasury order size: $100k - $100MM in $100k ticks (face value).
-		ticks := 1 + r.Intn(1000) // #nosec G404
-		return catalog.Field{Tag: app.TagOrderQty, Value: fmt.Sprintf("%d00000", ticks)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagOrderQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
+
+func drawQty(r *rand.Rand) string {
+	// Treasury order size: $100k - $100MM in $100k ticks (face value).
+	ticks := 1 + r.Intn(1000) // #nosec G404
+	return fmt.Sprintf("%d00000", ticks)
+}
 func leavesQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		ticks := 1 + r.Intn(1000) // #nosec G404
-		return catalog.Field{Tag: app.TagLeavesQty, Value: fmt.Sprintf("%d00000", ticks)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagLeavesQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
 func price() catalog.FieldGenerator {

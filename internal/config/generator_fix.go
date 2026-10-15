@@ -26,9 +26,10 @@ type FIXGeneratorConfig struct {
 	// options, govbonds, corpbonds, structured, otcderivs, repos,
 	// moneymarket.
 	EnabledCategories []string `yaml:"enabledCategories,omitempty" mapstructure:"enabledCategories,omitempty"`
-	// Seed is the deterministic RNG seed. Negative randomizes per
-	// worker; 0+ produces byte-identical output across runs for the
-	// same seed.
+	// Seed is the RNG seed; worker N uses Seed+N. Negative picks a
+	// random seed once at Start and logs it. The trade date follows the
+	// wall clock here (only an embedded Config.Start pins it), so a rerun
+	// repeats the same draws but lists the instruments live on its own day.
 	Seed int64 `yaml:"seed,omitempty" mapstructure:"seed,omitempty"`
 }
 

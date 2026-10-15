@@ -298,6 +298,15 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.wel.domain", "domain name for WEL events", "WORKGROUP"),
 		NewOverride("generator.wel.role", "WEL machine role. One of: workstation|member|dc", "member"),
 		NewOverride("generator.wel.manageEventSources", "auto-register/deregister WEL event sources (requires admin)", true),
+		// The generator.fix.* defaults mirror fix.DefaultConfig();
+		// TestOverrideDefaults keeps them in step.
+		NewOverride("generator.fix.workers", "number of FIX generator workers", 1),
+		NewOverride("generator.fix.rate", "rate at which FIX messages are generated per worker", time.Second),
+		NewOverride("generator.fix.version", "FIX protocol version. One of: 4.2|4.4|5.0sp2", "FIX.4.4"),
+		NewOverride("generator.fix.senderCompID", "base FIX SenderCompID (tag 49); worker index is appended", "BLITZ"),
+		NewOverride("generator.fix.targetCompID", "FIX TargetCompID (tag 56)", "VENUE"),
+		NewOverride("generator.fix.enabledCategories", "FIX asset categories to emit (empty = all)", []string{}),
+		NewOverride("generator.fix.seed", "FIX RNG seed (negative = random per run; 0+ = deterministic)", int64(-1)),
 		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file|hec|flow", OutputTypeNop),
 		NewOverride("output.stdout.flushInterval", "stdout output flush interval", DefaultStdoutFlushInterval),
 		NewOverride("output.udp.host", "UDP output target host", ""),

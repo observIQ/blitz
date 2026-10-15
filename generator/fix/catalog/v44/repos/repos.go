@@ -26,9 +26,10 @@ const (
 	TagMarginRatio                catalog.Tag = 898 // Haircut as ratio (e.g. 1.02 = 2% haircut)
 )
 
-const (
-	SecurityIDSourceISIN = "4"
-)
+// SecurityIDSourceClearingOrg (22=H, Clearing House / Clearing
+// Organization) declares the tri-party identifiers repos carry; a repo has no
+// ISIN of its own.
+const SecurityIDSourceClearingOrg = "H"
 
 // TermType (829) values.
 const (
@@ -128,7 +129,7 @@ func concat(parts ...[]catalog.FieldGenerator) []catalog.FieldGenerator {
 func instrumentBlock() []catalog.FieldGenerator {
 	return []catalog.FieldGenerator{
 		symbolField(), securityTypeField(), securityIDField(),
-		catalog.LiteralField(TagSecurityIDSrc, SecurityIDSourceISIN),
+		catalog.LiteralField(TagSecurityIDSrc, SecurityIDSourceClearingOrg),
 		collateralTypeField(), termTypeField(),
 		repoRateField(), settlDateField(), settlDate2Field(),
 		marginRatioField(), cfiCodeField(),
@@ -201,27 +202,29 @@ func repoRateField() catalog.FieldGenerator {
 	}
 }
 
-// settlBaseDate is the fixed near-leg settlement reference used by the
-// emitter — deterministic for reproducible output. SettlDate2 is
-// computed relative to this.
-var settlBaseDate = time.Date(2026, 5, 27, 0, 0, 0, 0, time.UTC)
+// nearLegDate is the repo start (near-leg) settlement date: same-day
+// settlement on the trade date, rolled to a business day.
+func nearLegDate(ctx *catalog.GenerateCtx) time.Time {
+	return catalog.NextBusinessDay(ctx.TradeDate())
+}
 
 func settlDateField() catalog.FieldGenerator {
-	return catalog.LiteralField(TagSettlDate, settlBaseDate.Format("20060102"))
+	return func(_ *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagSettlDate, Value: nearLegDate(ctx).Format("20060102")}
+	}
 }
 func settlDate2Field() catalog.FieldGenerator {
 	// Far-leg settlement: depends on TermType per FIX 4.4 repo
-	// conventions. Overnight closes T+1; standard term ~1 month;
-	// flexible ~1 month as a working default.
+	// conventions. Overnight closes the next business day; standard term
+	// ~1 month; flexible ~1 month as a working default.
 	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		near := nearLegDate(ctx)
 		var d time.Time
 		switch pickedRepo(r, ctx).Repo.Term {
 		case TermOvernight:
-			d = settlBaseDate.AddDate(0, 0, 1)
-		case TermTerm:
-			d = settlBaseDate.AddDate(0, 1, 0)
+			d = catalog.AddBusinessDays(near, 1)
 		default:
-			d = settlBaseDate.AddDate(0, 1, 0)
+			d = catalog.AddTenor(near, 1, 0)
 		}
 		return catalog.Field{Tag: TagSettlDate2, Value: d.Format("20060102")}
 	}
@@ -270,15 +273,18 @@ func tif() catalog.FieldGenerator {
 	return catalog.LiteralField(app.TagTimeInForce, app.TIFDay)
 }
 func orderQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		mm := 1 + r.Intn(1000) // $1MM - $1B // #nosec G404
-		return catalog.Field{Tag: app.TagOrderQty, Value: fmt.Sprintf("%d000000", mm)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagOrderQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
+
+func drawQty(r *rand.Rand) string {
+	mm := 1 + r.Intn(1000) // $1MM - $1B // #nosec G404
+	return fmt.Sprintf("%d000000", mm)
+}
 func leavesQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		mm := 1 + r.Intn(1000) // #nosec G404
-		return catalog.Field{Tag: app.TagLeavesQty, Value: fmt.Sprintf("%d000000", mm)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagLeavesQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
 func price() catalog.FieldGenerator {

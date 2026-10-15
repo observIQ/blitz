@@ -10,7 +10,10 @@ package options
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
+	"slices"
+	"time"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -43,25 +46,34 @@ const (
 type underlying struct {
 	Symbol   string
 	Exchange string // MIC for the listed option's exchange
+	Index    bool   // index options: European, cash-settled
+	// Level is the underlying's rough price level, and StrikeStep a strike
+	// interval the exchange lists across 80-120% of it: $10 for stocks and
+	// ETFs ($5 intervals up to $200, $10 above), 50 points for SPX/NDX/RUT,
+	// and 5 for VIX (whose minimum interval is 2.50).
+	// Fixed levels drift with the market; feed live levels from
+	// the environment if strikes must track today's prices.
+	Level      float64
+	StrikeStep int
 }
 
 // optionUnderlyings table — common underlyings for listed US options.
-// Exchanges: XCBO=Cboe, XASE=NYSE American, XNYS=NYSE.
+// Exchanges: XCBO=Cboe, XPHL=Nasdaq PHLX.
 var optionUnderlyings = []underlying{
-	{"AAPL", "XCBO"},
-	{"MSFT", "XCBO"},
-	{"GOOGL", "XCBO"},
-	{"AMZN", "XCBO"},
-	{"TSLA", "XCBO"},
-	{"NVDA", "XCBO"},
-	{"META", "XCBO"},
-	{"SPY", "XCBO"}, // SPDR S&P 500 ETF options
-	{"QQQ", "XCBO"}, // Nasdaq-100 ETF options
-	{"IWM", "XCBO"}, // Russell 2000 ETF options
-	{"SPX", "XCBO"}, // S&P 500 index options
-	{"NDX", "XCBO"}, // Nasdaq-100 index options
-	{"VIX", "XCBO"}, // VIX index options
-	{"RUT", "XCBO"}, // Russell 2000 index options
+	{"AAPL", "XCBO", false, 230, 10},
+	{"MSFT", "XCBO", false, 450, 10},
+	{"GOOGL", "XCBO", false, 180, 10},
+	{"AMZN", "XCBO", false, 210, 10},
+	{"TSLA", "XCBO", false, 300, 10},
+	{"NVDA", "XCBO", false, 150, 10},
+	{"META", "XCBO", false, 650, 10},
+	{"SPY", "XCBO", false, 600, 10},  // SPDR S&P 500 ETF options
+	{"QQQ", "XCBO", false, 520, 10},  // Nasdaq-100 ETF options
+	{"IWM", "XCBO", false, 220, 10},  // Russell 2000 ETF options
+	{"SPX", "XCBO", true, 6000, 50},  // S&P 500 index options
+	{"NDX", "XPHL", true, 21000, 50}, // Nasdaq-100 index options
+	{"VIX", "XCBO", true, 18, 5},     // VIX index options
+	{"RUT", "XCBO", true, 2200, 50},  // Russell 2000 index options
 }
 
 func init() {
@@ -165,53 +177,135 @@ func instrumentBlock() []catalog.FieldGenerator {
 	}
 }
 
-func pickUnderlying(r *rand.Rand) underlying {
-	return optionUnderlyings[r.Intn(len(optionUnderlyings))] // #nosec G404
+// contract is the message's one option: its underlying and put/call.
+type contract struct {
+	underlying
+	PutOrCall string
+}
+
+// OptAttribute is the exercise style: US listed index options are
+// European, equity and ETF options American.
+func (c contract) OptAttribute() string {
+	if c.Index {
+		return OptAttributeEuropean
+	}
+	return OptAttributeAmerican
+}
+
+// CFICode is the ISO 10962 code: O, call/put, exercise style, underlying
+// (I index, S equity), delivery (C cash, P physical), S standardized.
+func (c contract) CFICode() string {
+	pc := "C"
+	if c.PutOrCall == PutOrCallPut {
+		pc = "P"
+	}
+	if c.Index {
+		return "O" + pc + c.OptAttribute() + "ICS"
+	}
+	return "O" + pc + c.OptAttribute() + "SPS"
+}
+
+// contractKey is the GenerateCtx.Memo key for the message's contract.
+type contractKey struct{}
+
+// pickedContract picks the message's one contract, memoized so every field
+// describes it.
+func pickedContract(r *rand.Rand, ctx *catalog.GenerateCtx) contract {
+	if ctx.Memo == nil {
+		ctx.Memo = map[any]any{}
+	}
+	if v, ok := ctx.Memo[contractKey{}]; ok {
+		return v.(contract)
+	}
+	choices := []string{PutOrCallPut, PutOrCallCall}
+	c := contract{
+		underlying: optionUnderlyings[r.Intn(len(optionUnderlyings))], // #nosec G404
+		PutOrCall:  choices[r.Intn(len(choices))],                     // #nosec G404
+	}
+	ctx.Memo[contractKey{}] = c
+	return c
 }
 
 func symbolField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		u := pickUnderlying(r)
-		return catalog.Field{Tag: app.TagSymbol, Value: u.Symbol}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagSymbol, Value: pickedContract(r, ctx).Symbol}
 	}
 }
 
 func strikePriceField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		// Strike between $5 and $1000 in $5 increments.
-		strike := 5 * (1 + r.Intn(200)) // #nosec G404
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		u := pickedContract(r, ctx).underlying
+		lo := int(math.Ceil(0.8*u.Level/float64(u.StrikeStep))) * u.StrikeStep
+		hi := int(math.Floor(1.2*u.Level/float64(u.StrikeStep))) * u.StrikeStep
+		strike := lo + u.StrikeStep*r.Intn((hi-lo)/u.StrikeStep+1) // #nosec G404
 		return catalog.Field{Tag: TagStrikePrice, Value: fmt.Sprintf("%d.00", strike)}
 	}
 }
 
 func putOrCallField() catalog.FieldGenerator {
-	choices := []string{PutOrCallPut, PutOrCallCall}
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagPutOrCall, Value: choices[r.Intn(len(choices))]} // #nosec G404
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagPutOrCall, Value: pickedContract(r, ctx).PutOrCall}
 	}
 }
 
 func maturityDateField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		year := 2026 + r.Intn(2) // 2026 or 2027 // #nosec G404
-		month := 1 + r.Intn(12)  // #nosec G404
-		// Use 3rd Friday convention (close-enough day for v1): always 15th-21st.
-		day := 15 + r.Intn(7) // #nosec G404
-		return catalog.Field{
-			Tag:   TagMaturityDate,
-			Value: fmt.Sprintf("%d%02d%02d", year, month, day),
-		}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		listed := listedMaturities(ctx.TradeDate(), pickedContract(r, ctx).underlying)
+		exp := listed[r.Intn(len(listed))] // #nosec G404
+		return catalog.Field{Tag: TagMaturityDate, Value: exp.Format("20060102")}
 	}
 }
 
-func optAttributeField() catalog.FieldGenerator {
-	// US listed equity options are predominantly American style; SPX
-	// and a few index options are European. We weight 90/10.
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		if r.Intn(10) == 0 { // #nosec G404
-			return catalog.Field{Tag: TagOptAttribute, Value: OptAttributeEuropean}
+// listedMaturities is the expirations an underlying's options always list
+// after the trade date, so every drawn maturity names a real series:
+//   - Stocks and ETFs (OIC): the two near-term months, plus January LEAPS two
+//     years out, or three from the Monday of September expiration week, when
+//     the next LEAPS year lists.
+//   - SPX, NDX, and RUT (Cboe RUT spec): three near-term months plus three
+//     from the March quarterly cycle.
+//   - VIX (Cboe): the three near-term expirations, each on the Wednesday 30
+//     days before the following month's third Friday.
+//
+// Busier classes list more months; these are the ones every class carries.
+func listedMaturities(trade time.Time, u underlying) []time.Time {
+	// next is the first n expirations after the trade date that keep accepts,
+	// exp(k) being the one k months out.
+	next := func(n int, exp func(k int) time.Time, keep func(time.Time) bool) []time.Time {
+		var out []time.Time
+		for k := 0; len(out) < n; k++ {
+			if d := exp(k); d.After(trade) && keep(d) {
+				out = append(out, d)
+			}
 		}
-		return catalog.Field{Tag: TagOptAttribute, Value: OptAttributeAmerican}
+		return out
+	}
+	monthly := func(k int) time.Time { return catalog.ThirdFriday(trade, k) }
+	all := func(time.Time) bool { return true }
+	switch {
+	case u.Symbol == "VIX":
+		return next(3, func(k int) time.Time { return catalog.ThirdFriday(trade, k+1).AddDate(0, 0, -30) }, all)
+	case u.Index:
+		near := next(3, monthly, all)
+		last := near[len(near)-1]
+		return append(near, next(3, monthly, func(d time.Time) bool { return d.After(last) && d.Month()%3 == 0 })...)
+	}
+	listed := next(2, monthly, all)
+	years := 2
+	september := catalog.ThirdFriday(time.Date(trade.Year(), time.September, 1, 0, 0, 0, 0, time.UTC), 0)
+	if !trade.Before(september.AddDate(0, 0, -4)) {
+		years = 3
+	}
+	for y := trade.Year() + 1; y <= trade.Year()+years; y++ {
+		if jan := catalog.ThirdFriday(time.Date(y, time.January, 1, 0, 0, 0, 0, time.UTC), 0); !slices.Contains(listed, jan) {
+			listed = append(listed, jan)
+		}
+	}
+	return listed
+}
+
+func optAttributeField() catalog.FieldGenerator {
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagOptAttribute, Value: pickedContract(r, ctx).OptAttribute()}
 	}
 }
 
@@ -221,23 +315,14 @@ func contractMultiplierField() catalog.FieldGenerator {
 }
 
 func securityExchangeField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		u := pickUnderlying(r)
-		return catalog.Field{Tag: TagSecurityExchange, Value: u.Exchange}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagSecurityExchange, Value: pickedContract(r, ctx).Exchange}
 	}
 }
 
 func cfiCodeField() catalog.FieldGenerator {
-	// CFI category O (option), group C/P (call/put) — emit a generic
-	// representative; per-message coherence with PutOrCall is PR #16's
-	// job.
-	choices := []string{
-		"OCASPS", // Option / Call / American / Stock / Physical / Standard
-		"OPASPS", // Option / Put / American / Stock / Physical / Standard
-		"OCESPS", // Option / Call / European / Stock / Physical / Standard
-	}
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagCFICode, Value: choices[r.Intn(len(choices))]} // #nosec G404
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagCFICode, Value: pickedContract(r, ctx).CFICode()}
 	}
 }
 
@@ -289,17 +374,20 @@ func tif() catalog.FieldGenerator {
 }
 
 func orderQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		// Realistic options: 1-100 contracts.
-		qty := 1 + r.Intn(100) // #nosec G404
-		return catalog.Field{Tag: app.TagOrderQty, Value: fmt.Sprintf("%d", qty)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagOrderQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
 
+func drawQty(r *rand.Rand) string {
+	// Realistic options: 1-100 contracts.
+	qty := 1 + r.Intn(100) // #nosec G404
+	return fmt.Sprintf("%d", qty)
+}
+
 func leavesQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		qty := 1 + r.Intn(100) // #nosec G404
-		return catalog.Field{Tag: app.TagLeavesQty, Value: fmt.Sprintf("%d", qty)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagLeavesQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
 

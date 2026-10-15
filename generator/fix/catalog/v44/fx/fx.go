@@ -15,6 +15,8 @@ package fx
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
+	"time"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -41,19 +43,19 @@ const (
 
 // SecurityIDSource values relevant to FX (tag 22).
 const (
-	SecurityIDSourceBBGTICK = "A" // Bloomberg
-	SecurityIDSourceISO4217 = "G" // ISO 4217 currency code pair
+	SecurityIDSourceISO4217 = "6" // ISO Currency Code (the pair in 48)
 )
 
-// pair is one row in the per-SecurityType FX pair table. CCY1 and CCY2
-// are ISO 4217 currency codes; SettlT+N is the standard settlement
-// horizon in business days; NDF flags pairs that emit as non-
-// deliverable in the NDF SecurityType (note: a pair can be NDF-eligible
-// even if not its default form — e.g., USDBRL trades NDF offshore).
+// pair is one tradable currency pair as blitz emits it. CCY1/CCY2 are ISO
+// 4217 codes. SpotLag is the spot settlement lag in business days (T+1 for
+// USD/CAD, T+2 otherwise). TenorMonths/TenorDays is an outright, swap, or
+// NDF tenor after spot (1M = one calendar month, 1W = seven days). NDFEligible
+// marks a non-deliverable pair, which settles in USD.
 type pair struct {
-	CCY1        string
-	CCY2        string
-	SettlTN     int // typically 2 for major spot, 1 for USDCAD, 0 same-day for USDCNY
+	CCY1, CCY2  string
+	SpotLag     int
+	TenorMonths int
+	TenorDays   int
 	NDFEligible bool
 }
 
@@ -61,37 +63,37 @@ type pair struct {
 // representative currency pairs.
 var fxPairs = map[catalog.SecurityType][]pair{
 	catalog.SecFOR: {
-		{"EUR", "USD", 2, false},
-		{"GBP", "USD", 2, false},
-		{"USD", "JPY", 2, false},
-		{"USD", "CHF", 2, false},
-		{"AUD", "USD", 2, false},
-		{"USD", "CAD", 1, false},
-		{"NZD", "USD", 2, false},
-		{"EUR", "GBP", 2, false},
-		{"EUR", "JPY", 2, false},
-		{"USD", "MXN", 2, false},
+		{CCY1: "EUR", CCY2: "USD", SpotLag: 2},
+		{CCY1: "GBP", CCY2: "USD", SpotLag: 2},
+		{CCY1: "USD", CCY2: "JPY", SpotLag: 2},
+		{CCY1: "USD", CCY2: "CHF", SpotLag: 2},
+		{CCY1: "AUD", CCY2: "USD", SpotLag: 2},
+		{CCY1: "USD", CCY2: "CAD", SpotLag: 1},
+		{CCY1: "NZD", CCY2: "USD", SpotLag: 2},
+		{CCY1: "EUR", CCY2: "GBP", SpotLag: 2},
+		{CCY1: "EUR", CCY2: "JPY", SpotLag: 2},
+		{CCY1: "USD", CCY2: "MXN", SpotLag: 2},
 	},
 	catalog.SecFXFWD: {
-		{"EUR", "USD", 30, false}, // 1-month forward
-		{"GBP", "USD", 90, false}, // 3-month forward
-		{"USD", "JPY", 30, false},
-		{"AUD", "USD", 90, false},
-		{"USD", "CAD", 30, false},
+		{CCY1: "EUR", CCY2: "USD", SpotLag: 2, TenorMonths: 1},
+		{CCY1: "GBP", CCY2: "USD", SpotLag: 2, TenorMonths: 3},
+		{CCY1: "USD", CCY2: "JPY", SpotLag: 2, TenorMonths: 1},
+		{CCY1: "AUD", CCY2: "USD", SpotLag: 2, TenorMonths: 3},
+		{CCY1: "USD", CCY2: "CAD", SpotLag: 1, TenorMonths: 1},
 	},
 	catalog.SecFXSWAP: {
-		{"EUR", "USD", 7, false},  // 1-week swap
-		{"GBP", "USD", 30, false}, // 1-month swap
-		{"USD", "JPY", 7, false},
+		{CCY1: "EUR", CCY2: "USD", SpotLag: 2, TenorDays: 7},
+		{CCY1: "GBP", CCY2: "USD", SpotLag: 2, TenorMonths: 1},
+		{CCY1: "USD", CCY2: "JPY", SpotLag: 2, TenorDays: 7},
 	},
 	catalog.SecFXNDF: {
 		// NDFs trade in pairs where one side is non-convertible offshore.
-		{"USD", "BRL", 30, true},
-		{"USD", "INR", 30, true},
-		{"USD", "CNY", 30, true},
-		{"USD", "KRW", 30, true},
-		{"USD", "TWD", 30, true},
-		{"USD", "RUB", 30, true},
+		{CCY1: "USD", CCY2: "BRL", SpotLag: 2, TenorMonths: 1, NDFEligible: true},
+		{CCY1: "USD", CCY2: "INR", SpotLag: 2, TenorMonths: 1, NDFEligible: true},
+		{CCY1: "USD", CCY2: "CNY", SpotLag: 2, TenorMonths: 1, NDFEligible: true},
+		{CCY1: "USD", CCY2: "KRW", SpotLag: 2, TenorMonths: 1, NDFEligible: true},
+		{CCY1: "USD", CCY2: "TWD", SpotLag: 2, TenorMonths: 1, NDFEligible: true},
+		{CCY1: "USD", CCY2: "RUB", SpotLag: 2, TenorMonths: 1, NDFEligible: true},
 	},
 }
 
@@ -185,9 +187,9 @@ func concat(parts ...[]catalog.FieldGenerator) []catalog.FieldGenerator {
 
 // instrumentBlock emits the FX Instrument component: Symbol (55),
 // SecurityID (48), SecurityIDSource (22), SecurityType (167),
-// Currency (15), SettlCurrency (120). v1 picks each independently
-// (see fieldsFor comment for the wire-coherence note); PR #16 pins
-// per-message coherence.
+// Currency (15), SettlCurrency (120). Every field reads the one
+// instrument picked for the message (pickedInstrument), so the block is
+// internally coherent and SettlDate can follow the pair's convention.
 func instrumentBlock() []catalog.FieldGenerator {
 	return []catalog.FieldGenerator{
 		symbolField(),
@@ -200,15 +202,15 @@ func instrumentBlock() []catalog.FieldGenerator {
 }
 
 func symbolField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		p := pickPair(r, pickSecurityType(r))
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		p := pickedInstrument(r, ctx).Pair
 		return catalog.Field{Tag: app.TagSymbol, Value: p.CCY1 + "/" + p.CCY2}
 	}
 }
 
 func securityIDField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		p := pickPair(r, pickSecurityType(r))
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		p := pickedInstrument(r, ctx).Pair
 		return catalog.Field{Tag: TagSecurityID, Value: p.CCY1 + p.CCY2}
 	}
 }
@@ -218,22 +220,45 @@ func securityIDSourceField() catalog.FieldGenerator {
 }
 
 func securityTypeField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		st := pickSecurityType(r)
-		return catalog.Field{Tag: app.TagSecurityType, Value: string(st)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagSecurityType, Value: string(pickedInstrument(r, ctx).SecType)}
 	}
 }
 
+// instrumentKey is the GenerateCtx.Memo key for the message's instrument.
+type instrumentKey struct{}
+
+// instrument is the SecurityType and pair one message trades.
+type instrument struct {
+	SecType catalog.SecurityType
+	Pair    pair
+}
+
+// pickedInstrument picks the message's instrument once and memoizes it,
+// so every field of the message describes the same trade.
+func pickedInstrument(r *rand.Rand, ctx *catalog.GenerateCtx) instrument {
+	if ctx.Memo == nil {
+		ctx.Memo = map[any]any{}
+	}
+	if v, ok := ctx.Memo[instrumentKey{}]; ok {
+		return v.(instrument)
+	}
+	st := pickSecurityType(r)
+	in := instrument{SecType: st, Pair: pickPair(r, st)}
+	ctx.Memo[instrumentKey{}] = in
+	return in
+}
+
 func currencyField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		p := pickPair(r, pickSecurityType(r))
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		p := pickedInstrument(r, ctx).Pair
 		return catalog.Field{Tag: TagCurrency, Value: p.CCY1}
 	}
 }
 
 func settlCurrencyField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		p := pickPair(r, pickSecurityType(r))
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		p := pickedInstrument(r, ctx).Pair
 		// For NDF, settlement is in USD by convention.
 		settl := p.CCY2
 		if p.NDFEligible {
@@ -253,7 +278,7 @@ func pickSecurityType(r *rand.Rand) catalog.SecurityType {
 func pickPair(r *rand.Rand, st catalog.SecurityType) pair {
 	ps := fxPairs[st]
 	if len(ps) == 0 {
-		return pair{CCY1: "EUR", CCY2: "USD", SettlTN: 2}
+		return pair{CCY1: "EUR", CCY2: "USD", SpotLag: 2}
 	}
 	return ps[r.Intn(len(ps))] // #nosec G404
 }
@@ -318,29 +343,52 @@ func tif() catalog.FieldGenerator {
 }
 
 func orderQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		// Realistic FX order size: $1MM - $100MM notional in $1MM ticks.
-		mm := 1 + r.Intn(100) // #nosec G404
-		return catalog.Field{Tag: app.TagOrderQty, Value: fmt.Sprintf("%d000000", mm)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagOrderQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
+}
+
+func drawQty(r *rand.Rand) string {
+	// Realistic FX order size: $1MM - $100MM notional in $1MM ticks.
+	mm := 1 + r.Intn(100) // #nosec G404
+	return fmt.Sprintf("%d000000", mm)
 }
 
 func leavesQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		mm := 1 + r.Intn(100) // #nosec G404
-		return catalog.Field{Tag: app.TagLeavesQty, Value: fmt.Sprintf("%d000000", mm)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagLeavesQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
 
+// quote is a pair's reference mid and its market quoting precision (JPY
+// pairs trade to 3 decimals, KRW to 2, most majors to 5).
+type quote struct {
+	mid      float64
+	decimals int
+}
+
+// Static reference mids, not live rates; each price jitters within
+// +/-1% of its mid. Feed live or configured mids if absolute levels matter.
+var quotes = map[string]quote{
+	"EURUSD": {1.1200, 5}, "GBPUSD": {1.3100, 5}, "USDJPY": {150.00, 3},
+	"USDCHF": {0.8500, 5}, "AUDUSD": {0.6600, 5}, "USDCAD": {1.3800, 5},
+	"NZDUSD": {0.6000, 5}, "EURGBP": {0.8550, 5}, "EURJPY": {165.00, 3},
+	"USDMXN": {18.800, 4}, "USDBRL": {5.500, 4}, "USDINR": {86.00, 4},
+	"USDCNY": {7.150, 4}, "USDKRW": {1400.0, 2}, "USDTWD": {31.50, 3},
+	"USDRUB": {88.00, 4},
+}
+
 func price() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		// FX prices use 5 decimal places (pip + half-pip precision).
-		// Range: 0.50000 to 200.00000.
-		// Use integer ten-thousandths to avoid float rounding.
-		pips := 50000 + r.Intn(19950000) // 5_0000 to 199_9999_5 // #nosec G404
-		whole := pips / 100000
-		frac := pips % 100000
-		return catalog.Field{Tag: app.TagPrice, Value: fmt.Sprintf("%d.%05d", whole, frac)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		p := pickedInstrument(r, ctx).Pair
+		q, ok := quotes[p.CCY1+p.CCY2]
+		if !ok {
+			// Safety net: every pair has a quote; a pair added without one
+			// still prices instead of emitting 0.
+			q = quote{mid: 1, decimals: 5}
+		}
+		px := q.mid * (1 + (r.Float64()*2-1)*0.01) // #nosec G404
+		return catalog.Field{Tag: app.TagPrice, Value: strconv.FormatFloat(px, 'f', q.decimals, 64)}
 	}
 }
 
@@ -354,15 +402,55 @@ func transactTime() catalog.FieldGenerator {
 	}
 }
 
+// settlementKey is the GenerateCtx.Memo key for the message's settlement.
+type settlementKey struct{}
+
+// settlement is a SettlType (63) with the SettlDate (64) it implies.
+type settlement struct {
+	Type string
+	Date time.Time
+}
+
+// pickedSettlement picks SettlType and derives SettlDate from the trade
+// date, memoized so tags 63 and 64 always agree. Spot (FOR) trades settle
+// cash (T+0), next day (T+1), or regular (the pair's spot lag). Forwards,
+// swaps, and NDFs settle as SettlType 6 at spot plus the pair's tenor (whole
+// calendar months or days), rolled to the next business day.
+func pickedSettlement(r *rand.Rand, ctx *catalog.GenerateCtx) settlement {
+	if ctx.Memo == nil { // safety net: message fields pick the instrument first, which allocates Memo
+		ctx.Memo = map[any]any{}
+	}
+	if v, ok := ctx.Memo[settlementKey{}]; ok {
+		return v.(settlement)
+	}
+	in := pickedInstrument(r, ctx)
+	trade := ctx.TradeDate()
+	var st settlement
+	if in.SecType == catalog.SecFOR {
+		switch []string{SettlTypeSpot, SettlTypeCash, SettlTypeNextDay}[r.Intn(3)] { // #nosec G404
+		case SettlTypeCash:
+			st = settlement{Type: SettlTypeCash, Date: catalog.NextBusinessDay(trade)}
+		case SettlTypeNextDay:
+			st = settlement{Type: SettlTypeNextDay, Date: catalog.AddBusinessDays(trade, 1)}
+		default:
+			st = settlement{Type: SettlTypeSpot, Date: catalog.AddBusinessDays(trade, in.Pair.SpotLag)}
+		}
+	} else {
+		spot := catalog.AddBusinessDays(trade, in.Pair.SpotLag)
+		st = settlement{Type: SettlTypeFwd, Date: catalog.AddTenor(spot, in.Pair.TenorMonths, in.Pair.TenorDays)}
+	}
+	ctx.Memo[settlementKey{}] = st
+	return st
+}
+
 func settlDate() catalog.FieldGenerator {
-	// Deterministic placeholder; StateTracker will populate per-trade
-	// settlement date based on T+N from the picked pair in PR #16.
-	return catalog.LiteralField(TagSettlDate, "20260601")
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagSettlDate, Value: pickedSettlement(r, ctx).Date.Format("20060102")}
+	}
 }
 
 func settlType() catalog.FieldGenerator {
-	choices := []string{SettlTypeSpot, SettlTypeCash, SettlTypeNextDay, SettlTypeFwd}
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagSettlType, Value: choices[r.Intn(len(choices))]} // #nosec G404
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagSettlType, Value: pickedSettlement(r, ctx).Type}
 	}
 }

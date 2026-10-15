@@ -111,8 +111,8 @@ services:
     <<: *blitz-common
     environment:
       BLITZ_GENERATOR_TYPE: apache-common
-      BLITZ_GENERATOR_APACHECOMMON_WORKERS: ${BLITZ_WORKERS:-1}
-      BLITZ_GENERATOR_APACHECOMMON_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_APACHE_COMMON_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_APACHE_COMMON_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
       BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
       BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
@@ -122,8 +122,8 @@ services:
     <<: *blitz-common
     environment:
       BLITZ_GENERATOR_TYPE: apache-combined
-      BLITZ_GENERATOR_APACHECOMBINED_WORKERS: ${BLITZ_WORKERS:-1}
-      BLITZ_GENERATOR_APACHECOMBINED_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_APACHE_COMBINED_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_APACHE_COMBINED_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
       BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
       BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
@@ -133,8 +133,8 @@ services:
     <<: *blitz-common
     environment:
       BLITZ_GENERATOR_TYPE: apache-error
-      BLITZ_GENERATOR_APACHEERROR_WORKERS: ${BLITZ_WORKERS:-1}
-      BLITZ_GENERATOR_APACHEERROR_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_APACHE_ERROR_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_APACHE_ERROR_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
       BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
       BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
@@ -227,8 +227,8 @@ services:
       BLITZ_GENERATOR_FIX_RATE: ${BLITZ_RATE:-1s}
       BLITZ_GENERATOR_FIX_VERSION: ${BLITZ_FIX_VERSION:-4.4}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 
   # Network flow records (NetFlow/IPFIX/sFlow) exported over UDP. Point it at a
   # collector with a netflow/sflow receiver (e.g. bdot-collector with a

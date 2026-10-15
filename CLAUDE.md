@@ -60,11 +60,11 @@ When adding a generator called `syslog-rfc5424`, update docker-compose:
     <<: *blitz-common
     environment:
       BLITZ_GENERATOR_TYPE: syslog-rfc5424
-      BLITZ_GENERATOR_SYSLOGRFC5424_WORKERS: ${BLITZ_WORKERS:-1}
-      BLITZ_GENERATOR_SYSLOGRFC5424_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_SYSLOG_RFC5424_WORKERS: ${BLITZ_WORKERS:-1}
+      BLITZ_GENERATOR_SYSLOG_RFC5424_RATE: ${BLITZ_RATE:-1s}
       BLITZ_OUTPUT_TYPE: otlp-grpc
-      BLITZ_OUTPUT_OTLPGRPC_HOST: bdot-collector
-      BLITZ_OUTPUT_OTLPGRPC_PORT: "4317"
+      BLITZ_OUTPUT_OTLP_GRPC_HOST: bdot-collector
+      BLITZ_OUTPUT_OTLP_GRPC_PORT: "4317"
 ```
 
 ## PII Generator
