@@ -3,7 +3,9 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strings"
+	"time"
 )
 
 // Config is the configuration for blitz.
@@ -105,12 +107,34 @@ func (c *Config) EffectiveOutputs() []Output {
 	return c.Outputs
 }
 
+// expandedSeedStride separates the seeds of hostmetrics entries expanded from
+// one comma-separated os value.
+const expandedSeedStride = 1 << 32
+
+// ResolveExpandedSeeds resolves a random (negative) seed on a hostmetrics entry
+// that expands across several OSes once for the whole entry, so every call to
+// EffectiveGenerators sees the same seeds and the seed the first host logs
+// replays every host. Both loaders call it after decoding.
+func (c *Config) ResolveExpandedSeeds() {
+	resolve := func(g *Generator) {
+		if g.Type == GeneratorTypeHostMetrics && strings.Contains(g.HostMetrics.OS, ",") && g.HostMetrics.Seed < 0 {
+			g.HostMetrics.Seed = time.Now().UnixNano()
+		}
+	}
+	// Only generators: entries expand; the singular form's Validate rejects
+	// a comma-separated os.
+	for i := range c.Generators {
+		resolve(&c.Generators[i])
+	}
+}
+
 // expandGenerators expands comma-separated HostMetrics OS values.
 func expandGenerators(gens []Generator) []Generator {
 	var result []Generator
 	for _, g := range gens {
 		if g.Type == GeneratorTypeHostMetrics && strings.Contains(g.HostMetrics.OS, ",") {
 			parts := strings.Split(g.HostMetrics.OS, ",")
+			clone := int64(0)
 			for _, os := range parts {
 				trimmed := strings.TrimSpace(os)
 				if trimmed == "" {
@@ -118,6 +142,14 @@ func expandGenerators(gens []Generator) []Generator {
 				}
 				expanded := g
 				expanded.HostMetrics.OS = trimmed
+				// Each host needs its own stream: a shared deterministic seed
+				// would emit identical values. The stride clears worker
+				// offsets (worker N uses Seed+N), wrapping within the
+				// non-negative range so a large seed stays deterministic.
+				if g.HostMetrics.Seed >= 0 {
+					expanded.HostMetrics.Seed = int64((uint64(g.HostMetrics.Seed) + uint64(clone)*expandedSeedStride) & math.MaxInt64) // #nosec G115 -- masked to the non-negative int64 range
+				}
+				clone++
 				result = append(result, expanded)
 			}
 		} else {

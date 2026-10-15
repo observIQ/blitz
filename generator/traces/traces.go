@@ -59,15 +59,16 @@ type Config struct {
 	// (its EndTime is reached on wall-clock). Required.
 	Consumer embed.TraceConsumer
 	// Seed controls per-worker RNG seeding for span content.
-	// Negative → randomize (worker N gets time.Now().UnixNano()+N).
+	// Negative → randomize: resolved once in New to time.Now().UnixNano(),
+	// logged as "seed" at Start, then worker N gets that seed+N.
 	// 0 or positive → deterministic (worker N gets seed Seed+N), so
 	// trace structure — span Name, Kind, StatusCode, Attributes,
 	// child count — is reproducible across runs.
 	//
-	// Programmatic Go callers see the literal value here. The YAML
-	// path additionally translates `seed: 0` (or omitted) into
-	// randomize at the dispatch layer so YAML users get stochastic
-	// data by default.
+	// Programmatic Go callers see the literal value here. The config
+	// layer defaults an omitted `seed:` to -1, so YAML, env, and flag
+	// users get random data unless they set a seed; an explicit 0 is
+	// deterministic.
 	//
 	// TraceID and SpanID are NOT governed by Seed: they come from
 	// crypto/rand and are always globally unique. This preserves
@@ -136,6 +137,11 @@ func New(cfg Config) (*Generator, error) {
 		return nil, fmt.Errorf("build generator metrics: %w", err)
 	}
 
+	// Resolve a negative (random) seed once, so the whole run derives
+	// from one logged value and rerunning with it reproduces the run.
+	if cfg.Seed < 0 {
+		cfg.Seed = time.Now().UnixNano()
+	}
 	// Resolve the simulated host: an explicit Environment identity when
 	// supplied, otherwise a minimal Linux-style identity synthesized from the
 	// Hostname knob. The resource projection is built once here and reused for
@@ -168,12 +174,8 @@ func syntheticIdentity(cfg Config) *datagen.SystemIdentity {
 	if hostname == "" {
 		// Hostname-only RNG; seeded once at construction since the
 		// simulated host is fixed for the lifetime of the generator.
-		seed := cfg.Seed
-		if seed < 0 {
-			seed = time.Now().UnixNano()
-		}
 		hostname = datagen.GenerateHostname(
-			mathrand.New(mathrand.NewSource(seed)), // #nosec G404 -- seeded for determinism contract
+			mathrand.New(mathrand.NewSource(cfg.Seed)), // #nosec G404 -- seeded for determinism contract
 			datagen.StyleLinux,
 			datagen.AllMythologyNames,
 		)
@@ -201,6 +203,7 @@ func (g *Generator) Start(_ context.Context) error {
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
 		zap.String("hostname", g.hostname),
+		zap.Int64("seed", g.seed),
 	)
 
 	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), generatorType)
@@ -273,12 +276,8 @@ func (g *Generator) SupportedTelemetry() []telemetry.Type {
 func (g *Generator) worker(id int) {
 	defer g.wg.Done()
 
-	seed := g.seed
-	if seed < 0 {
-		seed = time.Now().UnixNano() + int64(id)
-	} else {
-		seed += int64(id)
-	}
+	// g.seed was resolved to a non-negative value in New.
+	seed := g.seed + int64(id)
 	r := mathrand.New(mathrand.NewSource(seed)) // #nosec G404 -- seeded for determinism contract
 
 	ticker := time.NewTicker(g.rate)
