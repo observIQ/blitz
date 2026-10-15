@@ -1,89 +1,183 @@
 // Package asm registers the BIG-IP ASM (Application Security Manager)
-// product: WAF security events / attack signatures.
+// product: WAF security events from a remote logging profile.
 //
-// The ASM remote-logging Storage Format is operator-configurable (Field-List /
-// User-Defined), so there is no single positional wire spec. This models F5's
-// documented DEFAULT syslog field set, in the documented order, emitted as
-// comma-separated key="value" pairs. The full field catalog is GUI-only and not
-// published as an ordered reference.
+// Lines follow the key-value remote format F5's own telemetry-streaming
+// fixtures carry: "ASM:" directly followed by the first key (no space), the
+// 47 keys in their real order, the full request with CRLFs escaped as \r\n,
+// and support_id as a 64-bit decimal. Attack events reuse the shared waf
+// scenarios, so the request line, violations, and signatures agree.
 //
-// Reference (validated 2026-09-25):
+// Sources (validated 2026-09-29):
 //
-//	https://techdocs.f5.com/en-us/bigip-17-5-0/big-ip-asm-implementations/logging-application-security-events.html
-//	(Logging Application Security Events — default syslog format field set.)
+//	F5Networks/f5-telemetry-streaming test/unit/tests/data/messageStreamTestsData.js
+//	(real remote-logging line; testdata/golden.log)
+//	layer-3-communications/f5-syslog common/Sample.hs
+//	(passed requests logging response_code 200)
 package asm
 
 import (
-	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/observiq/blitz/generator/f5/catalog"
+	"github.com/observiq/blitz/generator/f5/waf"
 	"github.com/observiq/blitz/internal/datagen"
 )
 
 func init() { catalog.Register(catalog.Product{Name: "asm", Build: build}) }
 
-// defaultFields is F5's documented default ASM syslog field set, in order.
-var defaultFields = []string{
-	"rejection_description",
-	"request_violation",
-	"support_id",
-	"source_ip",
-	"xff_ip",
-	"source_port",
-	"destination_ip",
-	"destination_port",
-	"route_domain",
-	"http_classifier",
-	"scheme",
-	"geographic_location",
-	"request",
-	"username",
-	"session_id",
-	"violation_rating",
+// pri is local0.info, the remote logging profile's default facility.
+var pri = catalog.PRI(catalog.Local0, 6)
+
+// event is one ASM line's values.
+type event struct {
+	Now                          time.Time
+	HeaderHost, UnitHost, MgmtIP string
+	Policy, PolicyApplyDate      string
+	SupportID                    uint64
+	Status                       string
+	ResponseCode                 int
+	ClientIP, Method, Protocol   string
+	Path, Query                  string
+	DateTime                     time.Time
+	Violations, SigIDs, SigNames string
+	Severity, AttackType, Geo    string
+	SessionID                    string
+	SrcPort, DestPort            int
+	DestIP                       string
+	Rating                       int
+	VSName, HostHeader           string
+	// Headers are the request headers after Host, as "Name: value".
+	Headers []string
 }
 
-// DefaultFields returns the documented default field order (for tests).
-func DefaultFields() []string { return append([]string(nil), defaultFields...) }
-
 var (
-	violations = []string{"Attack signature detected", "Illegal meta character in value", "Illegal URL length", "Illegal HTTP method"}
-	statuses   = []string{"blocked", "alerted", "passed"}
-	classes    = []string{"/Common/prod_waf_policy", "/Common/api_protection", "/Common/owasp_top10"}
-	geos       = []string{"US", "GB", "DE", "CN"}
-	schemes    = []string{"https", "http"}
+	policies = []string{"/Common/prod_waf_policy", "/Common/api_protection", "/Common/owasp_top10"}
+	vsNames  = []string{"/Common/vs_https_443", "/Common/vs_app", "/Common/vs_api"}
+	geos     = []string{"N/A", "US", "GB", "DE"}
+	// cleanTargets are ordinary requests a "log all requests" profile records.
+	cleanTargets = [][2]string{{"GET", "/"}, {"GET", "/index.html"}, {"POST", "/api/v1/orders"}, {"OPTIONS", "/hello"}}
 )
 
-func build(r *rand.Rand, c *catalog.Ctx) string {
-	status := statuses[r.Intn(len(statuses))]
-	rejection := "N/A"
-	if status == "blocked" {
-		rejection = "Request was blocked"
+// orEmpty maps the App Protect "N/A" placeholder to ASM's empty value.
+func orEmpty(s string) string {
+	if s == "N/A" {
+		return ""
 	}
-	vals := map[string]string{
-		"rejection_description": rejection,
-		"request_violation":     violations[r.Intn(len(violations))],
-		"support_id":            fmt.Sprintf("%d", 1000000000000000+r.Int63n(8999999999999999)),
-		"source_ip":             datagen.RandomPublicIPv4(r),
-		"xff_ip":                datagen.RandomPublicIPv4(r),
-		"source_port":           fmt.Sprintf("%d", 1024+r.Intn(64000)),
-		"destination_ip":        datagen.RandomPrivateIPv4(r),
-		"destination_port":      "443",
-		"route_domain":          "0",
-		"http_classifier":       classes[r.Intn(len(classes))],
-		"scheme":                schemes[r.Intn(len(schemes))],
-		"geographic_location":   geos[r.Intn(len(geos))],
-		"request":               "GET /api/v1/orders?id=1%27%20or%20%271%27=%271 HTTP/1.1",
-		"username":              "N/A",
-		"session_id":            fmt.Sprintf("%x", r.Uint64()),
-		"violation_rating":      fmt.Sprintf("%d", 1+r.Intn(5)),
+	return s
+}
+
+func build(r *rand.Rand, c *catalog.Ctx) string {
+	e := event{
+		Now: c.Now, HeaderHost: c.Hostname, UnitHost: c.Hostname, MgmtIP: c.Device.MgmtIP,
+		Policy:          policies[r.Intn(len(policies))],
+		PolicyApplyDate: c.Now.Add(-time.Duration(1+r.Intn(90*24)) * time.Hour).Format("2006-01-02 15:04:05"),
+		SupportID:       r.Uint64(),
+		ClientIP:        datagen.RandomPublicIPv4(r),
+		DateTime:        c.Now,
+		Geo:             geos[r.Intn(len(geos))],
+		SessionID:       strconv.FormatUint(r.Uint64(), 16),
+		SrcPort:         1024 + r.Intn(64512),
+		DestIP:          datagen.RandomPrivateIPv4(r),
+		VSName:          vsNames[r.Intn(len(vsNames))],
+	}
+	e.Protocol, e.DestPort = "HTTPS", 443
+	if r.Intn(4) == 0 {
+		e.Protocol, e.DestPort = "HTTP", 80
 	}
 
-	header := catalog.SyslogHeader(134, c.Now, c.Hostname, "ASM", 0)
-	parts := make([]string, len(defaultFields))
-	for i, name := range defaultFields {
-		parts[i] = name + `="` + vals[name] + `"`
+	// A third of lines are clean requests; the rest replay a waf scenario.
+	if pick := r.Intn(len(waf.Scenarios) + 1); pick < len(waf.Scenarios) {
+		s := waf.Scenarios[pick]
+		e.Status, e.ResponseCode = s.Status, s.ResponseCode
+		e.Method, e.Path, e.Query = s.Method, s.Path, s.Query
+		e.Violations, e.SigIDs, e.SigNames = s.Violations, orEmpty(s.SigIDs), orEmpty(s.SigNames)
+		e.Severity, e.AttackType, e.Rating = s.Severity, s.AttackTypes, s.Rating
+		e.HostHeader = s.HostHeader
+		e.Headers = []string{"User-Agent: " + s.UserAgent, "Accept: */*"}
+	} else {
+		t := cleanTargets[r.Intn(len(cleanTargets))]
+		e.Status, e.ResponseCode = "passed", 200
+		e.Method, e.Path = t[0], t[1]
+		e.Severity = "Informational"
+		e.HostHeader = e.DestIP + ":" + strconv.Itoa(e.DestPort)
+		e.Headers = []string{"User-Agent: curl/8.4.0", "Accept: */*"}
 	}
-	return header + " " + strings.Join(parts, ",")
+	return render(e)
+}
+
+// render emits the remote-logging line in its real key order.
+func render(e event) string {
+	target := e.Path
+	if e.Query != "" {
+		target += "?" + e.Query
+	}
+	req := e.Method + " " + target + " HTTP/1.1\r\nHost: " + e.HostHeader + "\r\n"
+	for _, h := range e.Headers {
+		req += h + "\r\n"
+	}
+	req += "\r\n"
+
+	kv := [][2]string{
+		{"unit_hostname", e.UnitHost},
+		{"management_ip_address", e.MgmtIP},
+		{"management_ip_address_2", ""},
+		{"http_class_name", e.Policy},
+		{"web_application_name", e.Policy},
+		{"policy_name", e.Policy},
+		{"policy_apply_date", e.PolicyApplyDate},
+		{"violations", e.Violations},
+		{"support_id", strconv.FormatUint(e.SupportID, 10)},
+		{"request_status", e.Status},
+		{"response_code", strconv.Itoa(e.ResponseCode)},
+		{"ip_client", e.ClientIP},
+		{"route_domain", "0"},
+		{"method", e.Method},
+		{"protocol", e.Protocol},
+		{"query_string", e.Query},
+		{"x_forwarded_for_header_value", "N/A"},
+		{"sig_ids", e.SigIDs},
+		{"sig_names", e.SigNames},
+		{"date_time", e.DateTime.Format("2006-01-02 15:04:05")},
+		{"severity", e.Severity},
+		{"attack_type", e.AttackType},
+		{"geo_location", e.Geo},
+		{"ip_address_intelligence", "N/A"},
+		{"username", "N/A"},
+		{"session_id", e.SessionID},
+		{"src_port", strconv.Itoa(e.SrcPort)},
+		{"dest_port", strconv.Itoa(e.DestPort)},
+		{"dest_ip", e.DestIP},
+		{"sub_violations", ""},
+		{"virus_name", "N/A"},
+		{"violation_rating", strconv.Itoa(e.Rating)},
+		{"websocket_direction", "N/A"},
+		{"websocket_message_type", "N/A"},
+		{"device_id", "N/A"},
+		{"staged_sig_ids", ""},
+		{"staged_sig_names", ""},
+		{"threat_campaign_names", ""},
+		{"staged_threat_campaign_names", ""},
+		{"blocking_exception_reason", "N/A"},
+		{"captcha_result", "not_received"},
+		{"microservice", ""},
+		{"vs_name", e.VSName},
+		{"uri", e.Path},
+		{"fragment", ""},
+		{"request", strings.ReplaceAll(req, "\r\n", `\r\n`)},
+		{"response", "Response logging disabled"},
+	}
+	var b strings.Builder
+	b.WriteString(catalog.SyslogHeader(pri, e.Now, e.HeaderHost, "ASM", 0))
+	for i, p := range kv {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		// The Splunk key-value format escapes a quote inside a value with a
+		// backslash (F5 bug 1054297 states the requirement).
+		b.WriteString(p[0] + `="` + strings.ReplaceAll(p[1], `"`, `\"`) + `"`)
+	}
+	return b.String()
 }

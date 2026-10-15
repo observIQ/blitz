@@ -328,6 +328,13 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.fix.targetCompID", "FIX TargetCompID (tag 56)", "VENUE"),
 		NewOverride("generator.fix.enabledCategories", "FIX asset categories to emit (empty = all)", []string{}),
 		NewOverride("generator.fix.seed", "FIX RNG seed (negative = random per run; 0+ = deterministic)", int64(-1)),
+		// The generator.f5.* defaults mirror f5.DefaultConfig();
+		// TestF5OverrideDefaultsMatchGenerator keeps them in step.
+		NewOverride("generator.f5.workers", "number of F5 generator workers", 1),
+		NewOverride("generator.f5.rate", "rate at which F5 logs are generated per worker", time.Second),
+		NewOverride("generator.f5.hostname", "BIG-IP unit hostname (empty = environment F5 device, else bigip1)", ""),
+		NewOverride("generator.f5.seed", "F5 RNG seed (negative = random per run, 0+ = deterministic)", int64(-1)),
+		NewOverride("generator.f5.enabledProducts", "F5 products to emit (empty = all). One or more of: asm|afm|apm|dns|audit|nginx-plus|nginx-app-protect|irules|f5os", []string{}),
 		NewOverride("output.type", "output type. One of: nop|stdout|tcp|udp|syslog|otlp-grpc|file|hec|flow|prometheus-remote-write|prometheus-scrape", OutputTypeNop),
 		NewOverride("output.stdout.flushInterval", "stdout output flush interval", DefaultStdoutFlushInterval),
 		NewOverride("output.udp.host", "UDP output target host", ""),

@@ -2,12 +2,12 @@ package config
 
 import (
 	"fmt"
+	"maps"
+	"math"
+	"slices"
 	"time"
 
 	"github.com/observiq/blitz/generator/f5/catalog"
-
-	// Register the F5 products so product-name validation can see them.
-	_ "github.com/observiq/blitz/generator/f5"
 )
 
 // F5GeneratorConfig contains configuration for the multi-product F5 log
@@ -20,14 +20,14 @@ type F5GeneratorConfig struct {
 	// Hostname is the simulated F5 device hostname in the syslog header.
 	Hostname string `yaml:"hostname,omitempty" mapstructure:"hostname,omitempty"`
 	// EnabledProducts restricts emission to a subset of product names.
-	// Empty = all. Valid tokens: ltm, asm, afm, apm, dns, audit,
+	// Empty = all. Valid tokens: asm, afm, apm, dns, audit,
 	// nginx-plus, nginx-app-protect, irules, f5os.
 	EnabledProducts []string `yaml:"enabledProducts,omitempty" mapstructure:"enabledProducts,omitempty"`
 	// Weights sets the relative mix ratio per product name. Absent =
 	// weight 1. Empty map = all equal.
 	Weights map[string]float64 `yaml:"weights,omitempty" mapstructure:"weights,omitempty"`
-	// Seed is the deterministic RNG seed. Negative randomizes per worker;
-	// 0+ produces byte-identical output across runs for the same seed.
+	// Seed is the RNG seed. Negative picks a random seed once (logged at
+	// start); 0+ is deterministic (same seed + same start time = same output).
 	Seed int64 `yaml:"seed,omitempty" mapstructure:"seed,omitempty"`
 }
 
@@ -39,15 +39,33 @@ func (c *F5GeneratorConfig) Validate() error {
 	if c.Rate <= 0 {
 		return fmt.Errorf("f5 generator rate must be positive, got %v", c.Rate)
 	}
+	seen := make(map[string]bool, len(c.EnabledProducts))
 	for _, name := range c.EnabledProducts {
-		if _, ok := catalog.Get(name); !ok {
+		if !catalog.Known(name) {
 			return fmt.Errorf("f5 generator enabledProducts: unknown product %q", name)
 		}
+		if seen[name] {
+			return fmt.Errorf("f5 generator enabledProducts: %q listed more than once", name)
+		}
+		seen[name] = true
 	}
-	for name := range c.Weights {
-		if _, ok := catalog.Get(name); !ok {
+	var sum float64
+	for _, name := range slices.Sorted(maps.Keys(c.Weights)) { // stable error and sum
+		w := c.Weights[name]
+		if !catalog.Known(name) {
 			return fmt.Errorf("f5 generator weights: unknown product %q", name)
 		}
+		if len(seen) > 0 && !seen[name] {
+			return fmt.Errorf("f5 generator weights: %q is not in enabledProducts", name)
+		}
+		if !(w > 0) || math.IsInf(w, 1) { // !(w > 0) also catches NaN
+			return fmt.Errorf("f5 generator weights: %q must be positive and finite, got %v", name, w)
+		}
+		sum += w
+	}
+	if math.IsInf(sum, 1) {
+		// An infinite total would always pick the last product.
+		return fmt.Errorf("f5 generator weights: sum must be finite, got %v", sum)
 	}
 	return nil
 }

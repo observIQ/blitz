@@ -1,20 +1,30 @@
-// Package afm registers the BIG-IP AFM (Advanced Firewall Manager)
-// product: L3/L4 network firewall events.
+// Package afm registers the BIG-IP AFM (Advanced Firewall Manager) product:
+// network firewall events.
 //
-// Byte-exact to F5's documented DEFAULT network-firewall log format (the
-// "None" storage-format type): a comma-separated, double-quoted, positional
-// value list in the documented field order below.
+// Lines use the default ("None") storage format: fourteen double-quoted,
+// comma-separated values in F5's documented order, sent by tmm over a
+// remote high-speed log destination at local0.info. Values use the spellings
+// real events carry: "Virtual Server" and "Global" contexts (a Global event
+// has an empty context_name), uppercase protocols, "Accept", "Accept
+// Decisively" (Global context only), "Drop", "Reject", and no ports for ICMP.
 //
-// Reference (validated 2026-09-25):
+// Sources (validated 2026-09-29):
 //
-//	https://techdocs.f5.com/kb/en-us/products/big-ip-afm/manuals/product/network-firewall-policies-implementations-11-6-0/13.html
-//	(Local Logging with the Network Firewall — default log format field order.)
+//	https://techdocs.f5.com/kb/en-us/products/big-ip-afm/manuals/product/big-ip-network-firewall-policies-and-implementations-14-1-0/20.html
+//	(default storage format field order)
+//	f5devcentral/f5-big-iq-lab lab/traffic-scripts/playback/AFMPlayback/dataAFM/*.txt
+//	(real AFM events: context, protocol, action, and drop_reason spellings)
+//	https://cdn.f5.com/product/bugtracker/ID439094.html ("Accept Decisively" as logged)
+//	elastic/integrations packages/f5_bigip/_dev/deploy/docker/sample_logs/log.log (drop_reason "Policy")
+//	Juniper JSA F5 BIG-IP AFM DSM sample (tmm as the sending process)
 package afm
 
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/observiq/blitz/generator/f5/catalog"
 	"github.com/observiq/blitz/internal/datagen"
@@ -22,64 +32,58 @@ import (
 
 func init() { catalog.Register(catalog.Product{Name: "afm", Build: build}) }
 
-// defaultFields is the documented AFM default ("None") log format field order.
-// The wire format is positional quoted CSV in exactly this order.
-var defaultFields = []string{
-	"management_ip_address",
-	"bigip_hostname",
-	"context_type",
-	"context_name",
-	"src_ip",
-	"dest_ip",
-	"src_port",
-	"dest_port",
-	"vlan",
-	"protocol",
-	"route_domain",
-	"acl_rule_name",
-	"action",
-	"drop_reason",
+// pri is local0.info.
+var pri = catalog.PRI(catalog.Local0, 6)
+
+// event is one firewall event's values, in the documented default storage
+// format order.
+type event struct {
+	MgmtIP, Host, ContextType, ContextName, SrcIP, DestIP, SrcPort, DestPort string
+	VLAN, Protocol, RouteDomain, Rule, Action, DropReason                    string
 }
 
-// DefaultFields returns the documented default field order (for tests).
-func DefaultFields() []string { return append([]string(nil), defaultFields...) }
+// outcome is a rule decision and the context it can happen in.
+type outcome struct {
+	action, dropReason, context string
+	rule                        string // empty when no rule matched
+}
 
 var (
-	actions     = []string{"Drop", "Reject", "Accept", "Accept-Decisively"}
-	protocols   = []string{"tcp", "udp", "icmp"}
-	dropReasons = []string{"Policy", "Blacklisted address", "No route to host", "Port denied"}
-	rules       = []string{"deny_inbound_rfc1918", "allow_web", "block_geo_cn", "default_deny"}
-	ctxTypes    = []string{"Virtual Server", "Route Domain", "Global", "Self IP"}
+	outcomes = []outcome{
+		{"Accept", "", "Virtual Server", "allow_web"},
+		{"Accept Decisively", "", "Global", "allow_trusted_sources"},
+		{"Drop", "Policy", "Global", "deny_blocklisted_ips"},
+		{"Reject", "Policy", "Virtual Server", "block_geo"},
+		{"Drop", "Connection Flow Miss", "Virtual Server", ""},
+	}
+	vss       = []string{"/Common/vip1", "/Common/VS1", "/Common/vs_app"}
+	protocols = []string{"TCP", "TCP", "UDP", "ICMP"}
 )
 
 func build(r *rand.Rand, c *catalog.Ctx) string {
-	action := actions[r.Intn(len(actions))]
-	dropReason := ""
-	if action == "Drop" || action == "Reject" {
-		dropReason = dropReasons[r.Intn(len(dropReasons))]
+	o := outcomes[r.Intn(len(outcomes))]
+	e := event{
+		MgmtIP: c.Device.MgmtIP, Host: c.FullName(), ContextType: o.context,
+		SrcIP: datagen.RandomPublicIPv4(r), DestIP: datagen.RandomPrivateIPv4(r),
+		VLAN: "/Common/external", Protocol: protocols[r.Intn(len(protocols))], RouteDomain: "0",
+		Rule: o.rule, Action: o.action, DropReason: o.dropReason,
 	}
-	// Positional values in defaultFields order.
-	vals := map[string]string{
-		"management_ip_address": datagen.RandomPrivateIPv4(r),
-		"bigip_hostname":        c.Hostname,
-		"context_type":          ctxTypes[r.Intn(len(ctxTypes))],
-		"context_name":          "/Common/vs_app",
-		"src_ip":                datagen.RandomPublicIPv4(r),
-		"dest_ip":               datagen.RandomPrivateIPv4(r),
-		"src_port":              fmt.Sprintf("%d", 1024+r.Intn(64000)),
-		"dest_port":             fmt.Sprintf("%d", []int{80, 443, 22, 53, 3389}[r.Intn(5)]),
-		"vlan":                  "/Common/external",
-		"protocol":              protocols[r.Intn(len(protocols))],
-		"route_domain":          "0",
-		"acl_rule_name":         rules[r.Intn(len(rules))],
-		"action":                action,
-		"drop_reason":           dropReason,
+	if o.context == "Virtual Server" {
+		e.ContextName = vss[r.Intn(len(vss))]
 	}
+	if o.dropReason == "Connection Flow Miss" {
+		e.Protocol = "TCP" // a flow miss is a TCP segment without a connection
+	}
+	if e.Protocol != "ICMP" {
+		e.SrcPort = strconv.Itoa(1024 + r.Intn(64512))
+		e.DestPort = strconv.Itoa([]int{80, 443, 22, 53, 3389}[r.Intn(5)])
+	}
+	return render(c.Now, c.Device.PID("tmm"), e)
+}
 
-	header := catalog.SyslogHeader(134, c.Now, c.Hostname, "tmm", 4000+r.Intn(2000))
-	parts := make([]string, len(defaultFields))
-	for i, name := range defaultFields {
-		parts[i] = `"` + vals[name] + `"`
-	}
-	return header + " " + strings.Join(parts, ",")
+// render emits the event as quoted CSV behind tmm's header.
+func render(now time.Time, pid int, e event) string {
+	vals := []string{e.MgmtIP, e.Host, e.ContextType, e.ContextName, e.SrcIP, e.DestIP, e.SrcPort,
+		e.DestPort, e.VLAN, e.Protocol, e.RouteDomain, e.Rule, e.Action, e.DropReason}
+	return fmt.Sprintf(`%s "%s"`, catalog.SyslogHeader(pri, now, e.Host, "tmm", pid), strings.Join(vals, `","`))
 }

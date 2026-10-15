@@ -80,6 +80,7 @@ component name picks among the eligible hosts only.
 | `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `json`, `fix`, `traces` | servers that run applications, any OS | server software never runs on a router, workstation, or DC, or on a server whose OS runs no applications |
 | `okta`, `filegen` | any                          | the source is not host-bound                    |
 | `palo-alto`    | a Palo Alto device from `network_systems` | it describes a firewall, not a host (see below) |
+| `f5`           | an F5 device from `network_systems`, plus a Linux server for NGINX Plus | BIG-IP modules describe the load balancer; NGINX runs on a server |
 | `flow`         | a routing device from `network_systems`, of `exporterVendor` when set | flows come from the device that forwards the traffic |
 
 Entries of the same generator type get their own hosts, even when their
@@ -92,8 +93,8 @@ environment host of its own. Every host's hostname is unique within the fleet.
 
 ### Appliance generators
 
-A generator that describes a network appliance (`palo-alto`, and `flow`'s
-exporter) takes a device from the environment's `network_systems` instead of a
+A generator that describes a network appliance (`palo-alto`, `f5`, and
+`flow`'s exporter) takes a device from the environment's `network_systems` instead of a
 host. `flow` takes any routing (L3) device, or only `exporterVendor`'s when
 that is set, and its records name the device's management address as the
 exporter. Every device has a

@@ -39,8 +39,9 @@ Round 1's review cycles, and brings the existing components up to one consistent
 
 ### Round 3: Additional data types and sources
 
-NetFlow, sFlow, and IPFIX flow records. An F5 multi-product log generator spanning LTM, ASM, AFM,
-APM, GTM, and AVR. A Prometheus output offering both a scrape endpoint and a remote-write client.
+NetFlow, sFlow, and IPFIX flow records. An F5 multi-product log generator spanning BIG-IP ASM,
+AFM, APM, DNS, audit, and iRules, NGINX Plus, NGINX App Protect, and the F5OS platform. A
+Prometheus output offering both a scrape endpoint and a remote-write client.
 
 ### Round 4: Simulating distributed environments
 

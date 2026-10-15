@@ -5,9 +5,11 @@ import (
 	"sync"
 )
 
-// registry holds all registered Products keyed by Name. Per-product
-// subpackages register at init (single-goroutine); the generator reads
-// them on construction. Guarded by an RWMutex for safety.
+// registry holds all registered Products keyed by Name. Products register
+// from package init functions, which Go runs one at a time before main, so
+// init-time registration alone needs no lock. The RWMutex covers the calls
+// that can run later and concurrently: Register and resetForTest from
+// tests, and Get and AllProducts from every generator New.
 var (
 	mu       sync.RWMutex
 	products = map[string]Product{}
@@ -44,11 +46,4 @@ func AllProducts() []Product {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
-}
-
-// ResetForTest empties the registry. Tests only.
-func ResetForTest() {
-	mu.Lock()
-	defer mu.Unlock()
-	products = map[string]Product{}
 }

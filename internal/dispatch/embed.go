@@ -207,8 +207,11 @@ func ForEmbedAt(logger *zap.Logger, genCfg config.Generator, ordinal int, consum
 			EnabledProducts: genCfg.F5.EnabledProducts,
 			Weights:         genCfg.F5.Weights,
 			Seed:            genCfg.F5.Seed,
-		}, consumers.LogConsumer, tel)
-		// ponytail: identity for F5 lands with the appliance selector.
+		}, consumers.LogConsumer, tel,
+			// BIG-IP modules describe the F5 appliance; NGINX Plus and App
+			// Protect describe the server host.
+			generator.WithAppliance(applianceIdentity(env, genCfg, ordinal)),
+			generator.WithIdentity(hostIdentity(env, genCfg, ordinal)))
 		return module(mod, err)
 	case config.GeneratorTypeHostMetrics:
 		if err := consumers.requireMetric(genCfg.Type); err != nil {
@@ -281,6 +284,8 @@ func applianceVendor(t config.GeneratorType) datagen.ApplianceVendor {
 	switch t {
 	case config.GeneratorTypePaloAlto:
 		return datagen.VendorPaloAlto
+	case config.GeneratorTypeF5:
+		return datagen.VendorF5
 	default:
 		return ""
 	}
@@ -409,6 +414,10 @@ func hostRequirement(genCfg config.Generator) datagen.HostRequirement {
 		config.GeneratorTypeNginx, config.GeneratorTypePostgres, config.GeneratorTypeJSON,
 		config.GeneratorTypeFIX, config.GeneratorTypeTraces:
 		return datagen.HostRequirement{Roles: servers, Apps: true}
+	case config.GeneratorTypeF5:
+		// The F5 generator's host identity is its NGINX Plus server, which
+		// runs only on Linux or FreeBSD (NGINX technical specs).
+		return datagen.HostRequirement{OS: datagen.OSLinux, Roles: servers, Apps: true}
 	default:
 		return datagen.HostRequirement{}
 	}

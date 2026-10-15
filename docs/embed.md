@@ -61,7 +61,7 @@ Generator names are the `generator.type` values the config accepts.
 
 | Signal  | Generators                                                                                                                                  | Consumer interface | Host field     |
 |---------|---------------------------------------------------------------------------------------------------------------------------------------------|--------------------|----------------|
-| Logs    | `apache-common`, `apache-combined`, `apache-error`, `filegen`, `fix`, `json`, `kubernetes`, `nginx`, `okta`, `palo-alto`, `postgres`, `wel` | `LogConsumer`      | `Host.Logs`    |
+| Logs    | `apache-common`, `apache-combined`, `apache-error`, `f5`, `filegen`, `fix`, `json`, `kubernetes`, `nginx`, `okta`, `palo-alto`, `postgres`, `wel` | `LogConsumer`      | `Host.Logs`    |
 | Metrics | `hostmetrics`                                                                                                                               | `MetricConsumer`   | `Host.Metrics` |
 | Traces  | `traces`                                                                                                                                    | `TraceConsumer`    | `Host.Traces`  |
 | Flows   | `flow`                                                                                                                                      | `FlowConsumer`     | `Host.Flows`   |
@@ -147,6 +147,8 @@ as `generator.WithIdentity(id)` on the positional log generators, or as the
 `Identity` field on a `Config` struct (`wel`, `fix`, `hostmetrics`, `traces`).
 A network-appliance generator (`palo-alto`) describes a device, not a host, so
 it takes `generator.WithAppliance(n)` instead and ignores `WithIdentity`.
+`f5` takes both: `WithAppliance` names its BIG-IP unit and `WithIdentity` its
+NGINX hosts.
 The former `SetHostIdentity` setter was removed. Omit the identity to describe
 the running process's host.
 
@@ -239,7 +241,7 @@ Recommended merge: `embed.Host.Resource` is the base; per-record `Metadata.Resou
 Every shipped Producer populates at least:
 
 - `host.name`: the hostname the record semantically describes (defaults to `os.Hostname()`, falls back to `blitz`).
-- `telemetry.source`: the module identifier (`apache`, `nginx`, `paloalto`, `fix`, `wel`, …).
+- `telemetry.source`: the module identifier (`apache`, `nginx`, `paloalto`, `fix`, `f5`, `wel`, …).
 
 When a simulated identity environment is configured, every Producer additionally
 projects the resolved host's identity onto each record: `host.id`, `host.arch`,
@@ -390,8 +392,10 @@ Flows follow the same pattern through `FlowConsumer`. For hosts that want flows 
 | Module                                       | Class    | Notes                                                                                                            |
 |----------------------------------------------|----------|------------------------------------------------------------------------------------------------------------------|
 | apache-common, apache-combined, apache-error | Producer | Common / Combined / Error log formats                                                                            |
+| f5                                           | Producer | Weighted mix of F5 product logs (BIG-IP modules, NGINX, F5OS); see [generator/f5.md](generator/f5.md)           |
 | filegen                                      | Producer | Replays lines from files; supports glob and directories                                                          |
 | flow                                         | Producer | Network flow records (5-tuple plus counters); the flow output picks the wire format                              |
+| fix                                          | Producer | FIX protocol messages (4.2, 4.4, 5.0SP2)                                                                         |
 | json                                         | Producer | Structured JSON logs; `default` and `pii` log types                                                              |
 | kubernetes                                   | Producer | CRI-O container log format                                                                                       |
 | nginx                                        | Producer | NGINX Combined log format                                                                                        |
