@@ -39,13 +39,11 @@ func TestHostMetricsGeneratorConfig_Validate(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid workers",
+			// workers was removed (rate is the load knob); unset is valid.
+			name: "workers unset",
 			config: HostMetricsGeneratorConfig{
-				Workers: 0,
-				Rate:    time.Second,
+				Rate: time.Second,
 			},
-			wantErr: true,
-			errMsg:  "workers must be 1 or greater",
 		},
 		{
 			name: "invalid rate",

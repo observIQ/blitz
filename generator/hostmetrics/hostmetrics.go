@@ -24,9 +24,13 @@ const generatorType = "hostmetrics"
 type Config struct {
 	// Logger is the zap logger used for diagnostic output. Required.
 	Logger *zap.Logger
-	// Workers is the number of worker goroutines. Required, >= 1.
+	// Workers is ignored: one simulated host runs one worker, and Rate is the
+	// load knob. Parallel workers only emitted duplicate series for the same
+	// host.
+	//
+	// Deprecated: ignored; kept so existing embed callers still compile.
 	Workers int
-	// Rate is the scrape interval per worker. Required, > 0.
+	// Rate is the scrape interval. Required, > 0.
 	Rate time.Duration
 	// OS is the simulated operating system: any value datagen.ParseOSType
 	// accepts, and linux when empty or unrecognized. Ignored when Identity is
@@ -45,10 +49,10 @@ type Config struct {
 	ScraperNames []string
 	// Consumer receives every scraped batch. Required.
 	Consumer embed.MetricConsumer
-	// Seed controls per-worker RNG seeding for scrape values.
-	// Negative → randomize: resolved once in New to time.Now().UnixNano(),
-	// logged as "seed" at Start, then worker N gets that seed+N.
-	// 0 or positive → deterministic (worker N gets seed Seed+N).
+	// Seed seeds the scrape-value RNG.
+	// Negative → randomize: resolved once in New to time.Now().UnixNano()
+	// and logged as "seed" at Start.
+	// 0 or positive → deterministic (the RNG uses Seed as given).
 	//
 	// Programmatic Go callers see the literal value here. The config
 	// layer defaults an omitted `seed:` to -1, so YAML, env, and flag
@@ -66,7 +70,6 @@ type Generator struct {
 	embed.ProducerMarker
 
 	logger   *zap.Logger
-	workers  int
 	rate     time.Duration
 	osType   string
 	hostname string
@@ -94,9 +97,6 @@ func New(cfg Config) (*Generator, error) {
 	if cfg.Consumer == nil {
 		return nil, fmt.Errorf("MetricConsumer cannot be nil")
 	}
-	if cfg.Workers < 1 {
-		return nil, fmt.Errorf("workers must be 1 or greater, got %d", cfg.Workers)
-	}
 	if cfg.Rate <= 0 {
 		return nil, fmt.Errorf("rate must be greater than 0, got %s", cfg.Rate)
 	}
@@ -122,7 +122,6 @@ func New(cfg Config) (*Generator, error) {
 
 	return &Generator{
 		logger:   cfg.Logger.Named("generator-hostmetrics"),
-		workers:  cfg.Workers,
 		rate:     cfg.Rate,
 		osType:   sys.OSInfo.Type.SemconvOSType(),
 		hostname: sys.Hostname,
@@ -181,10 +180,10 @@ func (g *Generator) SetCountTracker(tracker *count.Tracker) {
 	g.tracker = tracker
 }
 
-// Start launches the worker goroutines.
+// Start launches the single worker: one simulated host emits one sample per
+// series per rate interval.
 func (g *Generator) Start(_ context.Context) error {
 	g.logger.Info("Starting host metrics generator",
-		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate),
 		zap.String("os.type", g.osType),
 		zap.String("hostname", g.hostname),
@@ -192,17 +191,15 @@ func (g *Generator) Start(_ context.Context) error {
 		zap.Int64("seed", g.seed),
 	)
 
-	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), generatorType)
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, generatorType)
 
-	for i := range g.workers {
-		g.wg.Add(1)
-		go g.worker(i)
-	}
+	g.wg.Add(1)
+	go g.worker()
 
 	return nil
 }
 
-// Stop signals workers to drain and waits for them to exit.
+// Stop signals the worker to drain and waits for it to exit.
 func (g *Generator) Stop(ctx context.Context) error {
 	g.logger.Info("Stopping host metrics generator")
 
@@ -230,11 +227,11 @@ func (g *Generator) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Metrics}
 }
 
-func (g *Generator) worker(id int) {
+func (g *Generator) worker() {
 	defer g.wg.Done()
 
 	// g.seed was resolved to a non-negative value in New.
-	seed := g.seed + int64(id)
+	seed := g.seed
 	r := rand.New(rand.NewSource(seed)) // #nosec G404 -- seeded for determinism contract
 
 	ticker := time.NewTicker(g.rate)
@@ -262,9 +259,8 @@ func (g *Generator) scrape(r *rand.Rand) {
 
 	// The host-identity resource is fixed for this generator's lifetime, so it
 	// is built once (StaticResources in New) and shared read-only across every
-	// scrape and worker. Scrapers only attach it to the MetricRecords they
-	// return — they never mutate it — so handing out the zero-allocation shared
-	// map is safe under concurrent workers.
+	// scrape. Scrapers only attach it to the MetricRecords they return — they
+	// never mutate it — so handing out the zero-allocation shared map is safe.
 	res := g.static.Record()
 
 	for _, scraper := range g.scrapers {

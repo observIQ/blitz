@@ -9,7 +9,11 @@ import (
 
 // HostMetricsGeneratorConfig contains configuration for host metrics generator
 type HostMetricsGeneratorConfig struct {
-	// Workers is the number of worker goroutines for host metrics generation
+	// Workers is removed and ignored: one simulated host runs one worker, and
+	// Rate is the load knob. Kept only so a still-configured value can be
+	// detected and warned about (see LogRemovedSettings).
+	//
+	// Deprecated: ignored; expected to fail validation as of v0.25.0.
 	Workers int `yaml:"workers,omitempty" mapstructure:"workers,omitempty"`
 	// Rate is the scrape interval for host metrics
 	Rate time.Duration `yaml:"rate,omitempty" mapstructure:"rate,omitempty"`
@@ -22,12 +26,12 @@ type HostMetricsGeneratorConfig struct {
 	Hostname string `yaml:"hostname,omitempty" mapstructure:"hostname,omitempty"`
 	// Scrapers is the list of scrapers to enable. If empty, all scrapers are enabled.
 	Scrapers []string `yaml:"scrapers,omitempty" mapstructure:"scrapers,omitempty"`
-	// Seed seeds scrape values per the contract in docs/datagen.md:
+	// Seed seeds the scrape-value RNG per the contract in docs/datagen.md:
 	// negative randomizes (the resolved seed is logged), 0 or positive is
-	// deterministic (worker N uses Seed+N), and an omitted key defaults to
-	// -1. Host identity is not governed by this seed: the loaders always
-	// build the simulated environment, which picks the host from
-	// `environment.seed_config`.
+	// deterministic (the RNG uses Seed as given), and an omitted key
+	// defaults to -1. Host identity is not governed by this seed: the
+	// loaders always build the simulated environment, which picks the host
+	// from `environment.seed_config`.
 	Seed int64 `yaml:"seed,omitempty" mapstructure:"seed,omitempty"`
 }
 
@@ -38,10 +42,6 @@ var ValidScrapers = []string{
 
 // Validate validates the host metrics generator configuration
 func (c *HostMetricsGeneratorConfig) Validate() error {
-	if c.Workers < 1 {
-		return fmt.Errorf("hostmetrics generator workers must be 1 or greater, got %d", c.Workers)
-	}
-
 	if c.Rate <= 0 {
 		return fmt.Errorf("hostmetrics generator rate must be positive, got %v", c.Rate)
 	}

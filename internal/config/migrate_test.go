@@ -222,6 +222,67 @@ func TestLogGeneratorDeprecations_NilSafe(t *testing.T) {
 	})
 }
 
+// TestLogRemovedSettings_HostMetricsWorkers asserts a Warn fires when the
+// removed generator.hostmetrics.workers setting is still configured, and that
+// it points to rate and the expected v0.25.0 validation failure.
+func TestLogRemovedSettings_HostMetricsWorkers(t *testing.T) {
+	core, recorded := observer.New(zap.WarnLevel)
+	logger := zap.New(core)
+
+	cfg := &config.Config{
+		Generator: config.Generator{
+			Type:        config.GeneratorTypeHostMetrics,
+			HostMetrics: config.HostMetricsGeneratorConfig{Workers: 4, Rate: time.Second},
+		},
+	}
+
+	config.LogRemovedSettings(logger, cfg)
+
+	entries := recorded.FilterMessageSnippet("generator.hostmetrics.workers").All()
+	require.Len(t, entries, 1)
+	assert.Contains(t, entries[0].Message, "ignored")
+	assert.Contains(t, entries[0].Message, "rate")
+	assert.Contains(t, entries[0].Message, "v0.25.0")
+}
+
+// TestLogRemovedSettings_GeneratorsList covers hostmetrics entries in the
+// generators: list, one Warn per offending entry.
+func TestLogRemovedSettings_GeneratorsList(t *testing.T) {
+	core, recorded := observer.New(zap.WarnLevel)
+	logger := zap.New(core)
+
+	cfg := &config.Config{
+		Generators: []config.Generator{
+			{Type: config.GeneratorTypeHostMetrics, HostMetrics: config.HostMetricsGeneratorConfig{Workers: 2, Rate: time.Second}},
+			{Type: config.GeneratorTypeHostMetrics, HostMetrics: config.HostMetricsGeneratorConfig{Rate: time.Second}},
+			// One entry with two OSes is still one entry: one Warn.
+			{Type: config.GeneratorTypeHostMetrics, HostMetrics: config.HostMetricsGeneratorConfig{Workers: 4, OS: "linux,windows", Rate: time.Second}},
+		},
+	}
+
+	config.LogRemovedSettings(logger, cfg)
+
+	assert.Len(t, recorded.FilterMessageSnippet("generator.hostmetrics.workers").All(), 2)
+}
+
+// TestLogRemovedSettings_NotSetNoWarn confirms no warning when workers is unset.
+func TestLogRemovedSettings_NotSetNoWarn(t *testing.T) {
+	core, recorded := observer.New(zap.WarnLevel)
+	logger := zap.New(core)
+
+	cfg := &config.Config{
+		Generator: config.Generator{
+			Type:        config.GeneratorTypeHostMetrics,
+			HostMetrics: config.HostMetricsGeneratorConfig{Rate: time.Second},
+		},
+	}
+
+	config.LogRemovedSettings(logger, cfg)
+
+	assert.Empty(t, recorded.All())
+	assert.NotPanics(t, func() { config.LogRemovedSettings(nil, nil) })
+}
+
 // TestMigrateDeprecatedKeys_ListEntries pins the per-entry rename in an
 // outputs: list: a legacy otlpGrpc key moves to otlp-grpc, an entry that
 // already has otlp-grpc keeps it, and an entry that is not a map is left as is.

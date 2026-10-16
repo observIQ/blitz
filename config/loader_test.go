@@ -7,9 +7,11 @@ import (
 
 	"github.com/observiq/blitz/config"
 	"github.com/observiq/blitz/embed"
+	internalconfig "github.com/observiq/blitz/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // mockConsumer captures records for assertions.
@@ -168,7 +170,6 @@ func TestLoadModules_HostMetricsRequiresMetricConsumer(t *testing.T) {
 generator:
   type: hostmetrics
   hostmetrics:
-    workers: 1
     rate: 1s
     os: linux
 output:
@@ -181,6 +182,34 @@ metrics:
 	_, err := config.LoadModules(yaml, config.EmbedOpts{LogConsumer: &mockConsumer{}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "MetricConsumer")
+}
+
+// nopMetricConsumer accepts and discards metric points.
+type nopMetricConsumer struct{}
+
+func (nopMetricConsumer) ConsumeMetrics(context.Context, []embed.MetricPoint) error { return nil }
+
+// TestLoadModules_WarnsOnRemovedSettings pins that the embed path warns about
+// a removed setting, as the CLI does, rather than ignoring it silently.
+func TestLoadModules_WarnsOnRemovedSettings(t *testing.T) {
+	yaml := []byte(`
+generator:
+  type: hostmetrics
+  hostmetrics:
+    workers: 4
+    rate: 1s
+    os: linux
+output:
+  type: nop
+logging:
+  type: stdout
+metrics:
+  port: 19000
+`)
+	core, logs := observer.New(zap.WarnLevel)
+	_, err := config.LoadModules(yaml, config.EmbedOpts{Logger: zap.New(core), MetricConsumer: nopMetricConsumer{}})
+	require.NoError(t, err)
+	assert.Equal(t, 1, logs.FilterMessage(internalconfig.HostMetricsWorkersRemoved).Len())
 }
 
 func TestLoadModules_TracesRequiresTraceConsumer(t *testing.T) {
