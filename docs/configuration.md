@@ -178,7 +178,7 @@ generators:
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `fix`, `flow` |
+| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `fix`, `flow`, `f5` |
 
 For detailed configuration options for each generator, see the individual generator documentation:
 
@@ -476,7 +476,7 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
 - `logging.type` - Must be one of: `stdout`, `file`
 - `logging.file.path` - Required when `logging.type` is `file`
-- `generator.type` - Must be one of: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `fix`, `flow`
+- `generator.type` - Must be one of: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `fix`, `flow`, `f5`
 - `output.type` - Must be one of: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec`, `flow`, `prometheus-remote-write`, `prometheus-scrape`
 
 ## Error Handling

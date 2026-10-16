@@ -115,6 +115,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 | `blitz-traces` | Traces | Synthetic distributed traces (HTTP + DB spans) |
 | `blitz-fix` | FIX | FIX protocol messages (4.2 / 4.4 / 5.0 SP2) across 10 asset categories — NewOrderSingle, ExecutionReport, cancel/replace/status |
 | `blitz-flow` | Network Flow | Synthetic NetFlow/IPFIX/sFlow records exported over UDP |
+| `blitz-f5` | F5 | Multi-product F5 syslog: BIG-IP ASM/AFM/APM/DNS/audit, NGINX-on-F5 Plus + App Protect, iRules, F5OS |
 
 ## Running Individual Generators
 

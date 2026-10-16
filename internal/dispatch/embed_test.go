@@ -255,6 +255,32 @@ func TestForEmbedFIXRejectsUnknownCategory(t *testing.T) {
 	assert.Contains(t, err.Error(), "unknown asset category")
 }
 
+func TestForEmbedF5ReturnsProducerModule(t *testing.T) {
+	cfg := config.Generator{
+		Type: config.GeneratorTypeF5,
+		F5: config.F5GeneratorConfig{
+			Workers:         1,
+			Rate:            50 * time.Millisecond,
+			EnabledProducts: []string{"afm", "asm"},
+			Weights:         map[string]float64{"asm": 2},
+			Seed:            7,
+		},
+	}
+	mod, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	require.NotNil(t, mod)
+	assert.Equal(t, "f5", mod.Name())
+}
+
+func TestForEmbedF5PropagatesConfigError(t *testing.T) {
+	cfg := config.Generator{
+		Type: config.GeneratorTypeF5,
+		F5:   config.F5GeneratorConfig{Workers: 1, Rate: time.Second, EnabledProducts: []string{"nope"}},
+	}
+	_, err := ForEmbed(zap.NewNop(), cfg, logsOnly(), nil, nil, embed.NopTelemetry())
+	require.ErrorContains(t, err, "unknown f5 product")
+}
+
 func TestForEmbedRejectsNilLogger(t *testing.T) {
 	_, err := ForEmbed(nil, config.Generator{Type: config.GeneratorTypeFIX}, logsOnly(), nil, nil, embed.NopTelemetry())
 	require.Error(t, err)
@@ -323,4 +349,12 @@ func TestForEmbedTracesRejectsMissingTraceConsumer(t *testing.T) {
 	_, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{}, nil, nil, embed.NopTelemetry())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "TraceConsumer")
+}
+
+// TestForEmbedF5RequiresLogConsumer pins that F5, a log generator, is refused
+// without a LogConsumer.
+func TestForEmbedF5RequiresLogConsumer(t *testing.T) {
+	cfg := config.Generator{Type: config.GeneratorTypeF5, F5: config.F5GeneratorConfig{Workers: 1, Rate: time.Second}}
+	_, err := ForEmbed(zap.NewNop(), cfg, EmbedConsumers{MetricConsumer: noopMetricConsumer{}}, nil, nil, embed.NopTelemetry())
+	require.ErrorContains(t, err, "requires EmbedConsumers.LogConsumer")
 }

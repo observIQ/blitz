@@ -44,6 +44,8 @@ const (
 	// GeneratorTypeFlow represents the network flow (NetFlow/IPFIX/sFlow)
 	// generator
 	GeneratorTypeFlow GeneratorType = "flow"
+	// GeneratorTypeF5 represents the multi-product F5 log generator
+	GeneratorTypeF5 GeneratorType = "f5"
 )
 
 // Generator contains configuration for log generators
@@ -84,6 +86,8 @@ type Generator struct {
 	FIX FIXGeneratorConfig `yaml:"fix,omitempty" mapstructure:"fix,omitempty"`
 	// Flow contains network flow generator configuration
 	Flow FlowGeneratorConfig `yaml:"flow,omitempty" mapstructure:"flow,omitempty"`
+	// F5 contains F5 multi-product generator configuration
+	F5 F5GeneratorConfig `yaml:"f5,omitempty" mapstructure:"f5,omitempty"`
 }
 
 // Validate validates the generator configuration
@@ -164,8 +168,12 @@ func (g *Generator) Validate() error {
 		if err := g.Flow.Validate(); err != nil {
 			return fmt.Errorf("flow generator validation failed: %w", err)
 		}
+	case GeneratorTypeF5:
+		if err := g.F5.Validate(); err != nil {
+			return fmt.Errorf("f5 generator validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen, okta, hostmetrics, traces, wel, fix, flow", g.Type)
+		return fmt.Errorf("invalid generator type: %s, must be one of: nop, json, winevt, palo-alto, apache-common, apache-combined, apache-error, nginx, postgres, kubernetes, filegen, okta, hostmetrics, traces, wel, fix, flow, f5", g.Type)
 	}
 
 	return nil

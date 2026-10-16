@@ -14,6 +14,7 @@ import (
 	apachegen "github.com/observiq/blitz/generator/apache"
 	apachecombinedgen "github.com/observiq/blitz/generator/apache_combined"
 	apacheerrorgen "github.com/observiq/blitz/generator/apache_error"
+	f5gen "github.com/observiq/blitz/generator/f5"
 	"github.com/observiq/blitz/generator/filegen"
 	fixgen "github.com/observiq/blitz/generator/fix"
 	"github.com/observiq/blitz/generator/fix/catalog"
@@ -195,6 +196,23 @@ func ForEmbedAt(logger *zap.Logger, genCfg config.Generator, ordinal int, consum
 		mod, err := flowgen.New(logger, genCfg.Flow.Workers, genCfg.Flow.Rate, flowgen.Scenario(genCfg.Flow.Scenario), genCfg.Flow.Seed, consumers.FlowConsumer, tel,
 			generator.WithAppliance(flowExporter(env, genCfg, ordinal)))
 		return module(mod, err)
+	case config.GeneratorTypeF5:
+		if err := consumers.requireLog(genCfg.Type); err != nil {
+			return nil, err
+		}
+		mod, err := f5gen.New(logger, f5gen.Config{
+			Workers:         genCfg.F5.Workers,
+			Rate:            genCfg.F5.Rate,
+			Hostname:        genCfg.F5.Hostname,
+			EnabledProducts: genCfg.F5.EnabledProducts,
+			Weights:         genCfg.F5.Weights,
+			Seed:            genCfg.F5.Seed,
+		}, consumers.LogConsumer, tel,
+			// BIG-IP modules describe the F5 appliance; NGINX Plus and App
+			// Protect describe the server host.
+			generator.WithAppliance(applianceIdentity(env, genCfg, ordinal)),
+			generator.WithIdentity(hostIdentity(env, genCfg, ordinal)))
+		return module(mod, err)
 	case config.GeneratorTypeHostMetrics:
 		if err := consumers.requireMetric(genCfg.Type); err != nil {
 			return nil, err
@@ -266,6 +284,8 @@ func applianceVendor(t config.GeneratorType) datagen.ApplianceVendor {
 	switch t {
 	case config.GeneratorTypePaloAlto:
 		return datagen.VendorPaloAlto
+	case config.GeneratorTypeF5:
+		return datagen.VendorF5
 	default:
 		return ""
 	}
@@ -394,6 +414,10 @@ func hostRequirement(genCfg config.Generator) datagen.HostRequirement {
 		config.GeneratorTypeNginx, config.GeneratorTypePostgres, config.GeneratorTypeJSON,
 		config.GeneratorTypeFIX, config.GeneratorTypeTraces:
 		return datagen.HostRequirement{Roles: servers, Apps: true}
+	case config.GeneratorTypeF5:
+		// The F5 generator's host identity is its NGINX Plus server, which
+		// runs only on Linux or FreeBSD (NGINX technical specs).
+		return datagen.HostRequirement{OS: datagen.OSLinux, Roles: servers, Apps: true}
 	default:
 		return datagen.HostRequirement{}
 	}

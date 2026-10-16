@@ -156,6 +156,15 @@ func TestPrometheusScrapeOutputErrorNamesItsType(t *testing.T) {
 	}
 }
 
+// TestF5GeneratorErrorNamesItsType pins that an invalid F5 generator's error
+// says which generator failed.
+func TestF5GeneratorErrorNamesItsType(t *testing.T) {
+	err := (&Generator{Type: GeneratorTypeF5}).Validate()
+	if err == nil || !strings.Contains(err.Error(), "f5 generator validation failed") {
+		t.Fatalf("Validate() = %v, want an f5 generator validation error", err)
+	}
+}
+
 // TestFlowOutputErrorNamesItsType pins that an invalid flow output's error
 // says which output failed.
 func TestFlowOutputErrorNamesItsType(t *testing.T) {

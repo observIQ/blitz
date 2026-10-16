@@ -1,0 +1,6 @@
+Feb 12 16:11:31 F5-TEST notice tmm[22913]: 01490500:5: /Common/exchange2016:Common:8014e002: New session from client IP x.x.x.x (ST=Ile-de-France/CC=FR/C=EU) at VIP x.x.x.x Listener /Common/VS-EX2016-IQR_https (Reputation=Unknown)
+Feb 12 16:11:33 F5-TEST notice apmd[15789]: 01490102:5: /Common/exchange2016:Common:8014e002: Access policy result: LTM+APM_Mode
+Feb 12 16:11:36 F5-TEST notice tmm2[22913]: 01490506:5: /Common/exchange2016:Common:36e6238b: Received User-Agent header: MSRPC.
+Nov 21 18:03:09 vddmz-px13-an notice apd[10743]: 01490005:5: 6370a13a: Following rule 'fallback' from item 'NTLM Auth Result' to ending 'Deny'
+Nov 21 18:03:09 vddmz-px13-an notice tmm[15203]: 01490520:5: 6370a13a: Session deleted due to admin initiated termination.
+Nov 21 18:03:43 vddmz-px13-an notice tmm[15203]: 01490521:5: 6370a13a: Session statistics - bytes in: 0, bytes out: 0
