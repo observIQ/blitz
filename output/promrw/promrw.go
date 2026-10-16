@@ -157,11 +157,6 @@ func newWithClock(endpoint, ver string, batchN, maxBuffered int, batchTimeout, t
 	return o, nil
 }
 
-// Write reports that logs are unsupported: this output is metrics-only.
-func (o *Output) Write(_ context.Context, _ output.LogRecord) error {
-	return output.ErrUnsupportedTelemetryType
-}
-
 // WriteMetric maps a metric record and buffers its series. It never POSTs or
 // blocks: when the batch fills it signals the sender and returns. When the
 // buffer is over its cap, the oldest series are dropped, as Prometheus loses
