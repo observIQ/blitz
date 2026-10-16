@@ -126,11 +126,6 @@ type promLogger struct{ l *zap.Logger }
 
 func (p promLogger) Println(v ...any) { p.l.Error(fmt.Sprint(v...)) }
 
-// Write reports that logs are unsupported: this output is metrics-only.
-func (o *Output) Write(_ context.Context, _ output.LogRecord) error {
-	return output.ErrUnsupportedTelemetryType
-}
-
 // errStopped refuses a write after Stop: the endpoint no longer serves it.
 var errStopped = errors.New("promscrape: output stopped")
 
