@@ -488,8 +488,9 @@ func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int
 	// Domain controllers run Windows Server, so they get their own baseline.
 	prodDCBaseline := osInfoForTier(r, OSWindows, RoleDC, true)
 
+	usedHostnames := map[string]bool{}
 	build := func(spec osRoleSpec) (*SystemIdentity, error) {
-		sys, err := GenerateSystemIdentity(r, spec.os, spec.role, domain, spec.pool)
+		sys, err := generateSystemIdentity(r, spec.os, spec.role, domain, spec.pool, usedHostnames)
 		if err != nil {
 			return nil, err
 		}

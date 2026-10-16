@@ -3,6 +3,7 @@ package datagen
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -217,6 +218,13 @@ type CertInfo struct {
 // Passing a nil domain or a domain with a nil CA returns an error rather than
 // panicking, so an embedding host handles bad input without crashing.
 func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *DomainIdentity, names *Pool[string]) (*SystemIdentity, error) {
+	return generateSystemIdentity(r, os, role, domain, names, nil)
+}
+
+// generateSystemIdentity is GenerateSystemIdentity with a fleet's used
+// hostnames: a drawn hostname already in used gets the next free number
+// instead, and the result is added to used. A nil used skips the check.
+func generateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *DomainIdentity, names *Pool[string], used map[string]bool) (*SystemIdentity, error) {
 	if domain == nil {
 		return nil, fmt.Errorf("datagen: GenerateSystemIdentity: domain must not be nil")
 	}
@@ -236,6 +244,14 @@ func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *Do
 	}
 
 	hostname := GenerateHostname(r, style, names)
+	if used != nil {
+		// Bumping the number draws nothing from r, so a fleet without a
+		// collision is unchanged.
+		for used[hostname] {
+			hostname = nextHostnameNumber(hostname)
+		}
+		used[hostname] = true
+	}
 	fqdn := fqdnFor(hostname, domain.Name)
 
 	// Coherent OS release + machine id, from authentic release data.
@@ -338,4 +354,16 @@ func generateCertInfo(r *rand.Rand, fqdn, hostname string, ca *CertAuthority) *C
 		ValidTo:      now.AddDate(1, 0, 0),
 		SANs:         []string{fqdn, hostname},
 	}
+}
+
+// nextHostnameNumber increments a hostname's trailing number, keeping at
+// least two digits: PAX-CI13 becomes PAX-CI14, and web-20 becomes web-21.
+// Every GenerateHostname style ends in a number.
+func nextHostnameNumber(hostname string) string {
+	i := len(hostname)
+	for i > 0 && hostname[i-1] >= '0' && hostname[i-1] <= '9' {
+		i--
+	}
+	n, _ := strconv.Atoi(hostname[i:])
+	return fmt.Sprintf("%s%02d", hostname[:i], n+1)
 }

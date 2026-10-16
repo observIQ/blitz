@@ -94,6 +94,11 @@ This mapping is a convention, not enforced. Each caller explicitly passes the po
 - **StyleWindows**: `{MYTH}-{ROLE}{NN}` (uppercase)
 - **StyleDC**: `{MYTH}-DC{NN}` (uppercase)
 
+Within an environment every system's hostname is unique: a drawn name that is
+already taken gets the next free number instead (`PAX-CI13` becomes
+`PAX-CI14`), before the FQDN and certificate are built from it.
+`GenerateHostname` on its own does not check.
+
 ## Shared Data Pools
 
 ### HTTP (`http.go`)

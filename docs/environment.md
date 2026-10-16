@@ -88,7 +88,7 @@ fleet has fewer eligible hosts than the entries need (no domain controller for a
 `role: dc` entry, one macOS host for two `hostmetrics` `os: macos` entries),
 the environment adds the rest, deterministically per seed and after the drawn
 hosts, so the drawn fleet is unchanged and every entry describes a real
-environment host of its own.
+environment host of its own. Every host's hostname is unique within the fleet.
 
 ### Appliance generators
 
