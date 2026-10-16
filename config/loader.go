@@ -80,8 +80,6 @@ func Load(yamlBytes []byte, opts LoadOpts) (*Config, error) {
 		return nil, fmt.Errorf("parse blitz YAML: %w", err)
 	}
 	internalconfig.MigrateDeprecatedKeys(v)
-	applySeedDefaults(v)
-	internalconfig.DefaultListSeeds(v)
 	for k, val := range opts.EnvOverrides {
 		v.Set(k, val)
 	}
@@ -213,16 +211,4 @@ func LoadModules(yamlBytes []byte, opts EmbedOpts) ([]embed.ProducerModule, erro
 		modules = append(modules, mod)
 	}
 	return modules, nil
-}
-
-// applySeedDefaults gives every generator seed key its override default (-1,
-// randomize) so an omitted seed means random in embedded mode too, per the
-// seed contract in docs/datagen.md. Only seeds are defaulted here: embedded
-// mode otherwise takes its values from the YAML as written.
-func applySeedDefaults(v *viper.Viper) {
-	for _, o := range internalconfig.DefaultOverrides() {
-		if strings.HasSuffix(o.Field, ".seed") {
-			v.SetDefault(o.Field, o.Default)
-		}
-	}
 }

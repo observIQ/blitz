@@ -690,7 +690,7 @@ func consumersFor(out output.Output, tel embed.TelemetrySettings) dispatch.Embed
 
 // loadConfig decodes the CLI config from v (the config file at path,
 // BLITZ_ env vars, and the flags init binds) with deprecated keys migrated
-// and list-entry seeds defaulted and resolved.
+// and list entries given their type defaults, seeds resolved.
 func loadConfig(v *viper.Viper, path string) (*config.Config, error) {
 	// Configure Viper to handle env overrides. Only BLITZ_ env vars count, so
 	// an unrelated variable such as OUTPUTS cannot replace or break the config.
@@ -711,7 +711,6 @@ func loadConfig(v *viper.Viper, path string) (*config.Config, error) {
 		return nil, err
 	}
 	config.MigrateDeprecatedKeys(v)
-	config.DefaultListSeeds(v)
 
 	if err := config.ValidateExclusiveOutputConfig(v, config.CLIExplicit(cliFlags)); err != nil {
 		return nil, err
