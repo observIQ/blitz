@@ -15,11 +15,17 @@ func TestFlowGeneratorConfigValidate(t *testing.T) {
 		c.Scenario = s
 		require.NoError(t, c.Validate(), "scenario %q", s)
 	}
+	for _, v := range []string{"", "cisco", "arista", "juniper", "f5", "palo-alto", "fortinet"} {
+		c := ok
+		c.ExporterVendor = v
+		require.NoError(t, c.Validate(), "exporter vendor %q", v)
+	}
 	for name, c := range map[string]FlowGeneratorConfig{
 		"zero workers":     {Workers: 0, Rate: time.Second},
 		"zero rate":        {Workers: 1, Rate: 0},
 		"negative rate":    {Workers: 1, Rate: -time.Second},
 		"unknown scenario": {Workers: 1, Rate: time.Second, Scenario: "lan"},
+		"unknown vendor":   {Workers: 1, Rate: time.Second, ExporterVendor: "hpe"},
 	} {
 		require.Error(t, c.Validate(), name)
 	}
