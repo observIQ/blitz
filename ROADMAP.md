@@ -28,20 +28,20 @@ What everything else builds on: finite generation, declaratively-defined metrics
 data generation, the embedded data library, and a normalized per-record metadata contract. This
 round also added the embed seam and public embed API, so blitz can be consumed as a library.
 
-## In progress
-
 ### Round 2: Bugfixes, tech debt, and standards
 
-The maintenance and conformance round. It lands the fixes and tech-debt work that surfaced during
-Round 1's review cycles, and brings the existing components up to one consistent standard.
-
-## Planned
+The maintenance and conformance round. It landed the fixes and tech-debt work that surfaced during
+Round 1's review cycles, and brought the existing components up to one consistent standard.
 
 ### Round 3: Additional data types and sources
 
 NetFlow, sFlow, and IPFIX flow records. An F5 multi-product log generator spanning BIG-IP ASM,
 AFM, APM, DNS, audit, and iRules, NGINX Plus, NGINX App Protect, and the F5OS platform. A
-Prometheus output offering both a scrape endpoint and a remote-write client.
+Prometheus output offering both a scrape endpoint and a remote-write client. Fan-out of one stream
+to multiple outputs at once. Full-width, spec-accurate PAN-OS logs, and more OS families in the
+synthetic environment.
+
+## In progress
 
 ### Round 4: Simulating distributed environments
 
@@ -49,6 +49,8 @@ Take blitz from single-process generation to a coordinated simulation of a whole
 Two thrusts. First, enrich the environment model with the primitives that describe how machines
 relate, fail, change, and sit in time and space. Second, coordinate multiple blitz instances into
 one simulation.
+
+## Planned
 
 ### Round 5: Plugin and extensibility SDK
 
