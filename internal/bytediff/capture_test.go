@@ -8,6 +8,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/internal/bytediff"
 	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
 )
 
 func TestLogCaptureRecordsAllWrites(t *testing.T) {
@@ -16,7 +17,7 @@ func TestLogCaptureRecordsAllWrites(t *testing.T) {
 
 	want := []string{"first", "second", "third"}
 	for _, msg := range want {
-		if err := cap.Write(ctx, output.LogRecord{Message: msg}); err != nil {
+		if err := cap.WriteLog(ctx, output.LogRecord{Message: msg}); err != nil {
 			t.Fatalf("write %q: %v", msg, err)
 		}
 	}
@@ -34,10 +35,21 @@ func TestLogCaptureRecordsAllWrites(t *testing.T) {
 
 func TestLogCaptureReset(t *testing.T) {
 	cap := bytediff.NewLogCapture()
-	_ = cap.Write(context.Background(), output.LogRecord{Message: "a"})
+	_ = cap.WriteLog(context.Background(), output.LogRecord{Message: "a"})
 	cap.Reset()
 	if got := len(cap.Messages()); got != 0 {
 		t.Fatalf("expected empty after reset, got %d messages", got)
+	}
+}
+
+func TestLogCaptureAcceptsLogsAndStopsCleanly(t *testing.T) {
+	cap := bytediff.NewLogCapture()
+	got := cap.SupportedTelemetry()
+	if len(got) != 1 || got[0] != telemetry.Logs {
+		t.Fatalf("expected [logs], got %v", got)
+	}
+	if err := cap.Stop(context.Background()); err != nil {
+		t.Fatalf("stop: %v", err)
 	}
 }
 
@@ -52,7 +64,7 @@ func TestLogCaptureConcurrent(t *testing.T) {
 			defer wg.Done()
 			ctx := context.Background()
 			for i := 0; i < writes; i++ {
-				_ = cap.Write(ctx, output.LogRecord{Message: "x"})
+				_ = cap.WriteLog(ctx, output.LogRecord{Message: "x"})
 			}
 		}()
 	}
@@ -62,9 +74,9 @@ func TestLogCaptureConcurrent(t *testing.T) {
 	}
 }
 
-// Verify the capture satisfies the output.Writer interface so any
-// generator wired against output.Writer can target it.
-var _ output.Writer = (*bytediff.LogCapture)(nil)
+// Verify the capture satisfies the output.LogWriter interface so any
+// generator wired against output.LogWriter can target it.
+var _ output.LogWriter = (*bytediff.LogCapture)(nil)
 
 // Verify the canonical embed.LogRecord type is what the capture stores
 // — the alias chain output.LogRecord = embed.LogRecord must hold for

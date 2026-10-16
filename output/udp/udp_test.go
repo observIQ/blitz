@@ -236,13 +236,13 @@ func TestUDP_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err = udp.Write(ctx, output.LogRecord{Message: testData1})
+	err = udp.WriteLog(ctx, output.LogRecord{Message: testData1})
 	if err != nil {
 		t.Errorf("First Write() failed: %v", err)
 	}
 
 	// Send second message
-	err = udp.Write(ctx, output.LogRecord{Message: testData2})
+	err = udp.WriteLog(ctx, output.LogRecord{Message: testData2})
 	if err != nil {
 		t.Errorf("Second Write() failed: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestUDP_WriteAfterStop(t *testing.T) {
 		}
 	}()
 
-	err = udp.Write(ctx, output.LogRecord{Message: "This should fail"})
+	err = udp.WriteLog(ctx, output.LogRecord{Message: "This should fail"})
 	if err != nil {
 		// Error is also expected due to race condition
 		if !strings.Contains(err.Error(), "UDP output is shutting down") {
@@ -377,7 +377,7 @@ func TestUDP_StopDrainsBufferedRecords(t *testing.T) {
 	const n = 100
 	ctx := context.Background()
 	for i := 0; i < n; i++ {
-		require.NoError(t, udp.Write(ctx, output.LogRecord{Message: fmt.Sprintf("drain-msg-%d", i)}))
+		require.NoError(t, udp.WriteLog(ctx, output.LogRecord{Message: fmt.Sprintf("drain-msg-%d", i)}))
 	}
 	require.NoError(t, udp.Stop(ctx))
 	require.Eventually(t, func() bool {

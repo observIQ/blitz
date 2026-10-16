@@ -173,8 +173,8 @@ func New(logger *zap.Logger, opts ...Option) (*HEC, error) {
 	return h, nil
 }
 
-// Write sends data to the HEC output channel for processing by workers.
-func (h *HEC) Write(ctx context.Context, data output.LogRecord) error {
+// WriteLog sends data to the HEC output channel for processing by workers.
+func (h *HEC) WriteLog(ctx context.Context, data output.LogRecord) error {
 	select {
 	case h.dataChan <- data:
 		h.metrics.recordLogsReceived(ctx, 1)

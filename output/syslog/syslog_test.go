@@ -17,7 +17,7 @@ type stubOutput struct {
 	stopped   bool
 }
 
-func (s *stubOutput) Write(ctx context.Context, data output.LogRecord) error {
+func (s *stubOutput) WriteLog(ctx context.Context, data output.LogRecord) error {
 	s.lastWrite = data.Message
 	return nil
 }
@@ -49,7 +49,7 @@ func TestFormatRFC5424(t *testing.T) {
 	s := newWithTransport(logger, cfg, stub)
 
 	ts := time.Date(2025, 1, 2, 3, 4, 5, 6, time.UTC)
-	err := s.Write(context.Background(), output.LogRecord{
+	err := s.WriteLog(context.Background(), output.LogRecord{
 		Message: "hello\nworld",
 		Metadata: output.LogRecordMetadata{
 			Timestamp: ts,
@@ -88,7 +88,7 @@ func TestFormatRFC3164(t *testing.T) {
 	time.Local = loc
 	defer func() { time.Local = origLocal }()
 	ts := time.Date(2025, 1, 2, 3, 4, 5, 0, loc)
-	err := s.Write(context.Background(), output.LogRecord{
+	err := s.WriteLog(context.Background(), output.LogRecord{
 		Message: "hello",
 		Metadata: output.LogRecordMetadata{
 			Timestamp: ts,
@@ -123,7 +123,7 @@ func TestUDPLengthTruncation(t *testing.T) {
 	s := newWithTransport(logger, cfg, stub)
 
 	ts := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
-	err := s.Write(context.Background(), output.LogRecord{
+	err := s.WriteLog(context.Background(), output.LogRecord{
 		Message: strings.Repeat("a", 200),
 		Metadata: output.LogRecordMetadata{
 			Timestamp: ts,
@@ -164,7 +164,7 @@ func TestRandomDefaultsRFC5424(t *testing.T) {
 	s := newWithTransport(logger, cfg, stub)
 
 	ts := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
-	err := s.Write(context.Background(), output.LogRecord{
+	err := s.WriteLog(context.Background(), output.LogRecord{
 		Message: "hello",
 		Metadata: output.LogRecordMetadata{
 			Timestamp: ts,
@@ -203,7 +203,7 @@ func TestRandomDefaultsRFC3164(t *testing.T) {
 
 	loc := time.FixedZone("Local", 0)
 	ts := time.Date(2025, 1, 2, 3, 4, 5, 0, loc)
-	err := s.Write(context.Background(), output.LogRecord{
+	err := s.WriteLog(context.Background(), output.LogRecord{
 		Message: "hello",
 		Metadata: output.LogRecordMetadata{
 			Timestamp: ts,

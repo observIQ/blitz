@@ -290,11 +290,11 @@ func (o *OTLPGrpc) ObserveBlitzOutputQueueSize(_ context.Context, observer metri
 	return nil
 }
 
-// Write sends data to the OTLP gRPC output channel for processing by workers.
-// Write shall not be called after Stop is called.
-// If the provided context is done, Write will return immediately
+// WriteLog sends data to the OTLP gRPC output channel for processing by workers.
+// WriteLog shall not be called after Stop is called.
+// If the provided context is done, WriteLog will return immediately
 // even if the data is not written to the channel.
-func (o *OTLPGrpc) Write(ctx context.Context, data output.LogRecord) error {
+func (o *OTLPGrpc) WriteLog(ctx context.Context, data output.LogRecord) error {
 	// Build OTLP log record before batching
 	timestamp := time.Now()
 	severityText := "INFO"

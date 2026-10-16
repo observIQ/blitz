@@ -123,8 +123,8 @@ func (f *File) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.In
 	return nil
 }
 
-// Write enqueues data for file workers.
-func (f *File) Write(ctx context.Context, data output.LogRecord) error {
+// WriteLog enqueues data for file workers.
+func (f *File) WriteLog(ctx context.Context, data output.LogRecord) error {
 	select {
 	case f.dataChan <- fileItem{ctx: ctx, msg: data.Message}:
 		f.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
