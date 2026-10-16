@@ -85,11 +85,14 @@ func TestOutput_FlushPostsRemoteWriteV1(t *testing.T) {
 	assert.Equal(t, float64(42), req.Timeseries[0].Samples[0].Value)
 }
 
-func TestOutput_LogsUnsupported(t *testing.T) {
-	o, err := New("http://localhost:9090/api/v1/write", "1.0", 500, 0, time.Hour, time.Second, nil, embed.TelemetrySettings{}, zap.NewNop())
-	require.NoError(t, err)
-	defer o.Stop(context.Background())
-	assert.ErrorIs(t, o.Write(context.Background(), output.LogRecord{}), output.ErrUnsupportedTelemetryType)
+// TestOutput_IsMetricsOnly pins that the output takes metrics only: it is a
+// MetricWriter and no LogWriter, so log records never reach it.
+func TestOutput_IsMetricsOnly(t *testing.T) {
+	var w output.Writer = &Output{}
+	_, logs := w.(output.LogWriter)
+	_, metrics := w.(output.MetricWriter)
+	assert.False(t, logs)
+	assert.True(t, metrics)
 }
 
 func TestOutput_SupportedTelemetryMetricsOnly(t *testing.T) {
