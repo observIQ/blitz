@@ -296,12 +296,12 @@ func RequiredAppliances(gens []config.Generator) []datagen.ApplianceVendor {
 	return out
 }
 
-// RequiredRouters counts the flow generators that take a routing device of
-// any vendor, so the environment holds one for each.
+// RequiredRouters counts the flow generators, so the environment holds a
+// routing device for each, pinned or not, and every entry gets its own.
 func RequiredRouters(gens []config.Generator) int {
 	n := 0
 	for _, g := range gens {
-		if g.Type == config.GeneratorTypeFlow && exporterVendor(g) == "" {
+		if g.Type == config.GeneratorTypeFlow {
 			n++
 		}
 	}
@@ -332,7 +332,29 @@ func flowExporter(env *datagen.Environment, genCfg config.Generator, ordinal int
 // plus a device for every appliance and a system for every host requirement
 // the generators need. Both loaders build through it so they cannot drift.
 func BuildEnvironment(logger *zap.Logger, envCfg config.EnvironmentConfig, gens []config.Generator) (*datagen.Environment, error) {
-	return envCfg.Build(logger, RequiredAppliances(gens), RequiredHosts(gens), RequiredRouters(gens))
+	env, err := envCfg.Build(logger, RequiredAppliances(gens), RequiredHosts(gens), RequiredRouters(gens))
+	if err != nil {
+		return nil, err
+	}
+	claimPinnedExporters(env, gens)
+	return env, nil
+}
+
+// claimPinnedExporters resolves the vendor-pinned flow entries' exporters
+// before any other, so an entry that takes any routing device can never take
+// the device a pinned entry needs. The loaders' later calls return these same
+// devices.
+func claimPinnedExporters(env *datagen.Environment, gens []config.Generator) {
+	ordinal := 0
+	for _, g := range gens {
+		if g.Type != config.GeneratorTypeFlow {
+			continue
+		}
+		if exporterVendor(g) != "" {
+			flowExporter(env, g, ordinal)
+		}
+		ordinal++
+	}
 }
 
 // RequiredHosts lists the host requirements of the configured generators, so

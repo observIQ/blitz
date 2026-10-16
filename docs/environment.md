@@ -99,11 +99,16 @@ that is set, and its records name the device's management address as the
 exporter. Every device has a
 hostname in the form `<vendor>-<role>-NN` (`pa-fw-01`, `f5-lb-01`,
 `cisco-sw-02`), unique within the fleet, and an FQDN in the environment's
-domain (`pa-fw-01.blitz.local`) that a device's syslog header carries. Each
-appliance generator entry gets its own device: when the random fleet holds
-fewer devices of a vendor than the entries need, the environment appends the
-rest, deterministically per seed and without moving any drawn device, so every
-entry describes a real device of its own. PAN-OS devices run an 11.0.x release,
+domain (`pa-fw-01.blitz.local`) that a device's syslog header carries.
+Entries of the same generator type get their own devices, even when `flow`
+entries with no `exporterVendor` are mixed with entries pinned to a vendor.
+Entries of different types can describe the same device, such as a `palo-alto`
+entry and a `flow` entry pinned to `palo-alto`, since one device emits
+several kinds of telemetry. When the random fleet holds fewer devices than the
+entries need, the environment appends the rest, deterministically per seed and
+without moving any drawn device, so every entry describes a real device. The
+same seeds and configuration always attach every entry to the same device.
+PAN-OS devices run an 11.0.x release,
 matching the PAN-OS 11.0 log format the `palo-alto` generator emits.
 The device's hostname is the generator's one name; its resource also carries
 `device.manufacturer`, `device.model.name`, `os.name`/`os.version` (the

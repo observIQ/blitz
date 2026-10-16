@@ -32,10 +32,10 @@ type Environment struct {
 	StorageSystems []*StorageSystemIdentity
 	NetworkSystems []*NetworkSystemIdentity
 
-	// picks records SystemFor's selections per key, so same-key entries
-	// never share a host. Guarded by picksMu.
+	// picks records pick's selections (hosts and devices) per key, so
+	// same-key entries never share one. Guarded by picksMu.
 	picksMu sync.Mutex
-	picks   map[string]map[int]*SystemIdentity
+	picks   map[string]map[int]any
 }
 
 // AllStorageSystems returns the environment's storage-array identities.
@@ -122,14 +122,25 @@ func (e *Environment) SystemForKey(key string) *SystemIdentity {
 // generator resolves its host identity once and attributes every record it
 // emits consistently. Returns nil when no system meets req.
 func (e *Environment) SystemFor(key string, ordinal int, req HostRequirement) *SystemIdentity {
-	var eligible []*SystemIdentity
-	for _, s := range e.Systems {
-		if req.accepts(s) {
-			eligible = append(eligible, s)
+	return pick(e, key, ordinal, e.Systems, req.accepts)
+}
+
+// pick deterministically selects, by key and ordinal, one of the candidates
+// that accepts admits, skipping any already selected for another ordinal of
+// the same key so same-key entries get distinct hosts or devices. A repeated
+// key and ordinal returns its earlier selection. Returns the zero value when
+// no candidate is admitted, and shares a taken one when every admitted
+// candidate is taken, rather than fail.
+func pick[T comparable](e *Environment, key string, ordinal int, candidates []T, accepts func(T) bool) T {
+	var eligible []T
+	for _, c := range candidates {
+		if accepts(c) {
+			eligible = append(eligible, c)
 		}
 	}
+	var zero T
 	if len(eligible) == 0 {
-		return nil
+		return zero
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(key))
@@ -137,37 +148,37 @@ func (e *Environment) SystemFor(key string, ordinal int, req HostRequirement) *S
 	// negative, never truncating), so this is correct on 32-bit targets and
 	// avoids an int->uint32 narrowing conversion.
 	// ordinal offsets same-key entries (two hostmetrics entries in one
-	// generators: list) onto distinct hosts while eligible hosts remain.
+	// generators: list) onto distinct candidates while eligible ones remain.
 	idx := (int64(h.Sum32()) + int64(ordinal)) % int64(len(eligible))
 
 	e.picksMu.Lock()
 	defer e.picksMu.Unlock()
-	taken := func(s *SystemIdentity) bool {
+	if p, ok := e.picks[key][ordinal].(T); ok && accepts(p) {
+		return p
+	}
+	taken := func(c T) bool {
 		for o, p := range e.picks[key] {
-			if o != ordinal && p == s {
+			if o != ordinal && p == any(c) {
 				return true
 			}
 		}
 		return false
 	}
-	if p := e.picks[key][ordinal]; p != nil && req.accepts(p) {
-		return p
-	}
-	pick := eligible[idx] // every eligible host taken: share rather than fail
+	chosen := eligible[idx] // every eligible candidate taken: share rather than fail
 	for i := range int64(len(eligible)) {
-		if s := eligible[(idx+i)%int64(len(eligible))]; !taken(s) {
-			pick = s
+		if c := eligible[(idx+i)%int64(len(eligible))]; !taken(c) {
+			chosen = c
 			break
 		}
 	}
 	if e.picks == nil {
-		e.picks = map[string]map[int]*SystemIdentity{}
+		e.picks = map[string]map[int]any{}
 	}
 	if e.picks[key] == nil {
-		e.picks[key] = map[int]*SystemIdentity{}
+		e.picks[key] = map[int]any{}
 	}
-	e.picks[key][ordinal] = pick
-	return pick
+	e.picks[key][ordinal] = chosen
+	return chosen
 }
 
 // EnvironmentOpts controls the size and shape of the generated environment.
@@ -682,18 +693,9 @@ func interfaceName(os OSType) string {
 // nil when the environment has none; build it with RequiredRouters or
 // RequiredVendors to guarantee one.
 func (e *Environment) FlowExporterFor(key string, ordinal int, vendor ApplianceVendor) *NetworkSystemIdentity {
-	var eligible []*NetworkSystemIdentity
-	for _, n := range e.NetworkSystems {
-		if n.L3Routing != nil && (vendor == "" || n.Vendor == vendor) {
-			eligible = append(eligible, n)
-		}
-	}
-	if len(eligible) == 0 {
-		return nil
-	}
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(key))
-	return eligible[(int64(h.Sum32())+int64(ordinal))%int64(len(eligible))]
+	return pick(e, key, ordinal, e.NetworkSystems, func(n *NetworkSystemIdentity) bool {
+		return n.L3Routing != nil && (vendor == "" || n.Vendor == vendor)
+	})
 }
 
 // ApplianceFor deterministically selects, by key, one of the environment's
@@ -701,16 +703,7 @@ func (e *Environment) FlowExporterFor(key string, ordinal int, vendor ApplianceV
 // F5) describes. Returns nil when the environment has none; build it with
 // EnvironmentOpts.RequiredVendors to guarantee one.
 func (e *Environment) ApplianceFor(key string, ordinal int, vendor ApplianceVendor) *NetworkSystemIdentity {
-	var eligible []*NetworkSystemIdentity
-	for _, n := range e.NetworkSystems {
-		if n.Vendor == vendor {
-			eligible = append(eligible, n)
-		}
-	}
-	if len(eligible) == 0 {
-		return nil
-	}
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(key))
-	return eligible[(int64(h.Sum32())+int64(ordinal))%int64(len(eligible))]
+	return pick(e, key, ordinal, e.NetworkSystems, func(n *NetworkSystemIdentity) bool {
+		return n.Vendor == vendor
+	})
 }
