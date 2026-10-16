@@ -32,6 +32,7 @@ func SignalsFor(t config.GeneratorType) []telemetry.Type {
 		config.GeneratorTypeOkta,
 		config.GeneratorTypeWel,
 		config.GeneratorTypeFIX,
+		config.GeneratorTypeF5,
 		config.GeneratorTypeWinevt:
 		return []telemetry.Type{telemetry.Logs}
 	default:
