@@ -1,13 +1,13 @@
 package paloalto
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
-	"strconv"
-	"strings"
+	mrand "math/rand"
 	"sync"
 	"time"
 
@@ -39,6 +39,8 @@ type Generator struct {
 	stopCh  chan struct{}
 	tracker *count.Tracker
 	metrics *generator.Metrics
+	// dev is the one firewall every line names; read-only after New.
+	dev device
 }
 
 // New creates a new Palo Alto generator. The consumer receives each
@@ -59,14 +61,30 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		return nil, fmt.Errorf("build generator metrics: %w", err)
 	}
 
+	// The environment appliance names the device; without one the generator
+	// still describes a single firewall for its lifetime. A hand-built
+	// appliance missing a name or serial takes the fallback's.
+	appliance := generator.NewOptions(opts...).Appliance
+	dev := fallbackDevice()
+	static := resource.NewStaticResources(resource.WithHost(dev.name, componentName))
+	if appliance != nil {
+		dev = newDevice(cmp.Or(appliance.Hostname, dev.name), cmp.Or(appliance.Serial, dev.serial))
+		if appliance.FQDN != "" {
+			dev.setFQDN(appliance.FQDN)
+		}
+		named := *appliance
+		named.Hostname = dev.name // host.name matches the line's device name
+		static = resource.FromAppliance(&named, componentName)
+	}
 	return &Generator{
 		logger:   logger,
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
-		static:   resource.FromAppliance(generator.NewOptions(opts...).Appliance, componentName),
+		static:   static,
 		metrics:  metrics,
 		stopCh:   make(chan struct{}),
+		dev:      dev,
 	}, nil
 }
 
@@ -160,7 +178,7 @@ func (g *Generator) worker(workerID int) {
 }
 
 func (g *Generator) generateAndWrite(_ int) error {
-	line := generatePaloAltoLog()
+	line, severity := generatePaloAltoLog(g.dev)
 
 	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
@@ -170,8 +188,10 @@ func (g *Generator) generateAndWrite(_ int) error {
 	logRecord := embed.LogRecord{
 		Message: line,
 		Metadata: embed.LogRecordMetadata{
-			Severity: "INFO",
+			Severity: severity,
 			Resource: g.static.Record(),
+			// The line carries the firewall's own BSD syslog header.
+			SyslogFramed: true,
 		},
 	}
 
@@ -194,172 +214,37 @@ func (g *Generator) recordWriteError(errorType string, _ error) {
 
 // ---- Palo Alto log synthesis ----
 
-func generatePaloAltoLog() string {
-	now := time.Now()
-	timestamp := now.Format("Jan 02 15:04:05")
-	dateTime := now.Format("2006/01/02 15:04:05")
-	// Generate an older timestamp for some fields
-	oldTime := now.Add(-time.Duration(randInt(1, 365*24)) * time.Hour)
-	oldDateTime := oldTime.Format("2006/01/02 15:04:05")
+// addrRand is the one source behind the address draws, seeded from
+// crypto/rand once. A *rand.Rand is not safe for concurrent use, so every
+// draw holds mu.
+var addrRand = struct {
+	mu sync.Mutex
+	r  *mrand.Rand
+}{r: mrand.New(mrand.NewSource(randInt64(0, math.MaxInt64-1)))} // #nosec G404 -- synthetic addresses, not security
 
-	logTypes := []string{"TRAFFIC", "THREAT", "SYSTEM", "CONFIG"}
-	logType := logTypes[randInt(0, len(logTypes)-1)]
-
-	sessionID := generateNumericSessionID()
-
-	switch logType {
-	case "SYSTEM":
-		return generateSystemLog(timestamp, dateTime, oldDateTime, sessionID)
-	case "CONFIG":
-		return generateConfigLog(timestamp, dateTime, oldDateTime, sessionID)
-	case "TRAFFIC":
-		return generateTrafficLog(timestamp, dateTime, sessionID)
-	case "THREAT":
-		return generateThreatLog(timestamp, dateTime, sessionID)
-	default:
-		return generateSystemLog(timestamp, dateTime, oldDateTime, sessionID)
-	}
+// drawAddr runs draw on the shared address source.
+func drawAddr(draw func(*mrand.Rand) string) string {
+	addrRand.mu.Lock()
+	defer addrRand.mu.Unlock()
+	return draw(addrRand.r)
 }
 
-func generateSystemLog(timestamp, dateTime, oldDateTime, sessionID string) string {
-	subtypes := []string{"general", "ras", "vpn", "routing"}
-	subtype := subtypes[randInt(0, len(subtypes)-1)]
-
-	messages := []string{
-		"Config installed",
-		"RASMGR daemon configuration load phase-1 succeeded.",
-		"RASMGR daemon configuration load phase-2 succeeded.",
-		"IKE daemon configuration load phase-1 succeeded.",
-		"IKE daemon configuration load phase-2 succeeded.",
-		"Route daemon configuration load phase-1 succeeded.",
-		"Route daemon configuration load phase-2 succeeded.",
-		"Log type config cleared by user",
-	}
-	message := messages[randInt(0, len(messages)-1)]
-
-	configNum := randInt(800, 1000)
-	return fmt.Sprintf("%s 1,%s,%s,SYSTEM,%s,1,%s,,unknown,,0,0,general,informational,%s,%d,0x0",
-		timestamp, dateTime, sessionID, subtype, oldDateTime, message, configNum)
-}
-
-func generateConfigLog(timestamp, dateTime, oldDateTime, sessionID string) string {
-	actions := []string{"commit", "edit", "set"}
-	action := actions[randInt(0, len(actions)-1)]
-
-	users := []string{"admin", "badguy", "operator"}
-	user := users[randInt(0, len(users)-1)]
-
-	methods := []string{"Web", "CLI"}
-	method := methods[randInt(0, len(methods)-1)]
-
-	statuses := []string{"Submitted", "Succeeded"}
-	status := statuses[randInt(0, len(statuses)-1)]
-
-	details := []string{
-		"",
-		" vsys  vsys1 profiles data-objects  PII",
-		" config shared local-user-database user  badguy",
-		" config mgt-config users  badguy",
-		" vsys  vsys1 profiles url-filtering  monzyspolicy",
-	}
-	detail := details[randInt(0, len(details)-1)]
-
-	ip := generateRandomIP()
-	return fmt.Sprintf("%s 1,%s,%s,CONFIG,0,0,%s,%s,,%s,%s,%s,%s%s,0,0x0",
-		timestamp, dateTime, sessionID, oldDateTime, ip, action, user, method, status, detail)
-}
-
-func generateTrafficLog(timestamp, dateTime, sessionID string) string {
-	actions := []string{"allow", "deny", "drop"}
-	action := actions[randInt(0, len(actions)-1)]
-
-	sourceIP := generateRandomIP()
-	destIP := generateRandomIP()
-	sourcePort := generateRandomPort()
-	destPort := generateRandomPort()
-
-	protocols := []string{"tcp", "udp", "icmp"}
-	protocol := protocols[randInt(0, len(protocols)-1)]
-
-	bytes := randInt(50, 1000)
-	packets := randInt(1, 10)
-
-	seqNum := randInt(100000, 999999)
-	seqNum2 := randInt(100000, 999999)
-	return fmt.Sprintf("%s 1,%s,%s,TRAFFIC,%s,2049,%s,%s,%s,%s,%s,,,incomplete,vsys1,untrusted,trusted,ethernet1/3,ethernet1/2,log-forwarding-default,%s,%d,1,%s,%s,%s,%s,0x400064,%s,%s,%d,%d,0,4,%d,7,any,0,0x0,0,4,0,aged-out,0,0,0,0,,from-policy,,,0,,0,,N/A,0,0,0,0",
-		timestamp, dateTime, sessionID, action, dateTime, sourceIP, destIP, sourceIP, destIP, dateTime, seqNum, sourcePort, destPort, sourcePort, destPort, protocol, action, bytes, packets, seqNum2)
-}
-
-func generateThreatLog(timestamp, dateTime, sessionID string) string {
-	sourceIP := generateRandomIP()
-	destIP := generateRandomIP()
-	sourcePort := generateRandomPort()
-	destPort := generateRandomPort()
-
-	protocols := []string{"tcp", "udp"}
-	protocol := protocols[randInt(0, len(protocols)-1)]
-
-	domains := []string{"example.com", "malicious-site.com", "suspicious-domain.net"}
-	domain := domains[randInt(0, len(domains)-1)]
-
-	return fmt.Sprintf("%s 1,%s,%s,THREAT,url,1,%s,%s,%s,%s,%s,RFC1918 to Internet,,,web-browsing,vsys1,Trust,Untrust,ae1.902,ae1.1000,LoggingToPanorama,%s,%d,1,%s,%s,%s,%s,0x408000,%s,alert,\"%s\",(9999),not-defined,informational,client-to-server,%d,0x0,%s,0,text/html",
-		timestamp, dateTime, sessionID, dateTime, sourceIP, destIP, sourceIP, destIP, dateTime, randInt(100000, 999999), sourcePort, destPort, sourcePort, destPort, protocol, domain, randInt64(1000000000, 9999999999), sourceIP)
-}
-
+// generateRandomIP is a private (RFC 1918) or public unicast address, never a
+// reserved one (loopback, multicast, Class E, CGNAT, documentation).
 func generateRandomIP() string {
-	ranges := []string{
-		"10.0.0.0/8",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"34.0.0.0/8",
-		"134.0.0.0/8",
-		"206.0.0.0/8",
-	}
-
-	rangeIndex := randInt(0, len(ranges)-1)
-	ipRange := ranges[rangeIndex]
-
-	if strings.Contains(ipRange, "10.") {
-		return fmt.Sprintf("10.%d.%d.%d", randInt(0, 255), randInt(0, 255), randInt(1, 254))
-	} else if strings.Contains(ipRange, "172.") {
-		return fmt.Sprintf("172.%d.%d.%d", randInt(16, 31), randInt(0, 255), randInt(1, 254))
-	} else if strings.Contains(ipRange, "192.168.") {
-		return fmt.Sprintf("192.168.%d.%d", randInt(0, 255), randInt(1, 254))
-	}
-	return fmt.Sprintf("%d.%d.%d.%d", randInt(1, 254), randInt(0, 255), randInt(0, 255), randInt(1, 254))
-}
-
-func generateRandomPort() string {
-	commonPorts := datagen.CommonPorts.All()
-	if randInt(0, 10) < 7 {
-		return strconv.Itoa(commonPorts[randInt(0, len(commonPorts)-1)])
-	}
-	return strconv.Itoa(randInt(1024, 65535))
-}
-
-func generateRandomSessionID() string {
-	bytes := make([]byte, 6)
-	_, _ = rand.Read(bytes)
-	return strings.ToUpper(hex.EncodeToString(bytes))
-}
-
-func generateNumericSessionID() string {
-	// Generate a numeric session ID like "01606001116" or "1606001116"
-	// Length varies between 9-11 digits
-	length := randInt(9, 11)
-	var sessionID strings.Builder
-	for i := range length {
-		// First digit can be 0 for IDs with length > 9, otherwise 1-9
-		if i == 0 && length > 9 {
-			digit := randInt(0, 9)
-			sessionID.WriteString(strconv.Itoa(digit))
-		} else {
-			digit := randInt(0, 9)
-			sessionID.WriteString(strconv.Itoa(digit))
+	return drawAddr(func(r *mrand.Rand) string {
+		if r.Intn(2) == 0 {
+			return datagen.RandomPrivateIPv4(r)
 		}
-	}
-	return sessionID.String()
+		return datagen.RandomPublicIPv4(r)
+	})
 }
+
+// generatePublicIP is a routable public IPv4 address.
+func generatePublicIP() string { return drawAddr(datagen.RandomPublicIPv4) }
+
+// generatePrivateIP is an RFC 1918 address.
+func generatePrivateIP() string { return drawAddr(datagen.RandomPrivateIPv4) }
 
 func randInt(min, max int) int {
 	delta := max - min + 1
@@ -367,9 +252,9 @@ func randInt(min, max int) int {
 	return min + int(n.Int64())
 }
 
-// randInt64 is the int64 sibling of randInt. Required at call sites
-// where min or max exceeds the int range on 32-bit platforms (notably
-// linux/arm) — see the 10-digit session-id field in the THREAT log.
+// randInt64 is the int64 sibling of randInt, for ranges past the int range on
+// 32-bit platforms (notably linux/arm): 64-bit sequence numbers, serials, and
+// IDs, and the seed of the address source.
 func randInt64(min, max int64) int64 {
 	delta := max - min + 1
 	n, _ := rand.Int(rand.Reader, big.NewInt(delta))
