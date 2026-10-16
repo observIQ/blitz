@@ -137,3 +137,21 @@ func TestOutput_Validate(t *testing.T) {
 		})
 	}
 }
+
+// TestFlowOutputErrorNamesItsType pins that an invalid flow output's error
+// says which output failed.
+func TestFlowOutputErrorNamesItsType(t *testing.T) {
+	err := (&Output{Type: OutputTypeFlow}).Validate()
+	if err == nil || !strings.Contains(err.Error(), "flow output validation failed") {
+		t.Fatalf("Validate() = %v, want a flow output validation error", err)
+	}
+}
+
+// TestFlowGeneratorErrorNamesItsType pins that an invalid flow generator's
+// error says which generator failed.
+func TestFlowGeneratorErrorNamesItsType(t *testing.T) {
+	err := (&Generator{Type: GeneratorTypeFlow}).Validate()
+	if err == nil || !strings.Contains(err.Error(), "flow generator validation failed") {
+		t.Fatalf("Validate() = %v, want a flow generator validation error", err)
+	}
+}

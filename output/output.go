@@ -71,7 +71,8 @@ type SpanMetadata = embed.SpanMetadata
 // Writer is the base output capability: lifecycle plus the telemetry
 // types the output accepts. Logs, metrics, and traces are each an
 // optional extension of Writer (LogWriter, MetricWriter, TraceWriter);
-// an output implements one extension per signal it accepts.
+// an output implements one extension per signal it accepts. Flows have no
+// Writer extension: a flow output implements embed.FlowConsumer.
 type Writer interface {
 	// Stop stops the output.
 	Stop(ctx context.Context) error

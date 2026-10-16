@@ -1,6 +1,6 @@
 # OTLP gRPC Output
 
-The OTLP gRPC output sends telemetry to an OpenTelemetry collector via gRPC using the OTLP protocol. Logs, metrics, and traces are batched and sent with resource and instrumentation scope information.
+The OTLP gRPC output sends telemetry to an OpenTelemetry collector via gRPC using the OTLP protocol. Logs, metrics, traces, and flows are batched and sent with resource and instrumentation scope information. Flows go out as OTLP logs shaped like the collector's `netflowreceiver` output; see [the flow generator's OTLP output](../generator/flow.md#otlp-output).
 
 ## Data Mutation
 

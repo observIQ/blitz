@@ -846,7 +846,7 @@ func (o *OTLPGrpc) recordSendError(_ string, _ error) {
 
 // SupportedTelemetry returns the telemetry types this output can consume.
 func (o *OTLPGrpc) SupportedTelemetry() []telemetry.Type {
-	return []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces}
+	return []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces, telemetry.Flows}
 }
 
 // mapSeverityNumber maps string log levels to OTLP severity numbers

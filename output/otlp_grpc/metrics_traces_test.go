@@ -200,7 +200,7 @@ func TestOTLPGrpc_SupportedTelemetry(t *testing.T) {
 	require.NoError(t, err)
 
 	types := otlp.SupportedTelemetry()
-	assert.Equal(t, []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces}, types)
+	assert.Equal(t, []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces, telemetry.Flows}, types, "it consumes flows too (ConsumeFlows)")
 
 	otlp.Stop(t.Context())
 }

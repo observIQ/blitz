@@ -81,3 +81,28 @@ func TestOTLPGrpc_sendBatchesEmitSpans(t *testing.T) {
 	tbErr.add(&tracepb.Span{})
 	require.Error(t, o.sendTraceBatch(mockTraceClient{err: errors.New("boom")}, tbErr))
 }
+
+// TestOTLPGrpc_ConsumeFlows pins the flow path into the OTLP worker queue: each
+// record is queued as one log record, a cancelled caller is told so, and an
+// output shutting down refuses the write.
+func TestOTLPGrpc_ConsumeFlows(t *testing.T) {
+	recs := []embed.FlowRecord{{Packets: 1}, {Packets: 2}}
+
+	o := testOTLP(t)
+	o.dataChan = make(chan *logspb.LogRecord, len(recs))
+	require.NoError(t, o.ConsumeFlows(context.Background(), recs))
+	require.Len(t, o.dataChan, len(recs), "one log record per flow")
+
+	o = testOTLP(t)
+	o.dataChan = make(chan *logspb.LogRecord) // never drained
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.ErrorContains(t, o.ConsumeFlows(ctx, recs), "context cancelled while waiting to write flow")
+
+	o = testOTLP(t)
+	o.dataChan = make(chan *logspb.LogRecord)
+	octx, ocancel := context.WithCancel(context.Background())
+	ocancel()
+	o.ctx = octx
+	require.ErrorContains(t, o.ConsumeFlows(context.Background(), recs), "shutting down")
+}

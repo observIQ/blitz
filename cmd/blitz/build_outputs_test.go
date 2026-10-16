@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -357,4 +358,34 @@ func TestCountTrackersDoNotDependOnListOrder(t *testing.T) {
 		assert.Same(t, runLevel.run, got, "a run-level count bounds every entry")
 		assert.False(t, created)
 	}
+}
+
+// TestBuildOutput_Flow pins the CLI's flow output: it exports records over UDP
+// in the configured wire format, and a bad flow config fails the build.
+func TestBuildOutput_Flow(t *testing.T) {
+	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	port := conn.LocalAddr().(*net.UDPAddr).Port
+
+	out, err := buildOutput(zap.NewNop(), config.Output{Type: config.OutputTypeFlow, Flow: config.FlowOutputConfig{
+		Host: "127.0.0.1", Port: port, Protocol: "ipfix",
+	}}, embed.NopTelemetry())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = out.Stop(context.Background()) })
+	fc, ok := out.(embed.FlowConsumer)
+	require.True(t, ok, "the flow output consumes flows")
+	require.NoError(t, fc.ConsumeFlows(context.Background(), []embed.FlowRecord{{Packets: 1, Bytes: 64}}))
+
+	buf := make([]byte, 65535)
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(5*time.Second)))
+	n, _, err := conn.ReadFrom(buf)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, n, 2)
+	assert.Equal(t, []byte{0, 10}, buf[:2], "an IPFIX message (version 10)")
+
+	_, err = buildOutput(zap.NewNop(), config.Output{Type: config.OutputTypeFlow, Flow: config.FlowOutputConfig{
+		Host: "127.0.0.1", Port: port, Protocol: "bogus",
+	}}, embed.NopTelemetry())
+	require.ErrorContains(t, err, "unknown protocol")
 }

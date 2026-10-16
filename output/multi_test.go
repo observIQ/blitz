@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -766,15 +767,18 @@ func TestNewMultiOutputConstruction(t *testing.T) {
 // nothing, rather than an item a child would write as one zero record.
 func TestMultiOutputEmptyBatchesWriteNothing(t *testing.T) {
 	child := &fakeOutput{supported: []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces}}
-	m := newMulti(t, zap.NewNop(), child)
+	flows := &flowOutput{}
+	m := newMulti(t, zap.NewNop(), child, flows)
 	ctx := context.Background()
 	require.NoError(t, m.ConsumeLogs(ctx, nil))
 	require.NoError(t, m.ConsumeMetrics(ctx, nil))
 	require.NoError(t, m.ConsumeTraces(ctx, nil))
+	require.NoError(t, m.ConsumeFlows(ctx, nil))
 	drain(t, m)
 	assert.Empty(t, child.logs)
 	assert.Empty(t, child.metrics)
 	assert.Empty(t, child.traces)
+	assert.Zero(t, flows.calls, "an empty flow batch reaches no child")
 }
 
 // stopCtxOutput records whether its Stop got a live context.
@@ -866,4 +870,134 @@ func TestMultiOutputDrainErrorKeepsTheCancelCause(t *testing.T) {
 	err := m.Stop(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 	require.NotErrorIs(t, err, context.DeadlineExceeded)
+}
+
+// flowOutput is a flow-capable child: it implements embed.FlowConsumer and
+// declares Flows.
+type flowOutput struct {
+	countingOutput
+	mu    sync.Mutex
+	recs  []embed.FlowRecord
+	calls int
+}
+
+func (f *flowOutput) ConsumeFlows(_ context.Context, recs []embed.FlowRecord) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.recs = append(f.recs, recs...)
+	f.calls++
+	return nil
+}
+
+func (f *flowOutput) SupportedTelemetry() []telemetry.Type { return []telemetry.Type{telemetry.Flows} }
+
+func (f *flowOutput) got() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.recs)
+}
+
+// TestMultiOutputFansFlowsToFlowChildren pins that a fan-out with a flow
+// output routes flow batches to it (and only to flow-capable children), so a
+// flow generator works with an outputs: list.
+func TestMultiOutputFansFlowsToFlowChildren(t *testing.T) {
+	flows := &flowOutput{}
+	logs := &fakeOutput{supported: []telemetry.Type{telemetry.Logs}}
+	m := newMulti(t, zap.NewNop(), flows, logs)
+
+	var fc embed.FlowConsumer = m
+	batch := []embed.FlowRecord{{Packets: 1}, {Packets: 2}}
+	require.NoError(t, fc.ConsumeFlows(context.Background(), batch))
+	batch[0].Packets = 99 // the caller reusing its slice must not reach the child
+	require.Eventually(t, func() bool { return flows.got() == 2 }, time.Second, time.Millisecond)
+	drain(t, m)
+	assert.Equal(t, uint64(1), flows.recs[0].Packets)
+	assert.Contains(t, m.SupportedTelemetry(), telemetry.Flows)
+	assert.Empty(t, logs.logs)
+}
+
+// errFlowOutput is a flow child whose every write fails.
+type errFlowOutput struct{ flowOutput }
+
+func (e *errFlowOutput) ConsumeFlows(context.Context, []embed.FlowRecord) error {
+	return errors.New("connection refused")
+}
+
+// blockingFlowOutput is a flow child that blocks each write until ctx ends.
+type blockingFlowOutput struct{ flowOutput }
+
+func (b *blockingFlowOutput) ConsumeFlows(ctx context.Context, _ []embed.FlowRecord) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// TestMultiOutputFlowWriteErrorsAreVisible pins that a flow child failing its
+// writes is logged at Warn and counted per record, like the other signals.
+func TestMultiOutputFlowWriteErrorsAreVisible(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	tel := embed.NopTelemetry()
+	tel.MeterProvider = sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	core, logs := observer.New(zap.WarnLevel)
+	m, err := NewMultiOutput(zap.New(core), tel, FanOutChild{Type: "flow", Output: &errFlowOutput{}})
+	require.NoError(t, err)
+
+	require.NoError(t, m.ConsumeFlows(context.Background(), []embed.FlowRecord{{Packets: 1}, {Packets: 2}}))
+	drain(t, m)
+
+	warns := logs.FilterMessage("fan-out output write failed").All()
+	require.Len(t, warns, 1)
+	assert.Equal(t, "flows", warns[0].ContextMap()["telemetry_type"])
+	assert.Equal(t, int64(2), counterTotal(t, reader, "blitz.output.fanout_write_errors"), "one error per record of the failed batch")
+}
+
+// TestMultiOutputFlowShutdownLossIsNotAWriteError is the flow mirror of
+// TestMultiOutputShutdownLossIsNotAWriteError.
+func TestMultiOutputFlowShutdownLossIsNotAWriteError(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	tel := embed.NopTelemetry()
+	tel.MeterProvider = sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	core, logs := observer.New(zap.WarnLevel)
+	m, err := NewMultiOutput(zap.New(core), tel, FanOutChild{Type: "flow", Output: &blockingFlowOutput{}})
+	require.NoError(t, err)
+
+	const n = 10
+	for range n {
+		require.NoError(t, m.ConsumeFlows(context.Background(), []embed.FlowRecord{{Packets: 1}}))
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	require.ErrorIs(t, m.Stop(ctx), context.DeadlineExceeded)
+
+	assert.Empty(t, logs.FilterMessage("fan-out output write failed").All(), "cancelled writes are not write failures")
+	lost := logs.FilterMessage("fan-out output abandoned queued records at shutdown").All()
+	require.Len(t, lost, 1)
+	assert.Equal(t, int64(n), lost[0].ContextMap()["batches"])
+	assert.Zero(t, counterTotal(t, reader, "blitz.output.fanout_write_errors"))
+}
+
+// counterTotal sums every data point of the named int64 counter.
+func counterTotal(t *testing.T, reader *sdkmetric.ManualReader, name string) int64 {
+	t.Helper()
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	var total int64
+	for _, sm := range rm.ScopeMetrics {
+		for _, mm := range sm.Metrics {
+			if mm.Name != name {
+				continue
+			}
+			for _, dp := range mm.Data.(metricdata.Sum[int64]).DataPoints {
+				total += dp.Value
+			}
+		}
+	}
+	return total
+}
+
+// TestMultiOutputSupportsFlowsOnlyWhenRouted pins that the fan-out advertises
+// Flows only when a child implements embed.FlowConsumer.
+func TestMultiOutputSupportsFlowsOnlyWhenRouted(t *testing.T) {
+	declared := declaresOnly{supported: []telemetry.Type{telemetry.Flows}}
+	assert.Empty(t, newMulti(t, zap.NewNop(), declared).SupportedTelemetry())
+	assert.Equal(t, []telemetry.Type{telemetry.Flows}, newMulti(t, zap.NewNop(), declared, &flowOutput{}).SupportedTelemetry())
 }

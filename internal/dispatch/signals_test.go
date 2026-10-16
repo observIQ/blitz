@@ -24,7 +24,9 @@ func TestSignalsFor(t *testing.T) {
 		{config.GeneratorTypeWinevt, []telemetry.Type{telemetry.Logs}},
 		{config.GeneratorTypeHostMetrics, []telemetry.Type{telemetry.Metrics}},
 		{config.GeneratorTypeTraces, []telemetry.Type{telemetry.Traces}},
+		{config.GeneratorTypeFlow, []telemetry.Type{telemetry.Flows}},
 		{config.GeneratorTypeNop, nil},
+		{"bogus", nil},
 	}
 	for _, c := range cases {
 		assert.ElementsMatch(t, c.want, SignalsFor(c.typ), "type %q", c.typ)
@@ -55,6 +57,7 @@ func TestSignalsForMatchesForEmbedRequirements(t *testing.T) {
 	_, accepted, _ := strings.Cut(err.Error(), "must be one of: ")
 	consumer := map[telemetry.Type]string{
 		telemetry.Logs: "LogConsumer", telemetry.Metrics: "MetricConsumer", telemetry.Traces: "TraceConsumer",
+		telemetry.Flows: "FlowConsumer",
 	}
 	for _, typ := range strings.Split(accepted, ", ") {
 		gt := config.GeneratorType(typ)
@@ -63,7 +66,7 @@ func TestSignalsForMatchesForEmbedRequirements(t *testing.T) {
 		}
 		emits := SignalsFor(gt)
 		for sig, name := range consumer {
-			all := EmbedConsumers{LogConsumer: noopConsumer{}, MetricConsumer: noopMetricConsumer{}, TraceConsumer: noopTraceConsumer{}}
+			all := EmbedConsumers{LogConsumer: noopConsumer{}, MetricConsumer: noopMetricConsumer{}, TraceConsumer: noopTraceConsumer{}, FlowConsumer: noopFlowConsumer{}}
 			switch sig {
 			case telemetry.Logs:
 				all.LogConsumer = nil
@@ -71,6 +74,8 @@ func TestSignalsForMatchesForEmbedRequirements(t *testing.T) {
 				all.MetricConsumer = nil
 			case telemetry.Traces:
 				all.TraceConsumer = nil
+			case telemetry.Flows:
+				all.FlowConsumer = nil
 			}
 			_, err := ForEmbed(zap.NewNop(), config.Generator{Type: gt}, all, nil, nil, embed.NopTelemetry())
 			requires := err != nil && strings.Contains(err.Error(), "requires EmbedConsumers."+name)

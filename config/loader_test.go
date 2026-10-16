@@ -363,3 +363,41 @@ output:
 	require.Len(t, cfg.Generators, 1)
 	assert.Equal(t, 7, cfg.Generators[0].PaloAlto.Workers)
 }
+
+type flowSink struct{}
+
+func (flowSink) ConsumeFlows(context.Context, []embed.FlowRecord) error { return nil }
+
+func TestLoadModules_FlowUsesFlowConsumer(t *testing.T) {
+	yaml := []byte(`
+generator:
+  type: flow
+  flow:
+    workers: 1
+    rate: 1s
+output:
+  type: nop
+logging:
+  type: stdout
+metrics:
+  port: 19000
+`)
+	mods, err := config.LoadModules(yaml, config.EmbedOpts{FlowConsumer: flowSink{}})
+	require.NoError(t, err)
+	require.Len(t, mods, 1)
+}
+
+// TestLoadModules_FlowRequiresFlowConsumer pins the documented contract: a
+// flow generator with no EmbedOpts.FlowConsumer is rejected at load.
+func TestLoadModules_FlowRequiresFlowConsumer(t *testing.T) {
+	_, err := config.LoadModules([]byte(`
+generator:
+  type: flow
+  flow:
+    workers: 1
+    rate: 1s
+output:
+  type: nop
+`), config.EmbedOpts{})
+	require.ErrorContains(t, err, "FlowConsumer")
+}

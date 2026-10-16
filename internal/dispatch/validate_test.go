@@ -92,3 +92,13 @@ func countSubstr(s, sub string) int {
 	}
 	return n
 }
+
+// TestValidateSignalCompat_Flows pins flow pairing: a flow generator needs a
+// flow-capable output (flow or otlp-grpc), and fails against a logs-only one.
+func TestValidateSignalCompat_Flows(t *testing.T) {
+	flows := []config.GeneratorType{config.GeneratorTypeFlow}
+	require.NoError(t, ValidateSignalCompat(flows, []OutputSignals{{Name: "flow", Signals: []telemetry.Type{telemetry.Flows}}}))
+	require.NoError(t, ValidateSignalCompat(flows, []OutputSignals{{Name: "otlp-grpc", Signals: []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces, telemetry.Flows}}}))
+	err := ValidateSignalCompat(flows, []OutputSignals{{Name: "tcp", Signals: []telemetry.Type{telemetry.Logs}}})
+	require.Error(t, err, "a flow generator into a logs-only output has no sink")
+}

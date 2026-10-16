@@ -132,6 +132,10 @@ type EmbedOpts struct {
 	// trace-yielding generator is configured.
 	TraceConsumer embed.TraceConsumer
 
+	// FlowConsumer is the destination for every flow record the flow
+	// generator produces. Required when a flow generator is configured.
+	FlowConsumer embed.FlowConsumer
+
 	// FileGenLibrary is the optional filesystem the filegen generator
 	// consults for `package:`-prefixed source references and bare-name
 	// library fallbacks. Pass embeddedlibrary.FS() (with the
@@ -195,6 +199,7 @@ func LoadModules(yamlBytes []byte, opts EmbedOpts) ([]embed.ProducerModule, erro
 		LogConsumer:    opts.LogConsumer,
 		MetricConsumer: opts.MetricConsumer,
 		TraceConsumer:  opts.TraceConsumer,
+		FlowConsumer:   opts.FlowConsumer,
 	}
 	modules := make([]embed.ProducerModule, 0, len(gens))
 	for i, gen := range gens {

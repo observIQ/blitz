@@ -35,11 +35,12 @@ A module declares its class by embedding `embed.ProducerMarker` or `embed.Effect
 
 ## Records and consumers
 
-Blitz emits three signal types, defined in `embed`:
+Blitz emits four signal types, defined in `embed`:
 
 - `LogRecord`: a single log entry (message, optional parser callback, metadata)
 - `MetricPoint`: a single metric data point (gauge / sum / counter / histogram)
 - `Span`: a single trace span
+- `FlowRecord`: a single network flow (one direction of a connection)
 
 Records are blitz-owned, wire-format-agnostic. OTLP encoding only happens at the OTLP-output boundary or in an OTel-pdata adapter; the embed contract itself does not pull `pdata`.
 
@@ -49,6 +50,7 @@ A host implements one or more consumer interfaces:
 type LogConsumer    interface { ConsumeLogs(ctx, []LogRecord) error }
 type MetricConsumer interface { ConsumeMetrics(ctx, []MetricPoint) error }
 type TraceConsumer  interface { ConsumeTraces(ctx, []Span) error }
+type FlowConsumer   interface { ConsumeFlows(ctx, []FlowRecord) error }
 ```
 
 Consumers receive batches. Most Producer modules push size-1 batches; the framework allows larger batches if a module wants to coalesce. The `traces` Producer is intentionally size-1 per call. Each span is scheduled at its own `EndTime` via `time.AfterFunc`. The consumer therefore observes spans arriving at staggered wall-clock moments, the way a real distributed system delivers them.
@@ -62,6 +64,7 @@ Generator names are the `generator.type` values the config accepts.
 | Logs    | `apache-common`, `apache-combined`, `apache-error`, `filegen`, `fix`, `json`, `kubernetes`, `nginx`, `okta`, `palo-alto`, `postgres`, `wel` | `LogConsumer`      | `Host.Logs`    |
 | Metrics | `hostmetrics`                                                                                                                               | `MetricConsumer`   | `Host.Metrics` |
 | Traces  | `traces`                                                                                                                                    | `TraceConsumer`    | `Host.Traces`  |
+| Flows   | `flow`                                                                                                                                      | `FlowConsumer`     | `Host.Flows`   |
 
 `nop` and `winevt` are excluded, and `LoadModules` rejects both with an explicit error. See "Not yet in the embed contract" and "Not embed-eligible at all" below.
 
@@ -356,7 +359,7 @@ The `filegen` generator references files under `data_library/` for the `package:
   First match wins. The env override is the recommended path for containers and custom install prefixes.
 - **Embedded snapshot**: import `github.com/observiq/blitz/generator/filegen/embeddedlibrary` and pass `embeddedlibrary.FS()` as `FileGenLibrary`. The blitz module ships the `data_library/` files inside the embeddedlibrary package, so `go get github.com/observiq/blitz/generator/filegen/embeddedlibrary` fetches them as part of the module cache. The host stages no files separately. The package is gated by the `//go:build embed_library` tag, so default builds skip the embed and tagged builds get the files baked into the binary.
 
-`LoadModules` constructs every Producer-class generator that has been migrated to the embed contract (logs, metrics, and traces). Each is wired to whichever consumer on `EmbedOpts` corresponds to the generator's signal. Generator types not yet migrated return an explicit error instead of being silently dropped, so the host's parsed config can't lose generators the user expected.
+`LoadModules` constructs every Producer-class generator that has been migrated to the embed contract (logs, metrics, traces, and flows). Each is wired to whichever consumer on `EmbedOpts` corresponds to the generator's signal. Generator types not yet migrated return an explicit error instead of being silently dropped, so the host's parsed config can't lose generators the user expected.
 
 ### Not yet in the embed contract
 
@@ -372,12 +375,15 @@ The `filegen` generator references files under `data_library/` for the `package:
 
 For OTel hosts that want `pdata` rather than blitz records, the adapter lives in the receiver itself (e.g., the [telemetrygeneratorreceiver](https://github.com/observIQ/bindplane-otel-contrib/tree/main/receiver/telemetrygeneratorreceiver)). Implementing `LogConsumer` / `MetricConsumer` / `TraceConsumer` and converting to `plog.Logs` / `pmetric.Metrics` / `ptrace.Traces` inside `Consume*` is the recommended pattern. Keeping the converter on the receiver side avoids pulling the heavy `go.opentelemetry.io/collector/pdata` module into blitz core.
 
+Flows follow the same pattern through `FlowConsumer`. For hosts that want flows as OTLP logs, `embed/otelpdata.FlowToLogRecord` converts a `FlowRecord` into the log record the collector's `netflowreceiver` emits for the same flow. It builds raw OTLP protobuf, so it adds no `pdata` dependency either.
+
 ## Module classes
 
 | Module                                       | Class    | Notes                                                                                                            |
 |----------------------------------------------|----------|------------------------------------------------------------------------------------------------------------------|
 | apache-common, apache-combined, apache-error | Producer | Common / Combined / Error log formats                                                                            |
 | filegen                                      | Producer | Replays lines from files; supports glob and directories                                                          |
+| flow                                         | Producer | Network flow records (5-tuple plus counters); the flow output picks the wire format                              |
 | json                                         | Producer | Structured JSON logs; `default` and `pii` log types                                                              |
 | kubernetes                                   | Producer | CRI-O container log format                                                                                       |
 | nginx                                        | Producer | NGINX Combined log format                                                                                        |

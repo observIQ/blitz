@@ -60,6 +60,10 @@ func getTestOverrideFlagsArgs() []string {
 		"--generator-hostmetrics-scrapers", "cpu,memory",
 		"--generator-traces-workers", "2",
 		"--generator-traces-rate", "500ms",
+		"--generator-flow-workers", "3",
+		"--generator-flow-rate", "250ms",
+		"--generator-flow-scenario", "wan-edge",
+		"--generator-flow-seed", "7",
 		"--generator-wel-workers", "3",
 		"--generator-wel-rate", "500ms",
 		"--generator-wel-channels", "Security,System",
@@ -132,6 +136,11 @@ func getTestOverrideFlagsArgs() []string {
 		"--output-hec-source", "myapp",
 		"--output-hec-sourcetype", "mylog",
 		"--output-hec-index", "main",
+		"--output-flow-host", "10.0.0.9",
+		"--output-flow-port", "4739",
+		"--output-flow-protocol", "ipfix",
+		"--output-flow-vendor", "appflow",
+		"--output-flow-agentip", "10.0.0.1",
 		"--output-hec-enable-tls", "true",
 		"--output-hec-tls-cert", "/path/to/hec_cert.pem",
 		"--output-hec-tls-key", "/path/to/hec_key.pem",
@@ -197,6 +206,10 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_GENERATOR_HOSTMETRICS_SCRAPERS":      "disk,network",
 		"BLITZ_GENERATOR_TRACES_WORKERS":            "5",
 		"BLITZ_GENERATOR_TRACES_RATE":               "2s",
+		"BLITZ_GENERATOR_FLOW_WORKERS":              "5",
+		"BLITZ_GENERATOR_FLOW_RATE":                 "750ms",
+		"BLITZ_GENERATOR_FLOW_SCENARIO":             "datacenter",
+		"BLITZ_GENERATOR_FLOW_SEED":                 "11",
 		"BLITZ_GENERATOR_WEL_WORKERS":               "3",
 		"BLITZ_GENERATOR_WEL_RATE":                  "500ms",
 		"BLITZ_GENERATOR_WEL_CHANNELS":              "Security,System",
@@ -269,6 +282,11 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_OUTPUT_HEC_SOURCE":                   "envapp",
 		"BLITZ_OUTPUT_HEC_SOURCETYPE":               "envlog",
 		"BLITZ_OUTPUT_HEC_INDEX":                    "dev",
+		"BLITZ_OUTPUT_FLOW_HOST":                    "10.0.0.8",
+		"BLITZ_OUTPUT_FLOW_PORT":                    "6343",
+		"BLITZ_OUTPUT_FLOW_PROTOCOL":                "netflow-v9",
+		"BLITZ_OUTPUT_FLOW_VENDOR":                  "rflow",
+		"BLITZ_OUTPUT_FLOW_AGENTIP":                 "10.0.0.2",
 		"BLITZ_OUTPUT_HEC_ENABLE_TLS":               "false",
 		"BLITZ_OUTPUT_HEC_TLS_CERT":                 "/env/hec_cert.pem",
 		"BLITZ_OUTPUT_HEC_TLS_KEY":                  "/env/hec_key.pem",
@@ -378,6 +396,12 @@ func TestOverrideDefaults(t *testing.T) {
 				Workers: 1,
 				Rate:    1 * time.Second,
 			},
+			Flow: FlowGeneratorConfig{
+				Workers:  1,
+				Rate:     1 * time.Second,
+				Scenario: DefaultFlowScenario,
+				Seed:     DefaultFlowSeed,
+			},
 			Wel: WelGeneratorConfig{
 				Workers:            1,
 				Rate:               1 * time.Second,
@@ -466,6 +490,11 @@ func TestOverrideDefaults(t *testing.T) {
 			},
 			Stdout: StdoutOutputConfig{
 				FlushInterval: DefaultStdoutFlushInterval,
+			},
+			Flow: FlowOutputConfig{
+				Host:     DefaultFlowOutputHost,
+				Port:     DefaultFlowOutputPort,
+				Protocol: DefaultFlowProtocol,
 			},
 		},
 		Metrics: Metrics{
@@ -578,6 +607,12 @@ func TestOverrideFlags(t *testing.T) {
 				Workers: 2,
 				Rate:    500 * time.Millisecond,
 			},
+			Flow: FlowGeneratorConfig{
+				Workers:  3,
+				Rate:     250 * time.Millisecond,
+				Scenario: "wan-edge",
+				Seed:     7,
+			},
 			Wel: WelGeneratorConfig{
 				Workers:            3,
 				Rate:               500 * time.Millisecond,
@@ -682,6 +717,13 @@ func TestOverrideFlags(t *testing.T) {
 			},
 			Stdout: StdoutOutputConfig{
 				FlushInterval: 50 * time.Millisecond,
+			},
+			Flow: FlowOutputConfig{
+				Host:     "10.0.0.9",
+				Port:     4739,
+				Protocol: "ipfix",
+				Vendor:   "appflow",
+				AgentIP:  "10.0.0.1",
 			},
 		},
 		Metrics: Metrics{
@@ -799,6 +841,12 @@ func TestOverrideEnvs(t *testing.T) {
 				Workers: 5,
 				Rate:    2 * time.Second,
 			},
+			Flow: FlowGeneratorConfig{
+				Workers:  5,
+				Rate:     750 * time.Millisecond,
+				Scenario: "datacenter",
+				Seed:     11,
+			},
 			Wel: WelGeneratorConfig{
 				Workers:            3,
 				Rate:               500 * time.Millisecond,
@@ -903,6 +951,13 @@ func TestOverrideEnvs(t *testing.T) {
 			Stdout: StdoutOutputConfig{
 				FlushInterval: 75 * time.Millisecond,
 			},
+			Flow: FlowOutputConfig{
+				Host:     "10.0.0.8",
+				Port:     6343,
+				Protocol: "netflow-v9",
+				Vendor:   "rflow",
+				AgentIP:  "10.0.0.2",
+			},
 		},
 		Metrics: Metrics{
 			Port: 9100,
@@ -995,5 +1050,51 @@ func TestOverrideCoverage(t *testing.T) {
 		}
 
 		t.Errorf("%s", report.String())
+	}
+}
+
+func TestCreateFlagInt64(t *testing.T) {
+	flagSet := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	o := NewOverride("test.int64.seed", "an int64 override", int64(-1))
+	flag := o.createFlag(flagSet)
+	require.Equal(t, "int64", flag.Value.Type())
+
+	require.Error(t, flagSet.Parse([]string{"--test-int64-seed=abc"}))
+	require.NoError(t, flagSet.Parse([]string{"--test-int64-seed=-9"}))
+	require.Equal(t, "-9", flag.Value.String())
+}
+
+// TestFlowSeedFlagIsInt64 keeps the flow seed flag the same type as
+// FlowGeneratorConfig.Seed.
+func TestFlowSeedFlagIsInt64(t *testing.T) {
+	flagSet := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	for _, o := range DefaultOverrides() {
+		if o.Field == "generator.flow.seed" {
+			require.Equal(t, "int64", o.createFlag(flagSet).Value.Type())
+			return
+		}
+	}
+	t.Fatal("no generator.flow.seed override")
+}
+
+// TestTypeHelpListsEveryType keeps the --generator-type and --output-type help
+// text in step with Validate: every type Validate accepts is listed.
+func TestTypeHelpListsEveryType(t *testing.T) {
+	for field, err := range map[string]error{
+		"generator.type": (&Generator{Type: "no-such-type"}).Validate(),
+		"output.type":    (&Output{Type: "no-such-type"}).Validate(),
+	} {
+		require.Error(t, err)
+		_, accepted, ok := strings.Cut(err.Error(), "must be one of: ")
+		require.True(t, ok, "unexpected Validate error: %v", err)
+		var help string
+		for _, o := range DefaultOverrides() {
+			if o.Field == field {
+				help = o.Usage
+			}
+		}
+		_, listed, ok := strings.Cut(help, "One of: ")
+		require.True(t, ok, "unexpected %s usage: %q", field, help)
+		require.ElementsMatch(t, strings.Split(accepted, ", "), strings.Split(listed, "|"), field)
 	}
 }

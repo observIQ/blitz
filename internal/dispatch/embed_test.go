@@ -29,6 +29,10 @@ type noopTraceConsumer struct{}
 
 func (noopTraceConsumer) ConsumeTraces(_ context.Context, _ []embed.Span) error { return nil }
 
+type noopFlowConsumer struct{}
+
+func (noopFlowConsumer) ConsumeFlows(_ context.Context, _ []embed.FlowRecord) error { return nil }
+
 func logsOnly() EmbedConsumers {
 	return EmbedConsumers{LogConsumer: noopConsumer{}}
 }

@@ -47,11 +47,12 @@ var (
 var errMultiStopped = errors.New("multi output stopped")
 
 // MultiOutput fans one generated stream out to several child outputs,
-// implementing Output, LogWriter, MetricWriter, TraceWriter, and the
-// ConsumeLogs/ConsumeMetrics/ConsumeTraces batch consumers so callers treat it
-// like a single output. Each child still emits its own output_type-tagged
-// metrics; the fan-out itself only records what no child can see: drops and
-// write errors on its forwarding queues.
+// implementing Output, LogWriter, MetricWriter, TraceWriter, the
+// ConsumeLogs/ConsumeMetrics/ConsumeTraces batch consumers, and
+// embed.FlowConsumer so callers treat it like a single output. Each child
+// still emits its own output_type-tagged metrics; the fan-out itself only
+// records what no child can see: drops and write errors on its forwarding
+// queues.
 //
 // Each child has its own bounded queue drained by one forwarding goroutine, so
 // a slow or dead child never paces the others: a write enqueues without
@@ -70,6 +71,7 @@ type MultiOutput struct {
 	logs      []*multiChild
 	metrics   []*multiChild
 	traces    []*multiChild
+	flows     []*multiChild
 	supported []telemetry.Type
 
 	// ctx is handed to child writes; Stop cancels it to unblock them.
@@ -89,6 +91,7 @@ type multiChild struct {
 	log     LogWriter
 	metric  MetricWriter
 	trace   TraceWriter
+	flow    embed.FlowConsumer
 	q       chan multiItem
 	errFull error
 	// warn logs this child's drops and write errors, sampled per child.
@@ -120,18 +123,21 @@ type multiItem struct {
 	logs    []LogRecord
 	metrics []MetricRecord
 	traces  []TraceRecord
+	flows   []embed.FlowRecord
 }
 
 // size is the number of records in the item: its batch length, or one.
 func (it multiItem) size() int {
-	if n := len(it.logs) + len(it.metrics) + len(it.traces); n > 0 {
+	if n := len(it.logs) + len(it.metrics) + len(it.traces) + len(it.flows); n > 0 {
 		return n
 	}
 	return 1
 }
 
 // batched reports whether the item carries a Consume* batch.
-func (it multiItem) batched() bool { return it.logs != nil || it.metrics != nil || it.traces != nil }
+func (it multiItem) batched() bool {
+	return it.logs != nil || it.metrics != nil || it.traces != nil || it.flows != nil
+}
 
 // NewMultiOutput wraps the given outputs and starts one forwarding goroutine
 // per child. Each child's SupportedTelemetry is read once here to route
@@ -178,6 +184,11 @@ func NewMultiOutput(logger *zap.Logger, tel embed.TelemetrySettings, children ..
 			m.traces = append(m.traces, c)
 			m.support(telemetry.Traces)
 		}
+		if w, ok := o.(embed.FlowConsumer); ok && slices.Contains(sup, telemetry.Flows) {
+			c.flow = w
+			m.flows = append(m.flows, c)
+			m.support(telemetry.Flows)
+		}
 		m.children = append(m.children, c)
 		m.wg.Add(1)
 		go m.forward(c) // #nosec G118 -- exits when Stop closes the queue
@@ -203,6 +214,18 @@ func (m *MultiOutput) forward(c *multiChild) {
 		if it.sc.IsValid() {
 			ctx = trace.ContextWithSpanContext(ctx, it.sc)
 		}
+		if it.sig == telemetry.Flows {
+			// A flow consumer takes the whole batch in one call.
+			if err := c.flow.ConsumeFlows(ctx, it.flows); err != nil {
+				if m.ctx.Err() != nil {
+					m.abandon(c)
+					return
+				}
+				c.warn.Warn("fan-out output write failed", zap.String("telemetry_type", string(it.sig)), zap.Error(err))
+				m.counters.BlitzOutputFanoutWriteErrorsCounter.Add(context.Background(), int64(len(it.flows)), c.typ, string(it.sig), c.name)
+			}
+			continue
+		}
 		for i := 0; i < it.size(); i++ {
 			var err error
 			switch {
@@ -220,9 +243,7 @@ func (m *MultiOutput) forward(c *multiChild) {
 				err = c.trace.WriteTrace(ctx, it.trace)
 			}
 			if err != nil && m.ctx.Err() != nil {
-				// Stop cancelled writes: this batch and the rest of the queue
-				// are shutdown loss, reported once, not one write error each.
-				c.warn.Warn("fan-out output abandoned queued records at shutdown", zap.Int("batches", 1+len(c.q)))
+				m.abandon(c)
 				return
 			}
 			if err != nil {
@@ -231,6 +252,13 @@ func (m *MultiOutput) forward(c *multiChild) {
 			}
 		}
 	}
+}
+
+// abandon reports a child's in-flight batch and the rest of its queue as
+// shutdown loss once Stop has cancelled writes: logged once, not counted as
+// write errors.
+func (m *MultiOutput) abandon(c *multiChild) {
+	c.warn.Warn("fan-out output abandoned queued records at shutdown", zap.Int("batches", 1+len(c.q)))
 }
 
 // enqueue offers it to each child without blocking. A child with a full
@@ -326,6 +354,16 @@ func (m *MultiOutput) ConsumeTraces(ctx context.Context, spans []embed.Span) err
 		return nil
 	}
 	return m.enqueue(m.traces, multiItem{sig: telemetry.Traces, sc: trace.SpanContextFromContext(ctx), traces: slices.Clone(spans)})
+}
+
+// ConsumeFlows fans a flow batch to children that implement
+// embed.FlowConsumer and declare Flows; others are skipped. The batch is
+// copied so the caller can reuse its slice once this returns.
+func (m *MultiOutput) ConsumeFlows(ctx context.Context, recs []embed.FlowRecord) error {
+	if len(recs) == 0 {
+		return nil
+	}
+	return m.enqueue(m.flows, multiItem{sig: telemetry.Flows, sc: trace.SpanContextFromContext(ctx), flows: slices.Clone(recs)})
 }
 
 // Stop closes every queue and lets the forwarders drain them, using at most

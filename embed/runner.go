@@ -52,9 +52,10 @@ type Config struct {
 	// Modules lists the ProducerModules the Runner will operate.
 	Modules []ProducerModule
 
-	// Logs, Metrics, Traces configure backpressure per signal channel.
+	// Logs, Metrics, Traces, Flows configure backpressure per signal channel.
 	// Zero values mean BackpressureBlock.
 	Logs    ConsumerBackpressure
 	Metrics ConsumerBackpressure
 	Traces  ConsumerBackpressure
+	Flows   ConsumerBackpressure
 }

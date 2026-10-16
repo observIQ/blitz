@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
+	flowout "github.com/observiq/blitz/output/flow"
 	"github.com/observiq/blitz/output/nop"
 	"github.com/observiq/blitz/output/stdout"
 )
@@ -44,4 +46,13 @@ func TestSingleOutputConsumersFollowItsWriters(t *testing.T) {
 	require.NotNil(t, c.LogConsumer)
 	require.NotNil(t, c.MetricConsumer)
 	require.NotNil(t, c.TraceConsumer)
+}
+
+// TestFlowOutputIsTheFlowConsumer pins that a generator writing to the flow
+// output gets that output as its FlowConsumer, so a flow generator can run.
+func TestFlowOutputIsTheFlowConsumer(t *testing.T) {
+	o, err := flowout.New(zap.NewNop(), "127.0.0.1", "9", flowout.ProtocolNetFlowV5, "", "", embed.NopTelemetry())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	require.Same(t, o, consumersFor(o, embed.NopTelemetry()).FlowConsumer)
 }
