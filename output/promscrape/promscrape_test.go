@@ -23,10 +23,14 @@ func newTestOutput(t *testing.T) *Output {
 	return o
 }
 
-func TestWriteLogUnsupported(t *testing.T) {
-	o := newTestOutput(t)
-	err := o.Write(context.Background(), output.LogRecord{})
-	require.ErrorIs(t, err, output.ErrUnsupportedTelemetryType)
+// TestIsMetricsOnly pins that the output takes metrics only: it is a
+// MetricWriter and no LogWriter, so log records never reach it.
+func TestIsMetricsOnly(t *testing.T) {
+	var w output.Writer = &Output{}
+	_, logs := w.(output.LogWriter)
+	_, metrics := w.(output.MetricWriter)
+	require.False(t, logs)
+	require.True(t, metrics)
 }
 
 func TestSupportedTelemetry(t *testing.T) {
