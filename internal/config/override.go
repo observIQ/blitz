@@ -310,6 +310,7 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.flow.workers", "number of flow generator workers", 1),
 		NewOverride("generator.flow.rate", "rate at which flow records are generated per worker", 1*time.Second),
 		NewOverride("generator.flow.scenario", "flow traffic-shape preset. One of: default|wan-edge|datacenter|ddos-target", DefaultFlowScenario),
+		NewOverride("generator.flow.exporterVendor", "vendor of the exporting routing device. One of: cisco|arista|juniper|f5|palo-alto|fortinet (empty = any)", ""),
 		NewOverride("generator.flow.seed", "flow generator RNG seed (negative randomizes)", DefaultFlowSeed),
 		NewOverride("generator.wel.workers", "number of WEL generator workers", 1),
 		NewOverride("generator.wel.rate", "rate at which WEL events are generated per worker", 1*time.Second),

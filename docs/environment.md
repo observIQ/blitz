@@ -80,6 +80,7 @@ component name picks among the eligible hosts only.
 | `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `json`, `fix`, `traces` | servers that run applications, any OS | server software never runs on a router, workstation, or DC, or on a server whose OS runs no applications |
 | `okta`, `filegen` | any                          | the source is not host-bound                    |
 | `palo-alto`    | a Palo Alto device from `network_systems` | it describes a firewall, not a host (see below) |
+| `flow`         | a routing device from `network_systems`, of `exporterVendor` when set | flows come from the device that forwards the traffic |
 
 Entries of the same generator type get their own hosts, even when their
 requirements differ (`wel` with any role and `wel` `role: dc`). When the random
@@ -91,8 +92,11 @@ environment host of its own.
 
 ### Appliance generators
 
-A generator that describes a network appliance (`palo-alto`) takes a device
-from the environment's `network_systems` instead of a host. Every device has a
+A generator that describes a network appliance (`palo-alto`, and `flow`'s
+exporter) takes a device from the environment's `network_systems` instead of a
+host. `flow` takes any routing (L3) device, or only `exporterVendor`'s when
+that is set, and its records name the device's management address as the
+exporter. Every device has a
 hostname in the form `<vendor>-<role>-NN` (`pa-fw-01`, `f5-lb-01`,
 `cisco-sw-02`), unique within the fleet, and an FQDN in the environment's
 domain (`pa-fw-01.blitz.local`) that a device's syslog header carries. Each

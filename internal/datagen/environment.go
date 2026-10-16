@@ -186,7 +186,11 @@ type EnvironmentOpts struct {
 	// RequiredHosts are hosts the configured generators describe (a domain
 	// controller, a macOS host), one per entry; the environment holds at least
 	// as many hosts meeting each requirement as it is listed.
-	RequiredHosts     []HostRequirement
+	RequiredHosts []HostRequirement
+	// RequiredRouters is how many routing (L3) devices of any vendor the
+	// configured generators describe, such as flow exporters; the environment
+	// holds at least that many.
+	RequiredRouters   int
 	DomainAdminsCount int         // exact Domain Admins membership; 0 (or negative) = use the user-count-scaled default in the datagen package.
 	Now               time.Time   // wall-clock anchor for time-dependent fields (e.g. CertAuthority validity window). Zero value = time.Now() at GenerateEnvironment call; see Environment docstring for determinism implications.
 	Logger            *zap.Logger // logger for datagen diagnostics; nil disables logging (no global-logger fallback).
@@ -295,7 +299,7 @@ func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) (*Environment
 	storageSystems := generateStorageSystems(storageSeed, opts.StorageSystemCount, networks)
 
 	networkSystemSeed := seeds.ResolveSeed(IdentityNetworkSystems)
-	networkSystems := generateNetworkSystems(networkSystemSeed, opts.NetworkSystemCount, networks, opts.RequiredVendors)
+	networkSystems := generateNetworkSystems(networkSystemSeed, opts.NetworkSystemCount, networks, opts.RequiredVendors, opts.RequiredRouters)
 	for _, n := range networkSystems {
 		n.FQDN = fqdnFor(n.Hostname, domain.Name)
 	}
@@ -356,7 +360,7 @@ func generateStorageSystems(seed int64, count int, networks []*NetworkIdentity) 
 // the same RNG after the drawn fleet is bound, so the fleet stays
 // deterministic per seed and requiring a vendor never moves a drawn device.
 // Every device then gets a unique hostname.
-func generateNetworkSystems(seed int64, count int, networks []*NetworkIdentity, required []ApplianceVendor) []*NetworkSystemIdentity {
+func generateNetworkSystems(seed int64, count int, networks []*NetworkIdentity, required []ApplianceVendor, routers int) []*NetworkSystemIdentity {
 	r := rand.New(rand.NewSource(seed)) // #nosec G404
 	mgmt := managementNetwork(networks)
 	out := make([]*NetworkSystemIdentity, 0, count+len(required))
@@ -374,8 +378,21 @@ func generateNetworkSystems(seed int64, count int, networks []*NetworkIdentity, 
 			add(NetworkSystemIdentityFor(r, v))
 		}
 	}
+	for routerCount(out) < routers {
+		add(RandomNetworkSystemIdentity(r)) // every network model routes (L3)
+	}
 	assignApplianceHostnames(out)
 	return out
+}
+
+func routerCount(ns []*NetworkSystemIdentity) int {
+	n := 0
+	for _, s := range ns {
+		if s.L3Routing != nil {
+			n++
+		}
+	}
+	return n
 }
 
 func vendorCount(ns []*NetworkSystemIdentity, v ApplianceVendor) int {
@@ -657,6 +674,26 @@ func interfaceName(os OSType) string {
 	default:
 		return "eth0"
 	}
+}
+
+// FlowExporterFor deterministically selects, by key and ordinal, one of the
+// environment's routing (L3) devices, the device a flow generator's records
+// come from: any vendor when vendor is empty, else only that vendor's. Returns
+// nil when the environment has none; build it with RequiredRouters or
+// RequiredVendors to guarantee one.
+func (e *Environment) FlowExporterFor(key string, ordinal int, vendor ApplianceVendor) *NetworkSystemIdentity {
+	var eligible []*NetworkSystemIdentity
+	for _, n := range e.NetworkSystems {
+		if n.L3Routing != nil && (vendor == "" || n.Vendor == vendor) {
+			eligible = append(eligible, n)
+		}
+	}
+	if len(eligible) == 0 {
+		return nil
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key))
+	return eligible[(int64(h.Sum32())+int64(ordinal))%int64(len(eligible))]
 }
 
 // ApplianceFor deterministically selects, by key, one of the environment's

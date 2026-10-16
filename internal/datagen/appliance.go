@@ -23,6 +23,27 @@ const (
 	VendorFortinet ApplianceVendor = "Fortinet"
 )
 
+// exporterVendors maps the config spellings of the vendors whose devices
+// export flows to their ApplianceVendor.
+var exporterVendors = map[string]ApplianceVendor{
+	"cisco": VendorCisco, "arista": VendorArista, "juniper": VendorJuniper,
+	"f5": VendorF5, "palo-alto": VendorPaloAlto, "fortinet": VendorFortinet,
+}
+
+// ParseExporterVendor maps a flow exporter vendor's config spelling (cisco,
+// arista, juniper, f5, palo-alto, fortinet) to its ApplianceVendor. Empty
+// means any vendor and returns "".
+func ParseExporterVendor(s string) (ApplianceVendor, error) {
+	if s == "" {
+		return "", nil
+	}
+	v, ok := exporterVendors[s]
+	if !ok {
+		return "", fmt.Errorf("unknown flow exporter vendor %q: must be one of cisco, arista, juniper, f5, palo-alto, fortinet", s)
+	}
+	return v, nil
+}
+
 // ApplianceOSFamily identifies the OS family running on an appliance, spelled
 // as the device reports it (e.g. via "show version" / SNMP sysDescr / vendor
 // API). Each family maps to exactly one vendor (see applianceOSVendor).

@@ -78,7 +78,7 @@ func (e EnvironmentConfig) Validate() error {
 // configured generators describe; the environment always holds a device of
 // each vendor and a system meeting each requirement (see
 // dispatch.BuildEnvironment).
-func (e EnvironmentConfig) Build(logger *zap.Logger, vendors []datagen.ApplianceVendor, hosts []datagen.HostRequirement) (*datagen.Environment, error) {
+func (e EnvironmentConfig) Build(logger *zap.Logger, vendors []datagen.ApplianceVendor, hosts []datagen.HostRequirement, routers int) (*datagen.Environment, error) {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -128,6 +128,7 @@ func (e EnvironmentConfig) Build(logger *zap.Logger, vendors []datagen.Appliance
 		DomainAdminsCount:  e.Counts.DomainAdmins,
 		RequiredVendors:    vendors,
 		RequiredHosts:      hosts,
+		RequiredRouters:    routers,
 		Logger:             logger,
 	}
 

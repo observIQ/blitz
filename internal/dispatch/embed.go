@@ -192,10 +192,8 @@ func ForEmbedAt(logger *zap.Logger, genCfg config.Generator, ordinal int, consum
 		if err := consumers.requireFlow(genCfg.Type); err != nil {
 			return nil, err
 		}
-		mod, err := flowgen.New(logger, genCfg.Flow.Workers, genCfg.Flow.Rate, flowgen.Scenario(genCfg.Flow.Scenario), genCfg.Flow.Seed, consumers.FlowConsumer, tel)
-		if err == nil {
-			mod.SetHostIdentity(hostIdentity(env, genCfg, ordinal))
-		}
+		mod, err := flowgen.New(logger, genCfg.Flow.Workers, genCfg.Flow.Rate, flowgen.Scenario(genCfg.Flow.Scenario), genCfg.Flow.Seed, consumers.FlowConsumer, tel,
+			generator.WithAppliance(flowExporter(env, genCfg, ordinal)))
 		return module(mod, err)
 	case config.GeneratorTypeHostMetrics:
 		if err := consumers.requireMetric(genCfg.Type); err != nil {
@@ -291,15 +289,50 @@ func RequiredAppliances(gens []config.Generator) []datagen.ApplianceVendor {
 		if v := applianceVendor(g.Type); v != "" {
 			out = append(out, v)
 		}
+		if v := exporterVendor(g); v != "" {
+			out = append(out, v)
+		}
 	}
 	return out
+}
+
+// RequiredRouters counts the flow generators that take a routing device of
+// any vendor, so the environment holds one for each.
+func RequiredRouters(gens []config.Generator) int {
+	n := 0
+	for _, g := range gens {
+		if g.Type == config.GeneratorTypeFlow && exporterVendor(g) == "" {
+			n++
+		}
+	}
+	return n
+}
+
+// exporterVendor is a flow generator's configured exporter vendor, or "" for
+// any vendor (and for every other generator type). Validate has already
+// rejected an unknown spelling.
+func exporterVendor(g config.Generator) datagen.ApplianceVendor {
+	if g.Type != config.GeneratorTypeFlow {
+		return ""
+	}
+	v, _ := datagen.ParseExporterVendor(g.Flow.ExporterVendor)
+	return v
+}
+
+// flowExporter resolves the environment routing device a flow generator's
+// records come from, or nil without an environment.
+func flowExporter(env *datagen.Environment, genCfg config.Generator, ordinal int) *datagen.NetworkSystemIdentity {
+	if env == nil {
+		return nil
+	}
+	return env.FlowExporterFor(string(genCfg.Type), ordinal, exporterVendor(genCfg))
 }
 
 // BuildEnvironment builds the simulated environment for gens: envCfg's fleet,
 // plus a device for every appliance and a system for every host requirement
 // the generators need. Both loaders build through it so they cannot drift.
 func BuildEnvironment(logger *zap.Logger, envCfg config.EnvironmentConfig, gens []config.Generator) (*datagen.Environment, error) {
-	return envCfg.Build(logger, RequiredAppliances(gens), RequiredHosts(gens))
+	return envCfg.Build(logger, RequiredAppliances(gens), RequiredHosts(gens), RequiredRouters(gens))
 }
 
 // RequiredHosts lists the host requirements of the configured generators, so
