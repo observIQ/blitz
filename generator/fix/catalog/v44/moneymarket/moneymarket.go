@@ -52,26 +52,27 @@ type instrument struct {
 	Yield   string
 	Price   string
 	CFICode string
+	Tenor   int // days to maturity, the tenor the symbol names
 }
 
 var instrumentsByType = map[catalog.SecurityType][]instrument{
 	catalog.SecCD: {
-		{"BAC-CD-90D", "060505AA1", "Bank of America", "5.25", "A-1", YieldTypeInterestBearing, PriceTypePercentOfPar, "DYZXFR"},
-		{"JPM-CD-180D", "46625HBA1", "JPMorgan Chase", "5.10", "A-1+", YieldTypeInterestBearing, PriceTypePercentOfPar, "DYZXFR"},
-		{"WFC-CD-30D", "949746AA1", "Wells Fargo", "5.30", "A-1", YieldTypeInterestBearing, PriceTypePercentOfPar, "DYZXFR"},
+		{"BAC-CD-90D", "060505906", "Bank of America", "5.25", "A-1", YieldTypeInterestBearing, PriceTypePercentOfPar, "DYZXFR", 90},
+		{"JPM-CD-180D", "46625H910", "JPMorgan Chase", "5.10", "A-1+", YieldTypeInterestBearing, PriceTypePercentOfPar, "DYZXFR", 180},
+		{"WFC-CD-30D", "949746903", "Wells Fargo", "5.30", "A-1", YieldTypeInterestBearing, PriceTypePercentOfPar, "DYZXFR", 30},
 	},
 	catalog.SecCP: {
-		{"GE-CP-30D", "36962GAA1", "GE Capital", "", "A-1+", YieldTypeDiscount, PriceTypePerYield, "DYXXFR"},
-		{"IBM-CP-60D", "459200CC1", "IBM", "", "A-1", YieldTypeDiscount, PriceTypePerYield, "DYXXFR"},
-		{"CVS-CP-90D", "126650AA1", "CVS Health", "", "A-2", YieldTypeDiscount, PriceTypePerYield, "DYXXFR"},
+		{"GE-CP-30D", "36962G906", "GE Capital", "", "A-1+", YieldTypeDiscount, PriceTypePerYield, "DYXXFR", 30},
+		{"IBM-CP-60D", "459200903", "IBM", "", "A-1", YieldTypeDiscount, PriceTypePerYield, "DYXXFR", 60},
+		{"CVS-CP-90D", "126650902", "CVS Health", "", "A-2", YieldTypeDiscount, PriceTypePerYield, "DYXXFR", 90},
 	},
 	catalog.SecBA: {
-		{"BAC-BA-30D", "060505BA1", "Bank of America", "", "A-1", YieldTypeDiscount, PriceTypePerYield, "DYXXFR"},
-		{"JPM-BA-90D", "46625HCC1", "JPMorgan Chase", "", "A-1+", YieldTypeDiscount, PriceTypePerYield, "DYXXFR"},
+		{"BAC-BA-30D", "060505930", "Bank of America", "", "A-1", YieldTypeDiscount, PriceTypePerYield, "DYXXFR", 30},
+		{"JPM-BA-90D", "46625H928", "JPMorgan Chase", "", "A-1+", YieldTypeDiscount, PriceTypePerYield, "DYXXFR", 90},
 	},
 	catalog.SecBN: {
-		{"BAC-BN-180D", "060505CA1", "Bank of America", "5.20", "A-1", YieldTypeInterestBearing, PriceTypePercentOfPar, "DYZXFR"},
-		{"JPM-BN-90D", "46625HDD1", "JPMorgan Chase", "5.15", "A-1+", YieldTypeInterestBearing, PriceTypePercentOfPar, "DYZXFR"},
+		{"BAC-BN-180D", "060505914", "Bank of America", "5.20", "A-1", YieldTypeInterestBearing, PriceTypePercentOfPar, "DYZXFR", 180},
+		{"JPM-BN-90D", "46625H936", "JPMorgan Chase", "5.15", "A-1+", YieldTypeInterestBearing, PriceTypePercentOfPar, "DYZXFR", 90},
 	},
 }
 
@@ -150,7 +151,7 @@ func pickSecurityType(r *rand.Rand) catalog.SecurityType {
 func pickInstrument(r *rand.Rand, st catalog.SecurityType) instrument {
 	is := instrumentsByType[st]
 	if len(is) == 0 {
-		return instrument{Symbol: "MM-FALLBACK", Cusip: "000000AAA", Issuer: "Generic", Yield: YieldTypeDiscount, Price: PriceTypePerYield, Rating: "A-1", CFICode: "DYXXFR"}
+		return instrument{Symbol: "MM-FALLBACK", Cusip: "000000935", Issuer: "Generic", Yield: YieldTypeDiscount, Price: PriceTypePerYield, Rating: "A-1", CFICode: "DYXXFR", Tenor: 30}
 	}
 	return is[r.Intn(len(is))] // #nosec G404
 }
@@ -178,9 +179,6 @@ func pickedInstrument(r *rand.Rand, ctx *catalog.GenerateCtx) pickedPair {
 	ctx.Memo[pickKey{}] = p
 	return p
 }
-
-// issueBaseDate anchors deterministic IssueDate/MaturityDate emission.
-var issueBaseDate = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func symbolField() catalog.FieldGenerator {
 	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
@@ -212,19 +210,24 @@ func couponRateField() catalog.FieldGenerator {
 	}
 }
 func maturityDateField() catalog.FieldGenerator {
-	// Money market matures within ≤1y per convention. Add the random
-	// days budget to the deterministic issueBaseDate so MaturityDate
-	// reflects actual days-to-maturity rather than collapsing onto the
-	// 15th of a month.
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		days := 7 + r.Intn(359) // 7-365 days // #nosec G404
-		matur := issueBaseDate.AddDate(0, 0, days)
+	// Paper matures at the tenor its symbol names: the issue date plus
+	// that many days, rolled to a business day.
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		days := pickedInstrument(r, ctx).Instrument.Tenor
+		matur := catalog.NextBusinessDay(issueDate(ctx).AddDate(0, 0, days))
 		return catalog.Field{Tag: TagMaturityDate, Value: matur.Format("20060102")}
 	}
 }
+
+// issueDate is primary-market issuance: the trade date, rolled to a business
+// day, since paper is not issued on a weekend.
+func issueDate(ctx *catalog.GenerateCtx) time.Time {
+	return catalog.NextBusinessDay(ctx.TradeDate())
+}
+
 func issueDateField() catalog.FieldGenerator {
-	return func(_ *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagIssueDate, Value: issueBaseDate.Format("20060102")}
+	return func(_ *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagIssueDate, Value: issueDate(ctx).Format("20060102")}
 	}
 }
 func creditRatingField() catalog.FieldGenerator {
@@ -281,15 +284,18 @@ func tif() catalog.FieldGenerator {
 	return catalog.LiteralField(app.TagTimeInForce, app.TIFDay)
 }
 func orderQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		mm := 1 + r.Intn(100) // $1MM - $100MM // #nosec G404
-		return catalog.Field{Tag: app.TagOrderQty, Value: fmt.Sprintf("%d000000", mm)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagOrderQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
+
+func drawQty(r *rand.Rand) string {
+	mm := 1 + r.Intn(100) // $1MM - $100MM // #nosec G404
+	return fmt.Sprintf("%d000000", mm)
+}
 func leavesQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		mm := 1 + r.Intn(100) // #nosec G404
-		return catalog.Field{Tag: app.TagLeavesQty, Value: fmt.Sprintf("%d000000", mm)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagLeavesQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
 func price() catalog.FieldGenerator {

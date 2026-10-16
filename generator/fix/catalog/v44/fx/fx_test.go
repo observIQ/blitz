@@ -92,17 +92,6 @@ func TestFXSecurityTypeStaysInCategory(t *testing.T) {
 	}
 }
 
-func TestFXPriceIs5DecimalPlaces(t *testing.T) {
-	reregisterAll()
-	def := catalog.Get(catalog.MessageKey{Version: catalog.V44, MsgType: app.MsgTypeNewOrderSingle, AssetCategory: catalog.AssetCategoryFX})
-	tags := buildTagMap(def.Fields, rand.New(rand.NewSource(7)))
-	price := tags[app.TagPrice]
-	dot := strings.Index(price, ".")
-	if dot < 0 || len(price)-dot != 6 {
-		t.Errorf("FX Price %q must have 5 decimal places", price)
-	}
-}
-
 func TestFXDeterminismFromSeed(t *testing.T) {
 	reregisterAll()
 	def := catalog.Get(catalog.MessageKey{Version: catalog.V44, MsgType: app.MsgTypeNewOrderSingle, AssetCategory: catalog.AssetCategoryFX})

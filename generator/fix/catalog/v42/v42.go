@@ -5,6 +5,8 @@
 // 4.2-specific application-layer deltas captured here:
 //   - ExecType (150): 4.2 uses numeric "1" Partial / "2" Fill — 4.4
 //     introduced "F" Trade covering both. Wrapped on emit.
+//   - Repos send no SecurityID (48) or IDSource (22): their tri-party IDs
+//     are 22=H, which 4.2's IDSource (1-9) lacks, and 48 needs 22.
 //
 // Session-layer differences (BeginString = "FIX.4.2", no FIXT.1.1, no
 // ApplVerID) are handled at framing time by the Version's BeginString /
@@ -16,6 +18,7 @@ package v42
 
 import (
 	"math/rand"
+	"slices"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -42,6 +45,11 @@ const (
 	ExecType42Fill        = "2"
 )
 
+const (
+	tagSecurityID catalog.Tag = 48
+	tagIDSource   catalog.Tag = 22
+)
+
 func init() {
 	registerAll()
 }
@@ -66,23 +74,37 @@ func registerAll() {
 			Version:       catalog.V42,
 			MsgType:       def.MsgType,
 			AssetCategory: def.AssetCategory,
-			Fields:        adjustForV42(def.MsgType, def.Fields),
+			Fields:        adjustForV42(def.MsgType, def.AssetCategory, def.Fields),
 		})
 	}
 }
 
 // adjustForV42 wraps the V44 ExecType generator in ExecutionReports to
-// emit the 4.2 numeric value instead of "F". Other generators are
-// passed through unchanged.
-func adjustForV42(msgType string, src []catalog.FieldGenerator) []catalog.FieldGenerator {
-	if msgType != app.MsgTypeExecutionReport {
-		return src
-	}
-	out := make([]catalog.FieldGenerator, len(src))
-	for i, g := range src {
-		out[i] = wrapExecTypeV42(g)
+// emit the 4.2 numeric value instead of "F", and drops SecurityID and
+// IDSource from repos. Other generators are passed through unchanged.
+func adjustForV42(msgType string, cat catalog.AssetCategory, src []catalog.FieldGenerator) []catalog.FieldGenerator {
+	out := slices.Clone(src)
+	for i, g := range out {
+		if msgType == app.MsgTypeExecutionReport {
+			g = wrapExecTypeV42(g)
+		}
+		if cat == catalog.AssetCategoryRepos {
+			g = dropSecurityIDV42(g)
+		}
+		out[i] = g
 	}
 	return out
+}
+
+// dropSecurityIDV42 skips tags 48 and 22 (EncodeFields skips a zero Field).
+func dropSecurityIDV42(g catalog.FieldGenerator) catalog.FieldGenerator {
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		f := g(r, ctx)
+		if f.Tag == tagSecurityID || f.Tag == tagIDSource {
+			return catalog.Field{}
+		}
+		return f
+	}
 }
 
 // wrapExecTypeV42 wraps a FieldGenerator: if the generated Field is

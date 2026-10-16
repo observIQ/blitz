@@ -2,6 +2,7 @@ package equities
 
 import (
 	"math/rand"
+	"slices"
 	"testing"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
@@ -155,4 +156,19 @@ func buildTagMap(gens []catalog.FieldGenerator, r *rand.Rand) map[catalog.Tag]st
 		out[f.Tag] = f.Value
 	}
 	return out
+}
+
+// TestEquitiesInstrumentBlockCoherent pins that Symbol, SecurityID,
+// SecurityIDSource, SecurityType, and CFICode all describe one instrument.
+func TestEquitiesInstrumentBlockCoherent(t *testing.T) {
+	reregisterAll()
+	def := catalog.Get(catalog.MessageKey{Version: catalog.V44, MsgType: app.MsgTypeNewOrderSingle, AssetCategory: catalog.AssetCategoryEquities})
+	for seed := int64(0); seed < 300; seed++ {
+		tags := buildTagMap(def.Fields, rand.New(rand.NewSource(seed)))
+		st := catalog.SecurityType(tags[app.TagSecurityType])
+		want := instrument{Symbol: tags[app.TagSymbol], ID: tags[TagSecurityID], IDSource: tags[TagSecurityIDSource], CFICode: tags[TagCFICode]}
+		if !slices.Contains(equityInstruments[st], want) {
+			t.Fatalf("seed %d: %s message mixes instruments: %+v", seed, st, want)
+		}
+	}
 }

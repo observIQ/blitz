@@ -38,12 +38,13 @@ func TestAllOTCMessagesRegistered(t *testing.T) {
 func TestOTCInstrumentBlock(t *testing.T) {
 	reregisterAll()
 	def := catalog.Get(catalog.MessageKey{Version: catalog.V44, MsgType: app.MsgTypeNewOrderSingle, AssetCategory: catalog.AssetCategoryOTCDerivs})
-	// Always-present instrument-block tags. TagSettlSessSubID
-	// (restructuring) is CDS-only and tested separately.
+	// Always-present instrument-block tags. UnderlyingSecurityID and its
+	// source appear only for an underlier with an identifier (tested in
+	// tagconformance_test.go).
 	required := []catalog.Tag{
 		app.TagSymbol, app.TagSecurityType, TagSecurityID, TagSecurityIDSrc,
 		TagCouponRate, TagMaturityDate, TagUnderlyingSymbol,
-		TagUnderlyingSecurityID, TagDayCount, TagCFICode,
+		TagCFICode,
 	}
 	tags := buildTagMap(def.Fields, rand.New(rand.NewSource(1)))
 	for _, want := range required {
@@ -55,7 +56,7 @@ func TestOTCInstrumentBlock(t *testing.T) {
 
 // TestOTCInstrumentBlockCoherent asserts that every instrument-block
 // field in a single message agrees on the same picked (SecurityType,
-// swap) — Symbol/SecurityID/Underlying/Restructuring/CFICode all come
+// swap) — Symbol/SecurityID/Underlying/CFICode all come
 // from one row of swapsByType, not independent picks per field.
 func TestOTCInstrumentBlockCoherent(t *testing.T) {
 	reregisterAll()
@@ -89,33 +90,6 @@ func TestOTCInstrumentBlockCoherent(t *testing.T) {
 	}
 }
 
-// TestOTCRestructuringOnlyForCDS confirms tag 717 is present on CDS
-// messages and absent on every other OTC swap type.
-func TestOTCRestructuringOnlyForCDS(t *testing.T) {
-	reregisterAll()
-	def := catalog.Get(catalog.MessageKey{Version: catalog.V44, MsgType: app.MsgTypeNewOrderSingle, AssetCategory: catalog.AssetCategoryOTCDerivs})
-	sawCDS, sawNonCDS := false, false
-	for seed := int64(1); seed <= 200; seed++ {
-		fields := evaluateFields(def.Fields, rand.New(rand.NewSource(seed)))
-		st := tagValue(fields, app.TagSecurityType)
-		_, hasRestructuring := indexOf(fields, TagSettlSessSubID)
-		if catalog.SecurityType(st) == catalog.SecCDS {
-			sawCDS = true
-			if !hasRestructuring {
-				t.Errorf("seed=%d CDS message must include tag %d", seed, TagSettlSessSubID)
-			}
-		} else {
-			sawNonCDS = true
-			if hasRestructuring {
-				t.Errorf("seed=%d non-CDS (%s) must NOT include tag %d", seed, st, TagSettlSessSubID)
-			}
-		}
-	}
-	if !sawCDS || !sawNonCDS {
-		t.Fatalf("test did not exercise both CDS and non-CDS code paths (cds=%v, nonCds=%v)", sawCDS, sawNonCDS)
-	}
-}
-
 // TestOTCPriceFormatByType: CDS prices are integer bps strings; other
 // swap types are N.NNNN decimal NPV/spread.
 func TestOTCPriceFormatByType(t *testing.T) {
@@ -142,36 +116,6 @@ func TestOTCPriceFormatByType(t *testing.T) {
 	if !sawCDS || !sawNonCDS {
 		t.Fatalf("test did not exercise both CDS and non-CDS code paths (cds=%v, nonCds=%v)", sawCDS, sawNonCDS)
 	}
-}
-
-// evaluateFields invokes every generator with a fresh GenerateCtx and
-// returns the ordered Field slice, preserving zero-value (skipped)
-// entries so callers can assert presence/absence.
-func evaluateFields(gens []catalog.FieldGenerator, r *rand.Rand) []catalog.Field {
-	ctx := &catalog.GenerateCtx{Version: catalog.V44, AssetCategory: catalog.AssetCategoryOTCDerivs}
-	out := make([]catalog.Field, 0, len(gens))
-	for _, g := range gens {
-		out = append(out, g(r, ctx))
-	}
-	return out
-}
-
-func tagValue(fields []catalog.Field, want catalog.Tag) string {
-	for _, f := range fields {
-		if f.Tag == want {
-			return f.Value
-		}
-	}
-	return ""
-}
-
-func indexOf(fields []catalog.Field, want catalog.Tag) (int, bool) {
-	for i, f := range fields {
-		if f.Tag == want {
-			return i, true
-		}
-	}
-	return -1, false
 }
 
 func TestOTCSecurityTypeStaysInCategory(t *testing.T) {

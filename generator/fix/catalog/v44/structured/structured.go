@@ -5,6 +5,9 @@ package structured
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -34,31 +37,33 @@ type instrument struct {
 	Tranche string
 	Rating  string
 	CFICode string
+	// TermYears is the years from issue to (expected) maturity.
+	TermYears int
 }
 
 var instrumentsByType = map[catalog.SecurityType][]instrument{
 	catalog.SecABS: {
-		{"CARD-ABS-2026A", "000000AA1", "5.250", "POOL-CARD-2026A", "A1", "AAA", "DAPSFR"},
-		{"AUTO-ABS-2026B", "000000AB9", "4.875", "POOL-AUTO-2026B", "A2", "AAA", "DAPSFR"},
-		{"SLABS-2026C", "000000AC7", "5.625", "POOL-SL-2026C", "A1", "AA", "DAPSFR"},
+		{"CARD-ABS-{Y}A", "000000901", "5.250", "POOL-CARD-{Y}A", "A1", "AAA", "DAPSFR", 5},
+		{"AUTO-ABS-{Y}B", "000000919", "4.875", "POOL-AUTO-{Y}B", "A2", "AAA", "DAPSFR", 4},
+		{"SLABS-{Y}C", "000000927", "5.625", "POOL-SL-{Y}C", "A1", "AA", "DAPSFR", 20},
 	},
 	catalog.SecMBS: {
-		{"FNMA-30YR-2026", "31418ABC4", "5.500", "POOL-FNMA-2026A", "", "AAA", "DAMSFR"},
-		{"FHLMC-15YR-2026", "3132ABCD7", "4.500", "POOL-FHLMC-2026B", "", "AAA", "DAMSFR"},
-		{"GNMA-30YR-2026", "36202ABCD9", "5.250", "POOL-GNMA-2026C", "", "AAA", "DAMSFR"},
+		{"FNMA-30YR-{Y}", "31418A900", "5.500", "POOL-FNMA-{Y}A", "", "AAA", "DAMSFR", 30},
+		{"FHLMC-15YR-{Y}", "3132AB904", "4.500", "POOL-FHLMC-{Y}B", "", "AAA", "DAMSFR", 15},
+		{"GNMA-30YR-{Y}", "36202A909", "5.250", "POOL-GNMA-{Y}C", "", "AAA", "DAMSFR", 30},
 	},
 	catalog.SecTMBS: {
-		{"TBA-FNMA-30YR-5.5", "01F052694", "5.500", "TBA-FNMA-30Y", "", "AAA", "DAMSFR"},
-		{"TBA-GNMA-30YR-5.0", "21H050695", "5.000", "TBA-GNMA-30Y", "", "AAA", "DAMSFR"},
+		{"TBA-FNMA-30YR-5.5", "01F052904", "5.500", "TBA-FNMA-30Y", "", "AAA", "DAMSFR", 30},
+		{"TBA-GNMA-30YR-5.0", "21H050904", "5.000", "TBA-GNMA-30Y", "", "AAA", "DAMSFR", 30},
 	},
 	catalog.SecCMBS: {
-		{"BBCMS-2026-C5", "05544RAA1", "5.250", "POOL-CMBS-2026C5", "A2", "AAA", "DAMSFR"},
-		{"BANK-2026-BNK48", "06054GAA1", "5.500", "POOL-CMBS-2026B48", "A3", "AAA", "DAMSFR"},
+		{"BBCMS-{Y}-C5", "05544R904", "5.250", "POOL-CMBS-{Y}C5", "A2", "AAA", "DAMSFR", 10},
+		{"BANK-{Y}-BNK48", "06054G908", "5.500", "POOL-CMBS-{Y}B48", "A3", "AAA", "DAMSFR", 10},
 	},
 	catalog.SecCDO: {
-		{"OAKWOOD-CLO-2026-1", "67402JAA1", "6.500", "POOL-CLO-2026-1", "A-1", "AAA", "DBOSFR"},
-		{"MAGNETITE-CLO-2026", "55946TAA1", "6.250", "POOL-CLO-2026-2", "B", "A", "DBOSFR"},
-		{"VOYA-CLO-2026", "928962AA1", "6.750", "POOL-CLO-2026-3", "C", "BBB", "DBOSFR"},
+		{"OAKWOOD-CLO-{Y}-1", "67402J903", "6.500", "POOL-CLO-{Y}-1", "A-1", "AAA", "DBOSFR", 13},
+		{"MAGNETITE-CLO-{Y}", "55946T909", "6.250", "POOL-CLO-{Y}-2", "B", "A", "DBOSFR", 13},
+		{"VOYA-CLO-{Y}", "928962901", "6.750", "POOL-CLO-{Y}-3", "C", "BBB", "DBOSFR", 13},
 	},
 }
 
@@ -138,40 +143,70 @@ func pickSecurityType(r *rand.Rand) catalog.SecurityType {
 func pickInstrument(r *rand.Rand, st catalog.SecurityType) instrument {
 	is := instrumentsByType[st]
 	if len(is) == 0 {
-		return instrument{Symbol: "STRUCT-FALLBACK", Cusip: "000000AAA", Coupon: "5.000", Rating: "AAA", CFICode: "DAPSFR"}
+		return instrument{Symbol: "STRUCT-FALLBACK", Cusip: "000000935", Coupon: "5.000", Rating: "AAA", CFICode: "DAPSFR", TermYears: 10}
 	}
 	return is[r.Intn(len(is))] // #nosec G404
 }
 
+// pickKey is the GenerateCtx.Memo key for the message's picked
+// (SecurityType, instrument) pair, so every instrument field describes one row.
+type pickKey struct{}
+
+type pickedPair struct {
+	SecType         catalog.SecurityType
+	Inst            instrument
+	Issue, Maturity time.Time
+}
+
+// vintage renders a symbol or pool's {Y} as the deal's issue year.
+func (p pickedPair) vintage(s string) string {
+	return strings.ReplaceAll(s, "{Y}", strconv.Itoa(p.Issue.Year()))
+}
+
+func pickedInstrument(r *rand.Rand, ctx *catalog.GenerateCtx) pickedPair {
+	if ctx.Memo == nil {
+		ctx.Memo = map[any]any{}
+	}
+	if v, ok := ctx.Memo[pickKey{}]; ok {
+		return v.(pickedPair)
+	}
+	st := pickSecurityType(r)
+	p := pickedPair{SecType: st, Inst: pickInstrument(r, st)}
+	// Outstanding on the trade date: issue and maturity span the term.
+	p.Issue, p.Maturity = catalog.BondDates(r, ctx.TradeDate(), 12*max(p.Inst.TermYears, 1))
+	ctx.Memo[pickKey{}] = p
+	return p
+}
+
 func symbolField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: app.TagSymbol, Value: pickInstrument(r, pickSecurityType(r)).Symbol}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		p := pickedInstrument(r, ctx)
+		return catalog.Field{Tag: app.TagSymbol, Value: p.vintage(p.Inst.Symbol)}
 	}
 }
 func securityTypeField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: app.TagSecurityType, Value: string(pickSecurityType(r))}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagSecurityType, Value: string(pickedInstrument(r, ctx).SecType)}
 	}
 }
 func securityIDField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagSecurityID, Value: pickInstrument(r, pickSecurityType(r)).Cusip}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagSecurityID, Value: pickedInstrument(r, ctx).Inst.Cusip}
 	}
 }
 func couponRateField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagCouponRate, Value: pickInstrument(r, pickSecurityType(r)).Coupon}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagCouponRate, Value: pickedInstrument(r, ctx).Inst.Coupon}
 	}
 }
 func maturityDateField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		yrs := 10 + r.Intn(20)                                                                             // 10-30y // #nosec G404
-		return catalog.Field{Tag: TagMaturityDate, Value: fmt.Sprintf("%d%02d15", 2026+yrs, 1+r.Intn(12))} // #nosec G404
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagMaturityDate, Value: pickedInstrument(r, ctx).Maturity.Format("20060102")}
 	}
 }
 func issueDateField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagIssueDate, Value: fmt.Sprintf("%d%02d15", 2022+r.Intn(4), 1+r.Intn(12))} // #nosec G404
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagIssueDate, Value: pickedInstrument(r, ctx).Issue.Format("20060102")}
 	}
 }
 func factorField() catalog.FieldGenerator {
@@ -183,13 +218,14 @@ func factorField() catalog.FieldGenerator {
 	}
 }
 func poolField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagPool, Value: pickInstrument(r, pickSecurityType(r)).Pool}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		p := pickedInstrument(r, ctx)
+		return catalog.Field{Tag: TagPool, Value: p.vintage(p.Inst.Pool)}
 	}
 }
 func trancheField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		t := pickInstrument(r, pickSecurityType(r)).Tranche
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		t := pickedInstrument(r, ctx).Inst.Tranche
 		if t == "" {
 			t = "A1" // sensible default for pass-through MBS-style with no formal tranche label
 		}
@@ -197,13 +233,13 @@ func trancheField() catalog.FieldGenerator {
 	}
 }
 func creditRatingField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagCreditRating, Value: pickInstrument(r, pickSecurityType(r)).Rating}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagCreditRating, Value: pickedInstrument(r, ctx).Inst.Rating}
 	}
 }
 func cfiCodeField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagCFICode, Value: pickInstrument(r, pickSecurityType(r)).CFICode}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: TagCFICode, Value: pickedInstrument(r, ctx).Inst.CFICode}
 	}
 }
 
@@ -246,15 +282,18 @@ func tif() catalog.FieldGenerator {
 	}
 }
 func orderQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		ticks := 1 + r.Intn(1000) // #nosec G404
-		return catalog.Field{Tag: app.TagOrderQty, Value: fmt.Sprintf("%d000", ticks)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagOrderQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
+
+func drawQty(r *rand.Rand) string {
+	ticks := 1 + r.Intn(1000) // #nosec G404
+	return fmt.Sprintf("%d000", ticks)
+}
 func leavesQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		ticks := 1 + r.Intn(1000) // #nosec G404
-		return catalog.Field{Tag: app.TagLeavesQty, Value: fmt.Sprintf("%d000", ticks)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagLeavesQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
 func price() catalog.FieldGenerator {

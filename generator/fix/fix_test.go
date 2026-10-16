@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"math"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -16,8 +19,10 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/internal/datagen"
 )
@@ -228,10 +233,10 @@ func TestEmitsMessagesAtRate(t *testing.T) {
 }
 
 func TestGoldenOutputDeterministicFromSeed(t *testing.T) {
-	// Same seed + same workers + same rate must produce identical
+	// Same seed + same Start + same workers + same rate must produce identical
 	// byte streams across two runs (within the prefix length common to
 	// both).
-	cfg := Config{Workers: 1, Rate: 5 * time.Millisecond, Version: catalog.V44, Seed: 12345}
+	cfg := Config{Workers: 1, Rate: 5 * time.Millisecond, Version: catalog.V44, Seed: 12345, Start: testStart}
 
 	runOnce := func() [][]byte {
 		cons := &captureConsumer{}
@@ -364,4 +369,131 @@ func TestSetHostIdentity(t *testing.T) {
 
 	g.SetHostIdentity(nil)
 	assert.NotEmpty(t, g.static.Record()["host.name"])
+}
+
+// TestLiveSendingTimeFollowsTheClock pins that an unpinned run stamps
+// SendingTime from the wall clock at send time, so a run that falls behind
+// its rate (backpressure) never drifts behind real time.
+func TestLiveSendingTimeFollowsTheClock(t *testing.T) {
+	var mu sync.Mutex
+	now := time.Date(2026, 9, 24, 14, 0, 0, 0, time.UTC)
+	cons := &captureConsumer{}
+	g, err := New(zap.NewNop(), Config{Workers: 1, Rate: time.Millisecond, Version: catalog.V44, Seed: 1}, cons, embed.NopTelemetry())
+	require.NoError(t, err)
+	fclock := func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return now
+	}
+	g.clock = fclock
+	require.NoError(t, g.Start(context.Background()))
+	require.Eventually(t, func() bool { return cons.Count() >= 1 }, 2*time.Second, time.Millisecond)
+	mu.Lock()
+	now = now.Add(time.Hour) // the run fell an hour behind its tick schedule
+	mu.Unlock()
+	seen := cons.Count()
+	require.Eventually(t, func() bool { return cons.Count() > seen+1 }, 2*time.Second, time.Millisecond)
+	require.NoError(t, g.Stop(context.Background()))
+	msgs := cons.Snapshot()
+	assert.Contains(t, string(msgs[len(msgs)-1]), "\x0152=20260924-15:00:00.000\x01")
+}
+
+// TestRandomSeedIsLoggedAndReproduces pins the seed contract: a negative seed
+// is resolved once and logged at Start, and rerunning with it reproduces the
+// stream.
+func TestRandomSeedIsLoggedAndReproduces(t *testing.T) {
+	run := func(seed int64) ([][]byte, int64) {
+		core, logs := observer.New(zap.InfoLevel)
+		cons := &captureConsumer{}
+		g, err := New(zap.New(core), Config{Workers: 1, Rate: time.Millisecond, Version: catalog.V44, Seed: seed, Start: testStart}, cons, embed.NopTelemetry())
+		require.NoError(t, err)
+		require.NoError(t, g.Start(context.Background()))
+		require.Eventually(t, func() bool { return cons.Count() >= 10 }, 2*time.Second, time.Millisecond)
+		require.NoError(t, g.Stop(context.Background()))
+		start := logs.FilterMessage("Starting FIX generator").All()
+		require.Len(t, start, 1)
+		logged, ok := start[0].ContextMap()["seed"].(int64)
+		require.True(t, ok, "start log has no int64 seed field")
+		return cons.Snapshot()[:10], logged
+	}
+	first, seed := run(-1)
+	require.Greater(t, seed, int64(math.MaxInt32), "a random seed uses the full clock, not 31 bits")
+	again, logged := run(seed)
+	require.Equal(t, seed, logged)
+	require.Equal(t, first, again)
+}
+
+func TestNewOrderExecutionReportsLeaveTheWholeOrder(t *testing.T) {
+	var checked int
+	for _, def := range catalog.AllDefinitions() {
+		if def.MsgType != "8" {
+			continue
+		}
+		r := rand.New(rand.NewSource(1)) // #nosec G404 -- deterministic test RNG
+		for range 50 {
+			ctx := &catalog.GenerateCtx{Version: def.Version, AssetCategory: def.AssetCategory}
+			tags := map[catalog.Tag]string{}
+			for _, gen := range def.Fields {
+				f := gen(r, ctx)
+				tags[f.Tag] = f.Value
+			}
+			if tags[14] != "0" {
+				continue
+			}
+			checked++
+			require.Equal(t, tags[38], tags[151], "%s %s: LeavesQty must equal OrderQty when CumQty is 0", def.Version, def.AssetCategory)
+		}
+	}
+	require.NotZero(t, checked)
+}
+
+// TestCountBoundsTheRun pins that generator.count bounds a FIX run: the
+// generator takes the run's count tracker and emits exactly count messages.
+func TestCountBoundsTheRun(t *testing.T) {
+	cons := &captureConsumer{}
+	g, err := New(zap.NewNop(), Config{Workers: 2, Rate: time.Millisecond, Version: catalog.V44, Seed: 42}, cons, embed.NopTelemetry())
+	require.NoError(t, err)
+	counted, ok := any(g).(interface{ SetCountTracker(*count.Tracker) })
+	require.True(t, ok, "the FIX generator must accept the run's count tracker")
+	tracker := count.NewTracker(5)
+	counted.SetCountTracker(tracker)
+
+	require.NoError(t, g.Start(context.Background()))
+	t.Cleanup(func() { _ = g.Stop(context.Background()) })
+	require.Eventually(t, func() bool {
+		select {
+		case <-tracker.Done():
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, time.Millisecond)
+	require.Never(t, func() bool { return cons.Count() > 5 }, 50*time.Millisecond, time.Millisecond)
+	require.Equal(t, 5, cons.Count())
+}
+
+// TestCountResumeKeepsTheSequence pins that a worker out of count builds
+// nothing: after a Reset its stream continues at the next MsgSeqNum, with no
+// gap a counterparty would answer with a ResendRequest.
+func TestCountResumeKeepsTheSequence(t *testing.T) {
+	cons := &captureConsumer{}
+	core, logs := observer.New(zap.DebugLevel)
+	g, err := New(zap.New(core), Config{Workers: 1, Rate: time.Millisecond, Version: catalog.V44, Seed: 42}, cons, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(2)
+	g.SetCountTracker(tracker)
+	require.NoError(t, g.Start(context.Background()))
+	t.Cleanup(func() { _ = g.Stop(context.Background()) })
+
+	// The worker has ticked past the spent count before the Reset.
+	require.Eventually(t, func() bool {
+		return logs.FilterMessage("FIX worker waiting for a count reset").Len() > 0
+	}, 5*time.Second, time.Millisecond)
+	require.Equal(t, 2, cons.Count())
+	tracker.Reset()
+	require.Eventually(t, func() bool { return cons.Count() >= 3 }, 5*time.Second, time.Millisecond)
+
+	for i, m := range cons.Snapshot()[:3] {
+		require.Contains(t, string(m), fmt.Sprintf("\x0134=%d\x01", i+1))
+	}
 }

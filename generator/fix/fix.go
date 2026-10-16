@@ -35,6 +35,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
 	"github.com/observiq/blitz/generator/fix/state"
@@ -75,9 +76,16 @@ type Config struct {
 	TargetCompID string
 	// EnabledCategories restricts emission to a subset. Empty = all.
 	EnabledCategories []catalog.AssetCategory
-	// Seed is the base RNG seed. Negative = randomize per worker;
-	// 0+ = deterministic (worker N gets seed Seed+N).
+	// Seed is the base RNG seed. Negative = pick a random seed once at
+	// Start (logged so the run can be reproduced); 0+ = deterministic.
+	// Worker N uses Seed+N.
 	Seed int64
+	// Start, when set, pins every emitted timestamp: SendingTime (52) and
+	// TransactTime (60) advance from it by Rate per message, and trade
+	// dates (settlement, issue, maturity) derive from them. Same Seed +
+	// same Start = byte-identical output. Zero = a live run stamped from
+	// the wall clock at send time.
+	Start time.Time
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -103,8 +111,15 @@ type Generator struct {
 	static   *resource.StaticResources
 	metrics  *generator.Metrics
 
-	wg     sync.WaitGroup
-	stopCh chan struct{}
+	wg      sync.WaitGroup
+	stopCh  chan struct{}
+	tracker *count.Tracker
+
+	// start anchors emitted timestamps; set in Start before any worker
+	// runs and read-only afterwards.
+	start time.Time
+	// clock stamps SendingTime in a live (unpinned) run.
+	clock func() time.Time
 }
 
 // New constructs a FIX Generator. The consumer receives each generated
@@ -147,6 +162,7 @@ func New(logger *zap.Logger, cfg Config, consumer embed.LogConsumer, tel embed.T
 		static:   resource.FromIdentity(nil, componentName, "fix.version", cfg.Version.String()),
 		metrics:  metrics,
 		stopCh:   make(chan struct{}),
+		clock:    time.Now,
 	}, nil
 }
 
@@ -163,17 +179,33 @@ func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
 
 // Start launches the worker goroutines.
 func (g *Generator) Start(_ context.Context) error {
+	// Resolve a random seed once so the logged value reproduces the run:
+	// worker N uses Seed+N.
+	if g.cfg.Seed < 0 {
+		g.cfg.Seed = time.Now().UnixNano()
+	}
 	g.logger.Info("Starting FIX generator",
 		zap.Int("workers", g.cfg.Workers),
 		zap.Duration("rate", g.cfg.Rate),
 		zap.String("version", g.cfg.Version.String()),
+		zap.Int64("seed", g.cfg.Seed),
 	)
 	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.cfg.Workers), componentName)
+	g.start = g.cfg.Start
+	if g.start.IsZero() {
+		g.start = time.Now()
+	}
+	g.start = g.start.UTC()
 	for i := 0; i < g.cfg.Workers; i++ {
 		g.wg.Add(1)
 		go g.runWorker(i) // #nosec G118 -- workers are bounded by Stop() and the WaitGroup, not the Start context
 	}
 	return nil
+}
+
+// SetCountTracker sets the finite generation count tracker.
+func (g *Generator) SetCountTracker(t *count.Tracker) {
+	g.tracker = t
 }
 
 // Stop signals workers to drain and waits for them to exit. Returns
@@ -200,13 +232,7 @@ func (g *Generator) Stop(ctx context.Context) error {
 func (g *Generator) runWorker(workerIdx int) {
 	defer g.wg.Done()
 
-	seed := g.cfg.Seed
-	if seed < 0 {
-		seed = time.Now().UnixNano() + int64(workerIdx)
-	} else {
-		seed += int64(workerIdx)
-	}
-	r := rand.New(rand.NewSource(seed)) // #nosec G404 -- seeded for determinism contract
+	r := rand.New(rand.NewSource(g.cfg.Seed + int64(workerIdx))) // #nosec G404 -- seeded for determinism contract
 
 	sender := fmt.Sprintf("%s-W%d", g.cfg.SenderCompID, workerIdx)
 	target := g.cfg.TargetCompID
@@ -220,6 +246,22 @@ func (g *Generator) runWorker(workerIdx int) {
 		case <-g.stopCh:
 			return
 		case <-ticker.C:
+			if g.tracker != nil {
+				// Take the resume channel before Acquire, so a Reset that lands
+				// between a failed Acquire and the wait still wakes the worker,
+				// and Acquire before building, so a spent count takes no
+				// sequence number or order.
+				resume := g.tracker.ResumeC()
+				if !g.tracker.Acquire() {
+					g.logger.Debug("FIX worker waiting for a count reset", zap.Int("worker_id", workerIdx))
+					select {
+					case <-g.stopCh:
+						return
+					case <-resume:
+						continue
+					}
+				}
+			}
 			msg := g.buildOneMessage(r, sess)
 			if msg == nil {
 				continue
@@ -270,7 +312,15 @@ func (g *Generator) buildOneMessage(r *rand.Rand, sess *state.Session) []byte {
 	}
 
 	seqNum := sess.NextOutSeqNum()
-	sendingTime := time.Unix(0, int64(seqNum)*int64(time.Millisecond)).UTC().Format("20060102-15:04:05.000")
+	// A pinned Start advances SendingTime by Rate per sequence number, so the
+	// output is byte-identical across runs. A live run stamps the wall clock
+	// at send time instead, so it never drifts behind real time when sends
+	// fall behind the rate. FIX UTCTimestamp, millisecond form.
+	now := g.clock().UTC()
+	if !g.cfg.Start.IsZero() {
+		now = g.start.Add(time.Duration(seqNum-1) * g.cfg.Rate)
+	}
+	sendingTime := now.Format("20060102-15:04:05.000")
 
 	ctx := &catalog.GenerateCtx{
 		Version:       g.cfg.Version,
@@ -279,6 +329,7 @@ func (g *Generator) buildOneMessage(r *rand.Rand, sess *state.Session) []byte {
 		TargetCompID:  sess.TargetCompID,
 		SeqNum:        seqNum,
 		SendingTime:   sendingTime,
+		Now:           now,
 	}
 
 	header := []catalog.Field{
@@ -320,7 +371,7 @@ func (g *Generator) buildOneMessage(r *rand.Rand, sess *state.Session) []byte {
 				OrderQty:  state.ParseOrderQty(qty),
 				LeavesQty: state.ParseOrderQty(qty),
 				Status:    state.OrderStatusNew,
-				Submitted: time.Now(),
+				Submitted: now,
 			})
 		}
 	}

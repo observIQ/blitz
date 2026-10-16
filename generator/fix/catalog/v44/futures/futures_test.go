@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -30,6 +31,23 @@ func TestFuturesContractTable(t *testing.T) {
 		}
 		if c.ContractMultiplier <= 0 {
 			t.Errorf("row %d (%s): non-positive ContractMultiplier %d", i, c.Symbol, c.ContractMultiplier)
+		}
+	}
+}
+
+// TestFuturesTickSizes pins each contract's minimum price fluctuation to the
+// exchange contract specs (CME Group, Cboe), in the contract's price units.
+func TestFuturesTickSizes(t *testing.T) {
+	want := map[string]string{
+		"ES": "0.25", "NQ": "0.25", "YM": "1", "CL": "0.01", "NG": "0.001",
+		"GC": "0.10", "SI": "0.005", "HG": "0.0005",
+		"ZN": "0.015625", "ZB": "0.03125", "ZF": "0.0078125",
+		"ZC": "0.0025", "ZS": "0.0025", "ZW": "0.0025",
+		"6E": "0.00005", "6J": "0.0000005", "BTC": "5", "VX": "0.05",
+	}
+	for _, c := range futuresContracts {
+		if c.TickSize != want[c.Symbol] {
+			t.Errorf("%s: TickSize %q, want %q", c.Symbol, c.TickSize, want[c.Symbol])
 		}
 	}
 }
@@ -102,7 +120,7 @@ func TestFuturesDeterminismFromSeed(t *testing.T) {
 
 func buildTagMap(gens []catalog.FieldGenerator, r *rand.Rand) map[catalog.Tag]string {
 	out := make(map[catalog.Tag]string, len(gens))
-	ctx := &catalog.GenerateCtx{Version: catalog.V44, AssetCategory: catalog.AssetCategoryFutures}
+	ctx := &catalog.GenerateCtx{Version: catalog.V44, AssetCategory: catalog.AssetCategoryFutures, Now: time.Date(2026, 9, 24, 14, 0, 0, 0, time.UTC)}
 	for _, g := range gens {
 		f := g(r, ctx)
 		out[f.Tag] = f.Value

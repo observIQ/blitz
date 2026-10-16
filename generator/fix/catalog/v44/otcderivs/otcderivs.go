@@ -12,6 +12,7 @@ package otcderivs
 import (
 	"fmt"
 	"math/rand"
+	"time"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -26,55 +27,56 @@ const (
 	TagCouponRate           catalog.Tag = 223 // Fixed leg rate for swaps
 	TagUnderlyingSymbol     catalog.Tag = 311 // Reference entity / underlier
 	TagUnderlyingSecurityID catalog.Tag = 309
+	TagUnderlyingSecIDSrc   catalog.Tag = 305
 	TagUnderlyingCFICode    catalog.Tag = 463
-	TagDayCount             catalog.Tag = 478 // SettlInstSource (proxy for day-count convention)
-	TagSettlSessSubID       catalog.Tag = 717 // Used as restructuring-clause proxy for CDS
 )
 
 const (
 	SecurityIDSourceCUSIP = "1"
 	SecurityIDSourceISIN  = "4"
-	SecurityIDSourceRED   = "I" // Markit RED (Reference Entity Database) — common for CDS
 )
 
 type swap struct {
-	Symbol       string
-	ID           string
-	IDSource     string
-	FixedRate    string
-	Underlying   string
-	UnderlyingID string
-	DayCount     string // ACT360, ACT365, 30/360 etc.
-	Restructure  string // "MR", "MM", "CR", "XR" for CDS
-	CFICode      string
+	Symbol     string
+	ID         string
+	IDSource   string
+	FixedRate  string
+	Underlying string
+	// UnderlyingID is the underlier's identifier, empty when it has none
+	// (a rate index, an FX pair, a CDS reference entity: FIX 4.4 has no RED
+	// SecurityIDSource); UnderlyingIDSource is its tag 305 value.
+	UnderlyingID       string
+	UnderlyingIDSource string
+	CFICode            string
+	TenorMonths        int // the tenor the name carries (5Y = 60)
 }
 
 var swapsByType = map[catalog.SecurityType][]swap{
 	catalog.SecIRS: {
-		{"USD-IRS-5Y", "IRS-USD-5Y-2026", SecurityIDSourceISIN, "4.500", "USD-SOFR", "USD-SOFR-COMPOUND", "ACT360", "", "SRACSP"},
-		{"EUR-IRS-10Y", "IRS-EUR-10Y-2026", SecurityIDSourceISIN, "3.250", "EUR-ESTR", "EUR-ESTR-COMPOUND", "ACT360", "", "SRACSP"},
-		{"GBP-IRS-2Y", "IRS-GBP-2Y-2026", SecurityIDSourceISIN, "4.875", "GBP-SONIA", "GBP-SONIA-COMPOUND", "ACT365", "", "SRACSP"},
+		{"USD-IRS-5Y", "EZXE13YG4T34", SecurityIDSourceISIN, "4.500", "USD-SOFR", "", "", "SRACSP", 60},
+		{"EUR-IRS-10Y", "EZ79WZYA7KJ1", SecurityIDSourceISIN, "3.250", "EUR-ESTR", "", "", "SRACSP", 120},
+		{"GBP-IRS-2Y", "EZAXYJ8T0ME0", SecurityIDSourceISIN, "4.875", "GBP-SONIA", "", "", "SRACSP", 24},
 	},
 	catalog.SecCDS: {
-		{"CDS-XYZ-5Y", "8I000000", SecurityIDSourceRED, "1.000", "XYZ Corp", "8I0000AAA", "ACT360", "MR", "SRRCSP"},
-		{"CDS-CDX-IG", "2I000000", SecurityIDSourceRED, "1.250", "CDX IG Index", "2I0000AAA", "ACT360", "MR", "SRRCSP"},
-		{"CDS-iTraxx", "4I000000", SecurityIDSourceRED, "1.000", "iTraxx Main", "4I0000AAA", "ACT360", "MM", "SRRCSP"},
+		{"CDS-XYZ-5Y", "EZ2LEFZHOGF8", SecurityIDSourceISIN, "1.000", "XYZ Corp", "", "", "SRRCSP", 60},
+		{"CDS-CDX-IG", "EZI1XEIKK050", SecurityIDSourceISIN, "1.250", "CDX IG Index", "", "", "SRRCSP", 60},
+		{"CDS-iTraxx", "EZEANY6QX6G6", SecurityIDSourceISIN, "1.000", "iTraxx Main", "", "", "SRRCSP", 60},
 	},
 	catalog.SecBSWAP: {
-		{"USD-BASIS-3M-1M", "BS-USD-3M1M-2026", SecurityIDSourceISIN, "0.150", "USD-LIBOR-3M / USD-LIBOR-1M", "USD-BASIS-SET", "ACT360", "", "SRBCSP"},
-		{"EUR-BASIS-6M-3M", "BS-EUR-6M3M-2026", SecurityIDSourceISIN, "0.100", "EUR-EURIBOR-6M / EUR-EURIBOR-3M", "EUR-BASIS-SET", "ACT360", "", "SRBCSP"},
+		{"USD-BASIS-SOFR-FF", "EZPDKBZO9OL0", SecurityIDSourceISIN, "0.150", "USD-SOFR / USD-FEDFUNDS", "", "", "SRBCSP", 60},
+		{"EUR-BASIS-6M-3M", "EZXMF12MV350", SecurityIDSourceISIN, "0.100", "EUR-EURIBOR-6M / EUR-EURIBOR-3M", "", "", "SRBCSP", 60},
 	},
 	catalog.SecVARSWAP: {
-		{"SPX-VAR-1Y", "VS-SPX-1Y-2026", SecurityIDSourceISIN, "20.000", "SPX", "SPX-INDEX", "ACT365", "", "SRVCSP"},
-		{"VIX-VAR-3M", "VS-VIX-3M-2026", SecurityIDSourceISIN, "30.000", "VIX", "VIX-INDEX", "ACT365", "", "SRVCSP"},
+		{"SPX-VAR-1Y", "EZIJH8K63J87", SecurityIDSourceISIN, "20.000", "SPX", "", "", "SRVCSP", 12},
+		{"VIX-VAR-3M", "EZKBGD048AN3", SecurityIDSourceISIN, "30.000", "VIX", "", "", "SRVCSP", 3},
 	},
 	catalog.SecTRSWAP: {
-		{"TRS-SPX-1Y", "TR-SPX-1Y-2026", SecurityIDSourceISIN, "0.500", "SPX", "SPX-INDEX", "ACT365", "", "SRTCSP"},
-		{"TRS-AAPL-1Y", "TR-AAPL-1Y-2026", SecurityIDSourceISIN, "0.300", "AAPL", "037833100", "ACT365", "", "SRTCSP"},
+		{"TRS-SPX-1Y", "EZ2GSTG22XW9", SecurityIDSourceISIN, "0.500", "SPX", "", "", "SRTCSP", 12},
+		{"TRS-AAPL-1Y", "EZDPQPUQOLJ7", SecurityIDSourceISIN, "0.300", "AAPL", "037833100", SecurityIDSourceCUSIP, "SRTCSP", 12},
 	},
 	catalog.SecXCS: {
-		{"XCS-USDEUR-5Y", "XCS-USDEUR-5Y-2026", SecurityIDSourceISIN, "0.250", "USD/EUR", "USDEUR-CROSS", "ACT360", "", "SRXCSP"},
-		{"XCS-USDJPY-10Y", "XCS-USDJPY-10Y-2026", SecurityIDSourceISIN, "0.150", "USD/JPY", "USDJPY-CROSS", "ACT365", "", "SRXCSP"},
+		{"XCS-USDEUR-5Y", "EZ6T2BW59UL3", SecurityIDSourceISIN, "0.250", "USD/EUR", "", "", "SRXCSP", 60},
+		{"XCS-USDJPY-10Y", "EZ8D1CJM8WL9", SecurityIDSourceISIN, "0.150", "USD/JPY", "", "", "SRXCSP", 120},
 	},
 }
 
@@ -137,8 +139,7 @@ func instrumentBlock() []catalog.FieldGenerator {
 	return []catalog.FieldGenerator{
 		symbolField(), securityTypeField(), securityIDField(), securityIDSrcField(),
 		couponRateField(), maturityDateField(),
-		underlyingSymbolField(), underlyingSecurityIDField(),
-		dayCountField(), restructuringField(),
+		underlyingSymbolField(), underlyingSecurityIDField(), underlyingSecurityIDSrcField(),
 		cfiCodeField(),
 	}
 }
@@ -154,7 +155,7 @@ func pickSecurityType(r *rand.Rand) catalog.SecurityType {
 func pickSwap(r *rand.Rand, st catalog.SecurityType) swap {
 	ss := swapsByType[st]
 	if len(ss) == 0 {
-		return swap{Symbol: "OTC-FALLBACK", ID: "OTC-X", IDSource: SecurityIDSourceISIN, FixedRate: "0.000", Underlying: "X", UnderlyingID: "X", DayCount: "ACT360", CFICode: "SRACSP"}
+		return swap{Symbol: "OTC-FALLBACK", ID: "EZ0KTK2MYTO4", IDSource: SecurityIDSourceISIN, FixedRate: "0.000", Underlying: "X", CFICode: "SRACSP"}
 	}
 	return ss[r.Intn(len(ss))] // #nosec G404
 }
@@ -212,11 +213,22 @@ func couponRateField() catalog.FieldGenerator {
 	}
 }
 func maturityDateField() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		yrs := 1 + r.Intn(30)                                                                              // #nosec G404
-		return catalog.Field{Tag: TagMaturityDate, Value: fmt.Sprintf("%d%02d15", 2026+yrs, 1+r.Intn(12))} // #nosec G404
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		// A swap starts at spot (T+2; T+0 for GBP SONIA, which starts the
+		// day it trades) and matures its named tenor later. Standard CDS
+		// instead follow the ISDA semi-annual roll to 20 Jun or 20 Dec.
+		p := pickedSwap(r, ctx)
+		if p.SecType == catalog.SecCDS {
+			return catalog.Field{Tag: TagMaturityDate, Value: cdsMaturity(ctx.TradeDate(), p.Swap.TenorMonths).Format("20060102")}
+		}
+		spot := catalog.AddBusinessDays(ctx.TradeDate(), 2)
+		if p.Swap.Underlying == "GBP-SONIA" {
+			spot = catalog.NextBusinessDay(ctx.TradeDate())
+		}
+		return catalog.Field{Tag: TagMaturityDate, Value: catalog.AddTenor(spot, p.Swap.TenorMonths, 0).Format("20060102")}
 	}
 }
+
 func underlyingSymbolField() catalog.FieldGenerator {
 	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
 		return catalog.Field{Tag: TagUnderlyingSymbol, Value: pickedSwap(r, ctx).Swap.Underlying}
@@ -224,24 +236,18 @@ func underlyingSymbolField() catalog.FieldGenerator {
 }
 func underlyingSecurityIDField() catalog.FieldGenerator {
 	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagUnderlyingSecurityID, Value: pickedSwap(r, ctx).Swap.UnderlyingID}
-	}
-}
-func dayCountField() catalog.FieldGenerator {
-	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
-		return catalog.Field{Tag: TagDayCount, Value: pickedSwap(r, ctx).Swap.DayCount}
-	}
-}
-func restructuringField() catalog.FieldGenerator {
-	// Restructuring clauses (tag 717: MR/MM/CR/XR) only apply to CDS.
-	// For non-CDS swaps, emit a zero-value Field so EncodeFields skips
-	// it — non-CDS swap messages must not carry this tag at all.
-	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
-		p := pickedSwap(r, ctx)
-		if p.SecType != catalog.SecCDS {
-			return catalog.Field{}
+		if id := pickedSwap(r, ctx).Swap.UnderlyingID; id != "" {
+			return catalog.Field{Tag: TagUnderlyingSecurityID, Value: id}
 		}
-		return catalog.Field{Tag: TagSettlSessSubID, Value: p.Swap.Restructure}
+		return catalog.Field{} // no identifier: EncodeFields skips the tag
+	}
+}
+func underlyingSecurityIDSrcField() catalog.FieldGenerator {
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		if src := pickedSwap(r, ctx).Swap.UnderlyingIDSource; src != "" {
+			return catalog.Field{Tag: TagUnderlyingSecIDSrc, Value: src}
+		}
+		return catalog.Field{}
 	}
 }
 func cfiCodeField() catalog.FieldGenerator {
@@ -283,16 +289,19 @@ func tif() catalog.FieldGenerator {
 	return catalog.LiteralField(app.TagTimeInForce, app.TIFGTC)
 }
 func orderQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		// Notional in $1MM increments, $1MM - $500MM.
-		mm := 1 + r.Intn(500) // #nosec G404
-		return catalog.Field{Tag: app.TagOrderQty, Value: fmt.Sprintf("%d000000", mm)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagOrderQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
+
+func drawQty(r *rand.Rand) string {
+	// Notional in $1MM increments, $1MM - $500MM.
+	mm := 1 + r.Intn(500) // #nosec G404
+	return fmt.Sprintf("%d000000", mm)
+}
 func leavesQty() catalog.FieldGenerator {
-	return func(r *rand.Rand, _ *catalog.GenerateCtx) catalog.Field {
-		mm := 1 + r.Intn(500) // #nosec G404
-		return catalog.Field{Tag: app.TagLeavesQty, Value: fmt.Sprintf("%d000000", mm)}
+	return func(r *rand.Rand, ctx *catalog.GenerateCtx) catalog.Field {
+		return catalog.Field{Tag: app.TagLeavesQty, Value: catalog.OrderQty(r, ctx, drawQty)}
 	}
 }
 func price() catalog.FieldGenerator {
@@ -315,5 +324,25 @@ func transactTime() catalog.FieldGenerator {
 			v = "19700101-00:00:00.000"
 		}
 		return catalog.Field{Tag: app.TagTransactTime, Value: v}
+	}
+}
+
+// cdsMaturity is a standard CDS contract's scheduled termination date under
+// the ISDA semi-annual roll (effective December 2015): contracts traded from
+// Mar 20 to Sep 19 mature on Jun 20, and from Sep 20 to Mar 19 on Dec 20, of
+// the roll year plus the tenor. The roll year of a January-to-March-19 trade
+// is the previous year, whose December roll it belongs to.
+func cdsMaturity(trade time.Time, tenorMonths int) time.Time {
+	y := trade.Year()
+	mar20 := time.Date(y, time.March, 20, 0, 0, 0, 0, time.UTC)
+	sep20 := time.Date(y, time.September, 20, 0, 0, 0, 0, time.UTC)
+	years := tenorMonths / 12
+	switch {
+	case trade.Before(mar20):
+		return time.Date(y-1+years, time.December, 20, 0, 0, 0, 0, time.UTC)
+	case trade.Before(sep20):
+		return time.Date(y+years, time.June, 20, 0, 0, 0, 0, time.UTC)
+	default:
+		return time.Date(y+years, time.December, 20, 0, 0, 0, 0, time.UTC)
 	}
 }

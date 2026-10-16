@@ -3,6 +3,7 @@ package v42
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -62,5 +63,35 @@ func TestV42BeginString(t *testing.T) {
 func TestV42HasNoApplVerID(t *testing.T) {
 	if catalog.V42.ApplVerID() != "" {
 		t.Errorf("V42 must not carry ApplVerID, got %q", catalog.V42.ApplVerID())
+	}
+}
+
+// TestV42IDSourceIsDefinedIn42 pins that every 4.2 message declares its
+// SecurityID (48) with an IDSource (22) FIX 4.2 defines (1-9), and never
+// sends 48 without 22.
+func TestV42IDSourceIsDefinedIn42(t *testing.T) {
+	for _, def := range catalog.AllDefinitions() {
+		if def.Version != catalog.V42 {
+			continue
+		}
+		for seed := int64(1); seed <= 20; seed++ {
+			r := rand.New(rand.NewSource(seed)) // #nosec G404
+			ctx := &catalog.GenerateCtx{Version: catalog.V42, AssetCategory: def.AssetCategory, Now: time.Date(2026, 10, 6, 14, 0, 0, 0, time.UTC)}
+			var id, src string
+			for _, g := range def.Fields {
+				switch f := g(r, ctx); f.Tag {
+				case 48:
+					id = f.Value
+				case 22:
+					src = f.Value
+				}
+			}
+			if src != "" && (len(src) != 1 || src[0] < '1' || src[0] > '9') {
+				t.Errorf("%s %s seed %d: IDSource %q is not defined in FIX 4.2", def.AssetCategory, def.MsgType, seed, src)
+			}
+			if id != "" && src == "" {
+				t.Errorf("%s %s seed %d: SecurityID %q sent without IDSource", def.AssetCategory, def.MsgType, seed, id)
+			}
+		}
 	}
 }

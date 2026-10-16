@@ -3,6 +3,7 @@ package repos
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/catalog/v44/app"
@@ -137,8 +138,9 @@ func TestReposSettlDate2DerivedFromTermType(t *testing.T) {
 			}
 		case TermTerm, TermFlexible:
 			sawTerm = true
-			if sd1 != "20260527" || sd2 != "20260627" {
-				t.Errorf("seed=%d %s: SettlDate=%q SettlDate2=%q, want 20260527 / 20260627", seed, tags[TagTermType], sd1, sd2)
+			// +1 month is Saturday 2026-06-27, rolled to Monday 2026-06-29.
+			if sd1 != "20260527" || sd2 != "20260629" {
+				t.Errorf("seed=%d %s: SettlDate=%q SettlDate2=%q, want 20260527 / 20260629", seed, tags[TagTermType], sd1, sd2)
 			}
 		}
 	}
@@ -161,7 +163,8 @@ func TestReposDeterminismFromSeed(t *testing.T) {
 
 func buildTagMap(gens []catalog.FieldGenerator, r *rand.Rand) map[catalog.Tag]string {
 	out := make(map[catalog.Tag]string, len(gens))
-	ctx := &catalog.GenerateCtx{Version: catalog.V44, AssetCategory: catalog.AssetCategoryRepos}
+	// Trade on Wednesday 2026-05-27 so the fixed expected dates below hold.
+	ctx := &catalog.GenerateCtx{Version: catalog.V44, AssetCategory: catalog.AssetCategoryRepos, Now: time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)}
 	for _, g := range gens {
 		f := g(r, ctx)
 		out[f.Tag] = f.Value
