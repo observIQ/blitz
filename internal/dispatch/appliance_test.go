@@ -64,3 +64,90 @@ func TestRequiredAppliancesListsEveryEntry(t *testing.T) {
 	require.Equal(t, []datagen.ApplianceVendor{datagen.VendorPaloAlto, datagen.VendorPaloAlto},
 		RequiredAppliances([]config.Generator{pa, pa}))
 }
+
+// resolvePicks resolves every entry's environment device or host in config
+// order, the way both loaders do, keyed "type#ordinal".
+func resolvePicks(env *datagen.Environment, gens []config.Generator) map[string]string {
+	picks := map[string]string{}
+	ordinals := map[config.GeneratorType]int{}
+	for _, g := range gens {
+		o := ordinals[g.Type]
+		ordinals[g.Type]++
+		key := fmt.Sprintf("%s#%d", g.Type, o)
+		switch {
+		case g.Type == config.GeneratorTypeFlow:
+			picks[key] = flowExporter(env, g, o).Hostname
+		case applianceVendor(g.Type) != "":
+			picks[key] = applianceIdentity(env, g, o).Hostname
+		default:
+			picks[key] = hostIdentity(env, g, o).Hostname
+		}
+	}
+	return picks
+}
+
+// TestFlowExportersAreDistinct pins that flow entries each export from their
+// own device on every seed, even when an entry that takes any routing device
+// is mixed with entries pinned to a vendor.
+func TestFlowExportersAreDistinct(t *testing.T) {
+	gens := []config.Generator{
+		{Type: config.GeneratorTypeFlow},
+		{Type: config.GeneratorTypeFlow, Flow: config.FlowGeneratorConfig{ExporterVendor: "cisco"}},
+		{Type: config.GeneratorTypeFlow},
+		{Type: config.GeneratorTypeFlow, Flow: config.FlowGeneratorConfig{ExporterVendor: "cisco"}},
+	}
+	for seed := int64(0); seed < 200; seed++ {
+		env, err := BuildEnvironment(zap.NewNop(), config.EnvironmentConfig{SeedConfig: config.EnvironmentSeedConfig{Shared: &seed}}, gens)
+		require.NoError(t, err)
+		seen := map[string]string{}
+		for entry, host := range resolvePicks(env, gens) {
+			require.NotContains(t, seen, host, "seed %d: %s and %s share %s", seed, seen[host], entry, host)
+			seen[host] = entry
+		}
+		require.Equal(t, datagen.VendorCisco, flowExporter(env, gens[1], 1).Vendor, "seed %d", seed)
+		require.Equal(t, datagen.VendorCisco, flowExporter(env, gens[3], 3).Vendor, "seed %d", seed)
+	}
+}
+
+// TestHostEntriesAreDistinct pins that same-type host entries with different
+// requirements each describe their own host on every seed: an entry that
+// accepts any Windows role never takes the host a domain-controller entry
+// needs.
+func TestHostEntriesAreDistinct(t *testing.T) {
+	gens := []config.Generator{
+		{Type: config.GeneratorTypeWel},
+		{Type: config.GeneratorTypeWel, Wel: config.WelGeneratorConfig{Role: "dc"}},
+	}
+	for seed := int64(0); seed < 200; seed++ {
+		// A one-system fleet leaves the environment only the hosts the
+		// entries require, so a careless pick has nothing to fall back on.
+		env, err := BuildEnvironment(zap.NewNop(), config.EnvironmentConfig{SeedConfig: config.EnvironmentSeedConfig{Shared: &seed}, Counts: config.EnvironmentCounts{Systems: 1}}, gens)
+		require.NoError(t, err)
+		picks := resolvePicks(env, gens)
+		require.NotEqual(t, picks["wel#0"], picks["wel#1"], "seed %d", seed)
+		require.Equal(t, datagen.RoleDC, hostIdentity(env, gens[1], 1).Role, "seed %d", seed)
+	}
+}
+
+// TestPicksAreRepeatable pins the seed contract for attachments: the same
+// seed and config resolve every entry to the same device or host.
+func TestPicksAreRepeatable(t *testing.T) {
+	seed := int64(42)
+	envCfg := config.EnvironmentConfig{SeedConfig: config.EnvironmentSeedConfig{Shared: &seed}}
+	gens := []config.Generator{
+		{Type: config.GeneratorTypeFlow},
+		{Type: config.GeneratorTypeFlow, Flow: config.FlowGeneratorConfig{ExporterVendor: "palo-alto"}},
+		{Type: config.GeneratorTypePaloAlto},
+		{Type: config.GeneratorTypeJSON},
+		{Type: config.GeneratorTypeWel, Wel: config.WelGeneratorConfig{Role: "dc"}},
+	}
+	build := func() map[string]string {
+		env, err := BuildEnvironment(zap.NewNop(), envCfg, gens)
+		require.NoError(t, err)
+		return resolvePicks(env, gens)
+	}
+	first := build()
+	for range 10 {
+		require.Equal(t, first, build())
+	}
+}
