@@ -118,9 +118,8 @@ func TestHostEntriesAreDistinct(t *testing.T) {
 		{Type: config.GeneratorTypeWel},
 		{Type: config.GeneratorTypeWel, Wel: config.WelGeneratorConfig{Role: "dc"}},
 	}
-	for seed := int64(0); seed < 200; seed++ {
-		// A one-system fleet leaves the environment only the hosts the
-		// entries require, so a careless pick has nothing to fall back on.
+	for seed := int64(0); seed < 500; seed++ {
+		// A one-system fleet leaves mostly the hosts the entries require.
 		env, err := BuildEnvironment(zap.NewNop(), config.EnvironmentConfig{SeedConfig: config.EnvironmentSeedConfig{Shared: &seed}, Counts: config.EnvironmentCounts{Systems: 1}}, gens)
 		require.NoError(t, err)
 		picks := resolvePicks(env, gens)
