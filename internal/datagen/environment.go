@@ -475,8 +475,8 @@ func generateSystems(systemSeed, servicesSeed, applicationsSeed int64, count int
 		case sys.Tier == TierProd:
 			info, ok := prodBaseline[spec.os]
 			if !ok {
-				// safety net: the baseline covers every OS this package
-				// defines; one added later gets its baseline on first use.
+				// The OSes beyond Linux, Windows, and macOS (the hypervisor
+				// hosts and Unix families) get their baseline on first use.
 				info = osInfoForTier(r, spec.os, spec.role, true)
 				prodBaseline[spec.os] = info
 			}
