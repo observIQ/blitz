@@ -3,14 +3,17 @@ package config
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/observiq/blitz/internal/datagen"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
 // EnvironmentConfig configures the simulated datagen.Environment that
 // generators draw their host identities from. The block is optional; an
-// omitted environment yields a randomized default Environment (PIPE-1036).
+// omitted environment yields a randomized default Environment.
 type EnvironmentConfig struct {
 	// DomainName is the AD/DNS domain for the environment. Empty = datagen default.
 	DomainName string `yaml:"domain_name,omitempty" mapstructure:"domain_name,omitempty"`
@@ -150,6 +153,21 @@ func validateNetworks(networks []*datagen.NetworkIdentity) error {
 	for _, n := range networks {
 		if err := n.Validate(); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// BindSeedEnv binds each environment.seed_config key to its
+// BLITZ_ENVIRONMENT_SEED_CONFIG_* variable, so the variable applies whether or
+// not the YAML sets the key. The keys have no CLI flags.
+func BindSeedEnv(v *viper.Viper) error {
+	t := reflect.TypeFor[EnvironmentSeedConfig]()
+	for i := range t.NumField() {
+		name, _, _ := strings.Cut(t.Field(i).Tag.Get("mapstructure"), ",")
+		key := "environment.seed_config." + name
+		if err := v.BindEnv(key, createEnvName(key)); err != nil {
+			return fmt.Errorf("bind %s: %w", key, err)
 		}
 	}
 	return nil

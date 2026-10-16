@@ -35,21 +35,26 @@ Deterministic generation is controlled by seeds. A shared seed applies to all id
 
 The Go API exposes `datagen.NewSeedConfig()` which returns a `*SeedConfig` with every field initialized to `-1`. Production code should obtain SeedConfig values via that constructor or via the config-loading path (which applies the `-1` defaults). A bare `&datagen.SeedConfig{}` literal yields zero-valued fields, which the contract treats as deterministic seed 0 across the board — useful in tests, but not what you want for a randomized run.
 
+In blitz configs the seeds live under `environment.seed_config`. Each
+key is optional; an omitted key is unset (nil), which the loader treats
+as `-1`:
+
 ```yaml
-datagen:
-  seed: 12345                    # shared seed; omit or set -1 for random
-  seeds:                         # per-type overrides (optional)
-    systems: 99999
+environment:
+  seed_config:
+    shared: 12345                # shared seed; omit or set -1 for random
+    systems: 99999               # per-type overrides (optional)
     users: 88888
-    # groups, services, applications, networks, domains fall back to shared
-    # when set to -1 or omitted; setting any of them to 0 or a positive int
-    # gives that type its own deterministic seed.
+    # groups, services, applications, networks, domains, storage_systems,
+    # and network_systems fall back to shared when omitted or set to -1;
+    # setting any of them to 0 or a positive int gives that type its own
+    # deterministic seed.
 ```
 
-CLI/env overrides:
-- `--datagen-seed` / `BLITZ_DATAGEN_SEED`
-- `--datagen-seed-systems` / `BLITZ_DATAGEN_SEED_SYSTEMS`
-- `--datagen-seed-users` / `BLITZ_DATAGEN_SEED_USERS`
+These keys have no CLI flags. Each reads an environment variable named after
+it, such as `BLITZ_ENVIRONMENT_SEED_CONFIG_SHARED`, which overrides the YAML.
+Embedded hosts can set them through `LoadOpts.EnvOverrides` (e.g.
+`environment.seed_config.shared`).
 
 On startup, `Init()` logs all effective seeds for reproducibility:
 

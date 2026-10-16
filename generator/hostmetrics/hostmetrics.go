@@ -46,14 +46,14 @@ type Config struct {
 	// Consumer receives every scraped batch. Required.
 	Consumer embed.MetricConsumer
 	// Seed controls per-worker RNG seeding for scrape values.
-	// Negative → randomize (worker N gets time.Now().UnixNano()+N).
+	// Negative → randomize: resolved once in New to time.Now().UnixNano(),
+	// logged as "seed" at Start, then worker N gets that seed+N.
 	// 0 or positive → deterministic (worker N gets seed Seed+N).
 	//
-	// Programmatic Go callers see the literal value here. The YAML
-	// path additionally translates `seed: 0` (or omitted) into
-	// randomize at the dispatch layer so YAML users get stochastic
-	// data by default; pass a positive value explicitly for
-	// reproducibility.
+	// Programmatic Go callers see the literal value here. The config
+	// layer defaults an omitted `seed:` to -1, so YAML, env, and flag
+	// users get random data unless they set a seed; an explicit 0 is
+	// deterministic.
 	Seed int64
 	// Telemetry supplies the OTel providers blitz routes its own
 	// self-telemetry through. The zero value falls back to the process
@@ -106,6 +106,11 @@ func New(cfg Config) (*Generator, error) {
 		return nil, fmt.Errorf("build generator metrics: %w", err)
 	}
 
+	// Resolve a negative (random) seed once, so the whole run derives
+	// from one logged value and rerunning with it reproduces the run.
+	if cfg.Seed < 0 {
+		cfg.Seed = time.Now().UnixNano()
+	}
 	// Resolve the simulated host: an explicit Environment identity when
 	// supplied, otherwise a minimal identity synthesized from the OS/Hostname
 	// knobs. Either way the resource projection is built once here and reused
@@ -156,7 +161,11 @@ func syntheticIdentity(cfg Config) *datagen.SystemIdentity {
 		if osType == datagen.OSWindows {
 			style = datagen.StyleWindows
 		}
-		hostname = datagen.GenerateHostname(r, style, datagen.AllMythologyNames)
+		hostname = datagen.GenerateHostname(
+			rand.New(rand.NewSource(cfg.Seed)), // #nosec G404 -- seeded for determinism contract
+			style,
+			datagen.AllMythologyNames,
+		)
 	}
 	return &datagen.SystemIdentity{
 		Hostname: hostname,
@@ -180,6 +189,7 @@ func (g *Generator) Start(_ context.Context) error {
 		zap.String("os.type", g.osType),
 		zap.String("hostname", g.hostname),
 		zap.Int("scrapers", len(g.scrapers)),
+		zap.Int64("seed", g.seed),
 	)
 
 	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), generatorType)
@@ -223,12 +233,8 @@ func (g *Generator) SupportedTelemetry() []telemetry.Type {
 func (g *Generator) worker(id int) {
 	defer g.wg.Done()
 
-	seed := g.seed
-	if seed < 0 {
-		seed = time.Now().UnixNano() + int64(id)
-	} else {
-		seed += int64(id)
-	}
+	// g.seed was resolved to a non-negative value in New.
+	seed := g.seed + int64(id)
 	r := rand.New(rand.NewSource(seed)) // #nosec G404 -- seeded for determinism contract
 
 	ticker := time.NewTicker(g.rate)

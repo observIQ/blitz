@@ -105,6 +105,7 @@ func Load(yamlBytes []byte, opts LoadOpts) (*Config, error) {
 	if err := internalconfig.ApplyListDefaults(v, cfg); err != nil {
 		return nil, fmt.Errorf("apply blitz list defaults: %w", err)
 	}
+	cfg.ResolveExpandedSeeds()
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate blitz config: %w", err)
 	}

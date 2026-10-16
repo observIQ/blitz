@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -91,6 +92,46 @@ func TestEffectiveGenerators_Empty(t *testing.T) {
 
 	gens := cfg.EffectiveGenerators()
 	require.Len(t, gens, 1, "should wrap empty Generator in slice")
+}
+
+// TestExpandedHostMetricsGetDistinctSeeds pins that one hostmetrics entry
+// expanded across several OSes yields distinct deterministic seeds, so the
+// hosts do not emit identical values; a random seed stays random per clone.
+func TestExpandedHostMetricsGetDistinctSeeds(t *testing.T) {
+	gen := func(seed int64) Generator {
+		return Generator{Type: GeneratorTypeHostMetrics, HostMetrics: HostMetricsGeneratorConfig{OS: "linux,windows,macos", Seed: seed}}
+	}
+	got := expandGenerators([]Generator{gen(0)})
+	require.Len(t, got, 3)
+	seen := map[int64]bool{}
+	for _, g := range got {
+		require.GreaterOrEqual(t, g.HostMetrics.Seed, int64(0), "a deterministic seed stays deterministic")
+		seen[g.HostMetrics.Seed] = true
+	}
+	require.Len(t, seen, 3, "each expanded host needs its own seed")
+	require.Equal(t, got, expandGenerators([]Generator{gen(0)}), "expansion is deterministic")
+
+	near := expandGenerators([]Generator{gen(math.MaxInt64 - 5)})
+	for _, g := range near {
+		require.GreaterOrEqual(t, g.HostMetrics.Seed, int64(0), "a seed near MaxInt64 must not overflow into random")
+	}
+}
+
+// TestExpandedRandomSeedReplays pins that a random seed on an expanded
+// hostmetrics entry resolves once for the entry, so the seed the first host
+// logs replays every host: rerunning with it reproduces all their seeds.
+func TestExpandedRandomSeedReplays(t *testing.T) {
+	cfg := &Config{Generators: []Generator{{Type: GeneratorTypeHostMetrics, HostMetrics: HostMetricsGeneratorConfig{OS: "linux,windows", Seed: -1}}}}
+	cfg.ResolveExpandedSeeds()
+	got := cfg.EffectiveGenerators()
+	require.Len(t, got, 2)
+	logged := got[0].HostMetrics.Seed
+	require.GreaterOrEqual(t, logged, int64(0))
+	require.Equal(t, got, cfg.EffectiveGenerators(), "every call sees the same seeds")
+
+	replay := &Config{Generators: []Generator{{Type: GeneratorTypeHostMetrics, HostMetrics: HostMetricsGeneratorConfig{OS: "linux,windows", Seed: logged}}}}
+	replay.ResolveExpandedSeeds()
+	require.Equal(t, got, replay.EffectiveGenerators())
 }
 
 // TestRunLevelCountIsValidatedNextToAList pins that a run-level

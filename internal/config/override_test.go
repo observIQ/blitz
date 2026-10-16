@@ -58,8 +58,10 @@ func getTestOverrideFlagsArgs() []string {
 		"--generator-hostmetrics-os", "windows",
 		"--generator-hostmetrics-hostname", "test-host",
 		"--generator-hostmetrics-scrapers", "cpu,memory",
+		"--generator-hostmetrics-seed", "0",
 		"--generator-traces-workers", "2",
 		"--generator-traces-rate", "500ms",
+		"--generator-traces-seed=-11",
 		"--generator-flow-workers", "3",
 		"--generator-flow-rate", "250ms",
 		"--generator-flow-scenario", "wan-edge",
@@ -204,8 +206,10 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_GENERATOR_HOSTMETRICS_OS":            "linux",
 		"BLITZ_GENERATOR_HOSTMETRICS_HOSTNAME":      "env-host",
 		"BLITZ_GENERATOR_HOSTMETRICS_SCRAPERS":      "disk,network",
+		"BLITZ_GENERATOR_HOSTMETRICS_SEED":          "0",
 		"BLITZ_GENERATOR_TRACES_WORKERS":            "5",
 		"BLITZ_GENERATOR_TRACES_RATE":               "2s",
+		"BLITZ_GENERATOR_TRACES_SEED":               "-13",
 		"BLITZ_GENERATOR_FLOW_WORKERS":              "5",
 		"BLITZ_GENERATOR_FLOW_RATE":                 "750ms",
 		"BLITZ_GENERATOR_FLOW_SCENARIO":             "datacenter",
@@ -391,10 +395,12 @@ func TestOverrideDefaults(t *testing.T) {
 				Rate:     1 * time.Second,
 				OS:       "linux",
 				Scrapers: []string{},
+				Seed:     -1,
 			},
 			Traces: TracesGeneratorConfig{
 				Workers: 1,
 				Rate:    1 * time.Second,
+				Seed:    -1,
 			},
 			Flow: FlowGeneratorConfig{
 				Workers:  1,
@@ -602,10 +608,12 @@ func TestOverrideFlags(t *testing.T) {
 				OS:       "windows",
 				Hostname: "test-host",
 				Scrapers: []string{"cpu", "memory"},
+				Seed:     0,
 			},
 			Traces: TracesGeneratorConfig{
 				Workers: 2,
 				Rate:    500 * time.Millisecond,
+				Seed:    -11,
 			},
 			Flow: FlowGeneratorConfig{
 				Workers:  3,
@@ -836,10 +844,12 @@ func TestOverrideEnvs(t *testing.T) {
 				OS:       "linux",
 				Hostname: "env-host",
 				Scrapers: []string{"disk", "network"},
+				Seed:     0,
 			},
 			Traces: TracesGeneratorConfig{
 				Workers: 5,
 				Rate:    2 * time.Second,
+				Seed:    -13,
 			},
 			Flow: FlowGeneratorConfig{
 				Workers:  5,
@@ -1053,6 +1063,8 @@ func TestOverrideCoverage(t *testing.T) {
 	}
 }
 
+// TestCreateFlagInt64 pins the int64 flag type used by seed overrides: the
+// flag is a real int64 (so a non-number is rejected) and takes negatives.
 func TestCreateFlagInt64(t *testing.T) {
 	flagSet := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	o := NewOverride("test.int64.seed", "an int64 override", int64(-1))

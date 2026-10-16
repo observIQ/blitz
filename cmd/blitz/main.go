@@ -136,38 +136,9 @@ func run(cmd *cobra.Command, args []string) error {
 	// wiring, and bringing every generator up.
 	startTime := time.Now()
 
-	// Configure Viper to handle env overrides. Only BLITZ_ env vars count, so
-	// an unrelated variable such as OUTPUTS cannot replace or break the config.
-	viper.SetConfigType("yaml")
-	viper.SetEnvPrefix("BLITZ")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
-
-	// Read configuration file if provided
-	if configFile != "" {
-		viper.SetConfigFile(configFile)
-		if err := viper.ReadInConfig(); err != nil {
-			return fmt.Errorf("failed to read config file %s: %w", configFile, err)
-		}
-	}
-
-	config.MigrateDeprecatedKeys(viper.GetViper())
-
-	if err := config.ValidateExclusiveOutputConfig(viper.GetViper(), config.CLIExplicit(cliFlags)); err != nil {
+	cfg, err := loadConfig(viper.GetViper(), configFile)
+	if err != nil {
 		return err
-	}
-
-	if err := config.ValidateExclusiveGeneratorConfig(viper.GetViper(), config.CLIExplicit(cliFlags)); err != nil {
-		return err
-	}
-
-	cfg := config.NewConfig()
-	if err := viper.Unmarshal(cfg); err != nil {
-		return fmt.Errorf("failed to unmarshal config: %w", err)
-	}
-
-	if err := config.ApplyListDefaults(viper.GetViper(), cfg); err != nil {
-		return fmt.Errorf("failed to apply list defaults: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -715,4 +686,48 @@ func consumersFor(out output.Output, tel embed.TelemetrySettings) dispatch.Embed
 		consumers.TraceConsumer = output.WriterAsTraceConsumer(tw, tel)
 	}
 	return consumers
+}
+
+// loadConfig decodes the CLI config from v (the config file at path,
+// BLITZ_ env vars, and the flags init binds) with deprecated keys migrated
+// and list entries given their type defaults, seeds resolved.
+func loadConfig(v *viper.Viper, path string) (*config.Config, error) {
+	// Configure Viper to handle env overrides. Only BLITZ_ env vars count, so
+	// an unrelated variable such as OUTPUTS cannot replace or break the config.
+	v.SetConfigType("yaml")
+	v.SetEnvPrefix("BLITZ")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	// Read configuration file if provided
+	if path != "" {
+		v.SetConfigFile(path)
+		if err := v.ReadInConfig(); err != nil {
+			return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
+		}
+	}
+
+	if err := config.BindSeedEnv(v); err != nil {
+		return nil, err
+	}
+	config.MigrateDeprecatedKeys(v)
+
+	if err := config.ValidateExclusiveOutputConfig(v, config.CLIExplicit(cliFlags)); err != nil {
+		return nil, err
+	}
+
+	if err := config.ValidateExclusiveGeneratorConfig(v, config.CLIExplicit(cliFlags)); err != nil {
+		return nil, err
+	}
+
+	cfg := config.NewConfig()
+	if err := v.Unmarshal(cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	if err := config.ApplyListDefaults(v, cfg); err != nil {
+		return nil, fmt.Errorf("failed to apply list defaults: %w", err)
+	}
+	cfg.ResolveExpandedSeeds()
+	return cfg, nil
 }

@@ -199,7 +199,7 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			Hostname:     genCfg.HostMetrics.Hostname,
 			ScraperNames: genCfg.HostMetrics.Scrapers,
 			Consumer:     consumers.MetricConsumer,
-			Seed:         yamlSeedDefault(genCfg.HostMetrics.Seed),
+			Seed:         genCfg.HostMetrics.Seed,
 			Identity:     hostIdentity(env, genCfg.Type),
 			Telemetry:    tel,
 		})
@@ -213,7 +213,7 @@ func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsum
 			Rate:      genCfg.Traces.Rate,
 			Hostname:  genCfg.Traces.Hostname,
 			Consumer:  consumers.TraceConsumer,
-			Seed:      yamlSeedDefault(genCfg.Traces.Seed),
+			Seed:      genCfg.Traces.Seed,
 			Identity:  hostIdentity(env, genCfg.Type),
 			Telemetry: tel,
 		})
@@ -262,25 +262,6 @@ func hostIdentity(env *datagen.Environment, component config.GeneratorType) *dat
 		return nil
 	}
 	return env.SystemForKey(string(component))
-}
-
-// yamlSeedDefault translates a YAML-loaded Seed value into the
-// generator-Config Seed value, applying the "stochastic by default"
-// architectural intent for YAML users. YAML zero-value (omitted `seed:`
-// key) and an explicit `seed: 0` both map to -1 (randomize per worker).
-// Any other value passes through unchanged.
-//
-// Programmatic Go callers bypass this translation and observe whatever
-// literal value they pass — useful for tests that want to pin seed=0.
-//
-// PIPE-1036 will route per-machine identity determinism through the
-// top-level `environment.seed_config` instead; this knob will then
-// govern only the generator's record-content RNG, not host identity.
-func yamlSeedDefault(yamlSeed int64) int64 {
-	if yamlSeed == 0 {
-		return -1
-	}
-	return yamlSeed
 }
 
 // newFIX translates the YAML-shaped FIXGeneratorConfig into the
