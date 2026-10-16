@@ -11,7 +11,6 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
-	"github.com/observiq/blitz/internal/datagen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -408,19 +407,4 @@ func TestGenerateRequestID(t *testing.T) {
 	id := generateRequestID(r)
 	assert.Len(t, id, 20)
 	assert.Regexp(t, `^[A-Za-z0-9]+$`, id)
-}
-
-func TestSetHostIdentity(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	gen, err := New(logger, 1, 100*time.Millisecond, newMockWriter(), embed.NopTelemetry())
-	require.NoError(t, err)
-
-	gen.SetHostIdentity(&datagen.SystemIdentity{
-		Hostname: "IDENTITY-HOST",
-		OSInfo:   datagen.OSInfo{Type: datagen.OSLinux},
-	})
-	assert.Equal(t, "IDENTITY-HOST", gen.static.Record()["host.name"])
-
-	gen.SetHostIdentity(nil)
-	assert.NotEmpty(t, gen.static.Record()["host.name"])
 }

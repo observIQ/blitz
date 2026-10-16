@@ -2,6 +2,7 @@ package datagen
 
 import (
 	"math/rand"
+	"slices"
 	"testing"
 	"time"
 )
@@ -344,5 +345,36 @@ func TestGenerateEnvironmentCARelativeValidityWindow(t *testing.T) {
 	const minSpan = 9*365*24*time.Hour + 364*24*time.Hour // ~9.997 years
 	if wantSpan < minSpan {
 		t.Errorf("CA validity span %v shorter than expected ~10 years", wantSpan)
+	}
+}
+
+// TestSystemHostnamesAreUnique pins that no two systems share a hostname, in
+// the drawn fleet or among the hosts the environment appends for required
+// entries, and that each system's FQDN and certificate name its own hostname.
+func TestSystemHostnamesAreUnique(t *testing.T) {
+	required := []HostRequirement{
+		{OS: OSWindows, Roles: []SystemRole{RoleDC, RoleServer, RoleWorkstation}},
+		{OS: OSWindows, Roles: []SystemRole{RoleDC}},
+	}
+	for _, opts := range []EnvironmentOpts{{}, {SystemCount: 1, RequiredHosts: required}} {
+		for seed := int64(0); seed < 500; seed++ {
+			seeds := NewSeedConfig()
+			seeds.Shared = seed
+			o := opts
+			env, err := GenerateEnvironment(seeds, &o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			seen := map[string]bool{}
+			for _, s := range env.Systems {
+				if seen[s.Hostname] {
+					t.Fatalf("seed %d: hostname %s repeats", seed, s.Hostname)
+				}
+				seen[s.Hostname] = true
+				if s.FQDN != fqdnFor(s.Hostname, s.Domain) || s.Cert.SubjectCN != s.FQDN || !slices.Contains(s.Cert.SANs, s.Hostname) {
+					t.Fatalf("seed %d: %s has FQDN %s, cert CN %s, SANs %v", seed, s.Hostname, s.FQDN, s.Cert.SubjectCN, s.Cert.SANs)
+				}
+			}
+		}
 	}
 }

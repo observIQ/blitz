@@ -66,6 +66,7 @@ func getTestOverrideFlagsArgs() []string {
 		"--generator-flow-workers", "3",
 		"--generator-flow-rate", "250ms",
 		"--generator-flow-scenario", "wan-edge",
+		"--generator-flow-exportervendor", "juniper",
 		"--generator-flow-seed", "7",
 		"--generator-wel-workers", "3",
 		"--generator-wel-rate", "500ms",
@@ -339,6 +340,7 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_TELEMETRY_TRACES_PERBATCHSPANS":                   "true",
 		"BLITZ_TELEMETRY_LOGS_OTLPENDPOINT":                      "logs.env.example:4317",
 		"BLITZ_TELEMETRY_LOGS_INSECURE":                          "true",
+		"BLITZ_GENERATOR_FLOW_EXPORTERVENDOR":                    "arista",
 	}
 }
 
@@ -448,9 +450,9 @@ func TestOverrideDefaults(t *testing.T) {
 				Workers:            1,
 				Rate:               1 * time.Second,
 				Channels:           []string{},
-				Domain:             "WORKGROUP",
-				Role:               "member",
-				ManageEventSources: true,
+				Domain:             "",
+				Role:               "",
+				ManageEventSources: false,
 			},
 			FIX: FIXGeneratorConfig{
 				Workers:           fixDefaults.Workers,
@@ -673,10 +675,11 @@ func TestOverrideFlags(t *testing.T) {
 				Seed:    -11,
 			},
 			Flow: FlowGeneratorConfig{
-				Workers:  3,
-				Rate:     250 * time.Millisecond,
-				Scenario: "wan-edge",
-				Seed:     7,
+				Workers:        3,
+				Rate:           250 * time.Millisecond,
+				Scenario:       "wan-edge",
+				ExporterVendor: "juniper",
+				Seed:           7,
 			},
 			Wel: WelGeneratorConfig{
 				Workers:            3,
@@ -932,10 +935,11 @@ func TestOverrideEnvs(t *testing.T) {
 				Seed:    -13,
 			},
 			Flow: FlowGeneratorConfig{
-				Workers:  5,
-				Rate:     750 * time.Millisecond,
-				Scenario: "datacenter",
-				Seed:     11,
+				Workers:        5,
+				Rate:           750 * time.Millisecond,
+				Scenario:       "datacenter",
+				ExporterVendor: "arista",
+				Seed:           11,
 			},
 			Wel: WelGeneratorConfig{
 				Workers:            3,

@@ -51,7 +51,7 @@ type ApacheErrorLogGenerator struct {
 
 // New creates a new Apache Error log generator. The consumer receives
 // each generated record as a size-1 batch via ConsumeLogs.
-func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer, tel embed.TelemetrySettings) (*ApacheErrorLogGenerator, error) {
+func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.LogConsumer, tel embed.TelemetrySettings, opts ...generator.Option) (*ApacheErrorLogGenerator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -74,7 +74,7 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 		workers:  workers,
 		rate:     rate,
 		consumer: consumer,
-		static:   resource.FromIdentity(nil, "apache", "apache.format", "error"),
+		static:   resource.FromIdentity(generator.NewOptions(opts...).Identity, "apache", "apache.format", "error"),
 		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 	}, nil
@@ -82,14 +82,6 @@ func New(logger *zap.Logger, workers int, rate time.Duration, consumer embed.Log
 
 // Name returns the module identifier.
 func (g *ApacheErrorLogGenerator) Name() string { return componentName }
-
-// SetHostIdentity sets the simulated host whose identity every emitted record
-// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
-// be called before Start; the resource it builds is read concurrently by
-// workers thereafter.
-func (g *ApacheErrorLogGenerator) SetHostIdentity(id *datagen.SystemIdentity) {
-	g.static = resource.FromIdentity(id, "apache", "apache.format", "error")
-}
 
 // Start launches the worker goroutines that push generated records to
 // the configured consumer.

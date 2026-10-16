@@ -80,6 +80,9 @@ type Config struct {
 	// Start (logged so the run can be reproduced); 0+ = deterministic.
 	// Worker N uses Seed+N.
 	Seed int64
+	// Identity is the simulated host every record describes.
+	// Nil falls back to the process hostname.
+	Identity *datagen.SystemIdentity
 	// Start, when set, pins every emitted timestamp: SendingTime (52) and
 	// TransactTime (60) advance from it by Rate per message, and trade
 	// dates (settlement, issue, maturity) derive from them. Same Seed +
@@ -159,7 +162,7 @@ func New(logger *zap.Logger, cfg Config, consumer embed.LogConsumer, tel embed.T
 		logger:   logger,
 		cfg:      cfg,
 		consumer: consumer,
-		static:   resource.FromIdentity(nil, componentName, "fix.version", cfg.Version.String()),
+		static:   resource.FromIdentity(cfg.Identity, componentName, "fix.version", cfg.Version.String()),
 		metrics:  metrics,
 		stopCh:   make(chan struct{}),
 		clock:    time.Now,
@@ -168,14 +171,6 @@ func New(logger *zap.Logger, cfg Config, consumer embed.LogConsumer, tel embed.T
 
 // Name returns the module identifier.
 func (g *Generator) Name() string { return componentName }
-
-// SetHostIdentity sets the simulated host whose identity every emitted record
-// carries (PIPE-1036). A nil identity keeps the process-hostname fallback. Must
-// be called before Start; the resource it builds is read concurrently by
-// workers thereafter.
-func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
-	g.static = resource.FromIdentity(id, componentName, "fix.version", g.cfg.Version.String())
-}
 
 // Start launches the worker goroutines.
 func (g *Generator) Start(_ context.Context) error {

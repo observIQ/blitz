@@ -12,9 +12,10 @@ type TracesGeneratorConfig struct {
 	// Rate is the rate at which traces are generated per worker
 	Rate time.Duration `yaml:"rate,omitempty" mapstructure:"rate,omitempty"`
 	// Hostname is the simulated hostname every emitted span's Resource
-	// attributes describe. Empty = deterministically generate from Seed
-	// via datagen.GenerateHostname so configs are reproducible across
-	// runs without pinning a hostname literal.
+	// attributes describe. Set, it wins over the environment host and
+	// replaces only that host's name. Empty uses the environment host's
+	// hostname, or with no environment host deterministically generates one
+	// from Seed via datagen.GenerateHostname.
 	Hostname string `yaml:"hostname,omitempty" mapstructure:"hostname,omitempty"`
 	// Seed seeds span content (Name, Kind, StatusCode, Attributes, child
 	// count) per the contract in docs/datagen.md: negative randomizes (the

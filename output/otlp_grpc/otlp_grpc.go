@@ -849,17 +849,27 @@ func (o *OTLPGrpc) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces, telemetry.Flows}
 }
 
-// mapSeverityNumber maps string log levels to OTLP severity numbers
+// mapSeverityNumber maps string log levels to OTLP severity numbers. The
+// syslog NOTICE, CRITICAL, ALERT, and EMERGENCY levels follow the
+// OpenTelemetry log data model's syslog table (INFO2, ERROR2, ERROR3, FATAL).
 func (o *OTLPGrpc) mapSeverityNumber(level string) logspb.SeverityNumber {
 	switch level {
 	case "DEBUG":
 		return logspb.SeverityNumber_SEVERITY_NUMBER_DEBUG
 	case "INFO":
 		return logspb.SeverityNumber_SEVERITY_NUMBER_INFO
+	case "NOTICE":
+		return logspb.SeverityNumber_SEVERITY_NUMBER_INFO2
 	case "WARN":
 		return logspb.SeverityNumber_SEVERITY_NUMBER_WARN
 	case "ERROR":
 		return logspb.SeverityNumber_SEVERITY_NUMBER_ERROR
+	case "CRITICAL":
+		return logspb.SeverityNumber_SEVERITY_NUMBER_ERROR2
+	case "ALERT":
+		return logspb.SeverityNumber_SEVERITY_NUMBER_ERROR3
+	case "EMERGENCY":
+		return logspb.SeverityNumber_SEVERITY_NUMBER_FATAL
 	case "FATAL":
 		return logspb.SeverityNumber_SEVERITY_NUMBER_FATAL2
 	default:

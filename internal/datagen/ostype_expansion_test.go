@@ -51,7 +51,7 @@ func TestSemconvOSType_Expanded(t *testing.T) {
 
 func TestGenerateOSInfo_Expanded(t *testing.T) {
 	for _, e := range expandedOSes {
-		info := GenerateOSInfo(rand.New(rand.NewSource(1)), e.os) // #nosec G404
+		info := GenerateOSInfo(rand.New(rand.NewSource(1)), e.os, RoleServer) // #nosec G404
 		if info.Type != e.os {
 			t.Errorf("%s: Type = %q, want %q", e.os, info.Type, e.os)
 		}
@@ -62,7 +62,7 @@ func TestGenerateOSInfo_Expanded(t *testing.T) {
 			t.Errorf("%s: os.name = %q, want to contain %q", e.os, info.Name, e.name)
 		}
 		// Deterministic for a given (seed, os).
-		again := GenerateOSInfo(rand.New(rand.NewSource(1)), e.os) // #nosec G404
+		again := GenerateOSInfo(rand.New(rand.NewSource(1)), e.os, RoleServer) // #nosec G404
 		if info != again {
 			t.Errorf("%s: GenerateOSInfo not deterministic: %+v vs %+v", e.os, info, again)
 		}

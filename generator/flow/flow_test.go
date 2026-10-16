@@ -12,6 +12,7 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/datagen"
 	"github.com/stretchr/testify/require"
@@ -59,17 +60,23 @@ func TestNewRejectsBadInput(t *testing.T) {
 
 func TestLifecycleEmitsFlowsWithResource(t *testing.T) {
 	c := &captureConsumer{}
-	g, err := New(zap.NewNop(), 2, time.Millisecond, "", 5, c, embed.NopTelemetry())
+	dev := &datagen.NetworkSystemIdentity{
+		Hostname: "cisco-rtr-01", Vendor: datagen.VendorCisco, Model: "Catalyst 9500-48Y4C",
+		ManagementInterface: &datagen.NetworkInterface{Name: "mgmt0", IPv4: "10.10.40.7"},
+		L3Routing:           &datagen.L3RoutingCapability{},
+	}
+	g, err := New(zap.NewNop(), 2, time.Millisecond, "", 5, c, embed.NopTelemetry(), generator.WithAppliance(dev))
 	require.NoError(t, err)
 	require.Equal(t, "flow", g.Name())
-	g.SetHostIdentity(&datagen.SystemIdentity{Hostname: "edge-rtr-1", OSInfo: datagen.OSInfo{Type: datagen.OSLinux}})
 	require.NoError(t, g.Start(context.Background()))
 	require.Eventually(t, func() bool { return len(c.got()) >= 10 }, 5*time.Second, time.Millisecond)
 	require.NoError(t, g.Stop(context.Background()))
 
 	for _, r := range c.got() {
-		require.Equal(t, "edge-rtr-1", r.Metadata.Resource["host.name"])
+		require.Equal(t, "cisco-rtr-01", r.Metadata.Resource["host.name"])
+		require.Equal(t, "Cisco", r.Metadata.Resource["device.manufacturer"])
 		require.Equal(t, "flow", r.Metadata.Resource["telemetry.source"])
+		require.Equal(t, "10.10.40.7", r.ExporterIP.String(), "the device's management address exports the flows")
 		require.False(t, r.Metadata.Timestamp.IsZero())
 	}
 }

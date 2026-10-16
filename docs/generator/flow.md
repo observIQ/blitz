@@ -111,16 +111,20 @@ emits for a decoded flow (`addMessageAttributes` in
   severity.
 - `flow.sampler_address` is the record's `ExporterIP`, the device the flow came
   from, as the receiver reports the exporter that sent the packet (`invalid IP`
-  when a record names none). A flow generator describes one exporter, a
-  private address drawn from its seed.
+  when a record names none). A flow generator describes one exporter: a
+  routing device from the simulated environment (see
+  [environment.md](../environment.md#appliance-generators)), whose management
+  address is the `ExporterIP`. With no environment it is a private address
+  drawn from the seed.
 - ICMP flows carry no ports; type and code are in `flow.icmp_type` and
   `flow.icmp_code`.
 - `Metadata.Attributes` are added, and can override any of the above (for
   example `flow.type`).
 
-The flow generator stamps each record's `Metadata.Resource` with the simulated
-host (`host.name`, `telemetry.source: flow`, and the environment identity when
-one is configured). The OTLP output currently sends every log under its own
+The flow generator stamps each record's `Metadata.Resource` with its exporting
+device (`host.name`, `device.manufacturer`, `device.model.name`, the appliance
+`os.*`, and the management `host.ip`/`host.mac`) and `telemetry.source: flow`.
+With no environment `host.name` is the running host's. The OTLP output currently sends every log under its own
 `service.name: blitz` resource, as it does for other logs.
 
 This path uses raw OTLP protobuf and adds no `collector/pdata` dependency.
@@ -198,12 +202,13 @@ format carries type and code its own way:
 
 Generator:
 
-| YAML Path                  | Flag                          | Env                             | Default   | Description |
-|----------------------------|-------------------------------|---------------------------------|-----------|-------------|
-| `generator.flow.workers`   | `--generator-flow-workers`    | `BLITZ_GENERATOR_FLOW_WORKERS`  | `1`       | Worker goroutines |
-| `generator.flow.rate`      | `--generator-flow-rate`       | `BLITZ_GENERATOR_FLOW_RATE`     | `1s`      | Interval per worker |
-| `generator.flow.scenario`  | `--generator-flow-scenario`   | `BLITZ_GENERATOR_FLOW_SCENARIO` | `default` | Traffic-shape preset |
-| `generator.flow.seed`      | `--generator-flow-seed`       | `BLITZ_GENERATOR_FLOW_SEED`     | `-1`      | RNG seed (negative randomizes) |
+| YAML Path                       | Flag                              | Env                                   | Default   | Description                                                                                                                    |
+|---------------------------------|-----------------------------------|---------------------------------------|-----------|--------------------------------------------------------------------------------------------------------------------------------|
+| `generator.flow.workers`        | `--generator-flow-workers`        | `BLITZ_GENERATOR_FLOW_WORKERS`        | `1`       | Worker goroutines                                                                                                              |
+| `generator.flow.rate`           | `--generator-flow-rate`           | `BLITZ_GENERATOR_FLOW_RATE`           | `1s`      | Interval per worker                                                                                                            |
+| `generator.flow.scenario`       | `--generator-flow-scenario`       | `BLITZ_GENERATOR_FLOW_SCENARIO`       | `default` | Traffic-shape preset                                                                                                           |
+| `generator.flow.exporterVendor` | `--generator-flow-exportervendor` | `BLITZ_GENERATOR_FLOW_EXPORTERVENDOR` | `""`      | Vendor of the exporting device: `cisco`, `arista`, `juniper`, `f5`, `palo-alto`, or `fortinet`. Empty takes any routing device |
+| `generator.flow.seed`           | `--generator-flow-seed`           | `BLITZ_GENERATOR_FLOW_SEED`           | `-1`      | RNG seed (negative randomizes)                                                                                                 |
 
 Output:
 

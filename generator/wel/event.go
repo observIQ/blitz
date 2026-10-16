@@ -137,11 +137,20 @@ func GenerateRecord(rng *rand.Rand, def *catalog.EventDefinition, opts *catalog.
 		Keywords:      def.Keywords,
 		KeywordNames:  def.KeywordNames,
 		Channel:       def.Channel,
-		Computer:      opts.Computer,
+		Computer:      eventComputer(opts),
 		TimeCreated:   time.Now(),
 		EventRecordID: recordID,
 		Data:          data,
 		Message:       message,
 		LevelName:     levelName,
 	}
+}
+
+// eventComputer is the <Computer> element value: a domain-joined host writes
+// its FQDN (DC01.contoso.local), a workgroup host its bare name.
+func eventComputer(opts *catalog.GenerateOpts) string {
+	if opts.FQDN != "" {
+		return opts.FQDN
+	}
+	return opts.Computer
 }

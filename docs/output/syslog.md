@@ -6,6 +6,8 @@ The Syslog output formats messages per RFC 3164 or RFC 5424 and sends them via U
 
 The Syslog output formats log records according to the selected RFC standard (3164 or 5424). The output adds syslog headers including facility, severity, timestamp, hostname, app name, process ID, and message ID. The original log message is included in the syslog message body.
 
+The header's hostname is `hostname` when set, else the record's host (its `host.name`), so one generator's records all name one host. A generator that writes a device's own syslog line marks it as framed, and the output sends that line as the device would, adding only a `<PRI>` when the line has none.
+
 ### Example Transformation
 
 **Input log:**
@@ -30,7 +32,7 @@ The Syslog output formats log records according to the selected RFC standard (31
 | `output.syslog.workers` | `--output-syslog-workers` | `BLITZ_OUTPUT_SYSLOG_WORKERS` | `1` | Number of Syslog output workers (must be ≥ 0) |
 | `output.syslog.facility` | `--output-syslog-facility` | `BLITZ_OUTPUT_SYSLOG_FACILITY` | `1` | Syslog facility (0–23) |
 | `output.syslog.appName` | `--output-syslog-appname` | `BLITZ_OUTPUT_SYSLOG_APPNAME` | `blitz` | App name used in syslog header |
-| `output.syslog.hostname` | `--output-syslog-hostname` | `BLITZ_OUTPUT_SYSLOG_HOSTNAME` | `""` | Hostname used in syslog header |
+| `output.syslog.hostname` | `--output-syslog-hostname` | `BLITZ_OUTPUT_SYSLOG_HOSTNAME` | `""` | Hostname used in syslog header; empty uses each record's `host.name` |
 | `output.syslog.procId` | `--output-syslog-procid` | `BLITZ_OUTPUT_SYSLOG_PROCID` | `""` | Process ID used in syslog header |
 | `output.syslog.msgId` | `--output-syslog-msgid` | `BLITZ_OUTPUT_SYSLOG_MSGID` | `""` | Message ID used in syslog header |
 | `output.syslog.maxDatagramBytes` | `--output-syslog-maxdatagrambytes` | `BLITZ_OUTPUT_SYSLOG_MAXDATAGRAMBYTES` | `0` | UDP safety limit in bytes; if > 0, messages are truncated to fit |

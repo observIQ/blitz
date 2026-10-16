@@ -3,6 +3,7 @@ package datagen
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -134,6 +135,52 @@ type SystemIdentity struct {
 	Applications []*ApplicationIdentity
 }
 
+// WithHostname returns the identity with its hostname replaced, for an explicit
+// hostname setting that wins over the resolved identity. Only the host name
+// changes, plus what derives from it: FQDN and the TLS cert's subject and SANs.
+// OS, arch, tier and the rest stay. The receiver is never mutated, since
+// environment identities are shared across generators: a non-empty hostname
+// yields a copy. An empty hostname returns the receiver as-is, and a nil
+// receiver with a hostname yields a minimal identity carrying only that name.
+func (s *SystemIdentity) WithHostname(hostname string) *SystemIdentity {
+	if hostname == "" {
+		return s
+	}
+	if s == nil {
+		return &SystemIdentity{Hostname: hostname}
+	}
+	c := *s
+	c.Hostname = hostname
+	// A workgroup host's FQDN is its bare name, so it follows the rename too.
+	c.FQDN = hostname
+	if c.Domain != "" {
+		c.FQDN = fqdnFor(hostname, c.Domain)
+	}
+	if s.Cert != nil {
+		cert := *s.Cert
+		cert.SubjectCN = c.FQDN
+		cert.SANs = make([]string, len(s.Cert.SANs))
+		for i, san := range s.Cert.SANs {
+			switch san {
+			case s.FQDN:
+				san = c.FQDN
+			case s.Hostname:
+				san = hostname
+			}
+			cert.SANs[i] = san
+		}
+		c.Cert = &cert
+	}
+	return &c
+}
+
+// fqdnFor joins hostname and DNS domain. The host part keeps its case, as
+// Windows does in its DNS name (Microsoft's event samples show
+// WIN-GG82ULGC9GO.contoso.local and DC01.contoso.local).
+func fqdnFor(hostname, domain string) string {
+	return hostname + "." + domain
+}
+
 // HostImage is the OpenTelemetry host.image.* projection source: the VM image
 // or OS install a host was instantiated from. It is not populated by core
 // system generation — a future CloudIdentity source will set it on cloud hosts.
@@ -171,6 +218,13 @@ type CertInfo struct {
 // Passing a nil domain or a domain with a nil CA returns an error rather than
 // panicking, so an embedding host handles bad input without crashing.
 func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *DomainIdentity, names *Pool[string]) (*SystemIdentity, error) {
+	return generateSystemIdentity(r, os, role, domain, names, nil)
+}
+
+// generateSystemIdentity is GenerateSystemIdentity with a fleet's used
+// hostnames: a drawn hostname already in used gets the next free number
+// instead, and the result is added to used. A nil used skips the check.
+func generateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *DomainIdentity, names *Pool[string], used map[string]bool) (*SystemIdentity, error) {
 	if domain == nil {
 		return nil, fmt.Errorf("datagen: GenerateSystemIdentity: domain must not be nil")
 	}
@@ -190,13 +244,18 @@ func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *Do
 	}
 
 	hostname := GenerateHostname(r, style, names)
-	fqdn := hostname + "." + domain.Name
-	if os == OSWindows || role == RoleDC {
-		fqdn = strings.ToLower(hostname) + "." + domain.Name
+	if used != nil {
+		// Bumping the number draws nothing from r, so a fleet without a
+		// collision is unchanged.
+		for used[hostname] {
+			hostname = nextHostnameNumber(hostname)
+		}
+		used[hostname] = true
 	}
+	fqdn := fqdnFor(hostname, domain.Name)
 
 	// Coherent OS release + machine id, from authentic release data.
-	osInfo := GenerateOSInfo(r, os)
+	osInfo := GenerateOSInfo(r, os, role)
 	hostID := GenerateHostID(r, os)
 
 	arch := pickArch(r, os)
@@ -295,4 +354,16 @@ func generateCertInfo(r *rand.Rand, fqdn, hostname string, ca *CertAuthority) *C
 		ValidTo:      now.AddDate(1, 0, 0),
 		SANs:         []string{fqdn, hostname},
 	}
+}
+
+// nextHostnameNumber increments a hostname's trailing number, keeping at
+// least two digits: PAX-CI13 becomes PAX-CI14, and web-20 becomes web-21.
+// Every GenerateHostname style ends in a number.
+func nextHostnameNumber(hostname string) string {
+	i := len(hostname)
+	for i > 0 && hostname[i-1] >= '0' && hostname[i-1] <= '9' {
+		i--
+	}
+	n, _ := strconv.Atoi(hostname[i:])
+	return fmt.Sprintf("%s%02d", hostname[:i], n+1)
 }

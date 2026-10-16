@@ -38,8 +38,9 @@ type Generator struct {
 	consumer embed.FlowConsumer
 	metrics  *generator.Metrics
 	static   *resource.StaticResources
-	// exporter is the one device the generator's flows come from, drawn at
-	// Start from the resolved seed; workers only read it.
+	// exporter is the address of the one device the generator's flows come
+	// from: the appliance's management address, or drawn at Start from the
+	// resolved seed. Workers only read it.
 	exporter net.IP
 	// victim is the ddos-target scenario's destination, drawn at Start.
 	victim host
@@ -53,7 +54,12 @@ type Generator struct {
 
 // New builds a flow generator. seed < 0 picks a random seed at Start (logged
 // so the run can be reproduced); 0+ is a deterministic seed.
-func New(logger *zap.Logger, workers int, rate time.Duration, scenario Scenario, seed int64, consumer embed.FlowConsumer, tel embed.TelemetrySettings) (*Generator, error) {
+//
+// generator.WithAppliance sets the routing device the flows come from: its
+// hostname and model are the resource, and its management address is every
+// record's ExporterIP. Without one the resource is the running host and the
+// exporter address is drawn from the seed.
+func New(logger *zap.Logger, workers int, rate time.Duration, scenario Scenario, seed int64, consumer embed.FlowConsumer, tel embed.TelemetrySettings, opts ...generator.Option) (*Generator, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
@@ -76,6 +82,11 @@ func New(logger *zap.Logger, workers int, rate time.Duration, scenario Scenario,
 	if scenario == "" {
 		scenario = ScenarioDefault
 	}
+	dev := generator.NewOptions(opts...).Appliance
+	var exporter net.IP
+	if dev != nil && dev.ManagementInterface != nil {
+		exporter = net.ParseIP(dev.ManagementInterface.IPv4)
+	}
 	return &Generator{
 		logger:   logger,
 		workers:  workers,
@@ -84,7 +95,8 @@ func New(logger *zap.Logger, workers int, rate time.Duration, scenario Scenario,
 		seed:     seed,
 		consumer: consumer,
 		metrics:  metrics,
-		static:   resource.FromIdentity(nil, componentName),
+		static:   resource.FromAppliance(dev, componentName),
+		exporter: exporter,
 		stopCh:   make(chan struct{}),
 		clock:    clockwork.NewRealClock(),
 	}, nil
@@ -109,7 +121,9 @@ func (g *Generator) Start(_ context.Context) error {
 		g.seed = time.Now().UnixNano()
 	}
 	// seed-1: workers use seed+N (N >= 0), so the exporter has its own stream.
-	g.exporter = net.ParseIP(datagen.RandomPrivateIPv4(rand.New(rand.NewSource(g.seed - 1)))) // #nosec G404 -- synthetic identity, not security
+	if g.exporter == nil {
+		g.exporter = net.ParseIP(datagen.RandomPrivateIPv4(rand.New(rand.NewSource(g.seed - 1)))) // #nosec G404 -- synthetic identity, not security
+	}
 	// seed-2: the ddos-target victim, a public host with its own stream too.
 	g.victim = endpoint(rand.New(rand.NewSource(g.seed-2)), false) // #nosec G404 -- synthetic identity, not security
 	g.logger.Info("Starting flow generator",
@@ -195,14 +209,6 @@ func (g *Generator) generateAndWrite(r *rand.Rand) error {
 		return err
 	}
 	return nil
-}
-
-// SetHostIdentity sets the simulated exporter whose identity every emitted
-// record's resource carries. A nil identity keeps the process-hostname
-// fallback. Must be called before Start; workers read the
-// resource concurrently thereafter.
-func (g *Generator) SetHostIdentity(id *datagen.SystemIdentity) {
-	g.static = resource.FromIdentity(id, componentName)
 }
 
 // newWriteBackoff paces a worker: rate between sends, growing exponentially

@@ -18,7 +18,7 @@ The legacy `winevt` generator emits a single-template Security 4625 (failed logo
 ## Example log
 
 ```xml
-<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='Microsoft-Windows-Security-Auditing' Guid='{54849625-5478-4994-a5ba-3e3b0328c30d}'/><EventID>4624</EventID><Version>2</Version><Level>0</Level><Task>12544</Task><Opcode>0</Opcode><Keywords>0x8020000000000000</Keywords><TimeCreated SystemTime='2026-05-21T14:37:24.1621700Z'/><EventRecordID>1536271</EventRecordID><Correlation/><Execution ProcessID='660' ThreadID='3060'/><Channel>Security</Channel><Computer>BLITZ-WEL</Computer><Security/></System><EventData><Data Name='SubjectUserSid'>S-1-5-18</Data><Data Name='SubjectUserName'>BLITZ-WEL$</Data><Data Name='SubjectDomainName'>CONTOSO</Data><Data Name='SubjectLogonId'>0x3e7</Data><Data Name='TargetUserSid'>S-1-5-21-1234567890-1234567890-1234567890-1001</Data><Data Name='TargetUserName'>jsmith</Data><Data Name='TargetDomainName'>CONTOSO</Data><Data Name='TargetLogonId'>0x12345abc</Data><Data Name='LogonType'>2</Data><Data Name='LogonProcessName'>User32</Data><Data Name='AuthenticationPackageName'>Negotiate</Data><Data Name='WorkstationName'>BLITZ-WEL</Data><Data Name='IpAddress'>10.0.0.1</Data><Data Name='IpPort'>0</Data></EventData></Event>
+<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='Microsoft-Windows-Security-Auditing' Guid='{54849625-5478-4994-a5ba-3e3b0328c30d}'/><EventID>4624</EventID><Version>2</Version><Level>0</Level><Task>12544</Task><Opcode>0</Opcode><Keywords>0x8020000000000000</Keywords><TimeCreated SystemTime='2026-05-21T14:37:24.1621700Z'/><EventRecordID>1536271</EventRecordID><Correlation/><Execution ProcessID='660' ThreadID='3060'/><Channel>Security</Channel><Computer>BLITZ-WEL</Computer><Security/></System><EventData><Data Name='SubjectUserSid'>S-1-5-18</Data><Data Name='SubjectUserName'>BLITZ-WEL$</Data><Data Name='SubjectDomainName'>WORKGROUP</Data><Data Name='SubjectLogonId'>0x3e7</Data><Data Name='TargetUserSid'>S-1-5-21-1234567890-1234567890-1234567890-1001</Data><Data Name='TargetUserName'>jsmith</Data><Data Name='TargetDomainName'>WORKGROUP</Data><Data Name='TargetLogonId'>0x12345abc</Data><Data Name='LogonType'>2</Data><Data Name='LogonProcessName'>User32</Data><Data Name='AuthenticationPackageName'>Negotiate</Data><Data Name='WorkstationName'>BLITZ-WEL</Data><Data Name='IpAddress'>10.0.0.1</Data><Data Name='IpPort'>0</Data></EventData></Event>
 ```
 
 ## Configuration
@@ -28,11 +28,17 @@ The legacy `winevt` generator emits a single-template Security 4625 (failed logo
 | `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Set to `wel` to use this generator. |
 | `generator.wel.workers` | `--generator-wel-workers` | `BLITZ_GENERATOR_WEL_WORKERS` | `1` | Number of WEL generator workers (must be ≥ 1) |
 | `generator.wel.rate` | `--generator-wel-rate` | `BLITZ_GENERATOR_WEL_RATE` | `1s` | Per-worker generation interval |
-| `generator.wel.role` | `--generator-wel-role` | `BLITZ_GENERATOR_WEL_ROLE` | `member` | Machine role: `workstation`, `member`, or `dc`. Controls which event pool is eligible. |
+| `generator.wel.role` | `--generator-wel-role` | `BLITZ_GENERATOR_WEL_ROLE` | `""` | Machine role: `workstation`, `member`, or `dc`. Controls which event pool is eligible. Empty follows the environment host (a DC emits DC events, a workstation workstation events, a server member events); a set role also limits which host is chosen. |
 | `generator.wel.channels` | `--generator-wel-channels` | `BLITZ_GENERATOR_WEL_CHANNELS` | (all) | Optional channel filter (comma-separated). Empty = all channels eligible for the role. |
-| `generator.wel.computer` | `--generator-wel-computer` | `BLITZ_GENERATOR_WEL_COMPUTER` | `BLITZ-WEL` | Computer name to embed in events |
-| `generator.wel.domain` | `--generator-wel-domain` | `BLITZ_GENERATOR_WEL_DOMAIN` | `WORKGROUP` | Domain name for AD-flavored events |
-| `generator.wel.manageEventSources` | `--generator-wel-manage-event-sources` | `BLITZ_GENERATOR_WEL_MANAGE_EVENT_SOURCES` | `false` | Reserved for the Effector Windows-API mode (no-op for XML mode) |
+| `generator.wel.computer` | `--generator-wel-computer` | `BLITZ_GENERATOR_WEL_COMPUTER` | `""` | Computer name. Empty uses the simulated host's hostname (see [environment.md](../environment.md)), or `BLITZ-WEL` with no environment host. A set value replaces only the host's name. Always matches `host.name`; a domain-joined host writes it as an FQDN in `<Computer>` |
+| `generator.wel.domain` | `--generator-wel-domain` | `BLITZ_GENERATOR_WEL_DOMAIN` | `""` | DNS domain the host is joined to (`contoso.local`): `<Computer>` becomes `HOST.contoso.local` and the account domain `CONTOSO`. `WORKGROUP` makes a workgroup machine (bare name, `WORKGROUP`). Empty uses the simulated host's domain, or `WORKGROUP` for a workgroup host or with no environment host |
+| `generator.wel.manageEventSources` | `--generator-wel-manageeventsources` | `BLITZ_GENERATOR_WEL_MANAGEEVENTSOURCES` | `false` | Reserved for the Effector Windows-API mode (no-op for XML mode) |
+
+`domain` is a DNS domain (`contoso.local`), not a NetBIOS name. A config
+written for earlier releases with a NetBIOS value such as `domain: CONTOSO`
+now reads it as the DNS domain `contoso`, so `<Computer>` becomes
+`HOST.contoso`, and logs a warning; set the full DNS domain instead. The
+account domain is still derived from it (`CONTOSO`).
 
 ## Example configurations
 
@@ -46,7 +52,7 @@ generator:
     rate: 500ms
     role: workstation
     computer: WS-12345
-    domain: CONTOSO
+    domain: contoso.local
 ```
 
 ### Domain controller emitting AD DS / GPO / NTDS / DNS Server events
@@ -59,7 +65,7 @@ generator:
     rate: 250ms
     role: dc
     computer: DC01
-    domain: CONTOSO
+    domain: contoso.local
 ```
 
 ### Security-only stream (login auditing scenarios)

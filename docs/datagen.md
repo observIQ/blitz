@@ -94,6 +94,11 @@ This mapping is a convention, not enforced. Each caller explicitly passes the po
 - **StyleWindows**: `{MYTH}-{ROLE}{NN}` (uppercase)
 - **StyleDC**: `{MYTH}-DC{NN}` (uppercase)
 
+Within an environment every system's hostname is unique: a drawn name that is
+already taken gets the next free number instead (`PAX-CI13` becomes
+`PAX-CI14`), before the FQDN and certificate are built from it.
+`GenerateHostname` on its own does not check.
+
 ## Shared Data Pools
 
 ### HTTP (`http.go`)
@@ -294,7 +299,7 @@ records parse the way genuine device output does:
 | Cisco NX-OS | `Cisco Nexus Operating System (NX-OS) Software, Version 10.3(4a)` |
 | Arista EOS | `Arista EOS 4.31.2F` |
 | Junos | `Junos: 23.4R1` |
-| PAN-OS | `PAN-OS 11.1.3` |
+| PAN-OS | `PAN-OS 11.0.4` |
 | FortiOS | `FortiOS v7.4.3` |
 
 Each family maps to exactly one vendor, so vendor/family coherence is

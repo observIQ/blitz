@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"time"
+
+	"github.com/observiq/blitz/internal/datagen"
 )
 
 // Default flow generator configuration values.
@@ -28,6 +30,10 @@ type FlowGeneratorConfig struct {
 	// Scenario is the traffic-shape preset: default, wan-edge, datacenter,
 	// ddos-target.
 	Scenario string `yaml:"scenario,omitempty" mapstructure:"scenario,omitempty"`
+	// ExporterVendor limits the exporting device, a routing device from the
+	// environment, to one vendor: cisco, arista, juniper, f5, palo-alto, or
+	// fortinet. Empty takes any vendor's.
+	ExporterVendor string `yaml:"exporterVendor,omitempty" mapstructure:"exporterVendor,omitempty"`
 	// Seed is the RNG seed; negative randomizes, 0+ is deterministic.
 	Seed int64 `yaml:"seed,omitempty" mapstructure:"seed,omitempty"`
 }
@@ -42,6 +48,9 @@ func (c *FlowGeneratorConfig) Validate() error {
 	}
 	if !validFlowScenarios[c.Scenario] {
 		return fmt.Errorf("flow generator scenario must be one of: default, wan-edge, datacenter, ddos-target; got %q", c.Scenario)
+	}
+	if _, err := datagen.ParseExporterVendor(c.ExporterVendor); err != nil {
+		return fmt.Errorf("flow generator: %w", err)
 	}
 	return nil
 }

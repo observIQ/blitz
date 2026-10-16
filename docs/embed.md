@@ -141,6 +141,15 @@ func main() {
 }
 ```
 
+A generator's simulated host is fixed at construction. `config.LoadModules`
+resolves it from the configured environment for you. Direct constructors take it
+as `generator.WithIdentity(id)` on the positional log generators, or as the
+`Identity` field on a `Config` struct (`wel`, `fix`, `hostmetrics`, `traces`).
+A network-appliance generator (`palo-alto`) describes a device, not a host, so
+it takes `generator.WithAppliance(n)` instead and ignores `WithIdentity`.
+The former `SetHostIdentity` setter was removed. Omit the identity to describe
+the running process's host.
+
 ## Lifecycle
 
 - **Start** launches every configured module. If any module's Start fails, modules already started are rolled back (Stop'd in reverse order) before Start returns the failure.
