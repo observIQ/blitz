@@ -7,6 +7,8 @@
 | [`blitz.output.active_workers`](#blitzoutputactive-workers) | Gauge | `{worker}` | number of active output worker goroutines |
 | [`blitz.output.entries_received`](#blitzoutputentries-received) | Counter | `{entry}` | total number of telemetry entries received by the output |
 | [`blitz.output.entry_rate`](#blitzoutputentry-rate) | Counter | `{entry}/s` | rate of telemetry entries processed per second |
+| [`blitz.output.fanout_dropped`](#blitzoutputfanout-dropped) | Counter | `{entry}` | number of entries dropped for one fan-out output because its forwarding queue was full |
+| [`blitz.output.fanout_write_errors`](#blitzoutputfanout-write-errors) | Counter | `{entry}` | number of entries a fan-out output failed to write after accepting them into its queue |
 | [`blitz.output.queue_size`](#blitzoutputqueue-size) | Gauge | `{entry}` | current number of entries in the output queue |
 | [`blitz.output.request_latency`](#blitzoutputrequest-latency) | Histogram | `ms` | latency of output requests |
 | [`blitz.output.request_size`](#blitzoutputrequest-size) | Histogram | `By` | size of output requests in bytes |
@@ -89,6 +91,60 @@ blitzOutputEntriesReceivedCounter.Add(ctx, 1, outputTypeValue, telemetryTypeValu
 ```go
 // Type-safe wrapper with required attributes
 blitzOutputEntryRateCounter.Add(ctx, 1, outputTypeValue, telemetryTypeValue)
+```
+
+---
+
+### blitz.output.fanout_dropped
+
+| Property | Value |
+|----------|-------|
+| **Type** | Counter |
+| **Unit** | `{entry}` |
+| **Meter** | `output` |
+| **Stability** | Stable |
+| **Description** | number of entries dropped for one fan-out output because its forwarding queue was full |
+| **Attributes** |`output_type`, `telemetry_type`, `output` |
+
+**Attributes:**
+
+| Name | Type | Required | Values |
+|------|------|----------|--------|
+| `output_type` | string | ✓ | - |
+| `telemetry_type` | string | ✓ | - |
+| `output` | string | ✓ | - |
+
+**Usage:**
+```go
+// Type-safe wrapper with required attributes
+blitzOutputFanoutDroppedCounter.Add(ctx, 1, outputTypeValue, telemetryTypeValue, outputValue)
+```
+
+---
+
+### blitz.output.fanout_write_errors
+
+| Property | Value |
+|----------|-------|
+| **Type** | Counter |
+| **Unit** | `{entry}` |
+| **Meter** | `output` |
+| **Stability** | Stable |
+| **Description** | number of entries a fan-out output failed to write after accepting them into its queue |
+| **Attributes** |`output_type`, `telemetry_type`, `output` |
+
+**Attributes:**
+
+| Name | Type | Required | Values |
+|------|------|----------|--------|
+| `output_type` | string | ✓ | - |
+| `telemetry_type` | string | ✓ | - |
+| `output` | string | ✓ | - |
+
+**Usage:**
+```go
+// Type-safe wrapper with required attributes
+blitzOutputFanoutWriteErrorsCounter.Add(ctx, 1, outputTypeValue, telemetryTypeValue, outputValue)
 ```
 
 ---

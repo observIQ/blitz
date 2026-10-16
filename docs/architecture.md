@@ -144,8 +144,9 @@ type Module interface {
 ```
 
 A generator takes its consumer (`embed.LogConsumer`, `MetricConsumer`, or
-`TraceConsumer`) at construction and writes records to it; the CLI hands it
-an output through the `output.WriterAsLogConsumer` family of adapters.
+`TraceConsumer`) at construction and writes records to it. The CLI hands it a
+single output through the `output.WriterAsLogConsumer` family of adapters,
+and a fan-out as the `output.MultiOutput` itself, which takes whole batches.
 
 #### NOP Generator Implementation (`nop.go`):
 

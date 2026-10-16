@@ -221,3 +221,61 @@ func TestLogGeneratorDeprecations_NilSafe(t *testing.T) {
 		config.LogGeneratorDeprecations(nil, &config.Config{})
 	})
 }
+
+// TestMigrateDeprecatedKeys_ListEntries pins the per-entry rename in an
+// outputs: list: a legacy otlpGrpc key moves to otlp-grpc, an entry that
+// already has otlp-grpc keeps it, and an entry that is not a map is left as is.
+func TestMigrateDeprecatedKeys_ListEntries(t *testing.T) {
+	v := viper.New()
+	v.SetConfigType("yaml")
+	yaml := []byte(`
+outputs:
+  - type: otlp-grpc
+    otlpGrpc:
+      host: legacy.example.com
+  - type: otlp-grpc
+    otlpGrpc:
+      host: legacy.example.com
+    otlp-grpc:
+      host: canonical.example.com
+  - not-a-map
+`)
+	require.NoError(t, v.ReadConfig(bytes.NewReader(yaml)))
+
+	config.MigrateDeprecatedKeys(v)
+
+	entries := v.Get("outputs").([]any)
+	moved := entries[0].(map[string]any)
+	assert.Equal(t, map[string]any{"host": "legacy.example.com"}, moved["otlp-grpc"])
+	assert.NotContains(t, moved, "otlpgrpc")
+	kept := entries[1].(map[string]any)
+	assert.Equal(t, map[string]any{"host": "canonical.example.com"}, kept["otlp-grpc"])
+	assert.Equal(t, "not-a-map", entries[2])
+}
+
+// TestMigrateDeprecatedKeys_LeavesNoOverride pins that a migrated value lives
+// only in the config just read: the next config read on the same viper (as a
+// second run in one process does) does not inherit it.
+func TestMigrateDeprecatedKeys_LeavesNoOverride(t *testing.T) {
+	v := viper.New()
+	v.SetConfigType("yaml")
+	require.NoError(t, v.ReadConfig(bytes.NewReader([]byte(`
+output:
+  type: otlp-grpc
+  otlpGrpc:
+    host: legacy.example.com
+outputs:
+  - type: otlp-grpc
+    otlpGrpc:
+      host: legacy.example.com
+`))))
+	config.MigrateDeprecatedKeys(v)
+	require.Equal(t, "legacy.example.com", v.GetString("output.otlp-grpc.host"))
+
+	require.NoError(t, v.ReadConfig(bytes.NewReader([]byte(`
+output:
+  type: nop
+`))))
+	assert.False(t, v.IsSet("output.otlp-grpc"), "singular rename outlived the config")
+	assert.False(t, v.IsSet("outputs"), "list rename outlived the config")
+}

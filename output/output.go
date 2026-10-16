@@ -77,6 +77,8 @@ type Writer interface {
 	Stop(ctx context.Context) error
 
 	// SupportedTelemetry returns the telemetry types this output can consume.
+	// The set is fixed once the output is configured: callers may read it once
+	// and cache it. A reconfiguration builds a new output, which recomputes it.
 	SupportedTelemetry() []telemetry.Type
 }
 

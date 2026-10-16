@@ -41,13 +41,17 @@ import (
 	"github.com/observiq/blitz/output/udp"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
 var (
 	configFile string
-	rootCmd    = &cobra.Command{
+	// cliFlags is rootCmd's flag set, held apart so run can read it without
+	// an initialization cycle through rootCmd.
+	cliFlags *pflag.FlagSet
+	rootCmd  = &cobra.Command{
 		Use:   "blitz",
 		Short: "The last, best, most magnificent telemetry generation/simulation tool anyone will ever need",
 		Long:  "Blitz is the last, best, most magnificent telemetry generation/simulation tool anyone will ever need.",
@@ -56,6 +60,8 @@ var (
 )
 
 func init() {
+	cliFlags = rootCmd.PersistentFlags()
+
 	// Add config file flag
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "path to configuration file")
 
@@ -102,8 +108,10 @@ func run(cmd *cobra.Command, args []string) error {
 	// wiring, and bringing every generator up.
 	startTime := time.Now()
 
-	// Configure Viper to handle env overrides
+	// Configure Viper to handle env overrides. Only BLITZ_ env vars count, so
+	// an unrelated variable such as OUTPUTS cannot replace or break the config.
 	viper.SetConfigType("yaml")
+	viper.SetEnvPrefix("BLITZ")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
@@ -117,9 +125,17 @@ func run(cmd *cobra.Command, args []string) error {
 
 	config.MigrateDeprecatedKeys(viper.GetViper())
 
+	if err := config.ValidateExclusiveOutputConfig(viper.GetViper(), config.CLIExplicit(cliFlags)); err != nil {
+		return err
+	}
+
 	cfg := config.NewConfig()
 	if err := viper.Unmarshal(cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	if err := config.ApplyListDefaults(viper.GetViper(), cfg); err != nil {
+		return fmt.Errorf("failed to apply list defaults: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -197,180 +213,24 @@ func run(cmd *cobra.Command, args []string) error {
 			zap.String("endpoint", cfg.Telemetry.Traces.OTLPEndpoint))
 	}
 
-	// Configure output first
-	var outputInstance output.Output
-	switch cfg.Output.Type {
-	case config.OutputTypeNop:
-		outputInstance, err = nop.New(logger, tel)
-		if err != nil {
-			logger.Error("Failed to create NOP output", zap.Error(err))
-			return err
-		}
-	case config.OutputTypeStdout:
-		outputInstance, err = stdoutout.New(logger,
-			stdoutout.WithFlushInterval(cfg.Output.Stdout.FlushInterval),
-			stdoutout.WithTelemetry(tel),
-		)
-		if err != nil {
-			logger.Error("Failed to create stdout output", zap.Error(err))
-			return err
-		}
-	case config.OutputTypeTCP:
-		var tlsConfig *tls.Config
-		if cfg.Output.TCP.EnableTLS {
-			var tlsErr error
-			tlsConfig, tlsErr = cfg.Output.TCP.TLS.Convert()
-			if tlsErr != nil {
-				logger.Error("Failed to convert TLS config for TCP output", zap.Error(tlsErr))
-				return tlsErr
-			}
-		}
-		outputInstance, err = tcp.New(
-			logger,
-			cfg.Output.TCP.Host,
-			strconv.Itoa(cfg.Output.TCP.Port),
-			cfg.Output.TCP.Workers,
-			tlsConfig,
-			tel,
-		)
-		if err != nil {
-			logger.Error("Failed to create TCP output", zap.Error(err))
-			return err
-		}
-	case config.OutputTypeUDP:
-		outputInstance, err = udp.New(
-			logger,
-			cfg.Output.UDP.Host,
-			strconv.Itoa(cfg.Output.UDP.Port),
-			cfg.Output.UDP.Workers,
-			tel,
-		)
-		if err != nil {
-			logger.Error("Failed to create UDP output", zap.Error(err))
-			return err
-		}
-	case config.OutputTypeSyslog:
-		var tlsConfig *tls.Config
-		if strings.ToLower(string(cfg.Output.Syslog.Transport)) == string(config.SyslogTransportTCP) && cfg.Output.Syslog.EnableTLS {
-			var tlsErr error
-			tlsConfig, tlsErr = cfg.Output.Syslog.TLS.Convert()
-			if tlsErr != nil {
-				logger.Error("Failed to convert TLS config for Syslog output", zap.Error(tlsErr))
-				return tlsErr
-			}
-		}
-		sysCfg := syslogout.Config{
-			Host:             cfg.Output.Syslog.Host,
-			Port:             cfg.Output.Syslog.Port,
-			Transport:        syslogout.Transport(strings.ToLower(string(cfg.Output.Syslog.Transport))),
-			RFC:              syslogout.RFCMode(cfg.Output.Syslog.RFC),
-			Workers:          cfg.Output.Syslog.Workers,
-			Facility:         cfg.Output.Syslog.Facility,
-			AppName:          cfg.Output.Syslog.AppName,
-			Hostname:         cfg.Output.Syslog.Hostname,
-			ProcID:           cfg.Output.Syslog.ProcID,
-			MsgID:            cfg.Output.Syslog.MsgID,
-			MaxDatagramBytes: cfg.Output.Syslog.MaxDatagramBytes,
-			TLSConfig:        tlsConfig,
-			Telemetry:        tel,
-		}
-		outputInstance, err = syslogout.New(logger, sysCfg)
-		if err != nil {
-			logger.Error("Failed to create Syslog output", zap.Error(err))
-			return err
-		}
-	case config.OutputTypeOTLPGrpc:
-		opts := []otlpgrpc.OTLPGrpcOption{
-			otlpgrpc.WithHost(cfg.Output.OTLPGrpc.Host),
-			otlpgrpc.WithPort(strconv.Itoa(cfg.Output.OTLPGrpc.Port)),
-			otlpgrpc.WithWorkers(cfg.Output.OTLPGrpc.Workers),
-		}
-		if cfg.Output.OTLPGrpc.BatchTimeout > 0 {
-			opts = append(opts, otlpgrpc.WithBatchTimeout(cfg.Output.OTLPGrpc.BatchTimeout))
-		}
-		if cfg.Output.OTLPGrpc.RequestTimeout > 0 {
-			opts = append(opts, otlpgrpc.WithRequestTimeout(cfg.Output.OTLPGrpc.RequestTimeout))
-		}
-		if cfg.Output.OTLPGrpc.MaxQueueSize > 0 {
-			opts = append(opts, otlpgrpc.WithMaxQueueSize(cfg.Output.OTLPGrpc.MaxQueueSize))
-		}
-		if cfg.Output.OTLPGrpc.MaxExportBatchSize > 0 {
-			opts = append(opts, otlpgrpc.WithMaxExportBatchSize(cfg.Output.OTLPGrpc.MaxExportBatchSize))
-		}
-		// Set insecure flag
-		opts = append(opts, otlpgrpc.WithInsecure(cfg.Output.OTLPGrpc.Insecure))
-		opts = append(opts, otlpgrpc.WithTelemetry(tel))
-		// If TLS is enabled and not insecure, set up TLS
-		if cfg.Output.OTLPGrpc.EnableTLS && !cfg.Output.OTLPGrpc.Insecure {
-			var tlsConfig *tls.Config
-			tlsConfig, err = cfg.Output.OTLPGrpc.TLS.Convert()
-			if err != nil {
-				logger.Error("Failed to convert TLS config for OTLP gRPC output", zap.Error(err))
-				return err
-			}
-			opts = append(opts, otlpgrpc.WithTLSConfig(tlsConfig))
-		}
-		outputInstance, err = otlpgrpc.New(logger, opts...)
-		if err != nil {
-			logger.Error("Failed to create OTLP gRPC output", zap.Error(err))
-			return err
-		}
-	case config.OutputTypeFile:
-		rot := fileout.RotationOptions{
-			MaxSizeMB:  cfg.Output.File.Rotation.MaxSizeMB,
-			MaxBackups: cfg.Output.File.Rotation.MaxBackups,
-			MaxAgeDays: cfg.Output.File.Rotation.MaxAgeDays,
-			Compress:   cfg.Output.File.Rotation.Compress,
-			LocalTime:  cfg.Output.File.Rotation.LocalTime,
-		}
-		outputInstance, err = fileout.New(
-			logger,
-			cfg.Output.File.Path,
-			cfg.Output.File.Workers,
-			rot,
-			tel,
-		)
-		if err != nil {
-			logger.Error("Failed to create File output", zap.Error(err))
-			return err
-		}
-	case config.OutputTypeHEC:
-		hecOpts := []hecout.Option{
-			hecout.WithHost(cfg.Output.HEC.Host),
-			hecout.WithPort(strconv.Itoa(cfg.Output.HEC.Port)),
-			hecout.WithToken(cfg.Output.HEC.Token),
-			hecout.WithWorkers(cfg.Output.HEC.Workers),
-			hecout.WithBatchSize(cfg.Output.HEC.BatchSize),
-			hecout.WithBatchTimeout(cfg.Output.HEC.BatchTimeout),
-			hecout.WithEventFormat(cfg.Output.HEC.EventFormat),
-			hecout.WithEnableACK(cfg.Output.HEC.EnableACK),
-			hecout.WithACKPollInterval(cfg.Output.HEC.ACKPollInterval),
-			hecout.WithACKTimeout(cfg.Output.HEC.ACKTimeout),
-			hecout.WithMaxRetries(cfg.Output.HEC.MaxRetries),
-			hecout.WithSource(cfg.Output.HEC.Source),
-			hecout.WithSourceType(cfg.Output.HEC.SourceType),
-			hecout.WithIndex(cfg.Output.HEC.Index),
-			hecout.WithEnableTLS(cfg.Output.HEC.EnableTLS),
-			hecout.WithTelemetry(tel),
-		}
-		if cfg.Output.HEC.EnableTLS {
-			var tlsConfig *tls.Config
-			tlsConfig, err = cfg.Output.HEC.TLS.Convert()
-			if err != nil {
-				logger.Error("Failed to convert TLS config for HEC output", zap.Error(err))
-				return err
-			}
-			hecOpts = append(hecOpts, hecout.WithTLSConfig(tlsConfig))
-		}
-		outputInstance, err = hecout.New(logger, hecOpts...)
-		if err != nil {
-			logger.Error("Failed to create HEC output", zap.Error(err))
-			return err
-		}
-	default:
-		logger.Error("Invalid output type", zap.String("type", string(cfg.Output.Type)))
-		return fmt.Errorf("invalid output type: %s", cfg.Output.Type)
+	// Build outputs; fan out to all when more than one is configured.
+	outputInstance, outSignals, err := buildOutputs(logger, cfg.EffectiveOutputs(), tel)
+	if err != nil {
+		return err
 	}
+	// Until the service starts and owns the outputs, a failed startup step
+	// stops them here, so no connection or fan-out goroutine outlives it.
+	serviceOwnsOutputs := false
+	defer func() {
+		if serviceOwnsOutputs {
+			return
+		}
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stopCancel()
+		if stopErr := outputInstance.Stop(stopCtx); stopErr != nil {
+			logger.Warn("failed to stop outputs after startup failure", zap.Error(stopErr))
+		}
+	}()
 
 	// Build the simulated identity environment once, up front, so every
 	// generator resolves its host identity from the same fleet (PIPE-1036). A
@@ -390,9 +250,6 @@ func run(cmd *cobra.Command, args []string) error {
 	genTypes := make([]config.GeneratorType, 0, len(effectiveGens))
 	for _, g := range effectiveGens {
 		genTypes = append(genTypes, g.Type)
-	}
-	outSignals := []dispatch.OutputSignals{
-		{Name: string(cfg.Output.Type), Signals: outputInstance.SupportedTelemetry()},
 	}
 	if err := dispatch.ValidateSignalCompat(genTypes, outSignals); err != nil {
 		logger.Error("output/generator signal mismatch", zap.Error(err))
@@ -440,6 +297,7 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.Error("Failed to start service", zap.Error(err))
 		return err
 	}
+	serviceOwnsOutputs = true
 
 	// Record process-level startup latency (best effort; a metric-build failure
 	// must not fail startup). Per-module and session startup are recorded by the
@@ -502,22 +360,9 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, out output.Out
 	}
 
 	// All remaining (embed-eligible) types go through the canonical
-	// dispatch.ForEmbed path. Outputs that implement MetricWriter or
-	// TraceWriter get wrapped as the corresponding consumer so
-	// metric-yielding (hostmetrics) and trace-yielding (traces)
-	// generators work standalone; ForEmbed rejects with a clear message
-	// when an output doesn't support a signal the configured generator
-	// needs.
-	consumers := dispatch.EmbedConsumers{}
-	if lw, ok := out.(output.LogWriter); ok {
-		consumers.LogConsumer = output.WriterAsLogConsumer(lw, tel)
-	}
-	if mw, ok := out.(output.MetricWriter); ok {
-		consumers.MetricConsumer = output.WriterAsMetricConsumer(mw, tel)
-	}
-	if tw, ok := out.(output.TraceWriter); ok {
-		consumers.TraceConsumer = output.WriterAsTraceConsumer(tw, tel)
-	}
+	// dispatch.ForEmbed path; ForEmbed rejects with a clear message when an
+	// output doesn't support a signal the configured generator needs.
+	consumers := consumersFor(out, tel)
 	// Pass the embedded library so an embed_library build resolves package
 	// sources; without the tag FS() is empty and resolution uses disk (PIPE-1445).
 	mod, err := dispatch.ForEmbed(logger, genCfg, consumers, embeddedlibrary.FS(), env, tel)
@@ -566,4 +411,255 @@ func httpServer(port int, logger *zap.Logger) error {
 
 	logger.Info("starting metrics HTTP server", zap.String("addr", addr))
 	return s.ListenAndServe()
+}
+
+// buildOutput constructs a single output from its config.
+func buildOutput(logger *zap.Logger, out config.Output, tel embed.TelemetrySettings) (output.Output, error) {
+	var inst output.Output
+	var err error
+	switch out.Type {
+	case config.OutputTypeNop:
+		inst, err = nop.New(logger, tel)
+		if err != nil {
+			logger.Error("Failed to create NOP output", zap.Error(err))
+			return nil, err
+		}
+	case config.OutputTypeStdout:
+		inst, err = stdoutout.New(logger,
+			stdoutout.WithFlushInterval(out.Stdout.FlushInterval),
+			stdoutout.WithTelemetry(tel),
+		)
+		if err != nil {
+			logger.Error("Failed to create stdout output", zap.Error(err))
+			return nil, err
+		}
+	case config.OutputTypeTCP:
+		var tlsConfig *tls.Config
+		if out.TCP.EnableTLS {
+			var tlsErr error
+			tlsConfig, tlsErr = out.TCP.TLS.Convert()
+			if tlsErr != nil {
+				logger.Error("Failed to convert TLS config for TCP output", zap.Error(tlsErr))
+				return nil, tlsErr
+			}
+		}
+		inst, err = tcp.New(
+			logger,
+			out.TCP.Host,
+			strconv.Itoa(out.TCP.Port),
+			out.TCP.Workers,
+			tlsConfig,
+			tel,
+		)
+		if err != nil {
+			logger.Error("Failed to create TCP output", zap.Error(err))
+			return nil, err
+		}
+	case config.OutputTypeUDP:
+		inst, err = udp.New(
+			logger,
+			out.UDP.Host,
+			strconv.Itoa(out.UDP.Port),
+			out.UDP.Workers,
+			tel,
+		)
+		if err != nil {
+			logger.Error("Failed to create UDP output", zap.Error(err))
+			return nil, err
+		}
+	case config.OutputTypeSyslog:
+		var tlsConfig *tls.Config
+		if strings.ToLower(string(out.Syslog.Transport)) == string(config.SyslogTransportTCP) && out.Syslog.EnableTLS {
+			var tlsErr error
+			tlsConfig, tlsErr = out.Syslog.TLS.Convert()
+			if tlsErr != nil {
+				logger.Error("Failed to convert TLS config for Syslog output", zap.Error(tlsErr))
+				return nil, tlsErr
+			}
+		}
+		sysCfg := syslogout.Config{
+			Host:             out.Syslog.Host,
+			Port:             out.Syslog.Port,
+			Transport:        syslogout.Transport(strings.ToLower(string(out.Syslog.Transport))),
+			RFC:              syslogout.RFCMode(out.Syslog.RFC),
+			Workers:          out.Syslog.Workers,
+			Facility:         out.Syslog.Facility,
+			AppName:          out.Syslog.AppName,
+			Hostname:         out.Syslog.Hostname,
+			ProcID:           out.Syslog.ProcID,
+			MsgID:            out.Syslog.MsgID,
+			MaxDatagramBytes: out.Syslog.MaxDatagramBytes,
+			TLSConfig:        tlsConfig,
+			Telemetry:        tel,
+		}
+		inst, err = syslogout.New(logger, sysCfg)
+		if err != nil {
+			logger.Error("Failed to create Syslog output", zap.Error(err))
+			return nil, err
+		}
+	case config.OutputTypeOTLPGrpc:
+		opts := []otlpgrpc.OTLPGrpcOption{
+			otlpgrpc.WithHost(out.OTLPGrpc.Host),
+			otlpgrpc.WithPort(strconv.Itoa(out.OTLPGrpc.Port)),
+			otlpgrpc.WithWorkers(out.OTLPGrpc.Workers),
+		}
+		if out.OTLPGrpc.BatchTimeout > 0 {
+			opts = append(opts, otlpgrpc.WithBatchTimeout(out.OTLPGrpc.BatchTimeout))
+		}
+		if out.OTLPGrpc.RequestTimeout > 0 {
+			opts = append(opts, otlpgrpc.WithRequestTimeout(out.OTLPGrpc.RequestTimeout))
+		}
+		if out.OTLPGrpc.MaxQueueSize > 0 {
+			opts = append(opts, otlpgrpc.WithMaxQueueSize(out.OTLPGrpc.MaxQueueSize))
+		}
+		if out.OTLPGrpc.MaxExportBatchSize > 0 {
+			opts = append(opts, otlpgrpc.WithMaxExportBatchSize(out.OTLPGrpc.MaxExportBatchSize))
+		}
+		// Set insecure flag
+		opts = append(opts, otlpgrpc.WithInsecure(out.OTLPGrpc.Insecure))
+		opts = append(opts, otlpgrpc.WithTelemetry(tel))
+		// If TLS is enabled and not insecure, set up TLS
+		if out.OTLPGrpc.EnableTLS && !out.OTLPGrpc.Insecure {
+			var tlsConfig *tls.Config
+			tlsConfig, err = out.OTLPGrpc.TLS.Convert()
+			if err != nil {
+				logger.Error("Failed to convert TLS config for OTLP gRPC output", zap.Error(err))
+				return nil, err
+			}
+			opts = append(opts, otlpgrpc.WithTLSConfig(tlsConfig))
+		}
+		inst, err = otlpgrpc.New(logger, opts...)
+		if err != nil {
+			logger.Error("Failed to create OTLP gRPC output", zap.Error(err))
+			return nil, err
+		}
+	case config.OutputTypeFile:
+		rot := fileout.RotationOptions{
+			MaxSizeMB:  out.File.Rotation.MaxSizeMB,
+			MaxBackups: out.File.Rotation.MaxBackups,
+			MaxAgeDays: out.File.Rotation.MaxAgeDays,
+			Compress:   out.File.Rotation.Compress,
+			LocalTime:  out.File.Rotation.LocalTime,
+		}
+		inst, err = fileout.New(
+			logger,
+			out.File.Path,
+			out.File.Workers,
+			rot,
+			tel,
+		)
+		if err != nil {
+			logger.Error("Failed to create File output", zap.Error(err))
+			return nil, err
+		}
+	case config.OutputTypeHEC:
+		hecOpts := []hecout.Option{
+			hecout.WithHost(out.HEC.Host),
+			hecout.WithPort(strconv.Itoa(out.HEC.Port)),
+			hecout.WithToken(out.HEC.Token),
+			hecout.WithWorkers(out.HEC.Workers),
+			hecout.WithBatchSize(out.HEC.BatchSize),
+			hecout.WithBatchTimeout(out.HEC.BatchTimeout),
+			hecout.WithEventFormat(out.HEC.EventFormat),
+			hecout.WithEnableACK(out.HEC.EnableACK),
+			hecout.WithACKPollInterval(out.HEC.ACKPollInterval),
+			hecout.WithACKTimeout(out.HEC.ACKTimeout),
+			hecout.WithMaxRetries(out.HEC.MaxRetries),
+			hecout.WithSource(out.HEC.Source),
+			hecout.WithSourceType(out.HEC.SourceType),
+			hecout.WithIndex(out.HEC.Index),
+			hecout.WithEnableTLS(out.HEC.EnableTLS),
+			hecout.WithTelemetry(tel),
+		}
+		if out.HEC.EnableTLS {
+			var tlsConfig *tls.Config
+			tlsConfig, err = out.HEC.TLS.Convert()
+			if err != nil {
+				logger.Error("Failed to convert TLS config for HEC output", zap.Error(err))
+				return nil, err
+			}
+			hecOpts = append(hecOpts, hecout.WithTLSConfig(tlsConfig))
+		}
+		inst, err = hecout.New(logger, hecOpts...)
+		if err != nil {
+			logger.Error("Failed to create HEC output", zap.Error(err))
+			return nil, err
+		}
+	default:
+		logger.Error("Invalid output type", zap.String("type", string(out.Type)))
+		return nil, fmt.Errorf("invalid output type: %s", out.Type)
+	}
+	return inst, nil
+}
+
+// buildOneOutput builds a single output; a var so tests can observe
+// buildOutputs' cleanup of already-built outputs.
+var buildOneOutput = buildOutput
+
+// buildOutputs builds each output; wraps in MultiOutput when >1 (fan-out).
+// It also returns per-output signals so validation sees each destination
+// individually, catching an output that would receive nothing. In fan-out
+// each is named by its list position, e.g. "outputs[1] (file)". If any build
+// fails, the outputs already built are stopped before returning the error.
+func buildOutputs(logger *zap.Logger, outs []config.Output, tel embed.TelemetrySettings) (output.Output, []dispatch.OutputSignals, error) {
+	built := make([]output.FanOutChild, 0, len(outs))
+	signals := make([]dispatch.OutputSignals, 0, len(outs))
+	fail := func(err error) (output.Output, []dispatch.OutputSignals, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		for _, c := range built {
+			if stopErr := c.Output.Stop(ctx); stopErr != nil {
+				logger.Warn("failed to stop output after build failure", zap.Error(stopErr))
+			}
+		}
+		return nil, nil, err
+	}
+	for i, oc := range outs {
+		childTel := tel
+		if len(outs) > 1 {
+			childTel.MeterProvider = output.WithOutputPosition(tel.MeterProvider, fmt.Sprintf("outputs[%d]", i))
+		}
+		o, err := buildOneOutput(logger, oc, childTel)
+		if err != nil {
+			return fail(err)
+		}
+		built = append(built, output.FanOutChild{Type: string(oc.Type), Output: o})
+		name := string(oc.Type)
+		if len(outs) > 1 {
+			name = fmt.Sprintf("outputs[%d] (%s)", i, oc.Type)
+		}
+		signals = append(signals, dispatch.OutputSignals{Name: name, Signals: o.SupportedTelemetry()})
+	}
+	if len(built) == 1 {
+		return built[0].Output, signals, nil
+	}
+	logger.Info("multi-output fan-out enabled", zap.Int("outputs", len(built)))
+	m, err := output.NewMultiOutput(logger, tel, built...)
+	if err != nil {
+		return fail(err)
+	}
+	return m, signals, nil
+}
+
+// consumersFor wraps an output's writers as the consumers ForEmbed takes, so
+// metric-yielding (hostmetrics) and trace-yielding (traces) generators work
+// standalone.
+func consumersFor(out output.Output, tel embed.TelemetrySettings) dispatch.EmbedConsumers {
+	// A fan-out takes whole batches, so one generator batch (a hostmetrics
+	// scrape) is one queue slot per child and a burst never drops points on a
+	// healthy output.
+	if m, ok := out.(*output.MultiOutput); ok {
+		return dispatch.EmbedConsumers{LogConsumer: m, MetricConsumer: m, TraceConsumer: m}
+	}
+	consumers := dispatch.EmbedConsumers{}
+	if lw, ok := out.(output.LogWriter); ok {
+		consumers.LogConsumer = output.WriterAsLogConsumer(lw, tel)
+	}
+	if mw, ok := out.(output.MetricWriter); ok {
+		consumers.MetricConsumer = output.WriterAsMetricConsumer(mw, tel)
+	}
+	if tw, ok := out.(output.TraceWriter); ok {
+		consumers.TraceConsumer = output.WriterAsTraceConsumer(tw, tel)
+	}
+	return consumers
 }

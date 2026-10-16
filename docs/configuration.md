@@ -175,11 +175,9 @@ For detailed configuration options for each generator, see the individual genera
 
 ### Output Configuration
 
-**Note:** Only a single output can be configured at a time.
-
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file` |
+| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec` |
 
 For detailed configuration options for each output, see the individual output documentation:
 
@@ -190,6 +188,52 @@ For detailed configuration options for each output, see the individual output do
 - [Syslog Output](https://github.com/observiq/blitz/blob/main/docs/output/syslog.md)
 - [OTLP gRPC Output](https://github.com/observiq/blitz/blob/main/docs/output/otlp-grpc.md)
 - [File Output](https://github.com/observiq/blitz/blob/main/docs/output/file.md)
+- [HEC Output](https://github.com/observiq/blitz/blob/main/docs/output/hec.md)
+
+#### Multiple Outputs (Fan-Out)
+
+To send one generated stream to several destinations at once, use the `outputs:`
+list instead of the singular `output:` block. Every generated record is fanned
+out to all listed outputs. Each entry takes the same fields as the singular
+`output` block, including `type`.
+
+```yaml
+outputs:
+  - type: stdout
+  - type: otlp-grpc
+    otlp-grpc:
+      host: localhost
+      port: 4317
+      insecure: true
+```
+
+Notes:
+
+- `output` and `outputs` are one-or-the-other by design: set one, not both. A
+  config with both is rejected, including when the singular value comes from a
+  `BLITZ_OUTPUT_*` environment variable, an `--output-*` flag, or an embedded
+  override next to an `outputs:` list.
+- Writes are best-effort: one slow or dead destination does not stop or slow
+  the others, and each signal goes only to the outputs that support it. Each
+  output has its own queue of 100 batches (a generator's batch, such as one
+  hostmetrics scrape, takes one slot however many records it holds). When an
+  output's queue is full, new batches are dropped for that output only. Each
+  drop is logged at Warn right away (sampled during a flood) and counted in
+  `blitz.output.fanout_dropped`. A drop is not a write error while another
+  output accepted the record; a record is a generator write error only when
+  every output dropped it. An output that accepts a record and then fails to
+  send it is logged at Warn (same sampling) and counted in
+  `blitz.output.fanout_write_errors`.
+- On shutdown, an output that will not stop writing is abandoned and logged
+  at Error, so one bad output cannot hang blitz or use up the other outputs'
+  time to flush. It is abandoned before the shutdown deadline, or at most
+  250 ms after it when the deadline had already passed. Records still queued
+  when shutdown cancels writes are logged once at Warn as abandoned, not
+  counted as write errors.
+- A field a list entry leaves unset (workers, and so on) gets that output
+  type's default. Any value you write on the entry is kept as written,
+  including `0` and `false`. Entries never take values from the singular
+  `output` form.
 
 ## Example Configurations
 

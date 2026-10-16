@@ -246,3 +246,79 @@ metrics:
 	require.Error(t, err)
 	assert.Nil(t, mods, "must not return a partial module slice on error")
 }
+
+// Load applies the same declared defaults as the CLI, so a singular stanza
+// that omits a key gets that key's default, exactly as a list entry does.
+func TestLoad_SingularGeneratorGetsDefaults(t *testing.T) {
+	cfg, err := config.Load([]byte("generator:\n  type: json\n"), config.LoadOpts{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, cfg.Generator.JSON.Workers, "unset workers gets the type default")
+}
+
+func TestLoad_SingularOutputGetsDefaults(t *testing.T) {
+	cfg, err := config.Load([]byte(`
+generator:
+  type: json
+  json:
+    workers: 1
+    rate: 1s
+output:
+  type: tcp
+  tcp:
+    host: localhost
+    port: 5000
+`), config.LoadOpts{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, cfg.Output.TCP.Workers, "unset workers gets the type default")
+}
+
+func TestLoad_RejectsOutputAndOutputs(t *testing.T) {
+	_, err := config.Load([]byte(`
+generator:
+  type: json
+output:
+  type: nop
+outputs:
+  - type: nop
+`), config.LoadOpts{})
+	require.Error(t, err, "embedded Load must reject singular and plural forms together, like the CLI")
+	assert.Contains(t, err.Error(), "set either output or outputs, not both")
+}
+
+// TestLoad_RejectsSingularOverrideWithOutputs pins that an embedded override
+// of the singular form counts as setting it, as a CLI env var or flag does.
+func TestLoad_RejectsSingularOverrideWithOutputs(t *testing.T) {
+	_, err := config.Load([]byte("generator:\n  type: json\noutputs:\n  - type: nop\n"),
+		config.LoadOpts{EnvOverrides: map[string]string{"output.type": "tcp", "output.tcp.host": "h"}})
+	require.ErrorContains(t, err, "set either output or outputs, not both")
+}
+
+func TestLoad_RejectsEmptyOutputsList(t *testing.T) {
+	_, err := config.Load([]byte("generator:\n  type: json\noutputs: []\n"), config.LoadOpts{})
+	require.ErrorContains(t, err, "outputs must not be empty")
+}
+
+func TestLoad_RejectsSingularOverrideEqualToDefaultWithOutputs(t *testing.T) {
+	// An override set to the default value is still an explicit singular form.
+	_, err := config.Load([]byte("generator:\n  type: json\noutputs:\n  - type: stdout\n"),
+		config.LoadOpts{EnvOverrides: map[string]string{"output.type": "nop"}})
+	require.ErrorContains(t, err, "set either output or outputs, not both")
+}
+
+// TestLoad_OutputsEntryMigratesDeprecatedKey pins that a list entry's legacy
+// otlpGrpc: sub-key is honored, as it is on the singular form, rather than
+// dropped in favor of the type defaults.
+func TestLoad_OutputsEntryMigratesDeprecatedKey(t *testing.T) {
+	cfg, err := config.Load([]byte(`generator:
+  type: json
+outputs:
+  - type: otlp-grpc
+    otlpGrpc:
+      host: collector.example
+      port: 5317
+`), config.LoadOpts{})
+	require.NoError(t, err)
+	require.Len(t, cfg.Outputs, 1)
+	assert.Equal(t, "collector.example", cfg.Outputs[0].OTLPGrpc.Host)
+	assert.Equal(t, 5317, cfg.Outputs[0].OTLPGrpc.Port)
+}

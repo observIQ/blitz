@@ -317,6 +317,8 @@ Two supported paths:
 
   Or use the lower-level `blitzconfig.Load(yamlBytes, blitzconfig.LoadOpts{})` if the host wants the parsed `*Config` to do its own module construction (e.g., a host that only wants to expose a subset of generators).
 
+  Keys the YAML leaves unset resolve to the same defaults the standalone CLI uses (for example, `workers: 1`), for the singular `generator`/`output` forms and for every `outputs:` entry.
+
 ### Environment overlay (host-driven)
 
 The embedded loader does **not** read `os.Environ()` directly. The standalone CLI binds `BLITZ_*` env vars automatically via viper. Embedded mode requires the host to do its own env-variable scanning, then pass the resolved values to blitz as a YAML-path → value map. That keeps the host's prefix conventions, secret resolution, and env-loading order from being bypassed.
