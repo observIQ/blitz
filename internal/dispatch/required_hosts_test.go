@@ -69,3 +69,24 @@ func TestServerSoftwareNeedsApplicationHosts(t *testing.T) {
 		require.True(t, hostRequirement(config.Generator{Type: typ}).Apps, "%s", typ)
 	}
 }
+
+// TestRequiredHostsCoverExtendedOSes pins that a hostmetrics entry for any OS
+// ParseOSType accepts, the hypervisor hosts and Unix families included, gets
+// an environment host of that OS on every seed, with a real release of it.
+func TestRequiredHostsCoverExtendedOSes(t *testing.T) {
+	for _, name := range []string{"esxi", "xen-dom0", "nutanix-ahv", "openstack-kvm", "aix", "solaris", "freebsd", "openbsd"} {
+		want, err := datagen.ParseOSType(name)
+		require.NoError(t, err)
+		gens := []config.Generator{{Type: config.GeneratorTypeHostMetrics, HostMetrics: config.HostMetricsGeneratorConfig{OS: name}}}
+		for seed := int64(0); seed < 50; seed++ {
+			seeds := datagen.NewSeedConfig()
+			seeds.Shared = seed
+			env, err := datagen.GenerateEnvironment(seeds, &datagen.EnvironmentOpts{SystemCount: 5, RequiredHosts: RequiredHosts(gens)})
+			require.NoError(t, err)
+			host := hostIdentity(env, gens[0], 0)
+			require.NotNil(t, host, "%s seed %d", name, seed)
+			require.Equal(t, want, host.OSInfo.Type, "%s seed %d", name, seed)
+			require.NotEmpty(t, host.OSInfo.Name, "%s seed %d: a real release", name, seed)
+		}
+	}
+}
