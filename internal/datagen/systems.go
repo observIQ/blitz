@@ -14,13 +14,37 @@ const (
 	OSLinux   OSType = "linux"
 	OSWindows OSType = "windows"
 	OSMacOS   OSType = "macos"
+
+	// ESXi is a real OS: closed, but it installs on hardware you choose, so it
+	// belongs here rather than in ApplianceOS.
+	OSESXi OSType = "esxi"
+
+	// Hypervisor-host Linux flavors. Each renders os.type=linux (its distro is
+	// carried in os.name/os.version) but is a distinct simulate-as selector.
+	OSXenDom0      OSType = "xen-dom0"      // Xen dom0 (XCP-ng / Citrix Hypervisor)
+	OSNutanixAHV   OSType = "nutanix-ahv"   // Nutanix AHV host
+	OSOpenStackKVM OSType = "openstack-kvm" // OpenStack/KVM compute host
+
+	// Unix families.
+	OSAIX     OSType = "aix"
+	OSSolaris OSType = "solaris"
+	OSFreeBSD OSType = "freebsd"
+	OSOpenBSD OSType = "openbsd"
 )
+
+// hypervisorHostLinux is the set of OSType values that are Linux under the hood
+// (os.type=linux) but present a distinct hypervisor-host identity.
+var hypervisorHostLinux = map[OSType]bool{
+	OSXenDom0:      true,
+	OSNutanixAHV:   true,
+	OSOpenStackKVM: true,
+}
 
 // Arch represents a CPU architecture.
 type Arch string
 
 // Arch values are the OpenTelemetry semconv host.arch value set. Random system
-// generation uses the common ones (amd64, arm64); the rest are selectable via
+// generation uses amd64 and arm64 (ppc64 for AIX); the rest are selectable via
 // explicit configuration (e.g. an s390x mainframe or ppc64 host).
 const (
 	ArchAMD64 Arch = "amd64"
@@ -32,6 +56,28 @@ const (
 	ArchS390X Arch = "s390x"
 	ArchX86   Arch = "x86"
 )
+
+// fixedArch is the one architecture an OS ships on: AIX runs only on POWER,
+// and Solaris (as blitz models it), ESXi, Nutanix AHV and XCP-ng on x86-64.
+var fixedArch = map[OSType]Arch{
+	OSAIX:        ArchPPC64,
+	OSSolaris:    ArchAMD64,
+	OSESXi:       ArchAMD64,
+	OSNutanixAHV: ArchAMD64,
+	OSXenDom0:    ArchAMD64,
+}
+
+// pickArch draws a host's architecture: the OS's only one, or amd64 with a
+// 10% share of arm64.
+func pickArch(r *rand.Rand, os OSType) Arch {
+	if a, ok := fixedArch[os]; ok {
+		return a
+	}
+	if r.Float64() < 0.1 { // #nosec G404
+		return ArchARM64
+	}
+	return ArchAMD64
+}
 
 // ParseArch maps a user-supplied CPU architecture string to an Arch, accepting
 // the OpenTelemetry semconv host.arch value set. Unknown values return an error.
@@ -153,11 +199,7 @@ func GenerateSystemIdentity(r *rand.Rand, os OSType, role SystemRole, domain *Do
 	osInfo := GenerateOSInfo(r, os)
 	hostID := GenerateHostID(r, os)
 
-	// Pick arch
-	arch := ArchAMD64
-	if r.Float64() < 0.1 { // #nosec G404
-		arch = ArchARM64
-	}
+	arch := pickArch(r, os)
 
 	// Generate resource specs based on role
 	cpu, mem, disk := generateResourceSpecs(r, role)

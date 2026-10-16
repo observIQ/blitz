@@ -78,6 +78,28 @@ var macosWorkstationApps = []appTemplate{
 	{"Homebrew", "4.2.0", "Homebrew", "/opt/homebrew"},
 }
 
+// extendedServerApps holds the application stacks for the Unix
+// servers. Hypervisor hosts (ESXi and the hypervisor-host Linux flavors) run
+// no applications beyond the platform, so they have no entry.
+var extendedServerApps = map[OSType][]appTemplate{
+	OSAIX: {
+		{"IBM Db2", "11.5.9.0", "IBM", "/opt/IBM/db2/V11.5"},
+		{"IBM Java", "8.0.8.15", "IBM", "/usr/java8_64"},
+	},
+	OSSolaris: {
+		{"Oracle Database 19c", "19.3.0.0.0", "Oracle Corporation", "/u01/app/oracle/product/19.0.0/dbhome_1"},
+		{"Apache HTTP Server", "2.4.58", "Apache Software Foundation", "/usr/apache2/2.4"},
+	},
+	OSFreeBSD: {
+		{"nginx", "1.24.0", "Nginx Inc.", "/usr/local/sbin/nginx"},
+		{"PostgreSQL", "16.1", "PostgreSQL Global Development Group", "/usr/local/bin/postgres"},
+	},
+	OSOpenBSD: {
+		{"nginx", "1.24.0", "Nginx Inc.", "/usr/local/sbin/nginx"},
+		{"PostgreSQL", "16.1", "PostgreSQL Global Development Group", "/usr/local/bin/postgres"},
+	},
+}
+
 var dcApps = []appTemplate{
 	{"Active Directory Domain Services", "10.0.20348", "Microsoft Corporation", `C:\Windows\System32`},
 	{"Active Directory Certificate Services", "10.0.20348", "Microsoft Corporation", `C:\Windows\System32\certsrv`},
@@ -103,6 +125,8 @@ var installDates = NewPool(
 //   - OSLinux + (RoleServer | RoleRouter) → Linux server applications.
 //   - OSLinux + RoleWorkstation → Linux workstation applications.
 //   - OSMacOS + RoleWorkstation → macOS workstation applications.
+//   - AIX, Solaris, FreeBSD, or OpenBSD + RoleServer → that platform's stack.
+//   - ESXi or a hypervisor-host Linux flavor + RoleServer → none, by design.
 //
 // Any other (os, role) combination is unsupported: the function returns an
 // empty slice and emits a Warn on the injected logger so misconfigurations
@@ -128,6 +152,10 @@ func GenerateApplicationsForSystem(r *rand.Rand, os OSType, role SystemRole, hos
 		templates = linuxWorkstationApps
 	case os == OSMacOS && role == RoleWorkstation:
 		templates = macosWorkstationApps
+	case role == RoleServer && extendedServerApps[os] != nil:
+		templates = extendedServerApps[os]
+	case role == RoleServer && (os == OSESXi || hypervisorHostLinux[os]):
+		return []*ApplicationIdentity{} // the platform is the only software
 	default:
 		logger.Warn("GenerateApplicationsForSystem: unsupported os/role combination — returning empty application set",
 			zap.String("os", string(os)),

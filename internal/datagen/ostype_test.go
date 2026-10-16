@@ -13,7 +13,7 @@ func TestParseOSType(t *testing.T) {
 		"macos":        {"macos", OSMacOS, false},
 		"darwin alias": {"darwin", OSMacOS, false},
 		"upper+space":  {"  MacOS ", OSMacOS, false},
-		"unsupported":  {"freebsd", "", true},
+		"unsupported":  {"plan9", "", true},
 		"empty":        {"", "", true},
 	}
 	for name, c := range cases {

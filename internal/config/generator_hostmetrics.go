@@ -13,9 +13,10 @@ type HostMetricsGeneratorConfig struct {
 	Workers int `yaml:"workers,omitempty" mapstructure:"workers,omitempty"`
 	// Rate is the scrape interval for host metrics
 	Rate time.Duration `yaml:"rate,omitempty" mapstructure:"rate,omitempty"`
-	// OS is the simulated operating system. One of: linux, windows, macos
-	// ("darwin" is accepted as an alias for macos). Empty selects the
-	// default at construction.
+	// OS is the simulated operating system: any OS datagen.ParseOSType
+	// accepts (linux, windows, macos, esxi, xen-dom0, nutanix-ahv,
+	// openstack-kvm, aix, solaris, freebsd, openbsd) or one of its aliases.
+	// Empty selects linux.
 	OS string `yaml:"os,omitempty" mapstructure:"os,omitempty"`
 	// Hostname is the simulated hostname. If empty, a random hostname is generated.
 	Hostname string `yaml:"hostname,omitempty" mapstructure:"hostname,omitempty"`
