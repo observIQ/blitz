@@ -61,7 +61,7 @@ type MetricFamily struct {
 // counter yields one sample; a histogram yields cumulative _bucket series (with
 // le labels, including +Inf), plus _sum and _count.
 func Map(mp embed.MetricPoint) (MetricFamily, error) {
-	base, err := promName(mp)
+	base, err := MetricName(mp)
 	if err != nil {
 		return MetricFamily{}, err
 	}
@@ -108,8 +108,8 @@ var promTypes = map[embed.MetricType]otlptranslator.MetricType{
 	embed.MetricTypeHistogram: otlptranslator.MetricTypeHistogram,
 }
 
-// promName is mp's Prometheus metric name (a histogram's base name).
-func promName(mp embed.MetricPoint) (string, error) {
+// MetricName is mp's Prometheus metric name (a histogram's base name).
+func MetricName(mp embed.MetricPoint) (string, error) {
 	name, err := namer.Build(otlptranslator.Metric{Name: mp.Name, Unit: mp.Unit, Type: promTypes[mp.Type]})
 	if err != nil {
 		return "", fmt.Errorf("prommap: %w", err)
@@ -179,6 +179,10 @@ func sortedLabels(attrs map[string]string, target []Label) ([]Label, error) {
 // labelNamer names labels as the collector's prometheusremotewrite exporter
 // does by default.
 var labelNamer = otlptranslator.LabelNamer{UnderscoreLabelSanitization: true} //nolint:staticcheck // the exporter's default
+
+// LabelName names an attribute key as a Prometheus label, as the collector's
+// exporters do.
+func LabelName(key string) (string, error) { return labelNamer.Build(key) }
 
 // mergeLabels adds attrs to byName as the collector's createAttributes does:
 // keys in sorted order, empty values dropped, and keys that name one label
@@ -273,7 +277,7 @@ func TargetInfo(mp embed.MetricPoint) (MetricFamily, bool) {
 		case keyServiceName, keyServiceNamespace, keyServiceInstanceID:
 			continue
 		}
-		attrs[k] = attrString(v)
+		attrs[k] = AttrString(v)
 	}
 	if len(attrs) == 0 {
 		return MetricFamily{}, false
@@ -303,12 +307,12 @@ func resourceString(res map[string]any, key string) string {
 	if !ok {
 		return ""
 	}
-	return attrString(v)
+	return AttrString(v)
 }
 
-// attrString renders a resource value as the collector does (pcommon
+// AttrString renders a resource value as the collector does (pcommon
 // Value.AsString): strings as-is, scalars formatted, slices and maps as JSON.
-func attrString(v any) string {
+func AttrString(v any) string {
 	switch t := v.(type) {
 	case string:
 		return t

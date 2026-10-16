@@ -27,19 +27,19 @@ func TestAttrStringFormatsFloatsAsTheCollector(t *testing.T) {
 		math.Inf(1):       "json: unsupported value: +Inf",
 		float64(-2500000): "-2500000",
 	} {
-		assert.Equal(t, want, attrString(in), "%v (%T)", in, in)
+		assert.Equal(t, want, AttrString(in), "%v (%T)", in, in)
 	}
 }
 
 // TestAttrStringOtherKinds pins the non-float kinds: nil is empty, scalars
 // print plainly, and composites are JSON (or printed when JSON fails).
 func TestAttrStringOtherKinds(t *testing.T) {
-	assert.Equal(t, "", attrString(nil))
-	assert.Equal(t, "true", attrString(true))
-	assert.Equal(t, "42", attrString(42))
-	assert.Equal(t, `["a","b"]`, attrString([]string{"a", "b"}))
+	assert.Equal(t, "", AttrString(nil))
+	assert.Equal(t, "true", AttrString(true))
+	assert.Equal(t, "42", AttrString(42))
+	assert.Equal(t, `["a","b"]`, AttrString([]string{"a", "b"}))
 	ch := make(chan int)
-	assert.Equal(t, fmt.Sprint(ch), attrString(ch))
+	assert.Equal(t, fmt.Sprint(ch), AttrString(ch))
 }
 
 // TestMapRejects pins Map's errors: a name the namer refuses, an attribute
@@ -64,4 +64,13 @@ func TestMapUnsetValueIsZero(t *testing.T) {
 func TestTargetInfoBadKey(t *testing.T) {
 	_, ok := TargetInfo(gaugeWithResource(map[string]any{"host.name": "h", "": "x"}))
 	assert.False(t, ok)
+}
+
+// LabelName sanitizes as the exporters do and rejects an empty key.
+func TestLabelName(t *testing.T) {
+	name, err := LabelName("http.method")
+	require.NoError(t, err)
+	assert.Equal(t, "http_method", name)
+	_, err = LabelName("")
+	require.Error(t, err)
 }

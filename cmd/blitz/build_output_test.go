@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -33,6 +34,7 @@ func defaultOutput(t *testing.T, typ config.OutputType) config.Output {
 		config.OutputTypeHEC:                   "  hec:\n    host: 127.0.0.1\n    port: 9\n    token: t\n",
 		config.OutputTypeFlow:                  "  flow:\n    host: 127.0.0.1\n    port: 9\n",
 		config.OutputTypePrometheusRemoteWrite: "  prometheus-remote-write:\n    endpoint: http://127.0.0.1:9/api/v1/write\n",
+		config.OutputTypePrometheusScrape:      "  prometheus-scrape:\n    listenAddress: 127.0.0.1:0\n",
 	}
 	cfg, err := blitzconfig.Load([]byte(fmt.Sprintf("output:\n  type: %s\n%s", typ, required[typ])), blitzconfig.LoadOpts{})
 	require.NoError(t, err)
@@ -75,6 +77,10 @@ func outputTypes(t *testing.T) []config.OutputType {
 // with TLS enabled, so every case's options and TLS conversion run.
 func TestBuildOutput_EveryType(t *testing.T) {
 	missingCA := config.TLS{CertificateAuthority: []string{filepath.Join(t.TempDir(), "missing-ca.pem")}}
+	held, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = held.Close() })
+	busy := held.Addr().String()
 	cases := []struct {
 		name    string
 		typ     config.OutputType
@@ -114,6 +120,10 @@ func TestBuildOutput_EveryType(t *testing.T) {
 		{name: "prometheus-remote-write bad endpoint", typ: config.OutputTypePrometheusRemoteWrite, mutate: func(o *config.Output) {
 			o.PrometheusRemoteWrite.Endpoint = "ftp://127.0.0.1/write"
 		}, wantErr: "endpoint"},
+		{name: "prometheus-scrape", typ: config.OutputTypePrometheusScrape},
+		{name: "prometheus-scrape busy address", typ: config.OutputTypePrometheusScrape, mutate: func(o *config.Output) {
+			o.PrometheusScrape.ListenAddress = busy
+		}, wantErr: "listen"},
 	}
 	covered := map[config.OutputType]bool{}
 	for _, tc := range cases {
@@ -137,7 +147,7 @@ func TestBuildOutput_EveryType(t *testing.T) {
 			require.NoError(t, out.Stop(context.Background()))
 		})
 	}
-	_, err := buildOutput(zap.NewNop(), config.Output{Type: "bogus"}, embed.NopTelemetry())
+	_, err = buildOutput(zap.NewNop(), config.Output{Type: "bogus"}, embed.NopTelemetry())
 	require.ErrorContains(t, err, "invalid output type")
 }
 
@@ -146,7 +156,7 @@ func TestBuildOutput_EveryType(t *testing.T) {
 // The Prometheus outputs keep running without their self-metrics when those
 // cannot be built, so they are the exception (their own tests pin that).
 func TestBuildOutput_ConstructorErrors(t *testing.T) {
-	bestEffortMetrics := map[config.OutputType]bool{config.OutputTypePrometheusRemoteWrite: true}
+	bestEffortMetrics := map[config.OutputType]bool{config.OutputTypePrometheusRemoteWrite: true, config.OutputTypePrometheusScrape: true}
 	tel := embed.TelemetrySettings{MeterProvider: failingMeterProvider{}}
 	for _, typ := range outputTypes(t) {
 		out, err := buildOutput(zap.NewNop(), defaultOutput(t, typ), tel)

@@ -1,0 +1,98 @@
+package promscrape
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"net/url"
+	"testing"
+	"time"
+
+	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/output"
+	"github.com/observiq/blitz/telemetry"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+)
+
+func newTestOutput(t *testing.T) *Output {
+	t.Helper()
+	o, err := New("127.0.0.1:0", "/metrics", false, 5*time.Minute, embed.TelemetrySettings{}, zap.NewNop())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = o.Stop(context.Background()) })
+	return o
+}
+
+// TestIsMetricsOnly pins that the output takes metrics only: it is a
+// MetricWriter and no LogWriter, so log records never reach it.
+func TestIsMetricsOnly(t *testing.T) {
+	var w output.Writer = &Output{}
+	_, logs := w.(output.LogWriter)
+	_, metrics := w.(output.MetricWriter)
+	require.False(t, logs)
+	require.True(t, metrics)
+}
+
+func TestSupportedTelemetry(t *testing.T) {
+	o := newTestOutput(t)
+	require.Equal(t, []telemetry.Type{telemetry.Metrics}, o.SupportedTelemetry())
+}
+
+func TestScrapeServesExposition(t *testing.T) {
+	o := newTestOutput(t)
+	v := 0.5
+	err := o.WriteMetric(context.Background(), output.MetricRecord{
+		Name:        "system_cpu_utilization",
+		Type:        embed.MetricTypeGauge,
+		DoubleValue: &v,
+	})
+	require.NoError(t, err)
+
+	body := scrape(t, o)
+	require.Contains(t, body, "# TYPE system_cpu_utilization gauge")
+	require.Contains(t, body, `system_cpu_utilization{otel_scope_name="",otel_scope_schema_url="",otel_scope_version=""} 0.5`)
+}
+
+func TestBindFailureSurfaces(t *testing.T) {
+	o := newTestOutput(t)
+	_, err := New(o.Addr(), "/metrics", false, 5*time.Minute, embed.TelemetrySettings{}, zap.NewNop())
+	require.Error(t, err)
+}
+
+func scrape(t *testing.T, o *Output) string {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, "http://"+o.Addr()+"/metrics", nil)
+	require.NoError(t, err)
+	var resp *http.Response
+	require.Eventually(t, func() bool {
+		resp, err = http.DefaultClient.Do(req)
+		return err == nil
+	}, 2*time.Second, 20*time.Millisecond)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return string(b)
+}
+
+// The exposition is served on exactly the configured path: characters a
+// ServeMux pattern would treat as syntax ("{", a trailing "/") are literal,
+// and every other path is 404.
+func TestMetricsPathIsLiteral(t *testing.T) {
+	for _, path := range []string{"/{", "/metrics/"} {
+		o, err := New("127.0.0.1:0", path, false, 5*time.Minute, embed.TelemetrySettings{}, zap.NewNop())
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = o.Stop(context.Background()) })
+		require.Equal(t, http.StatusOK, get(t, o, path))
+		require.Equal(t, http.StatusNotFound, get(t, o, path+"x"))
+		require.Equal(t, http.StatusNotFound, get(t, o, "/other"))
+	}
+}
+
+func get(t *testing.T, o *Output, path string) int {
+	t.Helper()
+	resp, err := http.Get("http://" + o.Addr() + (&url.URL{Path: path}).EscapedPath())
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	return resp.StatusCode
+}

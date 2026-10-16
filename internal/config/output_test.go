@@ -147,6 +147,15 @@ func TestPrometheusRemoteWriteOutputErrorNamesItsType(t *testing.T) {
 	}
 }
 
+// TestPrometheusScrapeOutputErrorNamesItsType pins that an invalid scrape
+// output's error says which output failed.
+func TestPrometheusScrapeOutputErrorNamesItsType(t *testing.T) {
+	err := (&Output{Type: OutputTypePrometheusScrape, PrometheusScrape: PrometheusScrapeOutputConfig{MetricExpiration: -1}}).Validate()
+	if err == nil || !strings.Contains(err.Error(), "prometheus-scrape output validation failed") {
+		t.Fatalf("Validate() = %v, want a prometheus-scrape output validation error", err)
+	}
+}
+
 // TestFlowOutputErrorNamesItsType pins that an invalid flow output's error
 // says which output failed.
 func TestFlowOutputErrorNamesItsType(t *testing.T) {

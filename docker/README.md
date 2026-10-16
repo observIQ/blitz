@@ -65,6 +65,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up
 | `BLITZ_PII_WORKERS` | `1` | Number of workers for PII generator |
 | `PROM_RW_ENDPOINT` | `http://bdot-collector:19291/api/v1/write` | Remote-write receiver URL for `blitz-hostmetrics-promrw` |
 | `PROM_RW_VERSION` | `1.0` | Remote-write protocol version (`1.0` or `2.0`) for `blitz-hostmetrics-promrw` |
+| `PROM_SCRAPE_PORT` | `9464` | Host port that publishes `blitz-hostmetrics-promscrape`'s `/metrics` endpoint |
 
 ### Examples
 
@@ -110,6 +111,7 @@ docker compose -f docker/docker-compose.telemetry-generator.yml up -d
 | `blitz-hostmetrics-linux` | Host Metrics | Synthetic host metrics (CPU, memory, disk, etc.) for Linux |
 | `blitz-hostmetrics-windows` | Host Metrics | Synthetic host metrics (CPU, memory, disk, etc.) for Windows |
 | `blitz-hostmetrics-promrw` | Host Metrics | Synthetic host metrics sent via the Prometheus remote-write output (needs a receiver at `PROM_RW_ENDPOINT`; starts only with `--profile prometheus-remote-write`) |
+| `blitz-hostmetrics-promscrape` | Host Metrics | Synthetic host metrics served on a Prometheus scrape (pull) endpoint at host port `PROM_SCRAPE_PORT`; starts only with `--profile prometheus-scrape` |
 | `blitz-traces` | Traces | Synthetic distributed traces (HTTP + DB spans) |
 | `blitz-fix` | FIX | FIX protocol messages (4.2 / 4.4 / 5.0 SP2) across 10 asset categories — NewOrderSingle, ExecutionReport, cancel/replace/status |
 | `blitz-flow` | Network Flow | Synthetic NetFlow/IPFIX/sFlow records exported over UDP |
