@@ -26,12 +26,13 @@ import (
 func defaultOutput(t *testing.T, typ config.OutputType) config.Output {
 	t.Helper()
 	required := map[config.OutputType]string{
-		config.OutputTypeTCP:    "  tcp:\n    host: 127.0.0.1\n    port: 9\n",
-		config.OutputTypeUDP:    "  udp:\n    host: 127.0.0.1\n    port: 9\n",
-		config.OutputTypeSyslog: "  syslog:\n    host: 127.0.0.1\n    port: 9\n",
-		config.OutputTypeFile:   "  file:\n    path: " + filepath.Join(t.TempDir(), "out.log") + "\n",
-		config.OutputTypeHEC:    "  hec:\n    host: 127.0.0.1\n    port: 9\n    token: t\n",
-		config.OutputTypeFlow:   "  flow:\n    host: 127.0.0.1\n    port: 9\n",
+		config.OutputTypeTCP:                   "  tcp:\n    host: 127.0.0.1\n    port: 9\n",
+		config.OutputTypeUDP:                   "  udp:\n    host: 127.0.0.1\n    port: 9\n",
+		config.OutputTypeSyslog:                "  syslog:\n    host: 127.0.0.1\n    port: 9\n",
+		config.OutputTypeFile:                  "  file:\n    path: " + filepath.Join(t.TempDir(), "out.log") + "\n",
+		config.OutputTypeHEC:                   "  hec:\n    host: 127.0.0.1\n    port: 9\n    token: t\n",
+		config.OutputTypeFlow:                  "  flow:\n    host: 127.0.0.1\n    port: 9\n",
+		config.OutputTypePrometheusRemoteWrite: "  prometheus-remote-write:\n    endpoint: http://127.0.0.1:9/api/v1/write\n",
 	}
 	cfg, err := blitzconfig.Load([]byte(fmt.Sprintf("output:\n  type: %s\n%s", typ, required[typ])), blitzconfig.LoadOpts{})
 	require.NoError(t, err)
@@ -109,6 +110,10 @@ func TestBuildOutput_EveryType(t *testing.T) {
 		{name: "flow bad agent ip", typ: config.OutputTypeFlow, mutate: func(o *config.Output) {
 			o.Flow.Protocol, o.Flow.AgentIP = "sflow", "not-an-ip"
 		}, wantErr: "agent"},
+		{name: "prometheus-remote-write", typ: config.OutputTypePrometheusRemoteWrite},
+		{name: "prometheus-remote-write bad endpoint", typ: config.OutputTypePrometheusRemoteWrite, mutate: func(o *config.Output) {
+			o.PrometheusRemoteWrite.Endpoint = "ftp://127.0.0.1/write"
+		}, wantErr: "endpoint"},
 	}
 	covered := map[config.OutputType]bool{}
 	for _, tc := range cases {
@@ -138,10 +143,18 @@ func TestBuildOutput_EveryType(t *testing.T) {
 
 // TestBuildOutput_ConstructorErrors pins that each type returns its
 // constructor's error, here a meter that cannot build the output metrics.
+// The Prometheus outputs keep running without their self-metrics when those
+// cannot be built, so they are the exception (their own tests pin that).
 func TestBuildOutput_ConstructorErrors(t *testing.T) {
+	bestEffortMetrics := map[config.OutputType]bool{config.OutputTypePrometheusRemoteWrite: true}
 	tel := embed.TelemetrySettings{MeterProvider: failingMeterProvider{}}
 	for _, typ := range outputTypes(t) {
-		_, err := buildOutput(zap.NewNop(), defaultOutput(t, typ), tel)
+		out, err := buildOutput(zap.NewNop(), defaultOutput(t, typ), tel)
+		if bestEffortMetrics[typ] {
+			require.NoError(t, err, typ)
+			require.NoError(t, out.Stop(context.Background()), typ)
+			continue
+		}
 		require.Error(t, err, typ)
 	}
 }

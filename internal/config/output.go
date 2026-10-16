@@ -26,6 +26,8 @@ const (
 	OutputTypeHEC OutputType = "hec"
 	// OutputTypeFlow represents the network flow (NetFlow/IPFIX/sFlow) output
 	OutputTypeFlow OutputType = "flow"
+	// OutputTypePrometheusRemoteWrite represents Prometheus remote-write output
+	OutputTypePrometheusRemoteWrite OutputType = "prometheus-remote-write"
 )
 
 // Output contains configuration for output destinations
@@ -48,6 +50,8 @@ type Output struct {
 	Stdout StdoutOutputConfig `yaml:"stdout,omitempty" mapstructure:"stdout,omitempty"`
 	// Flow contains network flow output configuration
 	Flow FlowOutputConfig `yaml:"flow,omitempty" mapstructure:"flow,omitempty"`
+	// PrometheusRemoteWrite contains Prometheus remote-write output configuration
+	PrometheusRemoteWrite PrometheusRemoteWriteOutputConfig `yaml:"prometheus-remote-write,omitempty" mapstructure:"prometheus-remote-write,omitempty"`
 }
 
 // Validate validates the output configuration
@@ -92,8 +96,12 @@ func (o *Output) Validate() error {
 		if err := o.Flow.Validate(); err != nil {
 			return fmt.Errorf("flow output validation failed: %w", err)
 		}
+	case OutputTypePrometheusRemoteWrite:
+		if err := o.PrometheusRemoteWrite.Validate(); err != nil {
+			return fmt.Errorf("prometheus-remote-write output validation failed: %w", err)
+		}
 	default:
-		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file, hec, flow", o.Type)
+		return fmt.Errorf("invalid output type: %s, must be one of: nop, stdout, tcp, udp, syslog, otlp-grpc, file, hec, flow, prometheus-remote-write", o.Type)
 	}
 
 	return nil

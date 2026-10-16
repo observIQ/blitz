@@ -197,7 +197,7 @@ For detailed configuration options for each generator, see the individual genera
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec`, `flow` |
+| `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Valid values: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec`, `flow`, `prometheus-remote-write` |
 
 For detailed configuration options for each output, see the individual output documentation:
 
@@ -210,6 +210,7 @@ For detailed configuration options for each output, see the individual output do
 - [File Output](https://github.com/observiq/blitz/blob/main/docs/output/file.md)
 - [HEC Output](https://github.com/observiq/blitz/blob/main/docs/output/hec.md)
 - [Flow Output](https://github.com/observiq/blitz/blob/main/docs/output/flow.md)
+- [Prometheus Remote-Write Output](https://github.com/observiq/blitz/blob/main/docs/output/prometheus-remote-write.md)
 
 #### Multiple Outputs (Fan-Out)
 
@@ -475,7 +476,7 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `logging.type` - Must be one of: `stdout`, `file`
 - `logging.file.path` - Required when `logging.type` is `file`
 - `generator.type` - Must be one of: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `fix`, `flow`
-- `output.type` - Must be one of: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec`, `flow`
+- `output.type` - Must be one of: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec`, `flow`, `prometheus-remote-write`
 
 ## Error Handling
 

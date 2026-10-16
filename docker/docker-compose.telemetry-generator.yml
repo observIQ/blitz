@@ -16,6 +16,9 @@
 #   - BLITZ_RATE: Log generation rate (default: 1s)
 #   - BLITZ_WORKERS: Workers per generator (default: 1)
 #   - BLITZ_PII_WORKERS: PII workers (default: 1)
+#   - PROM_RW_ENDPOINT: remote-write receiver URL for blitz-hostmetrics-promrw
+#     (default: http://bdot-collector:19291/api/v1/write)
+#   - PROM_RW_VERSION: remote-write protocol version, 1.0 or 2.0 (default: 1.0)
 
 x-blitz-common: &blitz-common
   image: ghcr.io/observiq/blitz:latest
@@ -242,6 +245,22 @@ services:
       BLITZ_OUTPUT_FLOW_HOST: ${FLOW_COLLECTOR_HOST:-bdot-collector}
       BLITZ_OUTPUT_FLOW_PORT: ${FLOW_COLLECTOR_PORT:-2055}
       BLITZ_OUTPUT_FLOW_PROTOCOL: ${FLOW_PROTOCOL:-netflow-v9}
+
+  # HostMetrics Generator (Prometheus remote-write output).
+  # Requires a remote-write receiver at PROM_RW_ENDPOINT (e.g. a collector
+  # prometheusremotewritereceiver, or a Prometheus server started with
+  # --web.enable-remote-write-receiver). Starts only with
+  # --profile prometheus-remote-write, since nothing here listens by default.
+  blitz-hostmetrics-promrw:
+    <<: *blitz-common
+    profiles: ["prometheus-remote-write"]
+    environment:
+      BLITZ_GENERATOR_TYPE: hostmetrics
+      BLITZ_GENERATOR_HOSTMETRICS_RATE: ${BLITZ_RATE:-1s}
+      BLITZ_GENERATOR_HOSTMETRICS_OS: linux
+      BLITZ_OUTPUT_TYPE: prometheus-remote-write
+      BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_ENDPOINT: ${PROM_RW_ENDPOINT:-http://bdot-collector:19291/api/v1/write}
+      BLITZ_OUTPUT_PROMETHEUS_REMOTE_WRITE_VERSION: ${PROM_RW_VERSION:-1.0}
 
 networks:
   telemetry-net:

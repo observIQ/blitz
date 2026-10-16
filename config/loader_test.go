@@ -276,6 +276,16 @@ metrics:
 	assert.Nil(t, mods, "must not return a partial module slice on error")
 }
 
+// TestLoadAcceptsUnquotedRemoteWriteVersion pins that an unquoted YAML
+// version (2.0, which YAML reads as a number and viper hands over as "2") is
+// accepted, as the docs' quoted form is.
+func TestLoadAcceptsUnquotedRemoteWriteVersion(t *testing.T) {
+	for _, v := range []string{"1.0", "2.0"} {
+		_, err := config.Load([]byte("output:\n  type: prometheus-remote-write\n  prometheus-remote-write:\n    endpoint: http://127.0.0.1:9090/api/v1/write\n    version: "+v+"\nlogging:\n  type: stdout\nmetrics:\n  port: 19000\n"), config.LoadOpts{})
+		require.NoError(t, err, v)
+	}
+}
+
 // TestLoad_ListEntrySeedsFollowTheContract pins the seed contract for
 // generators: list entries: an omitted seed is random (-1), an explicit 0 is
 // deterministic, like the singular form.

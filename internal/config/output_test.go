@@ -138,6 +138,15 @@ func TestOutput_Validate(t *testing.T) {
 	}
 }
 
+// TestPrometheusRemoteWriteOutputErrorNamesItsType pins that an invalid
+// remote-write output's error says which output failed.
+func TestPrometheusRemoteWriteOutputErrorNamesItsType(t *testing.T) {
+	err := (&Output{Type: OutputTypePrometheusRemoteWrite}).Validate()
+	if err == nil || !strings.Contains(err.Error(), "prometheus-remote-write output validation failed") {
+		t.Fatalf("Validate() = %v, want a prometheus-remote-write output validation error", err)
+	}
+}
+
 // TestFlowOutputErrorNamesItsType pins that an invalid flow output's error
 // says which output failed.
 func TestFlowOutputErrorNamesItsType(t *testing.T) {

@@ -36,6 +36,7 @@ import (
 	hecout "github.com/observiq/blitz/output/hec"
 	"github.com/observiq/blitz/output/nop"
 	otlpgrpc "github.com/observiq/blitz/output/otlp_grpc"
+	promrw "github.com/observiq/blitz/output/promrw"
 	stdoutout "github.com/observiq/blitz/output/stdout"
 	syslogout "github.com/observiq/blitz/output/syslog"
 	"github.com/observiq/blitz/output/tcp"
@@ -602,6 +603,13 @@ func buildOutput(logger *zap.Logger, out config.Output, tel embed.TelemetrySetti
 		inst, err = flowout.New(logger, f.Host, strconv.Itoa(f.Port), flowout.Protocol(f.Protocol), f.Vendor, f.AgentIP, tel)
 		if err != nil {
 			logger.Error("Failed to create flow output", zap.Error(err))
+			return nil, err
+		}
+	case config.OutputTypePrometheusRemoteWrite:
+		rw := out.PrometheusRemoteWrite
+		inst, err = promrw.New(rw.Endpoint, rw.Version, rw.BatchSize, rw.MaxBufferedSeries, rw.BatchTimeout, rw.Timeout, rw.Headers, tel, logger)
+		if err != nil { // safety net: config validation rejects what New does
+			logger.Error("Failed to create prometheus-remote-write output", zap.Error(err))
 			return nil, err
 		}
 	default:
