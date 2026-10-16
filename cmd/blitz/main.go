@@ -102,6 +102,33 @@ func main() {
 	}
 }
 
+// countTrackers holds the finite-generation trackers of one run: run is the
+// run-level generator.count's, entry the one the generators with a count share.
+type countTrackers struct{ run, entry *count.Tracker }
+
+// current is the run's tracker: the run-level one, else the entries' shared one.
+func (c *countTrackers) current() *count.Tracker {
+	if c.run != nil {
+		return c.run
+	}
+	return c.entry
+}
+
+// forEntry returns the tracker a generator with entry count n draws from, or
+// nil for none. created reports that this call made the shared entry tracker.
+func (c *countTrackers) forEntry(n int) (t *count.Tracker, created bool) {
+	switch {
+	case c.run != nil:
+		return c.run, false
+	case n <= 0:
+		return nil, false
+	case c.entry == nil:
+		c.entry = count.NewTracker(int64(n))
+		return c.entry, true
+	}
+	return c.entry, false
+}
+
 func run(cmd *cobra.Command, args []string) error {
 	// Mark process start so the blitz.startup.duration metric can measure the
 	// full standalone startup: config load, provider construction, output
@@ -126,6 +153,10 @@ func run(cmd *cobra.Command, args []string) error {
 	config.MigrateDeprecatedKeys(viper.GetViper())
 
 	if err := config.ValidateExclusiveOutputConfig(viper.GetViper(), config.CLIExplicit(cliFlags)); err != nil {
+		return err
+	}
+
+	if err := config.ValidateExclusiveGeneratorConfig(viper.GetViper(), config.CLIExplicit(cliFlags)); err != nil {
 		return err
 	}
 
@@ -257,7 +288,15 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	var generators []any
-	var tracker *count.Tracker
+	var trackers countTrackers
+	// generator.count is run-level: next to a generators: list it bounds the
+	// whole run and takes precedence over entry counts.
+	if len(cfg.Generators) > 0 && cfg.Generator.Count > 0 {
+		trackers.run = count.NewTracker(int64(cfg.Generator.Count))
+		logger.Info("Finite generation enabled",
+			zap.Int("count", cfg.Generator.Count),
+			zap.String("onFinish", cfg.OnFinish))
+	}
 
 	for _, genCfg := range effectiveGens {
 		gen, genErr := createGenerator(logger, genCfg, outputInstance, env, tel)
@@ -269,15 +308,14 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 
 		// Set up finite generation count tracker
-		if genCfg.Count > 0 {
-			if tracker == nil {
-				tracker = count.NewTracker(int64(genCfg.Count))
+		if t, created := trackers.forEntry(genCfg.Count); t != nil {
+			if created {
 				logger.Info("Finite generation enabled",
 					zap.Int("count", genCfg.Count),
 					zap.String("onFinish", cfg.OnFinish))
 			}
 			if s, ok := gen.(interface{ SetCountTracker(*count.Tracker) }); ok {
-				s.SetCountTracker(tracker)
+				s.SetCountTracker(t)
 			}
 		}
 
@@ -285,6 +323,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set up SIGUSR1 restart signal handler
+	tracker := trackers.current()
 	setupRestartSignal(ctx, logger, tracker)
 
 	svc, err := service.New(logger, generators, outputInstance, tel)
@@ -339,7 +378,7 @@ shutdown:
 
 	if tracker != nil {
 		logger.Info("Telemetry generation completed",
-			zap.String("generator", string(cfg.Generator.Type)),
+			zap.Any("generators", genTypes),
 			zap.Int64("records_emitted", tracker.Emitted()))
 	}
 

@@ -1,7 +1,9 @@
 package config
 
 import (
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,4 +86,103 @@ outputs:
 func TestApplyListDefaults_DecodeErrorNamesOutputs(t *testing.T) {
 	v := viperFrom(t, "outputs:\n  - type: tcp\n    tcp:\n      workers: many\n")
 	require.ErrorContains(t, ApplyListDefaults(v, NewConfig()), "decode outputs")
+}
+
+func TestApplyListDefaults_DecodeErrorNamesGenerators(t *testing.T) {
+	v := viperFrom(t, "generators:\n  - type: json\n    json:\n      workers: many\n")
+	require.ErrorContains(t, ApplyListDefaults(v, NewConfig()), "decode generators")
+}
+
+func TestApplyListDefaults_GeneratorExplicitFalseKept(t *testing.T) {
+	cfg := loadLikeCLI(t, `
+generators:
+  - type: filegen
+    filegen:
+      source: /tmp/x.log
+      cache-enabled: false
+`, nil)
+
+	gens := cfg.EffectiveGenerators()
+	require.Len(t, gens, 1)
+	assert.False(t, gens[0].Filegen.CacheEnabled, "explicit cache-enabled false (default true) must be kept")
+}
+
+func TestApplyListDefaults_GeneratorUnsetFieldsGetTypeDefaults(t *testing.T) {
+	cfg := loadLikeCLI(t, `
+generators:
+  - type: json
+    json:
+      rate: 2s
+`, nil)
+
+	gens := cfg.EffectiveGenerators()
+	require.Len(t, gens, 1)
+	assert.Equal(t, 1, gens[0].JSON.Workers, "unset workers gets the type default")
+	assert.Equal(t, 2*time.Second, gens[0].JSON.Rate, "user-set rate is kept")
+}
+
+func TestApplyListDefaults_SingularGeneratorValuesNeverReachListEntries(t *testing.T) {
+	cfg := loadLikeCLI(t, `
+generators:
+  - type: json
+`, map[string]any{"generator.json.workers": 9})
+
+	gens := cfg.EffectiveGenerators()
+	require.Len(t, gens, 1)
+	assert.Equal(t, 1, gens[0].JSON.Workers, "singular generator values must not leak into list entries")
+}
+
+func TestValidate_GeneratorErrorNamesYAMLPosition(t *testing.T) {
+	// The hostmetrics entry expands into two generators (one per OS), which
+	// must not shift the index reported for the entry after it.
+	cfg := loadLikeCLI(t, `
+generators:
+  - type: hostmetrics
+    hostmetrics:
+      os: linux,windows
+  - type: json
+    json:
+      workers: -1
+`, nil)
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "generators[1]", "the index is the entry's position in the YAML list")
+}
+
+// assertNoSharedStorage fails if any slice or map field of a and b (walked
+// recursively) points at the same backing storage.
+func assertNoSharedStorage(t *testing.T, a, b reflect.Value, path string) {
+	t.Helper()
+	switch a.Kind() {
+	case reflect.Struct:
+		for i := range a.NumField() {
+			assertNoSharedStorage(t, a.Field(i), b.Field(i), path+"."+a.Type().Field(i).Name)
+		}
+	case reflect.Slice:
+		if a.Cap() > 0 && b.Cap() > 0 {
+			assert.NotEqual(t, a.Pointer(), b.Pointer(), "%s shares a backing array across entries", path)
+		}
+	case reflect.Map:
+		if !a.IsNil() && !b.IsNil() {
+			assert.NotEqual(t, a.Pointer(), b.Pointer(), "%s shares a map across entries", path)
+		}
+	}
+}
+
+func TestApplyListDefaults_EntriesNeverShareStorage(t *testing.T) {
+	cfg := loadLikeCLI(t, `
+generators:
+  - type: wel
+  - type: wel
+    wel:
+      channels: [Security, System]
+`, nil)
+
+	require.Len(t, cfg.Generators, 2)
+	defs, err := typeDefaults()
+	require.NoError(t, err)
+	assert.Equal(t, defs.Generator.Wel.Channels, cfg.Generators[0].Wel.Channels,
+		"an entry's unset slice keeps the default, untouched by a sibling's value")
+	assertNoSharedStorage(t, reflect.ValueOf(cfg.Generators[0]), reflect.ValueOf(cfg.Generators[1]), "Generator")
 }

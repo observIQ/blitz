@@ -66,7 +66,7 @@ type LoadOpts struct {
 //
 // Load resolves and checks the config exactly as the standalone CLI does:
 // unset keys get the same declared defaults, for the singular forms and for
-// every `outputs:` entry alike, and a config that sets both the
+// every `outputs:`/`generators:` entry alike, and a config that sets both the
 // singular and plural form of a key is rejected. The only differences from
 // the CLI loader are where overrides come from:
 // (1) blitz does not read os.Environ() directly; see LoadOpts.EnvOverrides
@@ -93,6 +93,9 @@ func Load(yamlBytes []byte, opts LoadOpts) (*Config, error) {
 		return false
 	}
 	if err := internalconfig.ValidateExclusiveOutputConfig(v, explicit); err != nil {
+		return nil, fmt.Errorf("validate blitz config: %w", err)
+	}
+	if err := internalconfig.ValidateExclusiveGeneratorConfig(v, explicit); err != nil {
 		return nil, fmt.Errorf("validate blitz config: %w", err)
 	}
 	cfg := internalconfig.NewConfig()

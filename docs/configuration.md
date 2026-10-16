@@ -154,7 +154,27 @@ logging:
 
 ### Generator Configuration
 
-**Note:** Only a single generator can be configured at a time.
+To run several generators at once, use the `generators:` list instead of the
+singular `generator:` block. `generator` and `generators` are one-or-the-other
+by design: set one, not both. A config with both is rejected, including when
+the singular value comes from a `BLITZ_GENERATOR_*` environment variable, a
+`--generator-*` flag, or an embedded override next to a `generators:` list,
+even one set to its default. A field a list entry leaves unset (workers, and so
+on) gets that generator type's default. Any value you write on the entry is
+kept as written, including `0` and `false`. Entries never take values from the
+singular `generator` form. The one exception is `--generator-count`
+(`BLITZ_GENERATOR_COUNT`): it limits the whole run, so it may be set next to a
+`generators:` list, where it caps the total across all entries and takes
+precedence over entry `count` values.
+
+```yaml
+generators:
+  - type: json
+  - type: filegen
+    filegen:
+      source: /var/log/app.log
+      cache-enabled: false
+```
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
@@ -212,7 +232,7 @@ Notes:
 - `output` and `outputs` are one-or-the-other by design: set one, not both. A
   config with both is rejected, including when the singular value comes from a
   `BLITZ_OUTPUT_*` environment variable, an `--output-*` flag, or an embedded
-  override next to an `outputs:` list.
+  override next to an `outputs:` list, even one set to its default.
 - Writes are best-effort: one slow or dead destination does not stop or slow
   the others, and each signal goes only to the outputs that support it. Each
   output has its own queue of 100 batches (a generator's batch, such as one

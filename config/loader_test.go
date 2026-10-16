@@ -322,3 +322,44 @@ outputs:
 	assert.Equal(t, "collector.example", cfg.Outputs[0].OTLPGrpc.Host)
 	assert.Equal(t, 5317, cfg.Outputs[0].OTLPGrpc.Port)
 }
+
+// TestLoad_RejectsSingularOverrideWithGenerators pins that an embedded
+// override of the singular generator form counts as setting it.
+func TestLoad_RejectsSingularOverrideWithGenerators(t *testing.T) {
+	_, err := config.Load([]byte("generators:\n  - type: json\noutput:\n  type: nop\n"),
+		config.LoadOpts{EnvOverrides: map[string]string{"generator.type": "nginx"}})
+	require.ErrorContains(t, err, "set either generator or generators, not both")
+}
+
+func TestLoad_RejectsGeneratorAndGenerators(t *testing.T) {
+	_, err := config.Load([]byte(`
+generator:
+  type: json
+generators:
+  - type: json
+`), config.LoadOpts{})
+	require.ErrorContains(t, err, "set either generator or generators, not both",
+		"embedded Load must reject singular and plural forms together, like the CLI")
+}
+
+func TestLoad_RejectsSingularOverrideEqualToDefaultWithGenerators(t *testing.T) {
+	// An override set to the default value is still an explicit singular form.
+	_, err := config.Load([]byte("generators:\n  - type: json\noutput:\n  type: nop\n"),
+		config.LoadOpts{EnvOverrides: map[string]string{"generator.type": "nop"}})
+	require.ErrorContains(t, err, "set either generator or generators, not both")
+}
+
+// TestLoad_GeneratorsEntryMigratesDeprecatedKey is the generators: mirror of
+// TestLoad_OutputsEntryMigratesDeprecatedKey, for the legacy paloAlto: key.
+func TestLoad_GeneratorsEntryMigratesDeprecatedKey(t *testing.T) {
+	cfg, err := config.Load([]byte(`generators:
+  - type: palo-alto
+    paloAlto:
+      workers: 7
+output:
+  type: nop
+`), config.LoadOpts{})
+	require.NoError(t, err)
+	require.Len(t, cfg.Generators, 1)
+	assert.Equal(t, 7, cfg.Generators[0].PaloAlto.Workers)
+}

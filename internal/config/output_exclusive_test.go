@@ -99,3 +99,14 @@ func TestValidateExclusiveOutputConfig_CLIBoundDefaultsPass(t *testing.T) {
 func TestValidateListFormMatchesTypeCaseInsensitively(t *testing.T) {
 	require.NoError(t, ValidateExclusiveOutputConfig(viperFrom(t, "outputs:\n  - Type: nop\n"), nil))
 }
+
+// TestValidateExclusiveGeneratorConfig_SingularFromOverrideFails pins the
+// generator half of the rule: --generator-type or BLITZ_GENERATOR_TYPE next
+// to a YAML generators: list is rejected, not silently ignored.
+func TestValidateExclusiveGeneratorConfig_SingularFromOverrideFails(t *testing.T) {
+	v := viperFrom(t, "generators:\n  - type: json\n")
+	v.SetDefault("generator.type", "nop")
+	require.NoError(t, ValidateExclusiveGeneratorConfig(v, nil), "defaults alone are not a singular config")
+	v.Set("generator.type", "wel")
+	require.ErrorContains(t, ValidateExclusiveGeneratorConfig(v, nil), "set either generator or generators")
+}
