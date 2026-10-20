@@ -11,6 +11,7 @@ The last, best, most magnificent telemetry generation/simulation tool anyone wil
 - [Roadmap](/ROADMAP.md) - Where blitz is headed and the direction of current work
 - [Configuration Guide](/docs/configuration.md) - Complete guide to configuring blitz with YAML files, environment variables, and command-line flags
 - [Architecture Overview](/docs/architecture.md) - Detailed explanation of the application architecture, components, and data flow
+- [Terminology](/docs/terminology.md) - The words blitz uses for its internal components: Generator, Output, Producer, Effector, and the rest
 - [Metrics Documentation](/docs/metrics.md) - Comprehensive guide to monitoring and metrics exposed by blitz
 - [Shell Completion](/docs/shell-completion.md) - Guide to installing and using shell autocompletion for bash, zsh, fish, and PowerShell
 - [Development Guide](/docs/development.md) - Guidelines for contributing to the project
