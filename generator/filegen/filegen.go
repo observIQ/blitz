@@ -3,9 +3,11 @@ package filegen
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -15,13 +17,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/internal/generator/ctime"
+	"github.com/observiq/blitz/internal/generator/pacing"
 	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
@@ -107,6 +109,16 @@ type FileLogGenerator struct {
 	// resolved backend; set in Start
 	mode sourceMode
 
+	// replay emits every line once, in order, instead of random picks.
+	// replayLines is resolved once, before the worker starts; the worker only
+	// reads it.
+	replay      bool
+	replayLines []string
+
+	// seed drives the random mode's line picks; negative is resolved to a
+	// random seed at Start, and worker N uses seed+N.
+	seed int64
+
 	// File cache
 	cache *Cache
 
@@ -164,7 +176,60 @@ func New(logger *zap.Logger, workers int, rate time.Duration, source string, cac
 		stopCh:      make(chan struct{}),
 		cache:       cache,
 		metrics:     metrics,
+		seed:        -1,
 	}, nil
+}
+
+// SetSeed sets the random mode's RNG seed per the docs/datagen.md contract:
+// negative randomizes (the resolved seed is logged at Start), 0 or positive
+// is deterministic. Call it before Start.
+func (g *FileLogGenerator) SetSeed(seed int64) {
+	g.seed = seed
+}
+
+// SetReplay switches the generator to replay mode: every non-empty line of
+// the source is emitted once, in order (files in lexical order, each top to
+// bottom). Without a count tracker the generator then stops; with one it
+// waits for a reset and replays from the first line. Replay is one ordered
+// stream, so it requires a single worker. Call it before Start.
+func (g *FileLogGenerator) SetReplay() error {
+	if g.workers != 1 {
+		return fmt.Errorf("replay mode requires exactly 1 worker, got %d workers", g.workers)
+	}
+	g.replay = true
+	return nil
+}
+
+// ReplayCount returns the number of lines a replay emits, so a caller can
+// bound the run to it, and 0 in random mode. Call it before Start.
+func (g *FileLogGenerator) ReplayCount() (int, error) {
+	if !g.replay {
+		return 0, nil
+	}
+	lines, err := g.loadReplay()
+	return len(lines), err
+}
+
+// loadReplay resolves the source and reads every file's lines, in order.
+// A successful read is kept, so later calls return it without reading again.
+func (g *FileLogGenerator) loadReplay() ([]string, error) {
+	if g.replayLines != nil {
+		return g.replayLines, nil
+	}
+	files, err := g.getFiles()
+	if err != nil {
+		return nil, fmt.Errorf("get files: %w", err)
+	}
+	lines := []string{}
+	for _, f := range files {
+		fl, err := g.readFileLines(f)
+		if err != nil {
+			return nil, err
+		}
+		lines = append(lines, fl...)
+	}
+	g.replayLines = lines
+	return lines, nil
 }
 
 // Name returns the module identifier.
@@ -178,8 +243,25 @@ func (g *FileLogGenerator) Start(_ context.Context) error {
 		zap.Int("workers", g.workers),
 		zap.Duration("rate", g.rate))
 
-	// Record initial active workers count
-	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
+	if g.replay {
+		lines, err := g.loadReplay()
+		if err != nil {
+			return err
+		}
+		if len(lines) == 0 {
+			return fmt.Errorf("no lines to replay in source %q", g.source)
+		}
+		g.logger.Info("Replaying source", zap.Int("lines", len(lines)))
+		g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
+		g.wg.Add(1)
+		go g.replayWorker(lines) // #nosec G118 -- the worker is bounded by Stop() and the WaitGroup, not the Start context
+		return nil
+	}
+
+	if g.seed < 0 {
+		g.seed = time.Now().UnixNano()
+	}
+	g.logger.Info("File generator seed", zap.Int64("seed", g.seed))
 
 	// Get list of files to read
 	files, err := g.getFiles()
@@ -190,16 +272,32 @@ func (g *FileLogGenerator) Start(_ context.Context) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no files found to read")
 	}
+	if !g.anyLines(files) {
+		return fmt.Errorf("no non-empty lines in source %q", g.source)
+	}
 
 	g.logger.Info("Found files to read", zap.Int("count", len(files)))
 
-	// Start workers
+	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
 		go g.worker(i, files) // #nosec G118 -- workers are bounded by Stop() and the WaitGroup, not the Start context
 	}
 
 	return nil
+}
+
+// anyLines reports whether any file has a non-empty line, reading only until
+// it finds one. A worker skips a file with none, so without one anywhere it
+// would loop on the source and send nothing. An unreadable file is left for
+// the workers to report.
+func (g *FileLogGenerator) anyLines(files []string) bool {
+	for _, f := range files {
+		if lines, err := g.readFileLines(f); err != nil || len(lines) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Stop stops the File log generator
@@ -235,9 +333,9 @@ func (g *FileLogGenerator) Stop(ctx context.Context) error {
 //  2. Source with a path separator or matching disk file/glob → disk backend.
 //  3. Bare name (no separator, disk lookup fails) → library backend.
 //
-// When a bare name resolves to the library AND a same-named directory
-// exists on disk relative to cwd, a warning is logged so users with
-// unintentional collisions know to use the explicit "package:" prefix.
+// A same-named directory on disk wins over the library. When the bare name
+// falls back to the library anyway, because that directory could not be
+// read, a warning says why the directory was not used.
 func (g *FileLogGenerator) getFiles() ([]string, error) {
 	if strings.HasPrefix(g.source, packageSourcePrefix) {
 		name := strings.TrimPrefix(g.source, packageSourcePrefix)
@@ -327,15 +425,14 @@ func (g *FileLogGenerator) libraryFiles(name string) ([]string, error) {
 	return files, nil
 }
 
-// warnIfCollision logs a warning when a bare-name source resolved
-// against the library ALSO exists as a directory on disk relative to
-// cwd. Doesn't change behavior (library wins) — surfaces the ambiguity
-// so users can disambiguate with the explicit "package:" prefix.
+// warnIfCollision logs a warning when a bare-name source fell back to the
+// library while a directory of that name exists on disk, which happens only
+// when the directory could not be read.
 func (g *FileLogGenerator) warnIfCollision(name string) {
 	if info, err := os.Stat(name); err == nil && info.IsDir() {
 		g.logger.Warn("filegen source resolved to embedded data library, but a same-named directory exists on disk",
 			zap.String("source", name),
-			zap.String("hint", "use 'package:"+name+"' to force library lookup, or a relative path for disk lookup"),
+			zap.String("hint", "the directory could not be read; fix its permissions to use it, or use 'package:"+name+"' to choose the library"),
 		)
 	}
 }
@@ -350,14 +447,26 @@ func (g *FileLogGenerator) getFilesFromAutoDetect() ([]string, error) {
 		for _, f := range globFiles {
 			info, err := os.Stat(f)
 			if err != nil {
+				// Replay promises every line, so a match it cannot stat
+				// fails the run; random mode skips it.
+				if g.replay {
+					return nil, fmt.Errorf("stat %q: %w", f, err)
+				}
+				g.logger.Warn("Skipping a matched path that cannot be read", zap.String("path", f), zap.Error(err))
 				continue
 			}
 			if info.IsDir() {
 				// For directories in glob results, read all files from the directory
-				dirFiles, err := g.getFilesFromDirectory()
-				if err == nil {
-					files = append(files, dirFiles...)
+				dirFiles, err := filesInDirectory(f)
+				if err != nil {
+					// Likewise for a matched directory it cannot list.
+					if g.replay {
+						return nil, err
+					}
+					g.logger.Warn("Skipping a matched directory that cannot be read", zap.String("dir", f), zap.Error(err))
+					continue
 				}
+				files = append(files, dirFiles...)
 			} else {
 				// For files in glob results, add them directly
 				files = append(files, f)
@@ -375,7 +484,7 @@ func (g *FileLogGenerator) getFilesFromAutoDetect() ([]string, error) {
 	}
 
 	if info.IsDir() {
-		return g.getFilesFromDirectory()
+		return filesInDirectory(g.source)
 	}
 
 	return g.getFilesFromFile()
@@ -389,36 +498,48 @@ func (g *FileLogGenerator) getFilesFromFile() ([]string, error) {
 	return []string{g.source}, nil
 }
 
-// getFilesFromDirectory returns all files in a directory
-func (g *FileLogGenerator) getFilesFromDirectory() ([]string, error) {
-	pattern := filepath.Join(g.source, "*")
-	files, err := filepath.Glob(pattern)
+// filesInDirectory returns the files directly in dir, in lexical order,
+// skipping subdirectories and symlinks to directories.
+func filesInDirectory(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("glob directory: %w", err)
+		return nil, fmt.Errorf("read directory: %w", err)
 	}
-
+	var files []string
+	for _, e := range entries {
+		path := filepath.Join(dir, e.Name())
+		if e.IsDir() {
+			continue
+		}
+		if e.Type()&fs.ModeSymlink != 0 {
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				continue
+			}
+		}
+		files = append(files, path)
+	}
 	return files, nil
 }
 
-// worker reads lines from files and writes them to the output writer
 // SetCountTracker sets the finite generation count tracker.
 func (g *FileLogGenerator) SetCountTracker(t *count.Tracker) {
 	g.tracker = t
 }
 
+// worker sends a random line from its share of the files on each tick.
 func (g *FileLogGenerator) worker(id int, files []string) {
 	defer g.wg.Done()
 
 	g.logger.Debug("Worker started", zap.Int("id", id))
 
+	// #nosec G404 -- seeded for the determinism contract, not cryptographic use
+	rng := rand.New(rand.NewSource(g.seed + int64(id)))
+
 	// Distribute files among workers
 	fileIdx := id
 
 	// Use exponential backoff with configured rate as initial interval
-	backoffConfig := backoff.NewExponentialBackOff()
-	backoffConfig.InitialInterval = g.rate
-	backoffConfig.MaxInterval = 5 * time.Second
-	backoffConfig.MaxElapsedTime = 0 // Never stop retrying
+	backoffConfig := pacing.NewWriteBackoff(g.rate)
 
 	// Drive the timer from this goroutine only. backoff.ExponentialBackOff is
 	// not safe for concurrent use, so we never hand it to backoff.NewTicker's
@@ -432,31 +553,45 @@ func (g *FileLogGenerator) worker(id int, files []string) {
 			g.logger.Debug("Worker received stop signal", zap.Int("id", id))
 			return
 		case <-timer.C:
-			if g.tracker != nil && !g.tracker.Acquire() {
+			// Wrap rather than restart at file 0, so the workers together
+			// keep covering every file.
+			fileIdx %= len(files)
+
+			file := files[fileIdx]
+			lines, err := g.fileLines(file)
+			if err != nil {
+				if errors.Is(err, errNoLines) {
+					// Nothing failed, so keep the rate.
+					backoffConfig.Reset()
+				} else {
+					g.logger.Error("Error reading file", zap.String("file", file), zap.Error(err))
+				}
+				timer.Reset(backoffConfig.NextBackOff())
+				// Step to the very next file, not the next in this worker's
+				// share, which may hold nothing readable.
+				fileIdx++
+				continue
+			}
+
+			permit, resume, ok := g.tracker.Acquire()
+			if !ok {
 				select {
 				case <-g.stopCh:
 					return
-				case <-g.tracker.ResumeC():
+				case <-resume:
 					timer.Reset(backoffConfig.NextBackOff())
 					continue
 				}
 			}
-			if fileIdx >= len(files) {
-				// Cycle back to the beginning
-				fileIdx = 0
-			}
-
-			file := files[fileIdx]
-			err := g.readAndWriteFile(file)
-			if err != nil {
-				g.logger.Error("Error reading file", zap.String("file", file), zap.Error(err))
-				g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
-				// On error, backoff will automatically handle retry timing
+			if err := g.emit(lines[rng.Intn(len(lines))]); err != nil {
+				g.logger.Error("Error sending from file", zap.String("file", file), zap.Error(err))
+				permit.Release()
 				timer.Reset(backoffConfig.NextBackOff())
 				continue
 			}
 
 			// On success, reset backoff to configured rate
+			permit.Commit()
 			backoffConfig.Reset()
 			timer.Reset(backoffConfig.NextBackOff())
 			fileIdx += g.workers
@@ -464,8 +599,85 @@ func (g *FileLogGenerator) worker(id int, files []string) {
 	}
 }
 
-// readAndWriteFile reads a file, selects a random non-empty line, and pushes it to the consumer
-func (g *FileLogGenerator) readAndWriteFile(filename string) error {
+// replayWorker emits lines once, in order. At the end of the input, or when
+// the count tracker runs out, it waits for a tracker reset and replays from
+// the first line; without a tracker it stops.
+func (g *FileLogGenerator) replayWorker(lines []string) {
+	defer g.wg.Done()
+
+	backoffConfig := pacing.NewWriteBackoff(g.rate)
+
+	timer := time.NewTimer(backoffConfig.NextBackOff())
+	defer timer.Stop()
+
+	idx := 0
+	// cycle is the tracker's resume channel for the pass in progress. Acquire
+	// reports the current one with every permit, so a changed channel means a
+	// reset (SIGUSR1) landed and the refilled count starts a fresh pass.
+	var cycle <-chan struct{}
+	waitResume := func(resume <-chan struct{}) bool {
+		select {
+		case <-g.stopCh:
+			return false
+		case <-resume:
+			backoffConfig.Reset()
+			timer.Reset(backoffConfig.NextBackOff())
+			return true
+		}
+	}
+
+	for {
+		select {
+		case <-g.stopCh:
+			return
+		case <-timer.C:
+			if idx >= len(lines) {
+				if g.tracker == nil {
+					g.logger.Info("Replay complete", zap.Int("lines", len(lines)))
+					g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 0, componentName)
+					return
+				}
+				// End of input, the normal end of a counted replay: wait for a
+				// reset, then replay from the first line. A tracker larger
+				// than the line count (the CLI bounds it; a caller of
+				// SetCountTracker may not) leaves its extra permits undrawn.
+				if !waitResume(cycle) {
+					return
+				}
+				idx = 0
+				continue
+			}
+			permit, resume, ok := g.tracker.Acquire()
+			if resume != cycle {
+				idx = 0
+				cycle = resume
+			}
+			if !ok {
+				if !waitResume(resume) {
+					return
+				}
+				continue
+			}
+			if err := g.emit(lines[idx]); err != nil {
+				g.logger.Error("Error replaying line", zap.Int("index", idx), zap.Error(err))
+				permit.Release()
+				timer.Reset(backoffConfig.NextBackOff())
+				continue
+			}
+			permit.Commit()
+			idx++
+			backoffConfig.Reset()
+			timer.Reset(backoffConfig.NextBackOff())
+		}
+	}
+}
+
+// errNoLines reports a file with no non-empty lines to send.
+var errNoLines = errors.New("file has no non-empty lines")
+
+// fileLines returns a file's non-empty lines, through the cache. It is read
+// before a permit is taken, so a file with nothing to send never takes one.
+func (g *FileLogGenerator) fileLines(filename string) ([]string, error) {
 	// Cache key namespaces library-backed paths so they can't collide
 	// with disk paths in the shared LRU.
 	cacheKey := filename
@@ -482,25 +694,26 @@ func (g *FileLogGenerator) readAndWriteFile(filename string) error {
 		var err error
 		lines, err = g.readFileLines(filename)
 		if err != nil {
-			return err
+			// A failed read never reaches emit, which counts write failures, so
+			// it is counted here.
+			g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
+			return nil, err
 		}
 
 		// Update cache
 		g.cache.Set(cacheKey, lines)
 	}
 
-	// If no non-empty lines found, return without error
 	if len(lines) == 0 {
-		return nil
+		return nil, errNoLines
 	}
+	return lines, nil
+}
 
-	// Select a random line
-	// #nosec G404 - using weak random is acceptable for log generation, not cryptographic purposes
-	randomIdx := rand.Intn(len(lines))
-	selectedLine := lines[randomIdx]
-
-	// Process timestamp directives in the line
-	processedLine := g.processTimestamps(selectedLine)
+// emit processes the line's timestamp directives and pushes it to the
+// consumer as a size-1 batch.
+func (g *FileLogGenerator) emit(line string) error {
+	processedLine := g.processTimestamps(line)
 
 	// Push as a size-1 batch with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -515,7 +728,7 @@ func (g *FileLogGenerator) readAndWriteFile(filename string) error {
 
 	if err != nil {
 		g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)
-		return fmt.Errorf("write: %w", err)
+		return err
 	}
 
 	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
@@ -546,6 +759,8 @@ func (g *FileLogGenerator) readFileLines(filename string) ([]string, error) {
 	// Read all non-empty lines from the file
 	var lines []string
 	scanner := bufio.NewScanner(rc)
+	// Lift the default 64 KiB token limit so long lines are read whole.
+	scanner.Buffer(nil, math.MaxInt)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) > 0 {
@@ -586,41 +801,55 @@ func replaceEpochDirectives(line string, t time.Time) string {
 	})
 }
 
+// commonTimestampPatterns are the most frequent multi-directive patterns,
+// replaced whole before the per-directive pass.
+var commonTimestampPatterns = []struct {
+	pattern   string
+	formatter func(time.Time) string
+}{
+	{"%Y-%m-%dT%H:%M:%S.%3NZ", func(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }},
+	{"%Y-%m-%dT%H:%M:%SZ", func(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05Z") }},
+	{"%Y-%m-%dT%H:%M:%S", func(t time.Time) string { return t.Format("2006-01-02T15:04:05") }},
+	{"%Y/%m/%d %H:%M:%S", func(t time.Time) string { return t.Format("2006/01/02 15:04:05") }},
+	{"%b %d %H:%M:%S", func(t time.Time) string { return t.Format("Jan 02 15:04:05") }},
+	{"%b %e %T", func(t time.Time) string { return t.Format("Jan _2 15:04:05") }},
+}
+
+// directivePattern matches one ctime directive.
+var directivePattern = regexp.MustCompile(`%[YymdoqbhBdeagAHIlpPMSLfsZzwxFTXrRnct%]`)
+
 // processTimestamps replaces timestamp directives in the line with actual formatted timestamps
 func (g *FileLogGenerator) processTimestamps(line string) string {
 	now := time.Now()
+	if !strings.Contains(line, "%%") {
+		return g.renderDirectives(line, now)
+	}
+	// %% is a literal %, so render the text between escapes on its own; no
+	// pass, the epoch and whole-pattern ones included, can match across one.
+	parts := strings.Split(line, "%%")
+	for i, part := range parts {
+		parts[i] = g.renderDirectives(part, now)
+	}
+	return strings.Join(parts, "%")
+}
 
+// renderDirectives renders the timestamp directives in text that holds no %%.
+func (g *FileLogGenerator) renderDirectives(line string, now time.Time) string {
 	// Short-circuit the Unix-epoch directives before the ctime passes, since
 	// their integer values cannot be expressed as ctime layout tokens.
 	line = replaceEpochDirectives(line, now)
 
-	// Process common multi-directive patterns first for performance
-	// These are the most frequently used patterns that should be optimized
-	commonPatterns := []struct {
-		pattern   string
-		formatter func(time.Time) string
-	}{
-		{"%Y-%m-%dT%H:%M:%S.%3NZ", func(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }},
-		{"%Y-%m-%dT%H:%M:%SZ", func(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05Z") }},
-		{"%Y-%m-%dT%H:%M:%S", func(t time.Time) string { return t.Format("2006-01-02T15:04:05") }},
-		{"%Y/%m/%d %H:%M:%S", func(t time.Time) string { return t.Format("2006/01/02 15:04:05") }},
-		{"%b %d %H:%M:%S", func(t time.Time) string { return t.Format("Jan 02 15:04:05") }},
-		{"%b %e %T", func(t time.Time) string { return t.Format("Jan _2 15:04:05") }},
-	}
-
 	result := line
 
 	// First, process common patterns
-	for _, pattern := range commonPatterns {
-		re := regexp.MustCompile(regexp.QuoteMeta(pattern.pattern))
-		if re.MatchString(result) {
-			result = re.ReplaceAllString(result, pattern.formatter(now))
+	for _, pattern := range commonTimestampPatterns {
+		if strings.Contains(result, pattern.pattern) {
+			result = strings.ReplaceAll(result, pattern.pattern, pattern.formatter(now))
 		}
 	}
 
 	// Then process all individual ctime directives using the ctime package
 	// This handles all remaining directives according to the ctime standard
-	directivePattern := regexp.MustCompile(`%[YymdoqbhBdeagAHIlpPMSLfsZzwxFTXrRnct%]`)
 	result = directivePattern.ReplaceAllStringFunc(result, func(directive string) string {
 		// For each directive, use the ctime package to format it
 		// We use ctime.Format to handle the directive properly

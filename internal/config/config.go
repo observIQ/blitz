@@ -57,6 +57,11 @@ func (c *Config) Validate() error {
 					return fmt.Errorf("generators[%d] validation failed: %w", i, err)
 				}
 			}
+			// A replay ends the run at the end of its input through a count
+			// of its own, which other entries would share or override.
+			if len(c.Generators) > 1 && entry.Type == GeneratorTypeFile && entry.Filegen.Mode == FileModeReplay {
+				return fmt.Errorf("generators[%d]: filegen replay must be the only generator", i)
+			}
 		}
 	} else if err := c.Generator.Validate(); err != nil {
 		return err

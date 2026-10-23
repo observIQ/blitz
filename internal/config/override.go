@@ -88,6 +88,21 @@ func (o *Override) createFlag(flags *pflag.FlagSet) *pflag.Flag {
 	return flags.Lookup(o.Flag)
 }
 
+// Choices returns the "One of: a|b" or "One or more of: a|b" values in o's
+// usage text, the list --help prints, or nil. The list ends at the first
+// space, so a note after it is not a value.
+func (o Override) Choices() []string {
+	_, list, ok := strings.Cut(o.Usage, "One of: ")
+	if !ok {
+		_, list, ok = strings.Cut(o.Usage, "One or more of: ")
+	}
+	if !ok {
+		return nil
+	}
+	list, _, _ = strings.Cut(list, " ")
+	return strings.Split(list, "|")
+}
+
 // createFlagName creates a flag name from a field
 func createFlagName(field string) string {
 	updatedField := strings.ReplaceAll(field, ".", "-")
@@ -288,6 +303,8 @@ func DefaultOverrides() []*Override {
 		NewOverride("generator.filegen.source", "file path, directory path, or glob pattern (auto-detected)", ""),
 		NewOverride("generator.filegen.cache-enabled", "enable in-memory file caching", true),
 		NewOverride("generator.filegen.cache-ttl", "file cache time-to-live (0 = never expire)", time.Duration(0)),
+		NewOverride("generator.filegen.mode", "File generator mode. One of: random|replay (replay emits every line once, in order)", FileModeRandom),
+		NewOverride("generator.filegen.seed", "File generator random-mode RNG seed (negative = random per run; 0+ = deterministic)", int64(-1)),
 		NewOverride("generator.okta.workers", "number of Okta generator workers", 1),
 		NewOverride("generator.okta.rate", "rate at which Okta logs are generated per worker", 1*time.Second),
 		// Removed setting kept bound for the deprecation window; see LogRemovedSettings.

@@ -91,8 +91,10 @@ func init() {
 		},
 	})
 
-	// Add completion command
+	// Add completion command. The value lists are registered on the root,
+	// since TAB runs the hidden __complete command, not this one.
 	rootCmd.AddCommand(newCompletionCommand())
+	registerFlagCompletions(rootCmd)
 
 	// Add library command group
 	rootCmd.AddCommand(newLibraryCommand())
@@ -285,11 +287,32 @@ func run(cmd *cobra.Command, args []string) error {
 			return genErr
 		}
 
+		// A replay is finite: bound it to its line count, or to its count
+		// when that is lower, so the run ends at the end of the input. A
+		// run-level count takes precedence over the entry's, as for any
+		// generator, so only the line count can lower it.
+		// Validation keeps a replay the only generator, so it owns the run.
+		entryCount := genCfg.Count
+		if r, ok := gen.(interface{ ReplayCount() (int, error) }); ok {
+			lines, err := r.ReplayCount()
+			if err != nil {
+				return fmt.Errorf("resolve replay input: %w", err)
+			}
+			if lines > 0 && (entryCount <= 0 || lines < entryCount) {
+				entryCount = lines
+			}
+			if lines > 0 && trackers.run != nil && int64(lines) < int64(cfg.Generator.Count) {
+				trackers.run = count.NewTracker(int64(lines))
+				logger.Info("Replay lowers the run's count to its line count",
+					zap.Int("from", cfg.Generator.Count), zap.Int("count", lines))
+			}
+		}
+
 		// Set up finite generation count tracker
-		if t, created := trackers.forEntry(genCfg.Count); t != nil {
+		if t, created := trackers.forEntry(entryCount); t != nil {
 			if created {
 				logger.Info("Finite generation enabled",
-					zap.Int("count", genCfg.Count),
+					zap.Int("count", entryCount),
 					zap.String("onFinish", cfg.OnFinish))
 			}
 			if s, ok := gen.(interface{ SetCountTracker(*count.Tracker) }); ok {
@@ -323,31 +346,7 @@ func run(cmd *cobra.Command, args []string) error {
 		lifecycleMetrics.BlitzStartupDurationHistogram.Record(ctx, runtime.DurationMillis(time.Since(startTime)))
 	}
 
-	if tracker == nil {
-		<-ctx.Done()
-	} else if cfg.OnFinish == "idle" {
-		for {
-			select {
-			case <-ctx.Done():
-				goto shutdown
-			case <-tracker.Done():
-				logger.Info("Generation count reached, idling (SIGUSR1 to restart)")
-			}
-			select {
-			case <-ctx.Done():
-				goto shutdown
-			case <-tracker.ResumeC():
-				logger.Info("Generation restarted")
-			}
-		}
-	} else {
-		select {
-		case <-ctx.Done():
-		case <-tracker.Done():
-			logger.Info("Generation count reached, exiting")
-		}
-	}
-shutdown:
+	waitForFinish(ctx, logger, tracker, cfg.OnFinish, nil)
 
 	if err := svc.Stop(); err != nil {
 		logger.Error("Failed to stop service", zap.Error(err))
@@ -750,4 +749,45 @@ func loadConfig(v *viper.Viper, path string) (*config.Config, error) {
 	}
 	cfg.ResolveExpandedSeeds()
 	return cfg, nil
+}
+
+// waitForFinish blocks until the run should shut down: ctx is cancelled, or,
+// with a count tracker in exit mode, the count is reached. In idle mode it
+// keeps waiting through count-reached and restart cycles until ctx ends.
+//
+// A reset (SIGUSR1) replaces the tracker's done channel, so each wait takes
+// the resume channel first and re-reads both after a reset; otherwise a reset
+// before the count is reached would strand the wait on a channel that never
+// closes. waiting, if set, runs each time the wait has taken the channels,
+// so a test can land a reset strictly after the capture.
+func waitForFinish(ctx context.Context, logger *zap.Logger, tracker *count.Tracker, onFinish string, waiting func()) {
+	if tracker == nil {
+		<-ctx.Done()
+		return
+	}
+	for {
+		resume := tracker.ResumeC()
+		done := tracker.Done()
+		if waiting != nil {
+			waiting()
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-resume:
+			continue
+		case <-done:
+		}
+		if onFinish != "idle" {
+			logger.Info("Generation count reached, exiting")
+			return
+		}
+		logger.Info("Generation count reached, idling (SIGUSR1 to restart)")
+		select {
+		case <-ctx.Done():
+			return
+		case <-resume:
+			logger.Info("Generation restarted")
+		}
+	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/observiq/blitz/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -48,9 +49,6 @@ PowerShell:
 		ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
 		Args:                  cobra.ExactValidArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			// Register completion functions for flags with enum values
-			registerFlagCompletions(cmd.Root())
-
 			switch args[0] {
 			case "bash":
 				_ = cmd.Root().GenBashCompletion(os.Stdout)
@@ -66,61 +64,19 @@ PowerShell:
 	return cmd
 }
 
-// registerFlagCompletions registers completion functions for flags with specific valid values
+// registerFlagCompletions completes every flag whose usage lists its values
+// ("One of: a|b" or "One or more of: a|b"), so completion offers the same
+// list --help prints. A multi-value flag completes its first value only.
 func registerFlagCompletions(rootCmd *cobra.Command) {
-	// Generator type completions
-	_ = rootCmd.RegisterFlagCompletionFunc("generator-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"nop", "json", "winevt", "palo-alto", "apache-common", "apache-combined", "apache-error", "nginx", "postgres", "kubernetes", "filegen"}, cobra.ShellCompDirectiveNoFileComp
-	})
-
-	// Output type completions
-	_ = rootCmd.RegisterFlagCompletionFunc("output-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"nop", "stdout", "tcp", "udp", "syslog", "otlp-grpc", "file"}, cobra.ShellCompDirectiveNoFileComp
-	})
-
-	// Logging type completions
-	_ = rootCmd.RegisterFlagCompletionFunc("logging-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"stdout", "file"}, cobra.ShellCompDirectiveNoFileComp
-	})
-
-	// Log level completions
-	_ = rootCmd.RegisterFlagCompletionFunc("logging-level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"debug", "info", "warn", "error"}, cobra.ShellCompDirectiveNoFileComp
-	})
-
-	// Generator JSON type completions
-	_ = rootCmd.RegisterFlagCompletionFunc("generator-json-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"default", "pii"}, cobra.ShellCompDirectiveNoFileComp
-	})
-
-	// Generator Kubernetes format completions
-	_ = rootCmd.RegisterFlagCompletionFunc("generator-kubernetes-format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"cri-o"}, cobra.ShellCompDirectiveNoFileComp
-	})
-
-	// Generator filegen mode completions
-	_ = rootCmd.RegisterFlagCompletionFunc("generator-filegen-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"file", "directory"}, cobra.ShellCompDirectiveNoFileComp
-	})
-
-	// Syslog transport completions
-	_ = rootCmd.RegisterFlagCompletionFunc("output-syslog-transport", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"tcp", "udp"}, cobra.ShellCompDirectiveNoFileComp
-	})
-
-	// Syslog RFC completions
-	_ = rootCmd.RegisterFlagCompletionFunc("output-syslog-rfc", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"3164", "5424"}, cobra.ShellCompDirectiveNoFileComp
-	})
-
-	// TLS min version completions
-	_ = rootCmd.RegisterFlagCompletionFunc("output-tcp-tls-min-version", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"1.2", "1.3"}, cobra.ShellCompDirectiveNoFileComp
-	})
-	_ = rootCmd.RegisterFlagCompletionFunc("output-syslog-tls-min-version", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"1.2", "1.3"}, cobra.ShellCompDirectiveNoFileComp
-	})
-	_ = rootCmd.RegisterFlagCompletionFunc("otlp-grpc-tls-min-version", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"1.2", "1.3"}, cobra.ShellCompDirectiveNoFileComp
-	})
+	for _, o := range config.DefaultOverrides() {
+		choices := o.Choices()
+		if choices == nil {
+			continue
+		}
+		// Fails for a flag the command lacks, or one registered already by
+		// a field that shares it (the flattened TLS keys); both are fine.
+		_ = rootCmd.RegisterFlagCompletionFunc(o.Flag, func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+			return choices, cobra.ShellCompDirectiveNoFileComp
+		})
+	}
 }

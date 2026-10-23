@@ -253,12 +253,13 @@ func (g *Generator) worker() {
 }
 
 func (g *Generator) scrape(r *rand.Rand) {
-	// Check count tracker
-	if g.tracker != nil {
-		if !g.tracker.Acquire() {
-			return
-		}
+	// One permit per scrape, committed only when every scraper's write
+	// succeeded, so a partly failed scrape is retried whole on the next tick.
+	permit, _, ok := g.tracker.Acquire()
+	if !ok {
+		return
 	}
+	failed := false
 
 	ctx := context.Background()
 
@@ -281,10 +282,16 @@ func (g *Generator) scrape(r *rand.Rand) {
 			g.metrics.BlitzGeneratorWriteErrorsCounter.Add(ctx, 1, generatorType,
 				metric.WithAttributeSet(attribute.NewSet(attribute.String("scraper", scraper.Name()))),
 			)
+			failed = true
 			continue
 		}
 		g.metrics.BlitzGeneratorEntriesCounter.Add(ctx, int64(len(points)), generatorType)
 	}
+	if failed {
+		permit.Release()
+		return
+	}
+	permit.Commit()
 }
 
 // buildScrapers creates the scrapers based on the provided names.

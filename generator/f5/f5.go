@@ -310,22 +310,22 @@ func (g *Generator) runWorker(workerIdx int) {
 		case <-g.stopCh:
 			return
 		case <-ticker.C:
-			if g.tracker != nil {
-				// Take the resume channel before Acquire, so a Reset that lands
-				// between a failed Acquire and the wait still wakes the worker.
-				resume := g.tracker.ResumeC()
-				if !g.tracker.Acquire() {
-					g.logger.Debug("F5 worker waiting for a count reset", zap.Int("worker_id", workerIdx))
-					select {
-					case <-g.stopCh:
-						return
-					case <-resume:
-						continue
-					}
+			permit, resume, ok := g.tracker.Acquire()
+			if !ok {
+				g.logger.Debug("F5 worker at the count limit, waiting", zap.Int("worker_id", workerIdx))
+				select {
+				case <-g.stopCh:
+					return
+				case <-resume:
+					continue
 				}
 			}
 			c.Now = g.now()
-			g.emit(g.build(r, c))
+			if err := g.emit(g.build(r, c)); err != nil {
+				permit.Release()
+				continue
+			}
+			permit.Commit()
 		}
 	}
 }
@@ -339,7 +339,7 @@ const (
 
 // emit counts one line, then pushes it to the consumer, its severity read
 // from the line's PRI.
-func (g *Generator) emit(line string, static *resource.StaticResources) {
+func (g *Generator) emit(line string, static *resource.StaticResources) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	rec := embed.LogRecord{
@@ -357,7 +357,9 @@ func (g *Generator) emit(line string, static *resource.StaticResources) {
 		g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
 			metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", "consume"))),
 		)
+		return err
 	}
+	return nil
 }
 
 // build picks a weighted product and builds one line from it on the
