@@ -7,7 +7,7 @@ import (
 
 // overlayFS layers a disk fs.FS over an embedded one: disk wins per path,
 // base fills what disk lacks, so an on-disk library overrides and extends
-// the embedded one (PIPE-1445). Either layer may be nil. It implements
+// the embedded one. Either layer may be nil. It implements
 // StatFS and ReadDirFS so WalkDir sees the union of both.
 type overlayFS struct {
 	disk fs.FS // override/extension layer; checked first

@@ -292,7 +292,6 @@ func TestForEmbedRejectsMissingLogConsumerForLogType(t *testing.T) {
 	assert.Contains(t, err.Error(), "LogConsumer")
 }
 
-// PIPE-1023 additions — hostmetrics dispatch.
 func TestForEmbedHostMetricsReturnsProducerModule(t *testing.T) {
 	cfg := config.Generator{
 		Type: config.GeneratorTypeHostMetrics,
@@ -323,7 +322,6 @@ func TestForEmbedHostMetricsRejectsMissingMetricConsumer(t *testing.T) {
 	assert.Contains(t, err.Error(), "MetricConsumer")
 }
 
-// PIPE-1024 additions — traces dispatch.
 func TestForEmbedTracesReturnsProducerModule(t *testing.T) {
 	cfg := config.Generator{
 		Type: config.GeneratorTypeTraces,

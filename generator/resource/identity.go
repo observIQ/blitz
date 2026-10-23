@@ -16,7 +16,7 @@ import (
 // Environment is present.
 //
 // host.image.* is deliberately never emitted: SystemIdentity.Image is an unwired
-// framework hook for a future CloudIdentity source (PIPE-1036).
+// framework hook for a future CloudIdentity source.
 func FromIdentity(sys *datagen.SystemIdentity, source string, extras ...string) *StaticResources {
 	if sys == nil {
 		return NewStaticResources(WithHost(Hostname(), source, extras...))

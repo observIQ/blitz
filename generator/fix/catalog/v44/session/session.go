@@ -86,8 +86,8 @@ func registerAll() {
 			AssetCategory: catalog.AssetCategoryUnknown,
 			// Heartbeats with no TestReqID context have an empty body.
 			// Heartbeats that respond to a TestRequest carry TestReqID
-			// 112; the StateTracker handles that case at emit time, not
-			// the static definition.
+			// 112, which this static definition leaves out; the generator
+			// does not emit heartbeats yet.
 			Fields: nil,
 		},
 		{
@@ -102,9 +102,9 @@ func registerAll() {
 			Version:       catalog.V44,
 			MsgType:       MsgTypeResendRequest,
 			AssetCategory: catalog.AssetCategoryUnknown,
-			// BeginSeqNo and EndSeqNo are session-state-driven; the
-			// definition carries placeholder generators that the
-			// StateTracker overrides at emit time.
+			// BeginSeqNo and EndSeqNo depend on session state, so these
+			// are placeholders; the generator does not emit ResendRequest
+			// yet.
 			Fields: []catalog.FieldGenerator{
 				catalog.IntField(TagBeginSeqNo, 1),
 				catalog.IntField(TagEndSeqNo, 0),

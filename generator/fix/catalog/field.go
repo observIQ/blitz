@@ -26,8 +26,8 @@ type FieldGenerator func(r *rand.Rand, ctx *GenerateCtx) Field
 
 // GenerateCtx carries shared inputs available to every FieldGenerator
 // during a message build. Fields here are read-only from a generator's
-// perspective; mutation is the StateTracker's responsibility and lives
-// behind its own locking.
+// perspective; state.Session owns mutation and guards it with its own
+// lock.
 type GenerateCtx struct {
 	// Version is the FIX protocol version being emitted.
 	Version Version

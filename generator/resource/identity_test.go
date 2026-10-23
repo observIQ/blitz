@@ -89,7 +89,7 @@ func TestFromIdentityHostIPAndMACArrays(t *testing.T) {
 
 	ips, ok := rec["host.ip"].([]string)
 	if !ok {
-		t.Fatalf("host.ip = %T, want []string (OTLP ArrayValue via PIPE-1253)", rec["host.ip"])
+		t.Fatalf("host.ip = %T, want []string (OTLP ArrayValue)", rec["host.ip"])
 	}
 	wantIPs := []string{"10.10.1.20", "fe80::1", "10.10.2.30"}
 	if !reflect.DeepEqual(ips, wantIPs) {

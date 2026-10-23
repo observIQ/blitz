@@ -191,7 +191,7 @@ func LoadModules(yamlBytes []byte, opts EmbedOpts) ([]embed.ProducerModule, erro
 	gens := cfg.EffectiveGenerators()
 
 	// Resolve the simulated identity environment once for the whole config, so
-	// every generator draws its host identity from the same fleet (PIPE-1036).
+	// every generator draws its host identity from the same fleet.
 	env, err := dispatch.BuildEnvironment(logger, cfg.Environment, gens)
 	if err != nil {
 		return nil, fmt.Errorf("build environment: %w", err)

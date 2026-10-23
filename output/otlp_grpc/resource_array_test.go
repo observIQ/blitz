@@ -7,7 +7,7 @@ import (
 )
 
 // A []string resource attribute (e.g. host.ip / host.mac) must serialize to an
-// OTLP ArrayValue of StringValues, not a stringified slice (PIPE-1253).
+// OTLP ArrayValue of StringValues, not a stringified slice.
 func TestBuildMetricRequest_ArrayResourceAttribute(t *testing.T) {
 	rm := buildMetricRequest(nil, map[string]any{
 		"host.ip": []string{"10.0.0.1", "10.0.0.2"},

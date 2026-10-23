@@ -155,8 +155,7 @@ func appTemplates(os OSType, role SystemRole) []appTemplate {
 // Any other (os, role) combination is unsupported: the function returns an
 // empty slice and emits a Warn on the injected logger so misconfigurations
 // surface in logs without panicking the caller. A nil logger disables the
-// warning (no global-logger fallback), per the embed-contract logging rules
-// (PIPE-1067).
+// warning (no global-logger fallback), per the embed-contract logging rules.
 func GenerateApplicationsForSystem(r *rand.Rand, os OSType, role SystemRole, hostname string, logger *zap.Logger) []*ApplicationIdentity {
 	if logger == nil {
 		logger = zap.NewNop()

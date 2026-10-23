@@ -4,8 +4,8 @@
 // (541), OptAttribute (206), ContractMultiplier (231),
 // SecurityExchange (207), and CFICode (461).
 //
-// Multi-leg combos (NoLegs / LegSymbol etc.) are deferred to PR #16's
-// StateTracker work — v1 emits single-leg options only.
+// Multi-leg combos (NoLegs / LegSymbol etc.) need repeating-group state
+// tracking, which does not exist yet, so v1 emits single-leg options only.
 package options
 
 import (

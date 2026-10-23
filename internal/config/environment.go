@@ -138,7 +138,7 @@ func (e EnvironmentConfig) Build(logger *zap.Logger, vendors []datagen.Appliance
 	}
 
 	// Gate the resolved environment on the network CIDR contract: an invalid
-	// CIDR fails the whole load rather than silently defaulting (PIPE-1002).
+	// CIDR fails the whole load rather than silently defaulting.
 	// Generated networks are always valid today; this is the enforcement point
 	// for when user-supplied CIDRs flow through.
 	if err := validateNetworks(env.Networks); err != nil {

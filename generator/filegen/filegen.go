@@ -374,7 +374,7 @@ func (g *FileLogGenerator) getFiles() ([]string, error) {
 }
 
 // libraryFS returns the data library backend: the on-disk library layered
-// over the embedded one, disk winning per path (PIPE-1445). Either layer
+// over the embedded one, disk winning per path. Either layer
 // may be absent; with neither, it returns the nfpm path so a read surfaces
 // a clear not-found error.
 func (g *FileLogGenerator) libraryFS() fs.FS {

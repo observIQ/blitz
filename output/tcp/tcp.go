@@ -168,7 +168,7 @@ func (t *TCP) Stop(ctx context.Context) error {
 
 	// The workers have now exited, so this goroutine is the sole owner of
 	// dataChan. Close it and drain any records that were still buffered when
-	// shutdown began, delivering them instead of dropping them (PIPE-1230).
+	// shutdown began, delivering them instead of dropping them.
 	// Draining here, after the workers are joined, keeps delivery deterministic
 	// rather than racing a worker's channel-drain against context cancellation.
 	close(t.dataChan)
