@@ -15,14 +15,14 @@ import (
 // destination for the flow signal, alongside logs/metrics/traces.
 func (o *OTLPGrpc) ConsumeFlows(ctx context.Context, records []embed.FlowRecord) error {
 	for i := range records {
-		rec := otelpdata.FlowToLogRecord(records[i], time.Now())
+		item := hold(ctx, otelpdata.FlowToLogRecord(records[i], time.Now()))
 		select {
-		case o.dataChan <- rec:
+		case o.dataChan <- item:
 			o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "flows")
 		case <-ctx.Done():
-			return fmt.Errorf("context cancelled while waiting to write flow: %w", ctx.Err())
+			return item.fail(fmt.Errorf("context cancelled while waiting to write flow: %w", ctx.Err()))
 		case <-o.ctx.Done():
-			return fmt.Errorf("OTLP gRPC output is shutting down")
+			return item.fail(fmt.Errorf("OTLP gRPC output is shutting down"))
 		}
 	}
 	return nil

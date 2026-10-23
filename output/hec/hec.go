@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/config"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -51,7 +53,7 @@ type HEC struct {
 	logger   *zap.Logger
 	cfg      Config
 	hostname string
-	dataChan chan output.LogRecord
+	dataChan chan hecItem
 	ctx      context.Context
 	cancel   context.CancelFunc
 	workers  []*worker
@@ -67,7 +69,7 @@ type worker struct {
 	channelID  string
 	httpClient *http.Client
 	baseURL    string
-	dataChan   chan output.LogRecord
+	dataChan   chan hecItem
 	ctx        context.Context
 	done       chan struct{}
 
@@ -79,6 +81,31 @@ type worker struct {
 	poller     *ackPoller
 	pollerStop chan struct{}
 	resendCh   chan resendItem
+	// resendsDone closes when processResends has drained resendCh.
+	resendsDone chan struct{}
+}
+
+// hecItem is one queued record and the settle function for its count permit;
+// sent is nil for a record a count run does not track.
+type hecItem struct {
+	rec  output.LogRecord
+	sent func(error)
+}
+
+func newHECItem(ctx context.Context, rec output.LogRecord) hecItem {
+	item := hecItem{rec: rec}
+	if count.Counted(ctx) {
+		item.sent = count.Hold(ctx)
+	}
+	return item
+}
+
+// fail settles the record as unsent and returns err.
+func (i hecItem) fail(err error) error {
+	if i.sent != nil {
+		i.sent(err)
+	}
+	return err
 }
 
 // New creates a new HEC output instance
@@ -116,6 +143,15 @@ func New(logger *zap.Logger, opts ...Option) (*HEC, error) {
 	if cfg.token == "" {
 		return nil, fmt.Errorf("token cannot be empty")
 	}
+	if cfg.batchTimeout <= 0 {
+		return nil, fmt.Errorf("batch timeout must be greater than 0, got %s", cfg.batchTimeout)
+	}
+	if cfg.enableACK && cfg.ackPollInterval <= 0 {
+		return nil, fmt.Errorf("ACK poll interval must be greater than 0 with ACK enabled, got %s", cfg.ackPollInterval)
+	}
+	if cfg.enableACK && cfg.ackTimeout <= 0 {
+		return nil, fmt.Errorf("ACK timeout must be greater than 0 with ACK enabled, got %s", cfg.ackTimeout)
+	}
 	if cfg.workers <= 0 {
 		cfg.workers = config.DefaultHECWorkers
 	}
@@ -136,7 +172,7 @@ func New(logger *zap.Logger, opts ...Option) (*HEC, error) {
 		logger:   logger.Named("output-hec"),
 		cfg:      cfg,
 		hostname: hostname,
-		dataChan: make(chan output.LogRecord, DefaultChannelSize),
+		dataChan: make(chan hecItem, DefaultChannelSize),
 		ctx:      ctx,
 		cancel:   cancel,
 		metrics:  m,
@@ -175,14 +211,15 @@ func New(logger *zap.Logger, opts ...Option) (*HEC, error) {
 
 // WriteLog sends data to the HEC output channel for processing by workers.
 func (h *HEC) WriteLog(ctx context.Context, data output.LogRecord) error {
+	item := newHECItem(ctx, data)
 	select {
-	case h.dataChan <- data:
+	case h.dataChan <- item:
 		h.metrics.recordLogsReceived(ctx, 1)
 		return nil
 	case <-ctx.Done():
-		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
+		return item.fail(fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err()))
 	case <-h.ctx.Done():
-		return fmt.Errorf("HEC output is shutting down")
+		return item.fail(fmt.Errorf("HEC output is shutting down"))
 	}
 }
 
@@ -212,7 +249,7 @@ func (h *HEC) Stop(ctx context.Context) error {
 	return nil
 }
 
-func newWorker(id int, logger *zap.Logger, cfg Config, hostname string, dataChan chan output.LogRecord, ctx context.Context, m *hecMetrics) (*worker, error) {
+func newWorker(id int, logger *zap.Logger, cfg Config, hostname string, dataChan chan hecItem, ctx context.Context, m *hecMetrics) (*worker, error) {
 	scheme := "https"
 	if !cfg.enableTLS {
 		scheme = "http"
@@ -257,6 +294,7 @@ func newWorker(id int, logger *zap.Logger, cfg Config, hostname string, dataChan
 		w.tracker = newACKTracker()
 		w.pollerStop = make(chan struct{})
 		w.resendCh = make(chan resendItem, 100)
+		w.resendsDone = make(chan struct{})
 		w.poller = newACKPoller(
 			w.logger,
 			w.tracker,
@@ -287,33 +325,40 @@ func (w *worker) run() {
 	}
 
 	batch := make([]output.LogRecord, 0, w.cfg.batchSize)
+	var sends count.Sends
 	timer := time.NewTimer(w.cfg.batchTimeout)
 	defer timer.Stop()
 
+	flush := func() {
+		w.sendBatch(batch, sends)
+		batch = batch[:0]
+		sends = nil
+	}
 	for {
 		select {
-		case record, ok := <-w.dataChan:
+		case item, ok := <-w.dataChan:
 			if !ok {
 				// Channel closed — flush remaining batch and exit
 				if len(batch) > 0 {
-					w.sendBatch(batch)
+					flush()
 				}
 				w.stopACKPoller()
 				w.logger.Info("HEC worker exiting - channel closed")
 				return
 			}
 
-			batch = append(batch, record)
+			batch = append(batch, item.rec)
+			if item.sent != nil {
+				sends = append(sends, item.sent)
+			}
 			if len(batch) >= w.cfg.batchSize {
-				w.sendBatch(batch)
-				batch = batch[:0]
+				flush()
 				timer.Reset(w.cfg.batchTimeout)
 			}
 
 		case <-timer.C:
 			if len(batch) > 0 {
-				w.sendBatch(batch)
-				batch = batch[:0]
+				flush()
 			}
 			timer.Reset(w.cfg.batchTimeout)
 		}
@@ -323,10 +368,12 @@ func (w *worker) run() {
 // processResends handles resend payloads from the ACK poller.
 // These are pre-serialized batch payloads that need to be re-POSTed to HEC.
 func (w *worker) processResends() {
+	defer close(w.resendsDone)
 	for item := range w.resendCh {
 		resp, err := w.postEvents(item.payload)
 		if err != nil {
 			w.logger.Error("Failed to resend batch", zap.Error(err))
+			item.sends.Settle(err)
 			continue
 		}
 		if resp.Code != 0 {
@@ -334,12 +381,15 @@ func (w *worker) processResends() {
 				zap.Int("code", resp.Code),
 				zap.String("text", resp.Text),
 			)
+			item.sends.Settle(fmt.Errorf("HEC error code %d: %s", resp.Code, resp.Text))
 			continue
 		}
 		// Track the new ackId from the resend, preserving the accumulated retry count
-		if w.tracker != nil && resp.AckID != nil {
-			w.tracker.trackWithRetries(*resp.AckID, item.payload, item.retryCount)
+		if resp.AckID != nil {
+			w.tracker.trackWithRetries(*resp.AckID, item.payload, item.retryCount, item.sends)
+			continue
 		}
+		item.sends.Settle(nil)
 	}
 }
 
@@ -351,9 +401,12 @@ func (w *worker) stopACKPoller() {
 	close(w.pollerStop)
 	<-w.poller.done
 	close(w.resendCh)
+	<-w.resendsDone
+	// Batches still awaiting their ACK were never confirmed as indexed.
+	w.tracker.failAll(errors.New("HEC output stopped before the batch was acknowledged"))
 }
 
-func (w *worker) sendBatch(batch []output.LogRecord) {
+func (w *worker) sendBatch(batch []output.LogRecord, sends count.Sends) {
 	ctx := context.Background()
 	batchLen := int64(len(batch))
 	w.metrics.recordBatchSize(ctx, batchLen)
@@ -362,6 +415,7 @@ func (w *worker) sendBatch(batch []output.LogRecord) {
 	if err != nil {
 		w.logger.Error("Failed to build HEC payload", zap.Error(err))
 		w.metrics.recordSendError(ctx, "encode")
+		sends.Settle(err)
 		return
 	}
 
@@ -380,6 +434,7 @@ func (w *worker) sendBatch(batch []output.LogRecord) {
 		span.RecordError(err)
 		w.logger.Error("Failed to send HEC events", zap.Error(err), zap.Int("batch_size", len(batch)))
 		w.metrics.recordSendError(ctx, "transport")
+		sends.Settle(err)
 		return
 	}
 
@@ -393,14 +448,17 @@ func (w *worker) sendBatch(batch []output.LogRecord) {
 			zap.Int("batch_size", len(batch)),
 		)
 		w.metrics.recordSendError(ctx, "hec_error")
+		sends.Settle(fmt.Errorf("HEC error code %d: %s", resp.Code, resp.Text))
 		return
 	}
 
 	w.metrics.recordLogRate(ctx, float64(batchLen))
 
-	// Track the ackId for ACK confirmation
+	// With ACKs on, the batch counts once Splunk confirms it was indexed.
 	if w.tracker != nil && resp.AckID != nil {
-		w.tracker.track(*resp.AckID, payload)
+		w.tracker.track(*resp.AckID, payload, sends)
+	} else {
+		sends.Settle(nil)
 	}
 
 	w.logger.Debug("HEC batch sent successfully",
@@ -476,6 +534,10 @@ func (w *worker) postEvents(payload []byte) (*hecResponse, error) {
 	var hecResp hecResponse
 	if err := json.NewDecoder(resp.Body).Decode(&hecResp); err != nil {
 		return nil, fmt.Errorf("decode response (status %d): %w", resp.StatusCode, err)
+	}
+	// A body without a HEC error code, as from a proxy, still fails on its status.
+	if hecResp.Code == 0 && (resp.StatusCode < 200 || resp.StatusCode > 299) {
+		return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
 
 	return &hecResp, nil

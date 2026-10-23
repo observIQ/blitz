@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -39,6 +40,12 @@ type RotationOptions struct {
 type fileItem struct {
 	ctx context.Context
 	msg string
+	// sent settles the line's count permit, if any, with the write result.
+	sent func(error)
+}
+
+func newFileItem(ctx context.Context, msg string) fileItem {
+	return fileItem{ctx: ctx, msg: msg, sent: count.Hold(ctx)}
 }
 
 // File implements the Output interface for file writes
@@ -125,14 +132,19 @@ func (f *File) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.In
 
 // WriteLog enqueues data for file workers.
 func (f *File) WriteLog(ctx context.Context, data output.LogRecord) error {
+	item := newFileItem(ctx, data.Message)
 	select {
-	case f.dataChan <- fileItem{ctx: ctx, msg: data.Message}:
+	case f.dataChan <- item:
 		f.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
-		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
+		err := fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
+		item.sent(err)
+		return err
 	case <-f.ctx.Done():
-		return fmt.Errorf("file output is shutting down")
+		err := fmt.Errorf("file output is shutting down")
+		item.sent(err)
+		return err
 	}
 }
 
@@ -142,9 +154,12 @@ func (f *File) Stop(ctx context.Context) error {
 
 	f.metrics.BlitzOutputActiveWorkersGauge.Record(ctx, 0, outputType)
 
-	close(f.dataChan)
+	// Stop the workers first, so this goroutine alone writes out the lines
+	// still queued instead of dropping them when the workers exit.
 	f.cancel()
 	f.workerManager.Stop()
+	close(f.dataChan)
+	f.drain()
 
 	if err := f.writer.Close(); err != nil {
 		return fmt.Errorf("close file writer: %w", err)
@@ -162,19 +177,12 @@ func (f *File) fileWorker(id int) {
 		select {
 		case item, ok := <-f.dataChan:
 			if !ok {
+				// Safety net: Stop closes dataChan only after the workers exit.
 				f.logger.Info("File worker exiting - channel closed", zap.Int("worker_id", id))
 				return
 			}
 
-			// The write span covers the lumberjack write, which transparently
-			// absorbs any file rotation that fires during it.
-			_, span := output.StartSendSpan(item.ctx, f.tel, "blitz.output.file.write")
-			err := f.writeData(item.msg)
-			if err != nil {
-				span.RecordError(err)
-			}
-			span.End()
-			if err != nil {
+			if err := f.deliver(item); err != nil {
 				f.logger.Error("Failed to write file data", zap.Int("worker_id", id), zap.Error(err))
 				return
 			}
@@ -183,6 +191,28 @@ func (f *File) fileWorker(id int) {
 			f.logger.Info("File worker exiting - context cancelled", zap.Int("worker_id", id))
 			return
 		}
+	}
+}
+
+// deliver writes one line and settles its permit with the result.
+func (f *File) deliver(item fileItem) error {
+	// The write span covers the lumberjack write, which transparently
+	// absorbs any file rotation that fires during it.
+	_, span := output.StartSendSpan(item.ctx, f.tel, "blitz.output.file.write")
+	err := f.writeData(item.msg)
+	if err != nil {
+		span.RecordError(err)
+	}
+	span.End()
+	item.sent(err)
+	return err
+}
+
+// drain writes every line left in the closed dataChan. A failed line does
+// not stop the rest, since each write stands alone.
+func (f *File) drain() {
+	for item := range f.dataChan {
+		_ = f.deliver(item)
 	}
 }
 

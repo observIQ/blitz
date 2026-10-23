@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/telemetry"
 )
 
@@ -23,6 +24,9 @@ const multiQueueSize = 100
 // when every eligible child's forwarding queue is full, so no child accepted
 // the record.
 var ErrQueueFull = errors.New("queue full, record dropped")
+
+// ErrNoOutput is returned when no child takes a counted record's signal.
+var ErrNoOutput = errors.New("no output takes this signal")
 
 // Drop logs are sampled per child: the first drop in each window logs at
 // once, then one in every dropLogThereafter until the window ends.
@@ -115,6 +119,11 @@ type FanOutChild struct {
 type multiItem struct {
 	sig telemetry.Type
 	sc  trace.SpanContext
+	// pctx carries the caller's count permit across the queue hop, nil for an
+	// uncounted record, and sent settles this child's hold on it with the
+	// write result.
+	pctx context.Context
+	sent func(error)
 	// A single Write* keeps its record inline (no per-record allocation);
 	// a Consume* batch uses the slice for its signal.
 	log     LogRecord
@@ -211,6 +220,9 @@ func (m *MultiOutput) forward(c *multiChild) {
 	defer close(c.done)
 	for it := range c.q {
 		ctx := m.ctx
+		if it.pctx != nil {
+			ctx = count.Inherit(ctx, it.pctx)
+		}
 		if it.sc.IsValid() {
 			ctx = trace.ContextWithSpanContext(ctx, it.sc)
 		}
@@ -218,14 +230,18 @@ func (m *MultiOutput) forward(c *multiChild) {
 			// A flow consumer takes the whole batch in one call.
 			if err := c.flow.ConsumeFlows(ctx, it.flows); err != nil {
 				if m.ctx.Err() != nil {
-					m.abandon(c)
+					m.abandon(c, it)
 					return
 				}
 				c.warn.Warn("fan-out output write failed", zap.String("telemetry_type", string(it.sig)), zap.Error(err))
 				m.counters.BlitzOutputFanoutWriteErrorsCounter.Add(context.Background(), int64(len(it.flows)), c.typ, string(it.sig), c.name)
+				it.sent(err)
+				continue
 			}
+			it.sent(nil)
 			continue
 		}
+		var failed error
 		for i := 0; i < it.size(); i++ {
 			var err error
 			switch {
@@ -243,43 +259,61 @@ func (m *MultiOutput) forward(c *multiChild) {
 				err = c.trace.WriteTrace(ctx, it.trace)
 			}
 			if err != nil && m.ctx.Err() != nil {
-				m.abandon(c)
+				m.abandon(c, it)
 				return
 			}
 			if err != nil {
 				c.warn.Warn("fan-out output write failed", zap.String("telemetry_type", string(it.sig)), zap.Error(err))
 				m.counters.BlitzOutputFanoutWriteErrorsCounter.Add(context.Background(), 1, c.typ, string(it.sig), c.name)
+				failed = err
 			}
 		}
+		it.sent(failed)
 	}
 }
 
 // abandon reports a child's in-flight batch and the rest of its queue as
 // shutdown loss once Stop has cancelled writes: logged once, not counted as
-// write errors.
-func (m *MultiOutput) abandon(c *multiChild) {
+// write errors, and settled as unsent. Stop has closed the queue by then.
+func (m *MultiOutput) abandon(c *multiChild, inFlight multiItem) {
 	c.warn.Warn("fan-out output abandoned queued records at shutdown", zap.Int("batches", 1+len(c.q)))
+	inFlight.sent(errMultiStopped)
+	for it := range c.q {
+		it.sent(errMultiStopped)
+	}
 }
 
 // enqueue offers it to each child without blocking. A child with a full
 // queue drops it, which is logged and counted; the write fails only when
 // every eligible child dropped it.
-func (m *MultiOutput) enqueue(children []*multiChild, it multiItem) error {
+func (m *MultiOutput) enqueue(ctx context.Context, children []*multiChild, it multiItem) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.stopped {
 		return errMultiStopped
 	}
+	if len(children) == 0 {
+		// Only a counted record must not pass as delivered; others are skipped.
+		if count.Counted(ctx) {
+			return fmt.Errorf("%w: %s", ErrNoOutput, it.sig)
+		}
+		return nil
+	}
+	if count.Counted(ctx) {
+		it.pctx = ctx
+	}
 	accepted := false
 	for _, c := range children {
+		it.sent = count.Hold(ctx)
 		select {
 		case c.q <- it:
 			accepted = true
 		default:
 			m.dropped(c, it)
+			it.sent(c.errFull)
 		}
 	}
-	if accepted || len(children) == 0 {
+	if accepted {
 		return nil
 	}
 	errs := make([]error, len(children))
@@ -298,7 +332,7 @@ func (m *MultiOutput) dropped(c *multiChild, it multiItem) {
 // WriteLog fans a log record to children that implement LogWriter and
 // declare Logs; others are skipped.
 func (m *MultiOutput) WriteLog(ctx context.Context, data LogRecord) error {
-	return m.enqueue(m.logs, multiItem{sig: telemetry.Logs, sc: trace.SpanContextFromContext(ctx), log: data})
+	return m.enqueue(ctx, m.logs, multiItem{sig: telemetry.Logs, sc: trace.SpanContextFromContext(ctx), log: data})
 }
 
 // batchSpan starts the per-batch span the consumer adapters create when
@@ -319,13 +353,13 @@ func (m *MultiOutput) ConsumeLogs(ctx context.Context, recs []embed.LogRecord) e
 	if len(recs) == 0 {
 		return nil
 	}
-	return m.enqueue(m.logs, multiItem{sig: telemetry.Logs, sc: trace.SpanContextFromContext(ctx), logs: slices.Clone(recs)})
+	return m.enqueue(ctx, m.logs, multiItem{sig: telemetry.Logs, sc: trace.SpanContextFromContext(ctx), logs: slices.Clone(recs)})
 }
 
 // WriteMetric fans a metric record to children that implement MetricWriter
 // and declare Metrics; others are skipped.
 func (m *MultiOutput) WriteMetric(ctx context.Context, data MetricRecord) error {
-	return m.enqueue(m.metrics, multiItem{sig: telemetry.Metrics, sc: trace.SpanContextFromContext(ctx), metric: data})
+	return m.enqueue(ctx, m.metrics, multiItem{sig: telemetry.Metrics, sc: trace.SpanContextFromContext(ctx), metric: data})
 }
 
 // ConsumeMetrics fans a whole metric batch out as one queue slot per child.
@@ -336,13 +370,13 @@ func (m *MultiOutput) ConsumeMetrics(ctx context.Context, points []embed.MetricP
 	if len(points) == 0 {
 		return nil
 	}
-	return m.enqueue(m.metrics, multiItem{sig: telemetry.Metrics, sc: trace.SpanContextFromContext(ctx), metrics: slices.Clone(points)})
+	return m.enqueue(ctx, m.metrics, multiItem{sig: telemetry.Metrics, sc: trace.SpanContextFromContext(ctx), metrics: slices.Clone(points)})
 }
 
 // WriteTrace fans a trace record to children that implement TraceWriter and
 // declare Traces; others are skipped.
 func (m *MultiOutput) WriteTrace(ctx context.Context, data TraceRecord) error {
-	return m.enqueue(m.traces, multiItem{sig: telemetry.Traces, sc: trace.SpanContextFromContext(ctx), trace: data})
+	return m.enqueue(ctx, m.traces, multiItem{sig: telemetry.Traces, sc: trace.SpanContextFromContext(ctx), trace: data})
 }
 
 // ConsumeTraces fans a whole span batch out as one queue slot per child. The
@@ -353,7 +387,7 @@ func (m *MultiOutput) ConsumeTraces(ctx context.Context, spans []embed.Span) err
 	if len(spans) == 0 {
 		return nil
 	}
-	return m.enqueue(m.traces, multiItem{sig: telemetry.Traces, sc: trace.SpanContextFromContext(ctx), traces: slices.Clone(spans)})
+	return m.enqueue(ctx, m.traces, multiItem{sig: telemetry.Traces, sc: trace.SpanContextFromContext(ctx), traces: slices.Clone(spans)})
 }
 
 // ConsumeFlows fans a flow batch to children that implement
@@ -363,7 +397,7 @@ func (m *MultiOutput) ConsumeFlows(ctx context.Context, recs []embed.FlowRecord)
 	if len(recs) == 0 {
 		return nil
 	}
-	return m.enqueue(m.flows, multiItem{sig: telemetry.Flows, sc: trace.SpanContextFromContext(ctx), flows: slices.Clone(recs)})
+	return m.enqueue(ctx, m.flows, multiItem{sig: telemetry.Flows, sc: trace.SpanContextFromContext(ctx), flows: slices.Clone(recs)})
 }
 
 // Stop closes every queue and lets the forwarders drain them, using at most

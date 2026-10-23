@@ -20,7 +20,7 @@ Logs are batched together and sent in ExportLogsServiceRequest messages per the 
 | `output.otlp-grpc.host` | `--output-otlp-grpc-host` | `BLITZ_OUTPUT_OTLP_GRPC_HOST` | `localhost` | OTLP gRPC target host (IP address or hostname) |
 | `output.otlp-grpc.port` | `--output-otlp-grpc-port` | `BLITZ_OUTPUT_OTLP_GRPC_PORT` | `4317` | OTLP gRPC target port (1-65535) |
 | `output.otlp-grpc.workers` | `--output-otlp-grpc-workers` | `BLITZ_OUTPUT_OTLP_GRPC_WORKERS` | `1` | Number of OTLP gRPC output workers (must be ≥ 0) |
-| `output.otlp-grpc.batchTimeout` | `--output-otlp-grpc-batchtimeout` | `BLITZ_OUTPUT_OTLP_GRPC_BATCHTIMEOUT` | `1s` | How long to wait for a batch to fill before sending (duration format) |
+| `output.otlp-grpc.batchTimeout` | `--output-otlp-grpc-batchtimeout` | `BLITZ_OUTPUT_OTLP_GRPC_BATCHTIMEOUT` | `1s` | How long to wait for a batch to fill before sending (duration format, must be > 0) |
 | `output.otlp-grpc.requestTimeout` | `--output-otlp-grpc-requesttimeout` | `BLITZ_OUTPUT_OTLP_GRPC_REQUESTTIMEOUT` | `10s` | Timeout for each individual gRPC export call. If exceeded the request is cancelled and counted as a send error. Independent of `batchTimeout`. |
 | `output.otlp-grpc.maxQueueSize` | `--output-otlp-grpc-maxqueuesize` | `BLITZ_OUTPUT_OTLP_GRPC_MAXQUEUESIZE` | `100` | Maximum queue size for batching logs (must be ≥ 0) |
 | `output.otlp-grpc.maxExportBatchSize` | `--output-otlp-grpc-maxexportbatchsize` | `BLITZ_OUTPUT_OTLP_GRPC_MAXEXPORTBATCHSIZE` | `200` | Maximum number of logs per export batch (must be ≥ 0) |

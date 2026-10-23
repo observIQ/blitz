@@ -6,7 +6,7 @@ Blitz supports generating a finite number of telemetry entries instead of runnin
 
 ### Count
 
-The `generator.count` setting controls how many total telemetry entries to generate across all workers. When set to `0` (the default), generation runs indefinitely.
+The `generator.count` setting controls how many total telemetry entries to deliver across all workers. When set to `0` (the default), generation runs indefinitely.
 
 **YAML:**
 
@@ -31,11 +31,32 @@ blitz --generator-type json --generator-count 10000
 BLITZ_GENERATOR_COUNT=10000
 ```
 
-The count is shared across all workers. For example, with 4 workers and a count of 10000, each worker competes to acquire permits from the shared pool. The total number of entries accepted by the output will be exactly 10000.
+The count is shared across all workers. For example, with 4 workers and a count of 10000, each worker competes to acquire permits from the shared pool. The run counts exactly 10000 delivered entries. The destination can receive a few more, since a replacement can duplicate an entry that was in fact delivered (see [Delivery](#delivery)).
 
 ### Delivery
 
-The count is of entries the output accepts, not attempts. When a write fails, its permit goes back to the pool and a later write takes it, so the run ends, and `onFinish` applies, only after the output has accepted the last entry. Most outputs (tcp, udp, syslog, file, stdout, hec, otlp-grpc) accept an entry by queuing it and send it afterwards, so an entry that fails on the wire after it was queued is not retried and still counts. On exit, entries still queued are flushed to the destination before blitz stops.
+The count is of entries delivered to the destination, not attempts. Most outputs queue an entry and send it later, so an entry counts only once its send succeeds. When a send fails, or an output drops a queued entry, its permit goes back to the pool and the generator makes a replacement. The run ends, and `onFinish` applies, only after the last entry is delivered, so a run against a destination that never accepts keeps retrying until blitz is stopped.
+
+Delivery is at least once. When blitz cannot tell which entries of a failed send arrived, it replaces all of them, so the destination may receive duplicates but never fewer entries than the count.
+
+Each output counts an entry as delivered at this point:
+
+| Output                    | Delivered when                                                                   |
+|---------------------------|----------------------------------------------------------------------------------|
+| `tcp`, `syslog` over TCP  | the socket write returns                                                         |
+| `udp`, `syslog` over UDP  | the datagram is sent (UDP has no acknowledgement)                                |
+| `file`                    | the line is written to the file                                                  |
+| `stdout`                  | the buffer holding the record is flushed                                         |
+| `hec`                     | Splunk acknowledges the batch, or an HTTP 2xx with ACKs off or no ackId returned |
+| `otlp-grpc`               | the export call for the batch succeeds with nothing rejected                     |
+| `prometheus-remote-write` | the endpoint accepts the batch                                                   |
+| `prometheus-scrape`       | the sample is stored for scraping                                                |
+| `flow`                    | the packet is sent                                                               |
+| `nop`                     | the write returns                                                                |
+
+A TCP write returns once the kernel has the data, so a destination that resets the connection can still lose the entries written just before the reset.
+
+With several `outputs:`, an entry counts once every output has delivered it. If any output fails, the replacement goes to all of them, so the outputs that succeeded receive a duplicate. HEC with ACKs on resends a batch whose acknowledgement times out, including when the ACK endpoint cannot be queried, so Splunk can index that batch twice. An otlp-grpc collector that rejects part of a batch (a partial success) does not say which entries it rejected, so the whole batch is replaced, and the entries it accepted arrive twice.
 
 ### On Finish
 
@@ -85,9 +106,9 @@ This resets the count tracker to the original count value, allowing another roun
 
 ## Per-Telemetry-Type Semantics
 
-The count represents the total number of telemetry entries accepted by the output, regardless of generator type. Each entry the output accepts consumes one permit from the shared count tracker, with two exceptions: a `traces` permit is one trace, counted once all of its spans are accepted, and a `hostmetrics` permit is one scrape, counted once every scraper's batch is.
+The count represents the total number of telemetry entries delivered, regardless of generator type. Each delivered entry consumes one permit from the shared count tracker, with two exceptions: a `traces` permit is one trace, counted once all of its spans are delivered, and a `hostmetrics` permit is one scrape, counted once every scraper's batch is.
 
-For generators with multiple workers, the permits are distributed on a first-come, first-served basis. This means the distribution across workers is not guaranteed to be even, but the total count will always be exact.
+For generators with multiple workers, the permits are distributed on a first-come, first-served basis. This means the distribution across workers is not guaranteed to be even, but the run always ends once exactly the count has been delivered (see [Delivery](#delivery) for the extras a destination can still receive).
 
 ## Examples
 
