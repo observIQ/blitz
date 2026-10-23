@@ -4,15 +4,16 @@ This file provides guidance to Claude Code when working with the Blitz repositor
 
 ## Repository Overview
 
-Blitz is an open-source load generation tool for testing OpenTelemetry collectors. It generates synthetic log data in various formats and sends it to configurable destinations.
+Blitz is an open-source load generation tool for testing OpenTelemetry collectors. It generates synthetic logs, metrics, traces, and flow records and sends them to configurable destinations.
 
 ## Architecture
 
 ### Generators (`generator/`)
 
-Each generator creates a specific log format:
+Each generator creates one kind of telemetry. The README lists them all with links to their docs:
 - `json/` - Structured JSON logs (supports `default` and `pii` log types)
-- `winevt/` - Windows Event logs
+- `winevt/` - Windows Event logs in XML (deprecated; use `wel/`)
+- `wel/` - Windows Event Log entries across many channels
 - `paloalto/` - Palo Alto firewall logs
 - `apache/` - Apache Common Log Format
 - `apache_combined/` - Apache Combined Log Format
@@ -20,17 +21,29 @@ Each generator creates a specific log format:
 - `nginx/` - NGINX logs
 - `postgres/` - PostgreSQL logs
 - `kubernetes/` - Kubernetes container logs (CRI-O format)
-- `filegen/` - File-based log generation
+- `filegen/` - Lines from files or the data library, random or replayed in order
+- `okta/` - Okta System Log events
+- `f5/` - F5 product-portfolio syslog
+- `fix/` - FIX protocol messages
+- `hostmetrics/` - Host metrics
+- `traces/` - Distributed traces
+- `flow/` - Network flow records
+- `nop/` - No-op generator
 
 ### Outputs (`output/`)
 
-Outputs send generated logs to destinations:
+Outputs send generated telemetry to destinations:
 - `stdout/` - Standard output
 - `tcp/` - TCP socket
 - `udp/` - UDP socket
 - `syslog/` - Syslog protocol
-- `otlp/` - OpenTelemetry Protocol (gRPC)
+- `otlp_grpc/` - OpenTelemetry Protocol (gRPC)
 - `file/` - File output with rotation
+- `hec/` - Splunk HTTP Event Collector
+- `flow/` - Flow records over UDP (NetFlow, sFlow, IPFIX)
+- `promrw/` - Prometheus remote-write push
+- `promscrape/` - Prometheus scrape endpoint
+- `nop/` - No-op output
 
 ## Important: Keeping Docker Telemetry Generator in Sync
 

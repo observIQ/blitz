@@ -21,7 +21,7 @@ Blitz is a high-performance telemetry generation and forwarding application desi
          │                       │              ┌─────────────────┐
          │                       │              │   Output        │
          │                       │              │                 │
-         │                       └─────────────▶│ • TCP/UDP       │
+         │                       └─────────────▶│ • Destinations  │
          │                                      │ • Worker Mgmt   │
          │                                      │ • Connection    │
          │                                      │ • Retry Logic   │
@@ -79,9 +79,15 @@ The config package provides a comprehensive configuration system with validation
 ##### Config Structure (`config.go`)
 ```go
 type Config struct {
-    Logging   Logging   `yaml:"logging,omitempty"`
-    Generator Generator `yaml:"generator,omitempty"`
-    Output    Output    `yaml:"output,omitempty"`
+    Logging     Logging           `yaml:"logging,omitempty"`
+    Generator   Generator         `yaml:"generator,omitempty"`
+    Generators  []Generator       `yaml:"generators,omitempty"`
+    Output      Output            `yaml:"output,omitempty"`
+    Outputs     []Output          `yaml:"outputs,omitempty"`
+    Metrics     Metrics           `yaml:"metrics,omitempty"`
+    Environment EnvironmentConfig `yaml:"environment,omitempty"`
+    Telemetry   Telemetry         `yaml:"telemetry,omitempty"`
+    OnFinish    string            `yaml:"onFinish,omitempty"`
 }
 ```
 
@@ -93,8 +99,12 @@ type Config struct {
 
 ##### Configuration Types:
 - **Logging**: Output destination and log level configuration
-- **Generator**: Generator type and specific configuration (JSON generator)
-- **Output**: Output type and specific configuration (TCP/UDP)
+- **Generator / Generators**: One generator, or a list of them, each with its type-specific configuration
+- **Output / Outputs**: One output, or a list that fans every record out to each of them
+- **Metrics**: The port for blitz's own Prometheus metrics endpoint
+- **Environment**: The simulated deployment's identities and seeds (see [environment.md](environment.md))
+- **Telemetry**: OTLP export of blitz's own spans and logs
+- **OnFinish**: What a finite run does when its count is reached
 
 #### Features:
 - **Multi-source Configuration**: Supports YAML files, environment variables, and command-line flags
@@ -111,9 +121,9 @@ The service package provides high-level orchestration of the generator and outpu
 #### Service Structure:
 ```go
 type Service struct {
-    Logger    *zap.Logger
-    Generator generator.Generator
-    Output    output.Output
+    Logger     *zap.Logger
+    Generators []any
+    Output     output.Output
 }
 ```
 
@@ -124,7 +134,7 @@ type Service struct {
 - **Graceful Shutdown**: Coordinates shutdown with timeout handling
 
 #### Lifecycle Methods:
-- **Start()**: Initiates the generator, which begins producing telemetry
+- **Start()**: Initiates the generators, which begin producing telemetry
 - **Stop()**: Stops both generator and output with 30-second timeout
 
 ### 4. generator Package - Telemetry Data Generation
@@ -148,6 +158,8 @@ A generator takes its consumer (`embed.LogConsumer`, `MetricConsumer`, or
 single output through the `output.WriterAsLogConsumer` family of adapters,
 and a fan-out as the `output.MultiOutput` itself, which takes whole batches.
 A flow output is itself the `embed.FlowConsumer` a flow generator takes.
+
+The README lists every generator. The two below illustrate the pattern.
 
 #### NOP Generator Implementation (`nop.go`):
 
@@ -180,11 +192,21 @@ A flow output is itself the `embed.FlowConsumer` a flow generator takes.
 ##### Log Structure:
 ```json
 {
-    "timestamp": "2024-01-15T10:30:45Z",
-    "level": "INFO",
-    "environment": "production",
-    "location": "us-east1",
-    "message": "User authentication failed for user_id=12345..."
+    "component": "database",
+    "correlation_id": "cd288d66-1294-7958-03de-d3332198e5cb",
+    "duration_ms": 6995,
+    "environment": "staging",
+    "host": "fenrir-proxy-15",
+    "level": "DEBUG",
+    "location": "us-west1",
+    "message": "File upload completed successfully, file_id=file_789012, ...",
+    "region": "ap-southeast-1",
+    "request_id": "cb1cda65-5edc-fc84-af45-6c5318345dcd",
+    "service": "event-bus",
+    "span_id": "49699436095629a9",
+    "timestamp": "2026-10-21T08:45:48.140307905-04:00",
+    "trace_id": "5112eb80e461aa8b1c2cefcc636e7eb5",
+    "version": "1.1.0"
 }
 ```
 
@@ -225,6 +247,8 @@ replaced the single `Output` interface: its `Write` method is now
 Code that implemented or called `output.Output` moves to `LogWriter`. Flows
 have no writer extension: a flow output implements `embed.FlowConsumer`
 (`ConsumeFlows`).
+
+The README lists every output. The three below illustrate the pattern.
 
 #### NOP Output Implementation (`nop.go`):
 
@@ -364,16 +388,16 @@ Worker Failure → Exponential Backoff → Worker Restart → Continued Operatio
 ## Extension Points
 
 ### Adding New Generators:
-1. Implement the `Generator` interface
-2. Add configuration types to the config package
-3. Update main.go to handle the new generator type
-4. Add validation rules and tests
+1. Implement `embed.ProducerModule` and yield records to the consumer for its signal
+2. Add configuration types and overrides to the config package
+3. Construct it in `dispatch.ForEmbedAt` (`internal/dispatch/embed.go`, wrapped by `ForEmbed`), which the CLI and embedded hosts share
+4. Add validation rules and tests, a `docs/generator/<name>.md` page, a README entry, and a docker-compose service
 
 ### Adding New Outputs:
-1. Implement the `Output` interface
-2. Add configuration types to the config package
-3. Update main.go to handle the new output type
-4. Integrate with the worker manager for robust operation
+1. Implement `output.Writer` plus the writer for each signal it accepts
+2. Add configuration types and overrides to the config package
+3. Construct it in the CLI's output builder (`cmd/blitz/main.go`)
+4. Add validation rules and tests, a `docs/output/<name>.md` page, and a README entry
 
 ### Configuration Extensions:
 1. Add new fields to configuration structures

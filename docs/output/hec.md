@@ -124,16 +124,18 @@ blitz
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `blitz.hec.logs.received` | Counter | Logs received from the write channel |
-| `blitz.hec.workers.active` | Gauge | Active worker goroutines |
-| `blitz.hec.log.rate` | Counter | Successfully sent events |
-| `blitz.hec.request.size.bytes` | Histogram | HTTP request body size |
-| `blitz.hec.request.latency` | Histogram | HTTP POST latency (seconds) |
-| `blitz.hec.send.errors` | Counter | Send errors (attribute: `error_type`) |
-| `blitz.hec.batch.size` | Histogram | Events per batch |
-| `blitz.hec.ack.pending` | Gauge | ackIds awaiting confirmation |
-| `blitz.hec.ack.confirmed` | Counter | ackIds confirmed by Splunk |
-| `blitz.hec.ack.expired` | Counter | ackIds that timed out (triggered resend) |
-| `blitz.hec.ack.retried` | Counter | Batches resent after ACK timeout |
-| `blitz.hec.ack.dropped` | Counter | Batches dropped after max retries |
-| `blitz.hec.ack.poll.latency` | Histogram | ACK poll request latency (seconds) |
+| `blitz.output.entries_received` | Counter | Entries received by the output |
+| `blitz.output.active_workers` | Gauge | Active worker goroutines |
+| `blitz.output.entry_rate` | Float64 Counter | Successfully sent events |
+| `blitz.output.request_size` | Histogram | HTTP request body size |
+| `blitz.output.request_latency` | Float64 Histogram | HTTP POST latency (ms) |
+| `blitz.output.send_errors` | Counter | Send errors, by `telemetry_type` |
+| `blitz.output.hec.batch_size` | Histogram | Events per batch |
+| `blitz.output.hec.ack_pending` | Gauge | ackIds awaiting confirmation |
+| `blitz.output.hec.ack_confirmed` | Counter | ackIds confirmed by Splunk |
+| `blitz.output.hec.ack_expired` | Counter | ackIds that timed out (triggered resend) |
+| `blitz.output.hec.ack_retried` | Counter | Batches resent after ACK timeout |
+| `blitz.output.hec.ack_dropped` | Counter | Batches dropped after max retries |
+| `blitz.output.hec.ack_poll_latency` | Float64 Histogram | ACK poll request latency (ms) |
+
+The shared `blitz.output.*` metrics carry an `output_type` attribute set to `hec`. See [Metrics](../metrics.md) for the exported names.

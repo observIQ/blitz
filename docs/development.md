@@ -2,7 +2,7 @@
 
 ## Understanding the Codebase
 
-Before contributing to blitz, we recommend reading the [Architecture Overview](/docs/architecture.md) to understand the application structure, components, and data flow. This will help you understand how different parts of the system interact and where to make changes.
+Before contributing to blitz, we recommend reading the [Architecture Overview](architecture.md) to understand the application structure, components, and data flow. This will help you understand how different parts of the system interact and where to make changes.
 
 ## Requirements
 
@@ -22,17 +22,17 @@ make test
 
 ## Adding a Data Library
 
-To add a new data library, create a directory under `data_library/` with your log files:
+To add a new data library package, create a directory under `generator/filegen/embeddedlibrary/data_library/` with your log files:
 
 ```bash
-mkdir -p data_library/my-dataset
-# Add your log files to data_library/my-dataset/
+mkdir -p generator/filegen/embeddedlibrary/data_library/my-dataset
+# Add your log files to generator/filegen/embeddedlibrary/data_library/my-dataset/
 ```
 
 Use it with:
 
 ```bash
-./blitz --generator-type=filegen --generator-filegen-source=data_library/my-dataset --output-type=stdout
+./blitz --generator-type=filegen --generator-filegen-source=my-dataset --output-type=stdout
 ```
 
 The generator supports timestamp directives (e.g., `%Y-%m-%dT%H:%M:%SZ`) for dynamic timestamp generation.
