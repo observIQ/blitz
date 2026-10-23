@@ -8,11 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/counttest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -245,8 +247,8 @@ func (f *flakyConsumer) ConsumeLogs(ctx context.Context, records []embed.LogReco
 }
 
 // TestReplay_RetryDoesNotSpendAPermit pins that a failed send gives its permit
-// back and retries the same line, so a count sized to the input still
-// delivers every line.
+// back and its line is retried after the pass, so a count sized to the input
+// still delivers every line.
 func TestReplay_RetryDoesNotSpendAPermit(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "capture.log")
 	writeFile(t, path, "a\nb\nc\n")
@@ -261,7 +263,7 @@ func TestReplay_RetryDoesNotSpendAPermit(t *testing.T) {
 	defer stop(t, gen)
 
 	require.Eventually(t, func() bool { return len(consumer.getWrites()) >= 3 }, 10*time.Second, time.Millisecond)
-	assert.Equal(t, []string{"a", "b", "c"}, messages(consumer.mockConsumer))
+	assert.Equal(t, []string{"c", "a", "b"}, messages(consumer.mockConsumer))
 }
 
 // TestReplay_DirectorySkipsSubdirectories pins that a directory source lists
@@ -502,15 +504,7 @@ func TestRandomMode_RefusedWorkerWakesOnReset(t *testing.T) {
 	gen.SetCountTracker(tracker)
 	require.NoError(t, gen.Start(context.Background()))
 	t.Cleanup(func() { stop(t, gen) })
-
-	for cycle := 1; cycle <= 2; cycle++ {
-		waitDone(t, tracker)
-		// At a 1ms rate the worker is refused many times over this window,
-		// so Reset finds it waiting.
-		require.Never(t, func() bool { return len(consumer.getWrites()) > cycle },
-			50*time.Millisecond, time.Millisecond, "the refused worker wrote nothing more")
-		tracker.Reset()
-	}
+	counttest.WakesOnReset(t, tracker, func() int { return len(consumer.getWrites()) })
 }
 
 // TestRandomMode_EmptyFilesKeepTheRate pins that skipping a file with no
@@ -585,4 +579,234 @@ func TestRandomMode_GlobSkipsBrokenMatches(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{good}, files)
 	assert.Equal(t, 2, logs.FilterMessageSnippet("Skipping a matched").Len())
+}
+
+// asyncConsumer models a queued output: it accepts each record at once and
+// reports the send's result later, failing the first send of failOnce.
+type asyncConsumer struct {
+	mu        sync.Mutex
+	failOnce  string
+	failed    bool
+	delivered []string
+}
+
+func (a *asyncConsumer) ConsumeLogs(ctx context.Context, records []embed.LogRecord) error {
+	sent := count.Hold(ctx)
+	line := records[0].Message
+	go func() {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		if line == a.failOnce && !a.failed {
+			a.failed = true
+			sent(errors.New("connection reset"))
+			return
+		}
+		a.delivered = append(a.delivered, line)
+		sent(nil)
+	}()
+	return nil
+}
+
+func (a *asyncConsumer) got() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]string(nil), a.delivered...)
+}
+
+// TestReplay_WaitsForEachLinesResult pins that replay sends the next line only
+// after the destination's result for the current one, so a send that fails
+// after the output accepted it is still retried.
+func TestReplay_WaitsForEachLinesResult(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "capture.log")
+	writeFile(t, path, "a\nb\nc\n")
+
+	consumer := &asyncConsumer{failOnce: "b"}
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, path, true, 0, consumer, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	require.NoError(t, gen.SetReplay())
+	tracker := count.NewTracker(3)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	defer stop(t, gen)
+
+	waitDone(t, tracker)
+	assert.Equal(t, []string{"a", "c", "b"}, consumer.got())
+}
+
+// heldConsumer takes every record's hold and never reports a result.
+type heldConsumer struct{ calls atomic.Int64 }
+
+func (h *heldConsumer) ConsumeLogs(ctx context.Context, _ []embed.LogRecord) error {
+	_ = count.Hold(ctx)
+	h.calls.Add(1)
+	return nil
+}
+
+// TestReplay_StopsWhileWaitingForResult pins that a replay waiting on a
+// line's delivery result stops promptly.
+func TestReplay_StopsWhileWaitingForResult(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "capture.log")
+	writeFile(t, path, "a\nb\n")
+	consumer := &heldConsumer{}
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, path, true, 0, consumer, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	require.NoError(t, gen.SetReplay())
+	gen.SetCountTracker(count.NewTracker(2))
+	require.NoError(t, gen.Start(context.Background()))
+	require.Eventually(t, func() bool { return consumer.calls.Load() == 1 }, 5*time.Second, time.Millisecond)
+	stop(t, gen)
+	assert.Equal(t, int64(1), consumer.calls.Load(), "the second line waits for the first's result")
+}
+
+// lateFailConsumer fails its first call while still holding the record, and
+// settles that hold only once release closes.
+type lateFailConsumer struct {
+	calls   atomic.Int64
+	release chan struct{}
+}
+
+func (l *lateFailConsumer) ConsumeLogs(ctx context.Context, _ []embed.LogRecord) error {
+	if l.calls.Add(1) > 1 {
+		return nil
+	}
+	sent := count.Hold(ctx)
+	go func() {
+		<-l.release
+		sent(nil)
+	}()
+	return errors.New("partly sent")
+}
+
+// TestReplay_RetryWaitsForTheFailedSendToSettle pins that a send which
+// errored while part of it was still queued is retried only after that part
+// settles, so the retry cannot overtake it.
+func TestReplay_RetryWaitsForTheFailedSendToSettle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "capture.log")
+	writeFile(t, path, "a\nb\n")
+
+	consumer := &lateFailConsumer{release: make(chan struct{})}
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, path, true, 0, consumer, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	require.NoError(t, gen.SetReplay())
+	// A spare permit, so only the wait under test holds the retry back.
+	tracker := count.NewTracker(2)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	defer stop(t, gen)
+
+	require.Eventually(t, func() bool { return consumer.calls.Load() == 1 }, 5*time.Second, time.Millisecond)
+	require.Never(t, func() bool { return consumer.calls.Load() > 1 }, 200*time.Millisecond, time.Millisecond,
+		"the retry waits for the failed send to settle")
+	close(consumer.release)
+	waitDone(t, tracker)
+}
+
+// TestReplay_UncountedFailedSendRetries pins that without a count tracker a
+// failed send is still retried after the pass, not skipped.
+func TestReplay_UncountedFailedSendRetries(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "capture.log")
+	writeFile(t, path, "a\nb\nc\n")
+
+	consumer := &flakyConsumer{mockConsumer: newMockConsumer(), fails: 1}
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, path, true, 0, consumer, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	require.NoError(t, gen.SetReplay())
+	require.NoError(t, gen.Start(context.Background()))
+	defer stop(t, gen)
+
+	require.Eventually(t, func() bool { return len(consumer.getWrites()) >= 3 }, 5*time.Second, time.Millisecond)
+	assert.Equal(t, []string{"b", "c", "a"}, messages(consumer.mockConsumer))
+}
+
+// lineFailConsumer fails every send of the lines in fail, counting each
+// line's attempts, and records the lines it accepts.
+type lineFailConsumer struct {
+	mu        sync.Mutex
+	fail      map[string]bool
+	attempts  map[string]int
+	delivered []string
+}
+
+func (l *lineFailConsumer) ConsumeLogs(_ context.Context, records []embed.LogRecord) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	line := records[0].Message
+	l.attempts[line]++
+	if l.fail[line] {
+		return errors.New("record too large")
+	}
+	l.delivered = append(l.delivered, line)
+	return nil
+}
+
+func (l *lineFailConsumer) snapshot() ([]string, int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.delivered...), l.attempts["b"]
+}
+
+// TestReplay_DropsALineAfterThreeRetries pins that a line no send accepts is
+// retried three times after the pass, then dropped, so the lines after it
+// are still sent and a counted replay still ends.
+func TestReplay_DropsALineAfterThreeRetries(t *testing.T) {
+	for name, counted := range map[string]bool{"counted": true, "uncounted": false} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "capture.log")
+			writeFile(t, path, "a\nb\nc\n")
+			consumer := &lineFailConsumer{fail: map[string]bool{"b": true}, attempts: map[string]int{}}
+			core, logs := observer.New(zap.InfoLevel)
+			gen, err := New(zap.New(core), 1, time.Millisecond, path, true, 0, consumer, nil, embed.NopTelemetry())
+			require.NoError(t, err)
+			require.NoError(t, gen.SetReplay())
+			tracker := count.NewTracker(3)
+			if counted {
+				gen.SetCountTracker(tracker)
+			}
+			require.NoError(t, gen.Start(context.Background()))
+			defer stop(t, gen)
+
+			if counted {
+				waitDone(t, tracker)
+				assert.Equal(t, int64(2), tracker.Emitted())
+			}
+			require.Eventually(t, func() bool { _, n := consumer.snapshot(); return n == 4 }, 5*time.Second, time.Millisecond)
+			require.Never(t, func() bool { _, n := consumer.snapshot(); return n > 4 }, 50*time.Millisecond, time.Millisecond,
+				"one send and three retries, then the line is dropped")
+			got, _ := consumer.snapshot()
+			assert.Equal(t, []string{"a", "c"}, got)
+			assert.Equal(t, 3, logs.FilterMessage("Retrying a replay line").Len(), "each retry is logged")
+			assert.Equal(t, 1, logs.FilterMessageSnippet("Dropping a replay line").Len())
+		})
+	}
+}
+
+// undeliveredConsumer accepts every send, then fails the first one's delivery,
+// as an output does when its later network send fails.
+type undeliveredConsumer struct{ calls atomic.Int64 }
+
+func (u *undeliveredConsumer) ConsumeLogs(ctx context.Context, _ []embed.LogRecord) error {
+	if u.calls.Add(1) == 1 {
+		count.Hold(ctx)(errors.New("connection reset"))
+	}
+	return nil
+}
+
+// TestReplay_UndeliveredLineLogsACause pins that a line an output failed
+// after accepting it is logged with an error, though the send returned none.
+func TestReplay_UndeliveredLineLogsACause(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "capture.log")
+	writeFile(t, path, "a\n")
+	core, logs := observer.New(zap.InfoLevel)
+	gen, err := New(zap.New(core), 1, time.Millisecond, path, true, 0, &undeliveredConsumer{}, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	require.NoError(t, gen.SetReplay())
+	tracker := count.NewTracker(1)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	defer stop(t, gen)
+
+	waitDone(t, tracker)
+	queued := logs.FilterMessage("Replayed line was not delivered, queued for retry").All()
+	require.Len(t, queued, 1)
+	assert.Contains(t, queued[0].ContextMap(), "error")
 }

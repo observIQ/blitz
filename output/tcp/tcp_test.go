@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/counttest"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/require"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -616,8 +618,8 @@ func TestTCP_drainTo_stopsOnSendError(t *testing.T) {
 	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
 	require.NoError(t, err)
 	tcp := &TCP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m, dataChan: make(chan tcpItem, 4)}
-	tcp.dataChan <- tcpItem{ctx: context.Background(), msg: "one"}
-	tcp.dataChan <- tcpItem{ctx: context.Background(), msg: "two"}
+	tcp.dataChan <- newTCPItem(context.Background(), "one")
+	tcp.dataChan <- newTCPItem(context.Background(), "two")
 	close(tcp.dataChan)
 
 	conn := &fakeConn{writeErr: fmt.Errorf("write failed")}
@@ -629,7 +631,7 @@ func TestTCP_drainTo_stopsOnSendError(t *testing.T) {
 // drainTo returns without sending when the context is already done.
 func TestTCP_drainTo_stopsWhenContextDone(t *testing.T) {
 	tcp := &TCP{logger: zap.NewNop(), dataChan: make(chan tcpItem, 4)}
-	tcp.dataChan <- tcpItem{ctx: context.Background(), msg: "one"}
+	tcp.dataChan <- newTCPItem(context.Background(), "one")
 	close(tcp.dataChan)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -688,4 +690,108 @@ func TestTCP_StopDrainsBufferedRecords(t *testing.T) {
 		}
 		return true
 	}, 3*time.Second, 10*time.Millisecond, "all buffered records should be delivered before Stop returns")
+}
+
+// TestTCP_PermitSettlesWhenSent pins that a queued record's permit counts
+// only once the record is written to the destination.
+func TestTCP_PermitSettlesWhenSent(t *testing.T) {
+	listener, serverAddr := startTestTCPServer(t)
+	defer listener.Close()
+	host, port, err := net.SplitHostPort(serverAddr)
+	require.NoError(t, err)
+	tcp, err := New(zap.NewNop(), host, port, 1, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	defer func() { _ = tcp.Stop(context.Background()) }()
+
+	ctx, p := counttest.Held(t)
+	require.NoError(t, tcp.WriteLog(ctx, output.LogRecord{Message: "held"}))
+	p.Commit()
+
+	require.True(t, counttest.Settled(p))
+	require.True(t, p.Delivered())
+}
+
+// TestTCP_UnsentRecordReleasesPermit pins that a record still queued when the
+// destination never accepts is not counted: Stop's failed drain returns its
+// permit.
+func TestTCP_UnsentRecordReleasesPermit(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	host, port, err := net.SplitHostPort(listener.Addr().String())
+	require.NoError(t, err)
+	require.NoError(t, listener.Close())
+
+	tcp, err := New(zap.NewNop(), host, port, 1, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+
+	ctx, p := counttest.Held(t)
+	require.NoError(t, tcp.WriteLog(ctx, output.LogRecord{Message: "stranded"}))
+	p.Commit()
+	counttest.StaysPending(t, p, "the record has not reached the destination, so its permit must still be owed")
+
+	require.NoError(t, tcp.Stop(context.Background()))
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
+}
+
+// TestTCP_drainTo_releasesEveryUnsentRecord pins that a drain that stops early
+// settles every record it did not send as failed, not just the first.
+func TestTCP_drainTo_releasesEveryUnsentRecord(t *testing.T) {
+	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
+	require.NoError(t, err)
+	tcp := &TCP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m, dataChan: make(chan tcpItem, 4)}
+	ctx1, p1 := counttest.Held(t)
+	ctx2, p2 := counttest.Held(t)
+	tcp.dataChan <- newTCPItem(ctx1, "one")
+	tcp.dataChan <- newTCPItem(ctx2, "two")
+	p1.Commit()
+	p2.Commit()
+	close(tcp.dataChan)
+
+	tcp.drainTo(context.Background(), &fakeConn{writeErr: fmt.Errorf("write failed")}, time.Now().Add(time.Hour))
+
+	for _, p := range []count.Permit{p1, p2} {
+		require.True(t, counttest.Settled(p))
+		require.False(t, p.Delivered())
+	}
+}
+
+// TestTCP_deliverReportsSendResult pins the worker's send step: a failed
+// write fails the record's permit.
+func TestTCP_deliverReportsSendResult(t *testing.T) {
+	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
+	require.NoError(t, err)
+	tcp := &TCP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m}
+
+	ctx, p := counttest.Held(t)
+	item := newTCPItem(ctx, "x")
+	p.Commit()
+	require.Error(t, tcp.deliver(&fakeConn{writeErr: fmt.Errorf("reset")}, item))
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
+}
+
+// TestTCP_UnqueuedWriteReleasesPermit pins that a record that never reaches
+// the queue is released.
+func TestTCP_UnqueuedWriteReleasesPermit(t *testing.T) {
+	counttest.ReleasesUnqueued(t, func(writeCtx, outputCtx context.Context) error {
+		o := &TCP{dataChan: make(chan tcpItem), ctx: outputCtx}
+		return o.WriteLog(writeCtx, output.LogRecord{Message: "x"})
+	})
+}
+
+// TestTCP_serveReturnsOnSendFailure pins that a failed send releases the
+// record and returns, so the worker manager reconnects.
+func TestTCP_serveReturnsOnSendFailure(t *testing.T) {
+	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
+	require.NoError(t, err)
+	tcp := &TCP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m, ctx: context.Background(),
+		dataChan: make(chan tcpItem, 1)}
+	ctx, p := counttest.Held(t)
+	tcp.dataChan <- newTCPItem(ctx, "x")
+	p.Commit()
+
+	tcp.serve(0, &fakeConn{writeErr: fmt.Errorf("connection reset")})
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
 }

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/counttest"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/require"
@@ -271,4 +273,44 @@ func (w *recordingMetricWriter) SupportedTelemetry() []telemetry.Type {
 func (w *recordingTraceWriter) Stop(context.Context) error { return nil }
 func (w *recordingTraceWriter) SupportedTelemetry() []telemetry.Type {
 	return []telemetry.Type{telemetry.Traces}
+}
+
+// permitWriter records whether each write's context carried a count permit.
+type permitWriter struct {
+	counted []bool
+}
+
+func (w *permitWriter) WriteLog(ctx context.Context, _ output.LogRecord) error {
+	w.counted = append(w.counted, count.Counted(ctx))
+	return nil
+}
+
+func (w *permitWriter) WriteMetric(ctx context.Context, _ output.MetricRecord) error {
+	w.counted = append(w.counted, count.Counted(ctx))
+	return nil
+}
+
+func (w *permitWriter) WriteTrace(ctx context.Context, _ output.TraceRecord) error {
+	w.counted = append(w.counted, count.Counted(ctx))
+	return nil
+}
+
+func (w *permitWriter) Stop(context.Context) error { return nil }
+
+func (w *permitWriter) SupportedTelemetry() []telemetry.Type {
+	return []telemetry.Type{telemetry.Logs, telemetry.Metrics, telemetry.Traces}
+}
+
+// TestWriterAdaptersForwardThePermit pins that every adapter hands the
+// consumer's context to the writer, so a queued output can hold the record's
+// count permit.
+func TestWriterAdaptersForwardThePermit(t *testing.T) {
+	w := &permitWriter{}
+	tel := embed.NopTelemetry()
+	ctx, p := counttest.Held(t)
+	require.NoError(t, output.WriterAsLogConsumer(w, tel).ConsumeLogs(ctx, []embed.LogRecord{{Message: "x"}}))
+	require.NoError(t, output.WriterAsMetricConsumer(w, tel).ConsumeMetrics(ctx, []embed.MetricPoint{{Name: "m"}}))
+	require.NoError(t, output.WriterAsTraceConsumer(w, tel).ConsumeTraces(ctx, []embed.Span{{Name: "s"}}))
+	p.Commit()
+	require.Equal(t, []bool{true, true, true}, w.counted)
 }

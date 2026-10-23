@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/counttest"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,9 +22,9 @@ import (
 func TestACKTracker_TrackAndConfirm(t *testing.T) {
 	tracker := newACKTracker()
 
-	tracker.track(1, []byte("batch1"))
-	tracker.track(2, []byte("batch2"))
-	tracker.track(3, []byte("batch3"))
+	tracker.track(1, []byte("batch1"), nil)
+	tracker.track(2, []byte("batch2"), nil)
+	tracker.track(3, []byte("batch3"), nil)
 
 	assert.Equal(t, 3, tracker.size())
 
@@ -41,8 +43,8 @@ func TestACKTracker_TrackAndConfirm(t *testing.T) {
 func TestACKTracker_Expired(t *testing.T) {
 	tracker := newACKTracker()
 
-	tracker.track(1, []byte("batch1"))
-	tracker.track(2, []byte("batch2"))
+	tracker.track(1, []byte("batch1"), nil)
+	tracker.track(2, []byte("batch2"), nil)
 
 	// Manually set sendTime to the past for ackId 1
 	tracker.mu.Lock()
@@ -57,6 +59,27 @@ func TestACKTracker_Expired(t *testing.T) {
 	assert.Equal(t, 1, tracker.size())
 }
 
+// TestACKTracker_ReusedIDReleasesEarlierBatch pins that when Splunk hands out
+// an ackId still pending (after a restart, or behind a load balancer), the
+// earlier batch is released rather than left unsettled forever.
+func TestACKTracker_ReusedIDReleasesEarlierBatch(t *testing.T) {
+	tracker := newACKTracker()
+	ctxA, a := counttest.Held(t)
+	ctxB, b := counttest.Held(t)
+	tracker.track(0, []byte("a"), count.Sends{count.Hold(ctxA)})
+	tracker.track(0, []byte("b"), count.Sends{count.Hold(ctxB)})
+	a.Commit()
+	b.Commit()
+
+	require.True(t, counttest.Settled(a))
+	require.False(t, a.Delivered())
+	counttest.StaysPending(t, b)
+
+	tracker.confirm([]int64{0})
+	require.True(t, counttest.Settled(b))
+	require.True(t, b.Delivered())
+}
+
 func TestACKTracker_ConcurrentAccess(t *testing.T) {
 	tracker := newACKTracker()
 	var wg sync.WaitGroup
@@ -66,7 +89,7 @@ func TestACKTracker_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			tracker.track(int64(id), []byte(fmt.Sprintf("batch%d", id)))
+			tracker.track(int64(id), []byte(fmt.Sprintf("batch%d", id)), nil)
 		}(i)
 	}
 	wg.Wait()
@@ -223,12 +246,16 @@ func TestHEC_ACKExpireAndResend(t *testing.T) {
 
 	ctx := t.Context()
 
-	// Send an event — gets ackId 0
-	err = h.WriteLog(ctx, output.LogRecord{
+	// Send an event — gets ackId 0. It carries a count permit, which settles
+	// only on the confirmation itself, never in the gap between an expiry
+	// and the resend's tracking.
+	writeCtx, p := counttest.Held(t)
+	err = h.WriteLog(count.Inherit(ctx, writeCtx), output.LogRecord{
 		Message:  "resend test",
 		Metadata: output.LogRecordMetadata{Timestamp: time.Now()},
 	})
 	require.NoError(t, err)
+	p.Commit()
 
 	// Wait for event to be sent, ackId 0 to expire, and a resend to produce a
 	// new ackId. The mock server auto-increments ackIds: the initial send is
@@ -244,9 +271,8 @@ func TestHEC_ACKExpireAndResend(t *testing.T) {
 	}
 
 	// Wait for the poller to pick up the confirmation
-	require.Eventually(t, func() bool {
-		return h.workers[0].tracker.size() == 0
-	}, 5*time.Second, 10*time.Millisecond)
+	require.True(t, counttest.Settled(p), "the resent batch was never confirmed")
+	require.True(t, p.Delivered())
 	assert.Equal(t, 0, h.workers[0].tracker.size(), "expected 0 pending after resend+confirm")
 
 	require.NoError(t, h.Stop(ctx))

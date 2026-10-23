@@ -25,6 +25,7 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/fix/catalog"
 	"github.com/observiq/blitz/generator/fix/state"
+	"github.com/observiq/blitz/internal/counttest"
 )
 
 // captureConsumer buffers every record passed to ConsumeLogs.
@@ -501,4 +502,29 @@ func TestEveryPickedMessageHasASkeleton(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestRefusedWorkerWakesOnReset pins that a worker refused a permit waits for
+// the tracker, then generates again once Reset is called.
+func TestRefusedWorkerWakesOnReset(t *testing.T) {
+	cons := &captureConsumer{}
+	gen, err := New(zap.NewNop(), Config{Workers: 1, Rate: time.Millisecond, Version: catalog.V44, Seed: 42}, cons, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+	counttest.WakesOnReset(t, tracker, func() int { return cons.Count() })
+}
+
+// TestRefusedWorkerStops pins that a worker refused a permit stops when the
+// generator stops.
+func TestRefusedWorkerStops(t *testing.T) {
+	cons := &captureConsumer{}
+	gen, err := New(zap.NewNop(), Config{Workers: 1, Rate: time.Millisecond, Version: catalog.V44, Seed: 42}, cons, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	counttest.StopsWhileRefused(t, tracker, func() int { return cons.Count() }, gen.Stop)
 }

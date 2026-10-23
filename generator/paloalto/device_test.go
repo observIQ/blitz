@@ -50,7 +50,7 @@ func TestDeviceFieldsNameOneFirewall(t *testing.T) {
 		g, err := New(zap.NewNop(), 1, time.Second, w, embed.NopTelemetry(), opts...)
 		require.NoError(t, err)
 		for range 40 {
-			require.NoError(t, g.generateAndWrite(0))
+			require.NoError(t, g.generateAndWrite(context.Background(), 0))
 		}
 		return w.getWrites()
 	}
@@ -91,7 +91,7 @@ func TestUnnamedApplianceResourceNamesTheFallback(t *testing.T) {
 	g, err := New(zap.NewNop(), 1, time.Second, c, embed.NopTelemetry(),
 		generator.WithAppliance(&datagen.NetworkSystemIdentity{Serial: "013201001234", Vendor: datagen.VendorPaloAlto}))
 	require.NoError(t, err)
-	require.NoError(t, g.generateAndWrite(0))
+	require.NoError(t, g.generateAndWrite(context.Background(), 0))
 	require.Len(t, c.recs, 1)
 	require.Equal(t, "PA-VM", c.recs[0].Metadata.Resource["host.name"])
 	require.Equal(t, "Palo Alto Networks", c.recs[0].Metadata.Resource["device.manufacturer"])
@@ -100,7 +100,7 @@ func TestUnnamedApplianceResourceNamesTheFallback(t *testing.T) {
 	c = &recordConsumer{}
 	g, err = New(zap.NewNop(), 1, time.Second, c, embed.NopTelemetry())
 	require.NoError(t, err)
-	require.NoError(t, g.generateAndWrite(0))
+	require.NoError(t, g.generateAndWrite(context.Background(), 0))
 	require.Equal(t, "PA-VM", c.recs[0].Metadata.Resource["host.name"])
 }
 
@@ -115,7 +115,7 @@ func TestSyslogHeaderNamesTheFirewall(t *testing.T) {
 		g, err := New(zap.NewNop(), 1, time.Second, w, embed.NopTelemetry(), opts...)
 		require.NoError(t, err)
 		for range 5 {
-			require.NoError(t, g.generateAndWrite(0))
+			require.NoError(t, g.generateAndWrite(context.Background(), 0))
 		}
 		return w.getWrites()
 	}
@@ -149,7 +149,7 @@ func TestRecordsAreSyslogFramed(t *testing.T) {
 	g, err := New(zap.NewNop(), 1, time.Second, c, embed.NopTelemetry())
 	require.NoError(t, err)
 	for range 5 {
-		require.NoError(t, g.generateAndWrite(0))
+		require.NoError(t, g.generateAndWrite(context.Background(), 0))
 	}
 	require.Len(t, c.recs, 5)
 	for _, r := range c.recs {
@@ -166,7 +166,7 @@ func TestUserDomainFollowsTheDevice(t *testing.T) {
 	require.NoError(t, err)
 	domainUsers := 0
 	for range 2000 {
-		require.NoError(t, g.generateAndWrite(0))
+		require.NoError(t, g.generateAndWrite(context.Background(), 0))
 	}
 	for _, l := range w.getWrites() {
 		rec, err := csv.NewReader(strings.NewReader(string(l)[strings.Index(string(l), " 1,")+1:])).Read()

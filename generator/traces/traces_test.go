@@ -2,6 +2,9 @@ package traces
 
 import (
 	"context"
+	"errors"
+	"maps"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -313,23 +316,41 @@ func TestSeedDeterminism(t *testing.T) {
 		return cons.Snapshot()
 	}
 
-	a := runOnce()
-	b := runOnce()
+	a := spansByTrace(runOnce())
+	b := spansByTrace(runOnce())
 
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
-	require.Positive(t, n, "neither run produced spans")
+	n := min(len(a), len(b))
+	require.Positive(t, n, "neither run produced a trace")
 
 	// Compare deterministic fields. Span names ("GET /api/users",
-	// "SELECT users", etc.), Kind, and HTTP status_code attribute all
-	// flow from the seeded RNG. TraceID / SpanID use crypto/rand and
-	// are intentionally non-deterministic per OTel spec.
-	for i := 0; i < n; i++ {
-		assert.Equal(t, a[i].Name, b[i].Name, "span %d: Name mismatch across seeded runs", i)
-		assert.Equal(t, a[i].Kind, b[i].Kind, "span %d: Kind mismatch across seeded runs", i)
+	// "SELECT users", etc.) and Kind flow from the seeded RNG. TraceID /
+	// SpanID use crypto/rand and are intentionally non-deterministic per
+	// OTel spec.
+	for i := range n {
+		assert.Equal(t, a[i], b[i], "trace %d differs across seeded runs", i)
 	}
+}
+
+// spansByTrace groups spans into traces in start order, listing each trace's
+// span names and kinds sorted. A trace's spans are sent on their own timers,
+// so they can arrive in either order.
+func spansByTrace(spans []embed.Span) [][]string {
+	start := map[string]time.Time{}
+	shape := map[string][]string{}
+	for _, sp := range spans {
+		if s, ok := start[sp.TraceID]; !ok || sp.StartTime.Before(s) {
+			start[sp.TraceID] = sp.StartTime
+		}
+		shape[sp.TraceID] = append(shape[sp.TraceID], sp.Name+"|"+string(sp.Kind))
+	}
+	ids := slices.Collect(maps.Keys(start))
+	slices.SortFunc(ids, func(x, y string) int { return start[x].Compare(start[y]) })
+	out := make([][]string, len(ids))
+	for i, id := range ids {
+		slices.Sort(shape[id])
+		out[i] = shape[id]
+	}
+	return out
 }
 
 func TestGenerateTraceID(t *testing.T) {
@@ -351,9 +372,10 @@ func TestScheduleEmission_PastEndSendsAtOnce(t *testing.T) {
 	tracker := count.NewTracker(1)
 	permit, _, ok := tracker.Acquire()
 	require.True(t, ok)
-	d := &traceDelivery{permit: permit}
+	ctx := count.WithPermit(context.Background(), permit)
 
-	g.scheduleEmission(embed.Span{Name: "late", EndTime: time.Now().Add(-time.Second)}, d)
+	g.scheduleEmission(ctx, embed.Span{Name: "late", EndTime: time.Now().Add(-time.Second)})
+	permit.Commit()
 	g.wg.Wait()
 	assert.Len(t, consumer.Arrivals(), 1)
 	select {
@@ -361,4 +383,44 @@ func TestScheduleEmission_PastEndSendsAtOnce(t *testing.T) {
 	default:
 		t.Fatal("the span's trace was not counted")
 	}
+}
+
+// rejectingTraceConsumer rejects the span named reject and accepts the rest.
+type rejectingTraceConsumer struct {
+	mockTraceConsumer
+	reject string
+}
+
+func (r *rejectingTraceConsumer) ConsumeTraces(ctx context.Context, batch []embed.Span) error {
+	for _, sp := range batch {
+		if sp.Name == r.reject {
+			return errors.New("rejected")
+		}
+	}
+	return r.mockTraceConsumer.ConsumeTraces(ctx, batch)
+}
+
+// TestScheduleEmission_FailedSpanReleasesTrace pins that one rejected span
+// fails its whole trace's permit, so a trace with a lost span is not counted.
+func TestScheduleEmission_FailedSpanReleasesTrace(t *testing.T) {
+	consumer := &rejectingTraceConsumer{reject: "lost"}
+	g, err := New(baseCfg(t, consumer))
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	permit, _, ok := tracker.Acquire()
+	require.True(t, ok)
+	ctx := count.WithPermit(context.Background(), permit)
+
+	past := time.Now().Add(-time.Second)
+	g.scheduleEmission(ctx, embed.Span{Name: "kept", EndTime: past})
+	g.scheduleEmission(ctx, embed.Span{Name: "lost", EndTime: past})
+	permit.Commit()
+	g.wg.Wait()
+	assert.Len(t, consumer.Arrivals(), 1, "the other span still arrived")
+	select {
+	case <-permit.Settled():
+	default:
+		t.Fatal("the trace's permit never settled")
+	}
+	assert.False(t, permit.Delivered(), "a trace with a lost span is not counted")
 }

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/counttest"
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1000,4 +1002,144 @@ func TestMultiOutputSupportsFlowsOnlyWhenRouted(t *testing.T) {
 	declared := declaresOnly{supported: []telemetry.Type{telemetry.Flows}}
 	assert.Empty(t, newMulti(t, zap.NewNop(), declared).SupportedTelemetry())
 	assert.Equal(t, []telemetry.Type{telemetry.Flows}, newMulti(t, zap.NewNop(), declared, &flowOutput{}).SupportedTelemetry())
+}
+
+// holdingOutput models a queued child output: it takes its own hold on the
+// record's permit and settles it when the test says the send finished.
+type holdingOutput struct {
+	countingOutput
+	mu   sync.Mutex
+	sent []func(error)
+}
+
+func (h *holdingOutput) WriteLog(ctx context.Context, _ LogRecord) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.sent = append(h.sent, count.Hold(ctx))
+	return nil
+}
+
+func (h *holdingOutput) finish(err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, s := range h.sent {
+		s(err)
+	}
+}
+
+// TestMultiOutputPermitWaitsForEveryChildSend pins that a fanned-out record
+// counts only once every child has sent it, which needs the permit to reach
+// the children across the queue hop.
+func TestMultiOutputPermitWaitsForEveryChildSend(t *testing.T) {
+	a, b := &holdingOutput{}, &holdingOutput{}
+	m := newMulti(t, zap.NewNop(), a, b)
+
+	ctx, p := counttest.Held(t)
+	require.NoError(t, m.WriteLog(ctx, LogRecord{Message: "x"}))
+	p.Commit()
+	drain(t, m)
+	counttest.StaysPending(t, p, "neither child has sent the record yet")
+
+	a.finish(nil)
+	counttest.StaysPending(t, p)
+	b.finish(nil)
+	require.True(t, counttest.Settled(p))
+	require.True(t, p.Delivered())
+}
+
+// TestMultiOutputChildWriteErrorReleasesPermit pins that one child's failed
+// write fails the record, so a replacement goes out.
+func TestMultiOutputChildWriteErrorReleasesPermit(t *testing.T) {
+	ok := &fakeOutput{supported: []telemetry.Type{telemetry.Logs}}
+	bad := &fakeOutput{supported: []telemetry.Type{telemetry.Logs}, writeErr: errors.New("refused")}
+	m := newMulti(t, zap.NewNop(), ok, bad)
+
+	ctx, p := counttest.Held(t)
+	require.NoError(t, m.WriteLog(ctx, LogRecord{Message: "x"}))
+	p.Commit()
+	drain(t, m)
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
+}
+
+// TestMultiOutputDroppedForOneChildReleasesPermit pins that a record one
+// child's full queue dropped is not counted, even though another child took
+// it.
+func TestMultiOutputDroppedForOneChildReleasesPermit(t *testing.T) {
+	dead, healthy := &blockingOutput{}, &ctxOutput{}
+	m := newMulti(t, zap.NewNop(), dead, healthy)
+	for range multiQueueSize + 1 {
+		// Wait for room in the healthy child's queue, so a write never finds both full.
+		require.Eventually(t, func() bool { return len(m.logs[1].q) < multiQueueSize }, 5*time.Second, time.Millisecond)
+		require.NoError(t, m.WriteLog(context.Background(), LogRecord{Message: "fill"}))
+	}
+	require.Eventually(t, func() bool { return len(m.logs[0].q) == multiQueueSize && len(m.logs[1].q) == 0 },
+		5*time.Second, time.Millisecond, "the dead child's queue is full and the healthy one's drained")
+
+	ctx, p := counttest.Held(t)
+	require.NoError(t, m.WriteLog(ctx, LogRecord{Message: "x"}), "the healthy child accepted it")
+	p.Commit()
+	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = m.Stop(stopCtx)
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
+}
+
+// TestMultiOutputAbandonReleasesQueuedPermits pins that records a stuck
+// child abandons at shutdown are not counted.
+func TestMultiOutputAbandonReleasesQueuedPermits(t *testing.T) {
+	child := newChanOutput()
+	m := newMulti(t, zap.NewNop(), child)
+	var permits []count.Permit
+	for range 3 {
+		ctx, p := counttest.Held(t)
+		require.NoError(t, m.WriteLog(ctx, LogRecord{Message: "x"}))
+		p.Commit()
+		permits = append(permits, p)
+	}
+	stopCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = m.Stop(stopCtx)
+	for _, p := range permits {
+		require.True(t, counttest.Settled(p))
+		require.False(t, p.Delivered())
+	}
+}
+
+// TestMultiOutputNoEligibleChildFails pins that in a count run a record no
+// child can take is a failed write, so it is not counted as delivered. An
+// uncounted record is skipped, as before.
+func TestMultiOutputNoEligibleChildFails(t *testing.T) {
+	m := newMulti(t, zap.NewNop(), &fakeOutput{supported: []telemetry.Type{telemetry.Logs}})
+	require.NoError(t, m.WriteTrace(context.Background(), TraceRecord{Name: "s"}))
+
+	ctx, p := counttest.Held(t)
+	require.ErrorIs(t, m.WriteTrace(ctx, TraceRecord{Name: "s"}), ErrNoOutput)
+	// The generator releases a refused record; with no hold left behind, the
+	// permit settles at once.
+	p.Release()
+	require.True(t, counttest.Settled(p), "the fan-out left a hold on the refused record")
+}
+
+// TestMultiOutputFlowSendSettlesPermit pins that a counted flow batch counts
+// once its flow child takes it, and is released when the child's write fails.
+func TestMultiOutputFlowSendSettlesPermit(t *testing.T) {
+	for name, tc := range map[string]struct {
+		child     Output
+		delivered bool
+	}{
+		"sent":   {&flowOutput{}, true},
+		"failed": {&errFlowOutput{}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newMulti(t, zap.NewNop(), tc.child)
+			ctx, p := counttest.Held(t)
+			require.NoError(t, m.ConsumeFlows(ctx, []embed.FlowRecord{{Packets: 1}}))
+			p.Commit()
+			require.True(t, counttest.Settled(p), "the flow send settles the record")
+			require.Equal(t, tc.delivered, p.Delivered())
+			drain(t, m)
+		})
+	}
 }
