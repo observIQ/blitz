@@ -24,6 +24,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/fix/catalog"
+	"github.com/observiq/blitz/generator/fix/state"
 )
 
 // captureConsumer buffers every record passed to ConsumeLogs.
@@ -472,7 +473,7 @@ func TestCountResumeKeepsTheSequence(t *testing.T) {
 
 	// The worker has ticked past the spent count before the Reset.
 	require.Eventually(t, func() bool {
-		return logs.FilterMessage("FIX worker waiting for a count reset").Len() > 0
+		return logs.FilterMessage("FIX worker at the count limit, waiting").Len() > 0
 	}, 5*time.Second, time.Millisecond)
 	require.Equal(t, 2, cons.Count())
 	tracker.Reset()
@@ -480,5 +481,24 @@ func TestCountResumeKeepsTheSequence(t *testing.T) {
 
 	for i, m := range cons.Snapshot()[:3] {
 		require.Contains(t, string(m), fmt.Sprintf("\x0134=%d\x01", i+1))
+	}
+}
+
+// TestEveryPickedMessageHasASkeleton pins the catalog coverage that makes the
+// worker's nil-message branch a safety net: every message type a category
+// can pick has a skeleton in every version.
+func TestEveryPickedMessageHasASkeleton(t *testing.T) {
+	r := rand.New(rand.NewSource(1)) // #nosec G404
+	for _, v := range catalog.AllVersions() {
+		for _, cat := range catalog.AllAssetCategories() {
+			cfg := DefaultConfig()
+			cfg.Version, cfg.EnabledCategories = v, []catalog.AssetCategory{cat}
+			g, err := New(zap.NewNop(), cfg, &captureConsumer{}, embed.NopTelemetry())
+			require.NoError(t, err)
+			sess := state.NewSession("SENDER", "TARGET")
+			for range 500 {
+				require.NotNil(t, g.buildOneMessage(r, sess), "%s %s", v, cat)
+			}
+		}
 	}
 }

@@ -2,6 +2,7 @@ package hostmetrics
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"sync"
 	"testing"
@@ -271,6 +272,70 @@ func TestCountTracker(t *testing.T) {
 	}
 
 	require.NoError(t, g.Stop(context.Background()))
+}
+
+// flakyMetricConsumer rejects its first call, then accepts every one.
+type flakyMetricConsumer struct {
+	mockMetricConsumer
+	calls int
+}
+
+func (f *flakyMetricConsumer) ConsumeMetrics(ctx context.Context, batch []embed.MetricPoint) error {
+	f.mu.Lock()
+	f.calls++
+	first := f.calls == 1
+	f.mu.Unlock()
+	if first {
+		return errors.New("rejected")
+	}
+	return f.mockMetricConsumer.ConsumeMetrics(ctx, batch)
+}
+
+// TestFailedScrapeReleasesPermit pins that a scrape with a rejected batch
+// gives its permit back and is retried, so the count ends on a scrape the
+// consumer accepted.
+func TestFailedScrapeReleasesPermit(t *testing.T) {
+	cons := &flakyMetricConsumer{}
+	cfg := baseCfg(t, cons)
+	cfg.Rate = time.Millisecond
+	cfg.ScraperNames = []string{"cpu"}
+	g, err := New(cfg)
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	g.SetCountTracker(tracker)
+	require.NoError(t, g.Start(context.Background()))
+	t.Cleanup(func() { _ = g.Stop(context.Background()) })
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("count never completed")
+	}
+	cons.mu.Lock()
+	defer cons.mu.Unlock()
+	assert.Equal(t, 2, cons.calls, "the rejected scrape was retried before the count closed")
+	assert.NotEmpty(t, cons.points, "the counted scrape reached the consumer")
+}
+
+// TestRefusedScrapeEmitsNothing pins that a scrape refused a permit emits
+// nothing, so a spent count stops hostmetrics output.
+func TestRefusedScrapeEmitsNothing(t *testing.T) {
+	cons := &mockMetricConsumer{}
+	cfg := baseCfg(t, cons)
+	cfg.Rate = time.Millisecond
+	g, err := New(cfg)
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	_, _, ok := tracker.Acquire() // spend the count, so every scrape is refused
+	require.True(t, ok)
+	g.SetCountTracker(tracker)
+	require.NoError(t, g.Start(context.Background()))
+	t.Cleanup(func() { _ = g.Stop(context.Background()) })
+
+	require.Never(t, func() bool { return cons.Count() > 0 }, 50*time.Millisecond, time.Millisecond)
+	// The worker was running and refused: a refilled count lets it scrape.
+	tracker.Reset()
+	require.Eventually(t, func() bool { return cons.Count() > 0 }, 5*time.Second, time.Millisecond)
 }
 
 // TestSeedDeterminism confirms two generators with the same Seed and

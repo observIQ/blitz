@@ -2,6 +2,7 @@ package winevt
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -189,4 +190,66 @@ func TestRenderTemplate_SuccessfulLogonHostname(t *testing.T) {
 	assert.Contains(t, result, "<Computer>test-host-123</Computer>")
 	// Verify hostname appears in message
 	assert.Contains(t, result, "Account Name:\t\tTEST-HOST-123$")
+}
+
+// flakyWriter rejects its first failFirst writes, then accepts every one.
+type flakyWriter struct {
+	mockWriter
+	failFirst int
+	calls     int
+}
+
+func (f *flakyWriter) WriteLog(ctx context.Context, data output.LogRecord) error {
+	f.mu.Lock()
+	f.calls++
+	failed := f.calls <= f.failFirst
+	f.mu.Unlock()
+	if failed {
+		return errors.New("destination unavailable")
+	}
+	return f.mockWriter.WriteLog(ctx, data)
+}
+
+// TestWinevtGenerator_FailedWriteReleasesPermit pins that a rejected write
+// gives its permit back, so the count ends on delivered records.
+func TestWinevtGenerator_FailedWriteReleasesPermit(t *testing.T) {
+	writer := &flakyWriter{failFirst: 2}
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(3)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(writer))
+	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(10 * time.Second):
+		t.Fatal("count never completed")
+	}
+	assert.Len(t, writer.getWrites(), 3, "every counted record was delivered")
+}
+
+// TestWinevtGenerator_RefusedWorkerWakesOnReset pins that a worker refused a
+// permit waits for the tracker, then generates again once Reset is called.
+func TestWinevtGenerator_RefusedWorkerWakesOnReset(t *testing.T) {
+	writer := &mockWriter{}
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(writer))
+	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+
+	for cycle := 1; cycle <= 2; cycle++ {
+		select {
+		case <-tracker.Done():
+		case <-time.After(10 * time.Second):
+			t.Fatalf("cycle %d never completed", cycle)
+		}
+		// At a 1ms rate the worker is refused many times over this window,
+		// so Reset finds it waiting.
+		require.Never(t, func() bool { return len(writer.getWrites()) > cycle },
+			50*time.Millisecond, time.Millisecond, "the refused worker wrote nothing more")
+		tracker.Reset()
+	}
 }

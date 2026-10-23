@@ -2,6 +2,7 @@ package wel
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"strings"
 	"sync"
@@ -199,7 +200,8 @@ func TestGeneratorHonorsFiniteCount(t *testing.T) {
 
 // TestGeneratorResumesAfterCountReset covers the idle-and-resume path: once the
 // budget is exhausted the worker idles (emitting nothing), and a tracker Reset
-// unblocks it via ResumeC so generation continues (PIPE-1111).
+// unblocks it through the channel Acquire returns, so generation continues
+// (PIPE-1111).
 func TestGeneratorResumesAfterCountReset(t *testing.T) {
 	logger := zap.NewNop()
 	consumer := &mockConsumer{}
@@ -219,12 +221,12 @@ func TestGeneratorResumesAfterCountReset(t *testing.T) {
 	require.NoError(t, gen.Start(context.Background()))
 
 	// The budget completes, then generation holds at the budget: the worker is
-	// idle in the ResumeC select for the whole window.
+	// idle, waiting on the channel Acquire returns, for the whole window.
 	require.Eventually(t, func() bool { return consumer.Count() >= 3 }, 5*time.Second, 5*time.Millisecond)
 	require.Never(t, func() bool { return consumer.Count() > 3 }, 150*time.Millisecond, 10*time.Millisecond,
 		"generation must not exceed the budget while idle")
 
-	// Reset re-opens the budget and unblocks the idle worker via ResumeC.
+	// Reset re-opens the budget and unblocks the idle worker.
 	tracker.Reset()
 	require.Eventually(t, func() bool { return consumer.Count() > 3 }, 5*time.Second, 10*time.Millisecond,
 		"generation should resume after the tracker is reset")
@@ -402,4 +404,49 @@ func TestSingleLabelDomainWarns(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, tc.warns, logs.Len() == 1, "domain %q", tc.domain)
 	}
+}
+
+// flakyConsumer rejects its first failFirst calls, then accepts every one.
+type flakyConsumer struct {
+	mockConsumer
+	failFirst int
+	calls     int
+}
+
+func (f *flakyConsumer) ConsumeLogs(ctx context.Context, records []embed.LogRecord) error {
+	f.mu.Lock()
+	f.calls++
+	failed := f.calls <= f.failFirst
+	f.mu.Unlock()
+	if failed {
+		return errors.New("rejected")
+	}
+	return f.mockConsumer.ConsumeLogs(ctx, records)
+}
+
+// TestGeneratorFailedWriteReleasesPermit pins that a rejected write gives its
+// permit back, so the count ends on delivered records.
+func TestGeneratorFailedWriteReleasesPermit(t *testing.T) {
+	consumer := &flakyConsumer{failFirst: 2}
+	gen, err := New(Config{
+		Logger:   zap.NewNop(),
+		Workers:  1,
+		Rate:     time.Millisecond,
+		Computer: "TESTPC",
+		Domain:   "CONTOSO",
+		Role:     catalog.RoleWorkstation,
+		Consumer: consumer,
+	})
+	require.NoError(t, err)
+	tracker := count.NewTracker(3)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("count never completed")
+	}
+	require.Equal(t, 3, consumer.Count(), "every counted record was delivered")
 }
