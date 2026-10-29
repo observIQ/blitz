@@ -3,13 +3,9 @@ package tcp
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -320,32 +316,8 @@ func TestTCP_StopTwice(t *testing.T) {
 func TestTCP_IntegrationTLS(t *testing.T) {
 	logger := zap.NewNop()
 
-	// Find test certificates relative to the repository root
-	// Get the absolute path of the test file first
-	_, testFile, _, _ := runtime.Caller(0)
-	testDir := filepath.Dir(testFile)
-	// output/tcp/tcp_test.go -> output/tcp/ -> output/ -> repo root
-	repoRoot := filepath.Join(testDir, "..", "..")
-	certFile := filepath.Join(repoRoot, "cmd", "server", "tcp", "test_server.crt")
-	keyFile := filepath.Join(repoRoot, "cmd", "server", "tcp", "test_server.key")
-
-	// Make paths absolute
-	certFile, _ = filepath.Abs(certFile)
-	keyFile, _ = filepath.Abs(keyFile)
-
-	// Check if certificates exist
-	if _, err := os.Stat(certFile); os.IsNotExist(err) {
-		t.Skipf("Test certificates not found at %s. Run ./generate_test_certs.sh in cmd/server/tcp/", certFile)
-	}
-	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
-		t.Skipf("Test key not found at %s. Run ./generate_test_certs.sh in cmd/server/tcp/", keyFile)
-	}
-
-	// Load server certificate
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		t.Fatalf("Failed to load test certificates: %v", err)
-	}
+	cert, caCertPool, err := newTestCert()
+	require.NoError(t, err)
 
 	// Start a TLS TCP server on a random available port
 	tlsConfig := &tls.Config{
@@ -388,17 +360,6 @@ func TestTCP_IntegrationTLS(t *testing.T) {
 	host, port, err := net.SplitHostPort(serverAddr)
 	if err != nil {
 		t.Fatalf("Failed to split server address: %v", err)
-	}
-
-	// Load CA certificate for client
-	caCert, err := os.ReadFile(certFile)
-	if err != nil {
-		t.Fatalf("Failed to read CA certificate: %v", err)
-	}
-
-	caCertPool := x509.NewCertPool()
-	if !caCertPool.AppendCertsFromPEM(caCert) {
-		t.Fatalf("Failed to parse CA certificate")
 	}
 
 	// Create TLS config for client

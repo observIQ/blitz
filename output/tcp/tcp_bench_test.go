@@ -3,11 +3,7 @@ package tcp
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"net"
-	"os"
-	"path/filepath"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -70,29 +66,9 @@ func startBenchmarkServer() (net.Listener, string) {
 // startTLSBenchmarkServer starts a single TLS TCP server for all TLS benchmarks
 func startTLSBenchmarkServer() (net.Listener, string, *tls.Config) {
 	benchTLSServerOnce.Do(func() {
-		// Find test certificates relative to the repository root
-		_, testFile, _, _ := runtime.Caller(0)
-		testDir := filepath.Dir(testFile)
-		repoRoot := filepath.Join(testDir, "..")
-		certFile := filepath.Join(repoRoot, "cmd", "server", "tcp", "test_server.crt")
-		keyFile := filepath.Join(repoRoot, "cmd", "server", "tcp", "test_server.key")
-
-		// Make paths absolute
-		certFile, _ = filepath.Abs(certFile)
-		keyFile, _ = filepath.Abs(keyFile)
-
-		// Check if certificates exist
-		if _, err := os.Stat(certFile); os.IsNotExist(err) {
-			panic("Test certificates not found at " + certFile + ". Run ./generate_test_certs.sh in cmd/server/tcp/")
-		}
-		if _, err := os.Stat(keyFile); os.IsNotExist(err) {
-			panic("Test key not found at " + keyFile + ". Run ./generate_test_certs.sh in cmd/server/tcp/")
-		}
-
-		// Load server certificate
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		cert, caCertPool, err := newTestCert()
 		if err != nil {
-			panic("Failed to load test certificates: " + err.Error())
+			panic("Failed to generate test certificate: " + err.Error())
 		}
 
 		// Start TLS server
@@ -108,17 +84,6 @@ func startTLSBenchmarkServer() (net.Listener, string, *tls.Config) {
 
 		benchTLSServer = listener
 		benchTLSServerAddr = listener.Addr().String()
-
-		// Load CA certificate for client
-		caCert, err := os.ReadFile(certFile)
-		if err != nil {
-			panic("Failed to read CA certificate: " + err.Error())
-		}
-
-		caCertPool := x509.NewCertPool()
-		if !caCertPool.AppendCertsFromPEM(caCert) {
-			panic("Failed to parse CA certificate")
-		}
 
 		// Create TLS config for client
 		benchTLSConfig = &tls.Config{

@@ -11,8 +11,8 @@ import (
 )
 
 // WARNING: Test certificates are for TESTING ONLY and should NOT be used in production.
-// The certificates located in this directory (test_server.key and test_server.crt) are
-// self-signed certificates generated for local development and testing purposes only.
+// The certificates (test_server.key and test_server.crt) are not committed. Generate
+// them with generate_test_certs.sh for local development and testing purposes only.
 const (
 	defaultCertFile = "test_server.crt"
 	defaultKeyFile  = "test_server.key"
