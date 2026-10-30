@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// OS taxonomy helpers (PIPE-1036).
+// OS taxonomy helpers.
 //
 // Two axes are deliberately kept separate:
 //   - Simulate-as (the fake identity): the bounded set of OSes blitz can render

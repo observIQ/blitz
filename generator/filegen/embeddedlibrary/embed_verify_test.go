@@ -8,7 +8,7 @@ import (
 )
 
 // TestEmbeddedLibraryPopulated proves an embed_library build ships a
-// non-empty library, guarding the embed seam against embedding nothing (PIPE-1445).
+// non-empty library, guarding the embed seam against embedding nothing.
 func TestEmbeddedLibraryPopulated(t *testing.T) {
 	fsys := FS()
 

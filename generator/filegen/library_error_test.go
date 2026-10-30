@@ -9,7 +9,7 @@ import (
 )
 
 // No library anywhere yields the explicit "data library not found" error,
-// not a package-name error (PIPE-1445).
+// not a package-name error.
 func TestGetFiles_MissingLibrary_ExplicitError(t *testing.T) {
 	t.Setenv("BLITZ_DATA_LIBRARY_DIR", "")
 	g := &FileLogGenerator{logger: zap.NewNop(), source: "package:apache"}

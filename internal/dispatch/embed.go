@@ -83,7 +83,7 @@ func (c EmbedConsumers) requireFlow(typ config.GeneratorType) error {
 // the snapshot shipped in the blitz module, or nil to fall back to
 // reading ./data_library/ from the process cwd.
 //
-// env is the simulated identity environment (PIPE-1036). When non-nil, the
+// env is the simulated identity environment. When non-nil, the
 // generator's host identity is resolved from it (see hostIdentity) so emitted
 // records carry the simulated host's host.* / os.* / deployment.* attributes;
 // when nil, generators fall back to the running process's hostname.
@@ -91,7 +91,7 @@ func (c EmbedConsumers) requireFlow(typ config.GeneratorType) error {
 // Returns an error when the configured generator type requires a
 // consumer that is nil in `consumers` (e.g. hostmetrics without a
 // MetricConsumer, traces without a TraceConsumer), and for generator
-// types that are not embed-eligible at all (nop, winevt — see PIPE-1032).
+// types that are not embed-eligible at all (nop, winevt).
 func ForEmbed(logger *zap.Logger, genCfg config.Generator, consumers EmbedConsumers, fileGenLibrary fs.FS, env *datagen.Environment, tel embed.TelemetrySettings) (embed.ProducerModule, error) {
 	return ForEmbedAt(logger, genCfg, 0, consumers, fileGenLibrary, env, tel)
 }

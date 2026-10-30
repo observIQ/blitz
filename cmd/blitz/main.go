@@ -241,7 +241,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}()
 
 	// Build the simulated identity environment once, up front, so every
-	// generator resolves its host identity from the same fleet (PIPE-1036). A
+	// generator resolves its host identity from the same fleet. A
 	// live-reconfigure path (deferred) would rebuild this and swap it in.
 	env, err := dispatch.BuildEnvironment(logger, cfg.Environment, cfg.EffectiveGenerators())
 	if err != nil {
@@ -380,7 +380,7 @@ func createGenerator(logger *zap.Logger, genCfg config.Generator, ordinal int, o
 	// output doesn't support a signal the configured generator needs.
 	consumers := consumersFor(out, tel)
 	// Pass the embedded library so an embed_library build resolves package
-	// sources; without the tag FS() is empty and resolution uses disk (PIPE-1445).
+	// sources; without the tag FS() is empty and resolution uses disk.
 	mod, err := dispatch.ForEmbedAt(logger, genCfg, ordinal, consumers, embeddedlibrary.FS(), env, tel)
 	if err != nil {
 		return nil, err

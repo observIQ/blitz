@@ -32,7 +32,7 @@ func TestDurationMillis(t *testing.T) {
 // TestRequestLatencyRecordsMillisAcrossBuckets asserts that a spread of real
 // send durations, converted the way the output call sites convert them
 // (output.DurationMillis), lands across multiple histogram buckets instead of
-// collapsing into the first one — the defect PIPE-1404 fixed.
+// collapsing into the first one.
 //
 // Asserting the unit is "ms" is NOT sufficient: the unit string does not change
 // the histogram's bucket boundaries, so a call site that recorded

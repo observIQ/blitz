@@ -10,9 +10,9 @@ import (
 // compose facets (a BIG-IP does load balancing + firewall + L3; a Catalyst
 // 9300 does L2 + limited L3).
 //
-// Deferred facets (per PIPE-927's architecture: VPN, WAN-optimization,
-// forward-proxy, DPI) are intentionally not modeled here. Add them when a
-// simulator needs them rather than speculatively.
+// Deferred facets (VPN, WAN-optimization, forward-proxy, DPI) are
+// intentionally not modeled here. Add them when a simulator needs them
+// rather than speculatively.
 
 // L2SwitchingCapability describes layer-2 switching.
 type L2SwitchingCapability struct {

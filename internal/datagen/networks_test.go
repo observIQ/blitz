@@ -211,7 +211,7 @@ func TestValidateCIDR(t *testing.T) {
 			}
 		}
 	})
-	t.Run("rejects IPv6 input pending PIPE-1001", func(t *testing.T) {
+	t.Run("rejects IPv6 input", func(t *testing.T) {
 		if err := ValidateCIDR("2001:db8::/32"); err == nil {
 			t.Error("ValidateCIDR(IPv6) expected error, got nil")
 		}

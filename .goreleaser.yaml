@@ -7,7 +7,7 @@ partial:
 before:
   hooks:
     # Retry the tool install so a transient Go module-proxy blip during the
-    # GoReleaser pre-build hook doesn't fail the build leg (PIPE-1058).
+    # GoReleaser pre-build hook doesn't fail the build leg.
     - bash .github/scripts/retry.sh make install-tools
     - make man
 
@@ -128,7 +128,7 @@ nfpms:
           mode: 0644
           owner: root
           group: root
-      # Data library on disk; the release binary does not embed it (PIPE-1445).
+      # Data library on disk; the release binary does not embed it.
       - src: generator/filegen/embeddedlibrary/data_library/**/*
         dst: /usr/share/blitz/data_library
         file_info:

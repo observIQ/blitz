@@ -9,7 +9,7 @@ import (
 )
 
 // These tests exercise the developer-error paths converted from panics to error
-// returns (PIPE-1003). They double as regression guards: they assert that each
+// returns. They double as regression guards: they assert that each
 // constructor rejects a nil domain, and that GenerateEnvironment propagates a
 // failure from any of its identity-generation stages.
 

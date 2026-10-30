@@ -9,7 +9,7 @@ import (
 // SQL Server logs to the Windows Application log under the MSSQLSERVER provider
 // (the default instance; named instances use MSSQL$<INSTANCE>). It does not use
 // a dedicated operational channel, so these definitions register on the
-// Application channel with provider "MSSQLSERVER" (PIPE-1110).
+// Application channel with provider "MSSQLSERVER".
 
 // mssqlProvider is the event source name for the default SQL Server instance.
 const mssqlProvider = "MSSQLSERVER"

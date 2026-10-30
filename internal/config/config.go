@@ -29,7 +29,7 @@ type Config struct {
 	// Metrics configuration (Prometheus scrape endpoint for self-metrics)
 	Metrics Metrics `yaml:"metrics,omitempty" mapstructure:"metrics,omitempty"`
 	// Environment configures the simulated datagen.Environment identities
-	// that generators draw their host.name/OS from (PIPE-1036).
+	// that generators draw their host.name/OS from.
 	Environment EnvironmentConfig `yaml:"environment,omitempty" mapstructure:"environment,omitempty"`
 	// Telemetry configures export of blitz's own self-telemetry (self-traces,
 	// and later self-logs) via OTLP.

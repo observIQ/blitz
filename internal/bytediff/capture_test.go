@@ -80,5 +80,5 @@ var _ output.LogWriter = (*bytediff.LogCapture)(nil)
 
 // Verify the canonical embed.LogRecord type is what the capture stores
 // — the alias chain output.LogRecord = embed.LogRecord must hold for
-// PRs #2-11 to be able to swap one for the other transparently.
+// migrated generators to swap one for the other transparently.
 var _ embed.LogRecord = output.LogRecord{}

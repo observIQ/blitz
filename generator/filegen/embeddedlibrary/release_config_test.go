@@ -10,7 +10,7 @@ import (
 )
 
 // TestReleaseConfigShipsLibraryOnDisk asserts the packages populate the
-// on-disk library rather than shipping an empty dir (PIPE-1445).
+// on-disk library rather than shipping an empty dir.
 func TestReleaseConfigShipsLibraryOnDisk(t *testing.T) {
 	data, err := os.ReadFile(findRepoFile(t, ".goreleaser.yaml"))
 	if err != nil {
