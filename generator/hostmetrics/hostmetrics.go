@@ -275,7 +275,7 @@ func (g *Generator) scrape(r *rand.Rand) {
 			continue
 		}
 		if err := g.consumer.ConsumeMetrics(ctx, points); err != nil {
-			g.logger.Debug("Consume metrics error",
+			g.logger.Error("Consume metrics error",
 				zap.String("scraper", scraper.Name()),
 				zap.Error(err),
 			)

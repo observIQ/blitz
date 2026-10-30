@@ -85,7 +85,7 @@ The File generator automatically processes timestamp directives in log files, re
 | `generator.filegen.cache-enabled` | `--generator-filegen-cache-enabled` | `BLITZ_GENERATOR_FILEGEN_CACHE_ENABLED` | `true` | Enable in-memory file caching (true/false) |
 | `generator.filegen.cache-ttl` | `--generator-filegen-cache-ttl` | `BLITZ_GENERATOR_FILEGEN_CACHE_TTL` | `0` | Cache entry time-to-live in duration format (0 = never expire) |
 | `generator.filegen.mode` | `--generator-filegen-mode` | `BLITZ_GENERATOR_FILEGEN_MODE` | `random` | `random` picks a random line on each emission; `replay` emits every non-empty line once, in order (see [Replay Mode](#replay-mode) for how the run ends). Replay requires `workers: 1`. The old source-type values `file`, `directory` and `package` still load and run `random` |
-| `generator.filegen.seed` | `--generator-filegen-seed` | `BLITZ_GENERATOR_FILEGEN_SEED` | `-1` | Random-mode RNG seed. Negative randomizes per run (the resolved seed is logged); 0 or positive reproduces the same line picks with one worker; worker N uses seed+N, so with several workers each worker's own picks repeat, but which of them a shared count takes does not. Replay ignores it. |
+| `generator.filegen.seed` | `--generator-filegen-seed` | `BLITZ_GENERATOR_FILEGEN_SEED` | `-1` | Random-mode RNG seed. Negative randomizes per run (the resolved seed is logged); 0 or positive repeats the same sequence of line picks with one worker. A failed send uses up its pick, so the lines delivered repeat only when every send succeeds. Worker N uses seed+N, so with several workers each worker's own picks repeat, but which of them a shared count takes does not. Replay ignores it. |
 
 ## Example Configurations
 
