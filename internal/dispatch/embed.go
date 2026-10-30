@@ -157,6 +157,12 @@ func ForEmbedAt(logger *zap.Logger, genCfg config.Generator, ordinal int, consum
 			return nil, err
 		}
 		mod, err := filegen.New(logger, genCfg.Filegen.Workers, genCfg.Filegen.Rate, genCfg.Filegen.Source, genCfg.Filegen.CacheEnabled, genCfg.Filegen.CacheTTL, consumers.LogConsumer, fileGenLibrary, tel, generator.WithIdentity(hostIdentity(env, genCfg, ordinal)))
+		if err == nil {
+			mod.SetSeed(genCfg.Filegen.Seed)
+			if genCfg.Filegen.Mode == config.FileModeReplay {
+				err = mod.SetReplay()
+			}
+		}
 		return module(mod, err)
 	case config.GeneratorTypeOkta:
 		if err := consumers.requireLog(genCfg.Type); err != nil {

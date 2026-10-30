@@ -31,7 +31,11 @@ blitz --generator-type json --generator-count 10000
 BLITZ_GENERATOR_COUNT=10000
 ```
 
-The count is shared across all workers. For example, with 4 workers and a count of 10000, each worker competes to acquire permits from the shared pool. The total number of entries generated will be exactly 10000.
+The count is shared across all workers. For example, with 4 workers and a count of 10000, each worker competes to acquire permits from the shared pool. The total number of entries accepted by the output will be exactly 10000.
+
+### Delivery
+
+The count is of entries the output accepts, not attempts. When a write fails, its permit goes back to the pool and a later write takes it, so the run ends, and `onFinish` applies, only after the output has accepted the last entry. Most outputs (tcp, udp, syslog, file, stdout, hec, otlp-grpc) accept an entry by queuing it and send it afterwards, so an entry that fails on the wire after it was queued is not retried and still counts. On exit, entries still queued are flushed to the destination before blitz stops.
 
 ### On Finish
 
@@ -63,6 +67,10 @@ blitz --generator-type json --generator-count 5000 --onfinish idle
 BLITZ_ONFINISH=idle
 ```
 
+### File generator replay
+
+A filegen generator in replay mode (`generator.filegen.mode: replay`) is finite without a count: its count is the number of lines in its input, so the run ends at the end of the input. A lower `count` ends it early. A run-level `generator.count` takes precedence over the generator's own `count`, as for any generator, so a lower generator `count` has no effect when a run-level count is set. A replay must be the only generator. See [Replay Mode](generator/filegen.md#replay-mode).
+
 ## Restarting Generation (SIGUSR1)
 
 When using `onFinish: idle`, you can restart generation by sending SIGUSR1 to the Blitz process:
@@ -71,15 +79,15 @@ When using `onFinish: idle`, you can restart generation by sending SIGUSR1 to th
 kill -USR1 $(pidof blitz)
 ```
 
-This resets the count tracker to the original count value, allowing another round of generation. This can be repeated as many times as needed.
+This resets the count tracker to the original count value, allowing another round of generation. This can be repeated as many times as needed. An entry in flight when the reset lands does not count toward the new round.
 
 **Note:** SIGUSR1 is only supported on Unix-like systems (Linux, macOS). On Windows, the signal handler is a no-op and a warning is logged at startup.
 
 ## Per-Telemetry-Type Semantics
 
-The count represents the total number of individual telemetry entries generated, regardless of generator type. Each call to the generator's write function that produces an entry consumes one permit from the shared count tracker.
+The count represents the total number of telemetry entries accepted by the output, regardless of generator type. Each entry the output accepts consumes one permit from the shared count tracker, with two exceptions: a `traces` permit is one trace, counted once all of its spans are accepted, and a `hostmetrics` permit is one scrape, counted once every scraper's batch is.
 
-For generators with multiple workers, the permits are distributed on a first-come, first-served basis using atomic operations. This means the distribution across workers is not guaranteed to be even, but the total count will always be exact.
+For generators with multiple workers, the permits are distributed on a first-come, first-served basis. This means the distribution across workers is not guaranteed to be even, but the total count will always be exact.
 
 ## Examples
 

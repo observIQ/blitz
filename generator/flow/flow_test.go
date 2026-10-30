@@ -313,7 +313,7 @@ func TestResumeSendsAtTheRate(t *testing.T) {
 	require.Eventually(t, func() bool { return len(c.got()) == 1 }, 5*time.Second, time.Millisecond)
 	require.NoError(t, clk.BlockUntilContext(ctx, 1))
 	clk.Advance(rate) // the next tick finds the count spent and parks
-	require.Eventually(t, func() bool { return logs.FilterMessage("Flow worker waiting for a count reset").Len() == 1 }, 5*time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return logs.FilterMessage("Flow worker at the count limit, waiting").Len() == 1 }, 5*time.Second, time.Millisecond)
 
 	tr.Reset()
 	require.NoError(t, clk.BlockUntilContext(ctx, 1))

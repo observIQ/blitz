@@ -241,24 +241,23 @@ func (g *Generator) runWorker(workerIdx int) {
 		case <-g.stopCh:
 			return
 		case <-ticker.C:
-			if g.tracker != nil {
-				// Take the resume channel before Acquire, so a Reset that lands
-				// between a failed Acquire and the wait still wakes the worker,
-				// and Acquire before building, so a spent count takes no
-				// sequence number or order.
-				resume := g.tracker.ResumeC()
-				if !g.tracker.Acquire() {
-					g.logger.Debug("FIX worker waiting for a count reset", zap.Int("worker_id", workerIdx))
-					select {
-					case <-g.stopCh:
-						return
-					case <-resume:
-						continue
-					}
+			// Acquire before building, so a spent count takes no sequence
+			// number or order.
+			permit, resume, ok := g.tracker.Acquire()
+			if !ok {
+				g.logger.Debug("FIX worker at the count limit, waiting", zap.Int("worker_id", workerIdx))
+				select {
+				case <-g.stopCh:
+					return
+				case <-resume:
+					continue
 				}
 			}
 			msg := g.buildOneMessage(r, sess)
 			if msg == nil {
+				// Safety net: the catalog has a skeleton for every message
+				// type a category picks, so a nil message never reaches here.
+				permit.Release()
 				continue
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -274,6 +273,9 @@ func (g *Generator) runWorker(workerIdx int) {
 				g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName,
 					metric.WithAttributeSet(attribute.NewSet(attribute.String("error_type", "consume"))),
 				)
+				permit.Release()
+			} else {
+				permit.Commit()
 			}
 			g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 			cancel()

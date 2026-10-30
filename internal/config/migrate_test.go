@@ -265,6 +265,26 @@ func TestLogRemovedSettings_GeneratorsList(t *testing.T) {
 	assert.Len(t, recorded.FilterMessageSnippet("generator.hostmetrics.workers").All(), 2)
 }
 
+// TestLogRemovedSettings_LegacyFilegenMode pins that a filegen mode still
+// holding one of the key's old source-type values logs nothing, since it runs
+// random, the default.
+func TestLogRemovedSettings_LegacyFilegenMode(t *testing.T) {
+	core, recorded := observer.New(zap.WarnLevel)
+	logger := zap.New(core)
+
+	cfg := &config.Config{
+		Generators: []config.Generator{
+			{Type: config.GeneratorTypeFile, Filegen: config.FileGeneratorConfig{Mode: "file"}},
+			{Type: config.GeneratorTypeFile, Filegen: config.FileGeneratorConfig{Mode: "directory"}},
+			{Type: config.GeneratorTypeFile, Filegen: config.FileGeneratorConfig{Mode: "package"}},
+		},
+	}
+
+	config.LogRemovedSettings(logger, cfg)
+
+	assert.Zero(t, recorded.Len())
+}
+
 // TestLogRemovedSettings_NotSetNoWarn confirms no warning when workers is unset.
 func TestLogRemovedSettings_NotSetNoWarn(t *testing.T) {
 	core, recorded := observer.New(zap.WarnLevel)

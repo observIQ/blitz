@@ -2,6 +2,7 @@ package hostmetrics
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"sync"
 	"testing"
@@ -15,7 +16,9 @@ import (
 	"github.com/stretchr/testify/require"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type mockMetricConsumer struct {
@@ -271,6 +274,97 @@ func TestCountTracker(t *testing.T) {
 	}
 
 	require.NoError(t, g.Stop(context.Background()))
+}
+
+// flakyMetricConsumer rejects its first call, then accepts every one.
+type flakyMetricConsumer struct {
+	mockMetricConsumer
+	calls int
+}
+
+func (f *flakyMetricConsumer) ConsumeMetrics(ctx context.Context, batch []embed.MetricPoint) error {
+	f.mu.Lock()
+	f.calls++
+	first := f.calls == 1
+	f.mu.Unlock()
+	if first {
+		return errors.New("rejected")
+	}
+	return f.mockMetricConsumer.ConsumeMetrics(ctx, batch)
+}
+
+// TestFailedScrapeReleasesPermit pins that a scrape with a rejected batch
+// gives its permit back and is retried, so the count ends on a scrape the
+// consumer accepted.
+func TestFailedScrapeReleasesPermit(t *testing.T) {
+	cons := &flakyMetricConsumer{}
+	cfg := baseCfg(t, cons)
+	cfg.Rate = time.Millisecond
+	cfg.ScraperNames = []string{"cpu"}
+	g, err := New(cfg)
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	g.SetCountTracker(tracker)
+	require.NoError(t, g.Start(context.Background()))
+	t.Cleanup(func() { _ = g.Stop(context.Background()) })
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("count never completed")
+	}
+	cons.mu.Lock()
+	defer cons.mu.Unlock()
+	assert.Equal(t, 2, cons.calls, "the rejected scrape was retried before the count closed")
+	assert.NotEmpty(t, cons.points, "the counted scrape reached the consumer")
+}
+
+// TestFailedScrapeLogsAnError pins that a rejected batch logs at error, so a
+// count stalled on a scraper the destination keeps rejecting is visible at
+// the default log level.
+func TestFailedScrapeLogsAnError(t *testing.T) {
+	core, logs := observer.New(zap.ErrorLevel)
+	cons := &flakyMetricConsumer{}
+	cfg := baseCfg(t, cons)
+	cfg.Logger = zap.New(core)
+	cfg.Rate = time.Millisecond
+	cfg.ScraperNames = []string{"cpu"}
+	g, err := New(cfg)
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	g.SetCountTracker(tracker)
+	require.NoError(t, g.Start(context.Background()))
+	t.Cleanup(func() { _ = g.Stop(context.Background()) })
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("count never completed")
+	}
+	failed := logs.FilterMessage("Consume metrics error").All()
+	require.Len(t, failed, 1)
+	assert.Equal(t, "cpu", failed[0].ContextMap()["scraper"])
+}
+
+// TestRefusedScrapeEmitsNothing pins that a scrape refused a permit emits
+// nothing, so a spent count stops hostmetrics output.
+func TestRefusedScrapeEmitsNothing(t *testing.T) {
+	cons := &mockMetricConsumer{}
+	cfg := baseCfg(t, cons)
+	cfg.Rate = time.Millisecond
+	g, err := New(cfg)
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	_, _, ok := tracker.Acquire() // spend the count, so every scrape is refused
+	require.True(t, ok)
+	g.SetCountTracker(tracker)
+	require.NoError(t, g.Start(context.Background()))
+	t.Cleanup(func() { _ = g.Stop(context.Background()) })
+
+	require.Never(t, func() bool { return cons.Count() > 0 }, 50*time.Millisecond, time.Millisecond)
+	// The worker was running and refused: a refilled count lets it scrape.
+	tracker.Reset()
+	require.Eventually(t, func() bool { return cons.Count() > 0 }, 5*time.Second, time.Millisecond)
 }
 
 // TestSeedDeterminism confirms two generators with the same Seed and
