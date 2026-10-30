@@ -16,7 +16,9 @@ import (
 	"github.com/stretchr/testify/require"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type mockMetricConsumer struct {
@@ -315,6 +317,33 @@ func TestFailedScrapeReleasesPermit(t *testing.T) {
 	defer cons.mu.Unlock()
 	assert.Equal(t, 2, cons.calls, "the rejected scrape was retried before the count closed")
 	assert.NotEmpty(t, cons.points, "the counted scrape reached the consumer")
+}
+
+// TestFailedScrapeLogsAnError pins that a rejected batch logs at error, so a
+// count stalled on a scraper the destination keeps rejecting is visible at
+// the default log level.
+func TestFailedScrapeLogsAnError(t *testing.T) {
+	core, logs := observer.New(zap.ErrorLevel)
+	cons := &flakyMetricConsumer{}
+	cfg := baseCfg(t, cons)
+	cfg.Logger = zap.New(core)
+	cfg.Rate = time.Millisecond
+	cfg.ScraperNames = []string{"cpu"}
+	g, err := New(cfg)
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	g.SetCountTracker(tracker)
+	require.NoError(t, g.Start(context.Background()))
+	t.Cleanup(func() { _ = g.Stop(context.Background()) })
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("count never completed")
+	}
+	failed := logs.FilterMessage("Consume metrics error").All()
+	require.Len(t, failed, 1)
+	assert.Equal(t, "cpu", failed[0].ContextMap()["scraper"])
 }
 
 // TestRefusedScrapeEmitsNothing pins that a scrape refused a permit emits
