@@ -106,7 +106,7 @@ This resets the count tracker to the original count value, allowing another roun
 
 ## Per-Telemetry-Type Semantics
 
-The count represents the total number of telemetry entries delivered, regardless of generator type. Each delivered entry consumes one permit from the shared count tracker, with two exceptions: a `traces` permit is one trace, counted once all of its spans are delivered, and a `hostmetrics` permit is one scrape, counted once every scraper's batch is.
+The count represents the total number of telemetry entries delivered, regardless of generator type. Each delivered entry consumes one permit from the shared count tracker, with two exceptions: a `traces` permit is one trace, counted once all of its spans are delivered, and a `hostmetrics` permit is one scrape, counted once every scraper's batch is. A failed batch replaces the whole scrape, so the scrapers that succeeded send a duplicate.
 
 For generators with multiple workers, the permits are distributed on a first-come, first-served basis. This means the distribution across workers is not guaranteed to be even, but the run always ends once exactly the count has been delivered (see [Delivery](#delivery) for the extras a destination can still receive).
 
