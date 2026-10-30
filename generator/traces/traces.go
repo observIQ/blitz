@@ -7,7 +7,6 @@ import (
 	"fmt"
 	mathrand "math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/observiq/blitz/embed"
@@ -327,11 +326,11 @@ func (g *Generator) startTrace(r *mathrand.Rand) {
 	if !ok {
 		return
 	}
-	// The builder holds one pending slot until every span is scheduled, so
-	// an early span finishing cannot settle the trace before the rest exist.
-	d := &traceDelivery{permit: permit}
-	d.pending.Store(1)
-	defer d.done(nil)
+	// Each span holds the permit until it is sent, and the generator's own
+	// commit after scheduling them all keeps an early span from settling the
+	// trace before the rest exist.
+	ctx := count.WithPermit(context.Background(), permit)
+	defer permit.Commit()
 
 	// The static host-identity resource is shared read-only; each span takes a
 	// defensive clone (cloneResource) so per-span mutations can't bleed across
@@ -368,7 +367,7 @@ func (g *Generator) startTrace(r *mathrand.Rand) {
 			},
 		},
 	}
-	g.scheduleEmission(rootSpan, d)
+	g.scheduleEmission(ctx, rootSpan)
 
 	// Pick 1-4 child kinds (random subset, no duplicates) → total 2-5 spans.
 	childCount := r.Intn(4) + 1 // #nosec G404
@@ -379,7 +378,7 @@ func (g *Generator) startTrace(r *mathrand.Rand) {
 	cursorStart := now
 	for i := range childCount {
 		child := g.buildChildSpan(r, shuffled[i], traceID, rootSpanID, cursorStart, res)
-		g.scheduleEmission(child, d)
+		g.scheduleEmission(ctx, child)
 		// Stagger child start times within the root's window so spans
 		// don't all start at `now` — keeps the shape realistic.
 		cursorStart = cursorStart.Add(time.Duration(r.Intn(40)) * time.Millisecond) // #nosec G404
@@ -463,25 +462,24 @@ func (g *Generator) buildChildSpan(r *mathrand.Rand, kind childKind, traceID, pa
 // timers within the bound. Stop does NOT cancel pending emissions: the
 // emission fires whether or not stopCh is closed, because dropping spans
 // silently at shutdown produces incoherent traces downstream.
-func (g *Generator) scheduleEmission(sp embed.Span, d *traceDelivery) {
+func (g *Generator) scheduleEmission(ctx context.Context, sp embed.Span) {
 	g.wg.Add(1)
-	d.pending.Add(1)
+	sent := count.Hold(ctx)
 	delay := time.Until(sp.EndTime)
 	if delay <= 0 {
 		go func() {
 			defer g.wg.Done()
-			d.done(g.emitSpan(sp))
+			sent(g.emitSpan(ctx, sp))
 		}()
 		return
 	}
 	time.AfterFunc(delay, func() {
 		defer g.wg.Done()
-		d.done(g.emitSpan(sp))
+		sent(g.emitSpan(ctx, sp))
 	})
 }
 
-func (g *Generator) emitSpan(sp embed.Span) error {
-	ctx := context.Background()
+func (g *Generator) emitSpan(ctx context.Context, sp embed.Span) error {
 	if err := g.consumer.ConsumeTraces(ctx, []embed.Span{sp}); err != nil {
 		g.logger.Debug("Consume trace error", zap.Error(err))
 		g.metrics.BlitzGeneratorWriteErrorsCounter.Add(ctx, 1, generatorType,
@@ -491,28 +489,6 @@ func (g *Generator) emitSpan(sp embed.Span) error {
 	}
 	g.metrics.BlitzGeneratorEntriesCounter.Add(ctx, 1, generatorType)
 	return nil
-}
-
-// traceDelivery settles one trace's permit once all its spans are emitted:
-// committed when every span was delivered, released when any failed.
-type traceDelivery struct {
-	permit  count.Permit
-	pending atomic.Int32
-	failed  atomic.Bool
-}
-
-func (d *traceDelivery) done(err error) {
-	if err != nil {
-		d.failed.Store(true)
-	}
-	if d.pending.Add(-1) != 0 {
-		return
-	}
-	if d.failed.Load() {
-		d.permit.Release()
-		return
-	}
-	d.permit.Commit()
 }
 
 // cloneResource returns a defensive copy so per-span mutations (e.g. a

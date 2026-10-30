@@ -10,6 +10,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/counttest"
 	"github.com/observiq/blitz/internal/generators/winevt/templates"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -239,17 +240,17 @@ func TestWinevtGenerator_RefusedWorkerWakesOnReset(t *testing.T) {
 	gen.SetCountTracker(tracker)
 	require.NoError(t, gen.Start(writer))
 	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+	counttest.WakesOnReset(t, tracker, func() int { return len(writer.getWrites()) })
+}
 
-	for cycle := 1; cycle <= 2; cycle++ {
-		select {
-		case <-tracker.Done():
-		case <-time.After(10 * time.Second):
-			t.Fatalf("cycle %d never completed", cycle)
-		}
-		// At a 1ms rate the worker is refused many times over this window,
-		// so Reset finds it waiting.
-		require.Never(t, func() bool { return len(writer.getWrites()) > cycle },
-			50*time.Millisecond, time.Millisecond, "the refused worker wrote nothing more")
-		tracker.Reset()
-	}
+// TestWinevtGenerator_RefusedWorkerStops pins that a worker refused a permit
+// stops when the generator stops.
+func TestWinevtGenerator_RefusedWorkerStops(t *testing.T) {
+	writer := &mockWriter{}
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(writer))
+	counttest.StopsWhileRefused(t, tracker, func() int { return len(writer.getWrites()) }, gen.Stop)
 }

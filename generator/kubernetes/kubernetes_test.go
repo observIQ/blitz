@@ -9,6 +9,7 @@ import (
 
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/counttest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -137,4 +138,29 @@ func TestGenerator_FailedWriteReleasesPermit(t *testing.T) {
 		t.Fatal("count never completed")
 	}
 	assert.Len(t, writer.getWrites(), 3, "every counted record was delivered")
+}
+
+// TestGenerator_RefusedWorkerWakesOnReset pins that a worker refused a permit
+// waits for the tracker, then generates again once Reset is called.
+func TestGenerator_RefusedWorkerWakesOnReset(t *testing.T) {
+	writer := newMockWriter()
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, "cri-o", writer, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+	counttest.WakesOnReset(t, tracker, func() int { return len(writer.getWrites()) })
+}
+
+// TestGenerator_RefusedWorkerStops pins that a worker refused a permit stops
+// when the generator stops.
+func TestGenerator_RefusedWorkerStops(t *testing.T) {
+	writer := newMockWriter()
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, "cri-o", writer, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	counttest.StopsWhileRefused(t, tracker, func() int { return len(writer.getWrites()) }, gen.Stop)
 }

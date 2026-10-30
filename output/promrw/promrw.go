@@ -16,6 +16,7 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/prommap"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -43,7 +44,12 @@ const (
 type entry struct {
 	fam    prommap.MetricFamily
 	target *prommap.MetricFamily
+	// sent settles the record's count permit with its batch's result.
+	sent func(error)
 }
+
+// errDropped settles a series the full buffer dropped.
+var errDropped = errors.New("promrw: buffer full, oldest series dropped")
 
 // errStopped refuses a write after Stop, whose drain it would miss.
 var errStopped = errors.New("promrw: output stopped")
@@ -179,11 +185,14 @@ func (o *Output) WriteMetric(ctx context.Context, data output.MetricRecord) erro
 		o.mu.Unlock()
 		return errStopped
 	}
+	e.sent = count.Hold(ctx)
 	o.buf = append(o.buf, e)
 	o.series += len(fam.Samples)
 	dropped := 0
+	var drops count.Sends
 	for o.series > o.maxBuffered && len(o.buf) > 1 {
 		n := len(o.buf[0].fam.Samples)
+		drops = append(drops, o.buf[0].sent)
 		o.buf[0] = entry{} // free the dropped series; the backing array outlives the reslice
 		o.buf = o.buf[1:]
 		o.series -= n
@@ -191,6 +200,7 @@ func (o *Output) WriteMetric(ctx context.Context, data output.MetricRecord) erro
 	}
 	full := o.series >= o.batchN
 	o.mu.Unlock()
+	drops.Settle(errDropped)
 
 	if dropped > 0 {
 		o.dropWarn.Warn("prometheus-remote-write buffer full: dropped the oldest series",
@@ -304,7 +314,12 @@ func (o *Output) take(partial bool) ([]entry, int64) {
 
 // send encodes one batch, adding each distinct target_info once (a repeat
 // would be a duplicate sample), and POSTs it with retry.
-func (o *Output) send(batch []entry, series int64) error {
+func (o *Output) send(batch []entry, series int64) (err error) {
+	defer func() {
+		for _, e := range batch {
+			e.sent(err)
+		}
+	}()
 	families := make([]prommap.MetricFamily, 0, len(batch)+1)
 	targets := map[string]int{}
 	for _, e := range batch {

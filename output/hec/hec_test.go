@@ -94,6 +94,24 @@ func TestHEC_NewValidation(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "token cannot be empty")
 	})
+
+	t.Run("zero batch timeout", func(t *testing.T) {
+		_, err := New(logger, WithHost("localhost"), WithPort("8088"), WithToken("tok"), WithBatchTimeout(0))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "batch timeout must be greater than 0")
+	})
+
+	t.Run("zero ACK poll interval with ACK on", func(t *testing.T) {
+		_, err := New(logger, WithHost("localhost"), WithPort("8088"), WithToken("tok"), WithACKPollInterval(0))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ACK poll interval must be greater than 0")
+	})
+
+	t.Run("zero ACK timeout with ACK on", func(t *testing.T) {
+		_, err := New(logger, WithHost("localhost"), WithPort("8088"), WithToken("tok"), WithACKTimeout(0))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ACK timeout must be greater than 0")
+	})
 }
 
 func TestHEC_WriteAndBatchBySize(t *testing.T) {

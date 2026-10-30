@@ -119,17 +119,14 @@ func (g *WinevtGenerator) worker(workerID int, writer output.LogWriter) {
 			g.logger.Debug("Worker stopping", zap.Int("worker_id", workerID))
 			return
 		case <-timer.C:
-			permit, resume, ok := g.tracker.Acquire()
+			permit, wait, ok := g.tracker.Acquire()
 			if !ok {
-				select {
-				case <-g.stopCh:
+				if !pacing.AwaitWake(g.stopCh, wait, backoffConfig, timer) {
 					return
-				case <-resume:
-					timer.Reset(backoffConfig.NextBackOff())
-					continue
 				}
+				continue
 			}
-			if err := g.generateAndWrite(writer, workerID); err != nil {
+			if err := g.generateAndWrite(count.WithPermit(context.Background(), permit), writer, workerID); err != nil {
 				g.logger.Error("Failed to write log", zap.Int("worker_id", workerID), zap.Error(err))
 				permit.Release()
 				timer.Reset(backoffConfig.NextBackOff())
@@ -142,7 +139,7 @@ func (g *WinevtGenerator) worker(workerID int, writer output.LogWriter) {
 	}
 }
 
-func (g *WinevtGenerator) generateAndWrite(writer output.LogWriter, workerID int) error {
+func (g *WinevtGenerator) generateAndWrite(ctx context.Context, writer output.LogWriter, workerID int) error {
 	data, err := templates.RenderTemplate(templates.RenderOptions{})
 	if err != nil {
 		g.recordWriteError("unknown", err)
@@ -151,7 +148,7 @@ func (g *WinevtGenerator) generateAndWrite(writer output.LogWriter, workerID int
 
 	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	logRecord := output.LogRecord{

@@ -19,3 +19,18 @@ func NewWriteBackoff(rate time.Duration) *backoff.ExponentialBackOff {
 	bo.Reset()
 	return bo
 }
+
+// AwaitWake parks a worker until wait closes (a released permit went back to
+// the pool, or the tracker was reset) or stop closes, and reports whether to
+// keep going. A wake is not a write failure, so the backoff restarts at the
+// rate.
+func AwaitWake(stop, wait <-chan struct{}, bo *backoff.ExponentialBackOff, timer interface{ Reset(time.Duration) bool }) bool {
+	select {
+	case <-stop:
+		return false
+	case <-wait:
+		bo.Reset()
+		timer.Reset(bo.NextBackOff())
+		return true
+	}
+}

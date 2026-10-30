@@ -310,18 +310,19 @@ func (g *Generator) runWorker(workerIdx int) {
 		case <-g.stopCh:
 			return
 		case <-ticker.C:
-			permit, resume, ok := g.tracker.Acquire()
+			permit, wait, ok := g.tracker.Acquire()
 			if !ok {
 				g.logger.Debug("F5 worker at the count limit, waiting", zap.Int("worker_id", workerIdx))
 				select {
 				case <-g.stopCh:
 					return
-				case <-resume:
+				case <-wait:
 					continue
 				}
 			}
 			c.Now = g.now()
-			if err := g.emit(g.build(r, c)); err != nil {
+			line, static := g.build(r, c)
+			if err := g.emit(count.WithPermit(context.Background(), permit), line, static); err != nil {
 				permit.Release()
 				continue
 			}
@@ -339,8 +340,8 @@ const (
 
 // emit counts one line, then pushes it to the consumer, its severity read
 // from the line's PRI.
-func (g *Generator) emit(line string, static *resource.StaticResources) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func (g *Generator) emit(ctx context.Context, line string, static *resource.StaticResources) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	rec := embed.LogRecord{
 		Message: line,

@@ -6,19 +6,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/counttest"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
 type stubOutput struct {
 	lastWrite string
+	counted   bool
 	stopped   bool
 }
 
 func (s *stubOutput) WriteLog(ctx context.Context, data output.LogRecord) error {
 	s.lastWrite = data.Message
+	s.counted = count.Counted(ctx)
 	return nil
 }
 
@@ -273,4 +279,15 @@ func TestHasPRIFollowsRFC5424(t *testing.T) {
 			t.Errorf("hasPRI(%q) = %v, want %v", msg, got, want)
 		}
 	}
+}
+
+// TestSyslogForwardsThePermit pins that WriteLog hands the caller's context to
+// the transport, so a queued transport can hold the record's count permit.
+func TestSyslogForwardsThePermit(t *testing.T) {
+	stub := &stubOutput{}
+	s := newWithTransport(zaptest.NewLogger(t), Config{Transport: TransportTCP, RFC: RFC5424Mode, AppName: "app", Hostname: "host"}, stub)
+	ctx, p := counttest.Held(t)
+	require.NoError(t, s.WriteLog(ctx, output.LogRecord{Message: "x"}))
+	p.Commit()
+	assert.True(t, stub.counted)
 }

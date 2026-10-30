@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
@@ -14,31 +15,31 @@ import (
 
 // WriteMetric sends a metric record to the OTLP gRPC output for processing by workers.
 func (o *OTLPGrpc) WriteMetric(ctx context.Context, data output.MetricRecord) error {
-	pbMetric := convertMetricRecord(data)
+	item := hold(ctx, convertMetricRecord(data))
 
 	select {
-	case o.metricChan <- pbMetric:
+	case o.metricChan <- item:
 		o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "metrics")
 		return nil
 	case <-ctx.Done():
-		return fmt.Errorf("context cancelled while waiting to write metric: %w", ctx.Err())
+		return item.fail(fmt.Errorf("context cancelled while waiting to write metric: %w", ctx.Err()))
 	case <-o.ctx.Done():
-		return fmt.Errorf("OTLP gRPC output is shutting down")
+		return item.fail(fmt.Errorf("OTLP gRPC output is shutting down"))
 	}
 }
 
 // WriteTrace sends a trace record to the OTLP gRPC output for processing by workers.
 func (o *OTLPGrpc) WriteTrace(ctx context.Context, data output.TraceRecord) error {
-	pbSpan := convertTraceRecord(data)
+	item := hold(ctx, convertTraceRecord(data))
 
 	select {
-	case o.traceChan <- pbSpan:
+	case o.traceChan <- item:
 		o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "traces")
 		return nil
 	case <-ctx.Done():
-		return fmt.Errorf("context cancelled while waiting to write trace: %w", ctx.Err())
+		return item.fail(fmt.Errorf("context cancelled while waiting to write trace: %w", ctx.Err()))
 	case <-o.ctx.Done():
-		return fmt.Errorf("OTLP gRPC output is shutting down")
+		return item.fail(fmt.Errorf("OTLP gRPC output is shutting down"))
 	}
 }
 
@@ -273,6 +274,7 @@ func buildTraceRequest(spans []*tracepb.Span) *tracepb.ResourceSpans {
 // metricBatch holds a batch of metrics to be sent
 type metricBatch struct {
 	metrics []*metricspb.Metric
+	sends   count.Sends
 	maxSize int
 	timer   *time.Timer
 }
@@ -285,19 +287,32 @@ func newMetricBatch(maxSize int, timeout time.Duration) *metricBatch {
 	}
 }
 
-func (b *metricBatch) add(m *metricspb.Metric) { b.metrics = append(b.metrics, m) }
-func (b *metricBatch) isFull() bool            { return len(b.metrics) >= b.maxSize }
-func (b *metricBatch) isEmpty() bool           { return len(b.metrics) == 0 }
+func (b *metricBatch) add(m *metricspb.Metric, sent func(error)) {
+	b.metrics = append(b.metrics, m)
+	if sent != nil {
+		b.sends = append(b.sends, sent)
+	}
+}
+func (b *metricBatch) isFull() bool  { return len(b.metrics) >= b.maxSize }
+func (b *metricBatch) isEmpty() bool { return len(b.metrics) == 0 }
 
-func (b *metricBatch) getAndClear() []*metricspb.Metric {
-	metrics := b.metrics
+func (b *metricBatch) getAndClear() ([]*metricspb.Metric, count.Sends) {
+	metrics, sends := b.metrics, b.sends
 	b.metrics = make([]*metricspb.Metric, 0, b.maxSize)
-	return metrics
+	b.sends = nil
+	return metrics, sends
+}
+
+// fail settles every record still in the batch as unsent.
+func (b *metricBatch) fail(err error) {
+	_, sends := b.getAndClear()
+	sends.Settle(err)
 }
 
 // traceBatch holds a batch of spans to be sent
 type traceBatch struct {
 	spans   []*tracepb.Span
+	sends   count.Sends
 	maxSize int
 	timer   *time.Timer
 }
@@ -310,12 +325,24 @@ func newTraceBatch(maxSize int, timeout time.Duration) *traceBatch {
 	}
 }
 
-func (b *traceBatch) add(s *tracepb.Span) { b.spans = append(b.spans, s) }
-func (b *traceBatch) isFull() bool        { return len(b.spans) >= b.maxSize }
-func (b *traceBatch) isEmpty() bool       { return len(b.spans) == 0 }
+func (b *traceBatch) add(s *tracepb.Span, sent func(error)) {
+	b.spans = append(b.spans, s)
+	if sent != nil {
+		b.sends = append(b.sends, sent)
+	}
+}
+func (b *traceBatch) isFull() bool  { return len(b.spans) >= b.maxSize }
+func (b *traceBatch) isEmpty() bool { return len(b.spans) == 0 }
 
-func (b *traceBatch) getAndClear() []*tracepb.Span {
-	spans := b.spans
+func (b *traceBatch) getAndClear() ([]*tracepb.Span, count.Sends) {
+	spans, sends := b.spans, b.sends
 	b.spans = make([]*tracepb.Span, 0, b.maxSize)
-	return spans
+	b.sends = nil
+	return spans, sends
+}
+
+// fail settles every record still in the batch as unsent.
+func (b *traceBatch) fail(err error) {
+	_, sends := b.getAndClear()
+	sends.Settle(err)
 }

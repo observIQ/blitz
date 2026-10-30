@@ -20,3 +20,32 @@ func TestNewWriteBackoffStartsAtTheRate(t *testing.T) {
 		require.Zero(t, bo.MaxElapsedTime, "never gives up")
 	}
 }
+
+// TestAwaitWakeRestartsAtTheRate pins that a wake rearms the timer at the
+// rate, not at a backoff grown by earlier wakes: a parked worker did not fail.
+func TestAwaitWakeRestartsAtTheRate(t *testing.T) {
+	bo := NewWriteBackoff(time.Millisecond)
+	for range 30 {
+		bo.NextBackOff() // grown to the 5s cap
+	}
+	timer := time.NewTimer(time.Hour)
+	defer timer.Stop()
+	wait := make(chan struct{})
+	close(wait)
+
+	require.True(t, AwaitWake(make(chan struct{}), wait, bo, timer))
+	select {
+	case <-timer.C:
+	case <-time.After(time.Second):
+		t.Fatal("timer rearmed at the grown backoff, not the rate")
+	}
+}
+
+// TestAwaitWakeStops pins that a closed stop channel ends the wait.
+func TestAwaitWakeStops(t *testing.T) {
+	stop := make(chan struct{})
+	close(stop)
+	timer := time.NewTimer(time.Hour)
+	defer timer.Stop()
+	require.False(t, AwaitWake(stop, make(chan struct{}), NewWriteBackoff(time.Millisecond), timer))
+}
