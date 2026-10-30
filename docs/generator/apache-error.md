@@ -34,9 +34,9 @@ generator:
 
 The Apache Error generator exposes the following metrics:
 
-- **`blitz_generator_logs_generated_total`** (Counter): Total number of logs generated
-- **`blitz_generator_workers_active`** (Gauge): Number of active worker goroutines
-- **`blitz_generator_write_errors_total`** (Counter): Total number of write errors, labeled by `error_type` (`unknown` or `timeout`)
+- **`blitz.generator.entries`** (Counter): Total number of logs generated
+- **`blitz.generator.active_workers`** (Gauge): Number of active worker goroutines
+- **`blitz.generator.write_errors`** (Counter): Total number of write errors, labeled by `error_type` (`unknown` or `timeout`)
 
-All metrics include a `component` label set to `generator_apache_error`.
+All metrics carry a `generator_type` attribute set to `apache-error`. See [Metrics](../metrics.md) for the exported names.
 

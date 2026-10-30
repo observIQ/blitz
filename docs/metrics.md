@@ -56,7 +56,7 @@ For detailed generator metric documentation, see [`generator/monitoring.md`](../
 | `blitz.output.active_workers` | Gauge | `{worker}` | Number of active output worker goroutines |
 | `blitz.output.entry_rate` | Float64 Counter | `{entry}/s` | Rate of telemetry entries processed per second |
 | `blitz.output.request_size` | Histogram | `By` | Size of output requests in bytes |
-| `blitz.output.request_latency` | Float64 Histogram | `s` | Latency of output requests |
+| `blitz.output.request_latency` | Float64 Histogram | `ms` | Latency of output requests |
 | `blitz.output.send_errors` | Counter | `{error}` | Total number of send errors |
 | `blitz.output.queue_size` | Observable Gauge | `{entry}` | Current number of entries in the output queue |
 | `blitz.output.fanout_dropped` | Counter | `{entry}` | Entries dropped for one fan-out output because its forwarding queue was full. Also carries `telemetry_type` and `output` (the list position, e.g. `outputs[1]`) |
@@ -83,7 +83,7 @@ The Splunk HEC output exposes additional metrics for batch and ACK tracking:
 | `blitz.output.hec.ack_expired` | Counter | `{ack}` | Total number of ACKs that expired without confirmation |
 | `blitz.output.hec.ack_retried` | Counter | `{ack}` | Total number of batches retried due to ACK failure |
 | `blitz.output.hec.ack_dropped` | Counter | `{ack}` | Total number of batches dropped after max retries |
-| `blitz.output.hec.ack_poll_latency` | Float64 Histogram | `s` | Latency of ACK polling requests |
+| `blitz.output.hec.ack_poll_latency` | Float64 Histogram | `ms` | Latency of ACK polling requests |
 
 These metrics are in addition to the shared output metrics (which use `output_type="hec"`).
 

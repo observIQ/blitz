@@ -85,6 +85,6 @@ generator:
 
 The WEL generator emits the same weaver-generated counters as every other Producer generator:
 
-- `blitz_generator_logs_generated_total` (Counter, label `component=wel`, label `channel=<channel>`): Total events emitted.
-- `blitz_generator_workers_active` (Gauge, label `component=wel`): Active worker count.
-- `blitz_generator_write_errors_total` (Counter, labels `component=wel`, `error_type` ∈ {`unknown`, `timeout`}): Consumer-rejection count.
+- `blitz.generator.entries` (Counter, attributes `generator_type=wel`, `channel=<channel>`): Total events emitted.
+- `blitz.generator.active_workers` (Gauge, attribute `generator_type=wel`): Active worker count.
+- `blitz.generator.write_errors` (Counter, attributes `generator_type=wel`, `error_type` ∈ {`unknown`, `timeout`}): Consumer-rejection count.

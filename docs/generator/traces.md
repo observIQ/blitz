@@ -2,7 +2,7 @@
 
 **Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
 
-The Traces generator produces synthetic distributed trace data. Each trace consists of an HTTP server root span, a database query child span, and optionally a processing internal span.
+The Traces generator produces synthetic distributed trace data. Each trace has an HTTP server root span and 1 to 4 child spans, for 2 to 5 spans in all.
 
 ## Telemetry Type
 
@@ -10,11 +10,15 @@ This generator produces **traces** (not logs). It must be paired with an output 
 
 ## Trace Structure
 
-Each generated trace contains:
+Each generated trace contains a **root span** (Server): an HTTP request (e.g., `GET /api/users`) with method, path, status code, and host attributes.
 
-1. **Root span** (Server): An HTTP request (e.g., `GET /api/users`) with method, path, status code, and host attributes.
-2. **DB child span** (Client): A database query (e.g., `SELECT users`) with database system, statement, and connection attributes.
-3. **Processing span** (Internal, 50% chance): An internal processing step with stage attributes.
+Under it are 1 to 4 child spans, each of a different kind picked at random from:
+
+- **Database query** (Client): a PostgreSQL query (e.g., `SELECT users`) with database system, statement, name, and peer attributes.
+- **Cache lookup** (Client): a Redis operation with database system, operation, and peer attributes.
+- **Internal processing** (Internal): a `process_request` step with a `processing.stage` attribute.
+- **Downstream HTTP call** (Client): an HTTP request to another service with method, URL, and peer attributes.
+- **Input validation** (Internal): a `validate_input` step with a `validation.scheme` attribute.
 
 All spans within a trace share the same trace ID and have proper parent-child relationships.
 

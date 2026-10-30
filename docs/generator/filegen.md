@@ -22,13 +22,13 @@ The `source` value is resolved in this order:
 
 1. **Explicit `package:` prefix** (e.g. `source: package:syslog_generic`) — resolved only against the data library; no disk fallback. Use this to lock the interpretation and get clear errors on misspellings.
 2. **Disk path / glob / directory** — resolved against the local filesystem. This covers absolute paths (`/var/log/app.log`), relative paths (`./logs`), and globs (`/data/syslog_*/*.log`).
-3. **Bare name** (no path separator, no prefix; e.g. `source: syslog_generic`) — first tried against the data library; if the library has no matching entry, treated as a disk path. Preserves existing configs that reference data library packages by bare name.
+3. **Bare name** (no path separator, no prefix; e.g. `source: syslog_generic`) — first tried as a disk path; if nothing on disk matches, looked up in the data library. Preserves existing configs that reference data library packages by bare name.
 
-When a bare name matches both a data-library entry AND a directory on disk relative to cwd, a startup warning is logged pointing at the explicit `package:` prefix as the way to disambiguate. The library entry wins; the warning surfaces the ambiguity so users can lock the meaning.
+A bare name that matches a file, directory, or glob on disk resolves to disk, even when the data library has an entry of the same name. Use the explicit `package:` prefix to force the library.
 
 ## Standalone CLI vs embedded library use
 
-- **Standalone CLI**: the data library is read from disk at runtime (from `./data_library/` relative to cwd). Editing files there takes effect on the next blitz run — no recompile required. This is the default behavior; the CLI passes no embedded library to `filegen.New`.
+- **Standalone CLI**: the data library is read from disk at runtime, from the first of `$BLITZ_DATA_LIBRARY_DIR`, `./data_library/`, the in-repo `generator/filegen/embeddedlibrary/data_library/`, and `/usr/share/blitz/data_library/` that exists. Editing files there takes effect on the next blitz run — no recompile required. The CLI also passes `embeddedlibrary.FS()`, which is empty unless blitz is built with `-tags embed_library`; when both are present, a file on disk wins over the embedded copy of the same path.
 - **Embedded library consumers** (e.g. the OTel `telemetrygeneratorreceiver`): import `github.com/observiq/blitz/generator/filegen/embeddedlibrary` and pass `embeddedlibrary.FS()` to `filegen.New`. The data library files are bundled into the consuming binary via `//go:embed` and travel with the import — no on-disk installation step required.
 
 ## Example Logs
@@ -125,7 +125,7 @@ generator:
   filegen:
     workers: 4
     rate: 50ms
-    source: data_library/syslog_*/*.log
+    source: /data/syslog_*/*.log
 ```
 
 ## Replay Mode
@@ -154,6 +154,7 @@ output:
   - `onFinish: idle` keeps blitz running after the last line. SIGUSR1 then replays again from the first line, including when it arrives mid-replay (see [Finite Generation](../finite-generation.md)).
   - Embedded hosts have no count, so there the generator stops emitting after one pass and keeps running until the host stops it.
 - **Empty input**: a source with no non-empty lines fails at startup.
+- **Unreadable file**: any file in the source that cannot be read, a glob match that cannot be stat'd (such as a dangling symlink), or a matched directory that cannot be listed fails at startup.
 - **Directories**: subdirectories, and symlinks to directories, are skipped.
 - **Long lines**: lines of any length are read whole, in both modes, so a file with no line breaks reads as one line.
 - **Memory**: the whole input is read into memory before the first line is sent, so a capture must fit in RAM.
@@ -171,37 +172,37 @@ The source type needs no configuration; it is detected at startup. It is separat
 
 ### Glob Patterns
 
-The source path supports standard glob patterns with wildcards (`*`, `?`, `[...]`), allowing flexible file selection:
+The source path supports standard glob patterns with wildcards (`*`, `?`, `[...]`), allowing flexible file selection. Globs match files on disk only; they do not expand inside the data library. To glob over library files, copy them to disk first with `blitz library extract`.
 
 **Important:** To prevent shell expansion, quote the glob pattern when providing it via command line:
 
 ```bash
 # Quote the pattern to let the Go program expand it
-blitz --generator-type=filegen --generator-filegen-source='data_library/*'
+blitz --generator-type=filegen --generator-filegen-source='/data/*'
 ```
 
+A `*` never matches a `/`, so each `*` covers one path level. A directory the pattern matches contributes the files directly inside it.
+
 **File glob examples:**
-- `data_library/syslog_generic/unparsable.*` - Match files with `unparsable.` prefix
-- `/var/log/*rfc5424*.log` - Match RFC 5424 log files in any subdirectory
+- `/data/syslog/unparsable.*` - Match files with `unparsable.` prefix
+- `/var/log/*rfc5424*.log` - Match RFC 5424 log files directly in `/var/log`
 - `/data/*.log` - Match all `.log` files in `/data`
 
 **Directory glob examples:**
-- `data_library/syslog_*/*.log` - Match all `.log` files in directories starting with `syslog_`
-- `/var/log/*/access.log` - Match `access.log` files in any subdirectory of `/var/log`
+- `/data/syslog_*/*.log` - Match all `.log` files in directories starting with `syslog_`
+- `/var/log/*/access.log` - Match `access.log` in each directory directly under `/var/log`
 - `/data/*_logs/*.log` - Match all `.log` files in directories ending with `_logs`
-- `data_library/*` - Match all top-level directories in data_library
+- `/data/*` - Match the files directly in `/data`, plus the files directly inside each of its subdirectories
 
 ### Worker Distribution
 
 This section describes random mode. Replay uses a single worker that walks every file in order (see [Replay Mode](#replay-mode)).
 
-Workers are assigned files in round-robin fashion. On each rate cycle, each worker:
-1. Reads all lines from its assigned file
+Each worker starts at its own file (worker N at file N) and steps forward by the worker count on each cycle, wrapping at the end of the file list, so the workers together cover every file. On each rate cycle, each worker:
+1. Reads all lines from its current file
 2. Selects one line at random from the file (skipping empty lines)
 3. Writes the selected line to the output
-4. Waits for the configured rate period before processing the next file
-
-Workers cycle back to the beginning of the file list when all files are exhausted.
+4. Waits for the configured rate period before moving to its next file
 
 ### Log Line Processing
 
@@ -212,7 +213,7 @@ On each work cycle:
 4. A random line is selected from the collected lines, drawn from the worker's seeded RNG (`generator.filegen.seed`)
 5. Timestamp directives in the selected line are processed
 6. The line is written to the output with the configured rate limit applied
-7. If a write fails, an error is recorded and the next file cycle begins
+7. If the write fails, an error is recorded and the worker retries the same file after a backoff. If the read fails, or the file has no non-empty lines, the worker moves on to the following file in the list
 
 ### Rate Limiting
 
@@ -251,17 +252,17 @@ Jan 13 15:30:45                       # %b %d %H:%M:%S format
 The File generator implements an in-memory cache to avoid reading files from disk on every log generation cycle. This significantly improves performance when working with large numbers of files or files with many lines.
 
 **Cache Behavior:**
-- Caching is **enabled by default** (`cache_enabled: true`)
+- Caching is **enabled by default** (`cache-enabled: true`)
 - Each file's lines are cached in memory after the first read
 - Cache entries can have an optional time-to-live (TTL) for automatic invalidation
   - **Default TTL is 0** (cache entries never expire)
-  - Setting `cache_ttl` to a value (e.g., `1m`) will invalidate entries older than that duration
+  - Setting `cache-ttl` to a value (e.g., `1m`) will invalidate entries older than that duration
 - Cache is **thread-safe** and allows concurrent access from multiple worker goroutines
 - Cache uses LRU (Least Recently Used) eviction with a 1000-file limit
 - Each file maintains its own cache entry independently
 
 **Disabling Cache:**
-- Set `cache_enabled: false` to disable caching entirely
+- Set `cache-enabled: false` to disable caching entirely
 - Useful when dealing with very large files or when file contents change frequently
 
 **Example with Cache TTL (1 minute):**
@@ -272,8 +273,8 @@ generator:
     workers: 4
     rate: 100ms
     source: /var/log/app.log
-    cache_enabled: true
-    cache_ttl: 1m
+    cache-enabled: true
+    cache-ttl: 1m
 ```
 
 **Example with Caching Disabled:**
@@ -284,54 +285,59 @@ generator:
     workers: 2
     rate: 500ms
     source: /large/files/directory
-    cache_enabled: false
+    cache-enabled: false
 ```
 
 ## Metrics
 
 The File generator exposes the following metrics:
 
-- **`blitz_generator_logs_generated_total`** (Counter): Total number of log lines written
-- **`blitz_generator_workers_active`** (Gauge): Number of active worker goroutines
-- **`blitz_generator_write_errors_total`** (Counter): Total number of write errors
+- **`blitz.generator.entries`** (Counter): Total number of log lines written
+- **`blitz.generator.active_workers`** (Gauge): Number of active worker goroutines
+- **`blitz.generator.write_errors`** (Counter): Total number of write errors
 
-All metrics include a `component` label set to `generator_file`.
+All metrics carry a `generator_type` attribute set to `file`. See [Metrics](../metrics.md) for the exported names.
 
 ## Error Handling
 
-If a file cannot be read or a write operation fails:
+This section describes random mode. Replay reads its whole input at startup, so an unreadable file stops it there (see [Replay Mode](#replay-mode)).
+
+If a write operation fails:
 - The error is logged
 - The error counter is incremented
-- Processing continues with the next file
+- The worker retries the same file after an exponential backoff (from the rate up to 5s, or up to the rate when that is longer)
 - Workers remain active and continue processing
 
-If no files are found in the specified source:
+If a file cannot be read, the error is logged and counted the same way, and the worker moves on to the following file in the list after the backoff. A file with no non-empty lines is skipped the same way, without an error. A path a glob matches but blitz cannot stat, or a matched directory it cannot list, is skipped at startup with a warning.
+
+If no files are found in the specified source, or no file has a non-empty line:
 - The generator returns an error during startup
 - The blitz process exits with a startup error
 
+The startup check skips files it cannot read, so a source whose files cannot be read still starts. The workers then report each read failure as described above.
+
 ## Data Library
 
-The following data library packages are included in the distribution at `data_library/`:
-
-- **syslog_generic**: Standard RFC 3164 and RFC 5424 syslog formatted logs representing generic syslog events across various device types
-
-To use data library packages, simply specify the directory path:
+The data library ships about 190 packages of sample logs, one per product (for example `apache`, `cisco-asa`, `kubernetes`, `palo-alto`, `syslog_generic`). The `blitz library` command inspects it:
 
 ```bash
-blitz --generator-type=filegen --generator-filegen-source=data_library/syslog_generic
+blitz library ls                    # list every package
+blitz library ls microsoft-windows  # list the files in one package
+blitz library search firewall       # find packages by name
 ```
 
-Or use glob patterns to read from multiple data library packages:
+Use a package by its bare name, or name one file in it with the `package:` prefix:
 
 ```bash
-# Read all files from all data library packages
-blitz --generator-type=filegen --generator-filegen-source='data_library/*'
+blitz --generator-type=filegen --generator-filegen-source=syslog_generic
+blitz --generator-type=filegen --generator-filegen-source=package:microsoft-windows/security.log
+```
 
-# Read from packages starting with 'a' (apache, ahnlab, akamai, etc.)
-blitz --generator-type=filegen --generator-filegen-source='data_library/a*'
+A source with a path separator and no `package:` prefix is always read from disk, so `data_library/syslog_generic` works only from a directory that holds a `data_library/` copy, such as an unpacked release tarball. Bare names work from anywhere. To read several packages at once, extract them and point a glob at the copy:
 
-# Read from all Cisco-related packages
-blitz --generator-type=filegen --generator-filegen-source='data_library/cisco*'
+```bash
+blitz library extract --all /tmp/blitz
+blitz --generator-type=filegen --generator-filegen-source='/tmp/blitz/data_library/cisco*'
 ```
 
 ## Usage Examples
@@ -342,7 +348,7 @@ Read Apache access logs from the data library and output to stdout:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/apache \
+  --generator-filegen-source=apache \
   --output-type=stdout
 ```
 
@@ -352,10 +358,10 @@ Send Apache logs to an OpenTelemetry collector:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/apache \
+  --generator-filegen-source=apache \
   --output-type=otlp-grpc \
-  --output-otlpgrpc-host=localhost \
-  --output-otlpgrpc-port=4317
+  --output-otlp-grpc-host=localhost \
+  --output-otlp-grpc-port=4317
 ```
 
 ### Cisco Network Device Logs to Stdout
@@ -364,7 +370,7 @@ Generate logs from Cisco network devices with multiple workers:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/cisco \
+  --generator-filegen-source=cisco \
   --generator-filegen-workers=2 \
   --output-type=stdout
 ```
@@ -375,11 +381,11 @@ Send Cisco device logs to a remote OTLP collector:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/cisco \
+  --generator-filegen-source=cisco \
   --generator-filegen-workers=2 \
   --output-type=otlp-grpc \
-  --output-otlpgrpc-host=otel-collector.example.com \
-  --output-otlpgrpc-port=4317
+  --output-otlp-grpc-host=otel-collector.example.com \
+  --output-otlp-grpc-port=4317
 ```
 
 ### Kubernetes Cluster Logs to Stdout
@@ -388,7 +394,7 @@ Generate Kubernetes cluster logs with high throughput:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/kubernetes \
+  --generator-filegen-source=kubernetes \
   --generator-filegen-workers=4 \
   --generator-filegen-rate=50ms \
   --output-type=stdout
@@ -400,14 +406,14 @@ Send Kubernetes logs to an OTLP collector with optimized batching:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/kubernetes \
+  --generator-filegen-source=kubernetes \
   --generator-filegen-workers=4 \
   --generator-filegen-rate=50ms \
   --output-type=otlp-grpc \
-  --output-otlpgrpc-host=collector.monitoring.svc \
-  --output-otlpgrpc-port=4317 \
-  --output-otlpgrpc-workers=2 \
-  --output-otlpgrpc-batchtimeout=5s
+  --output-otlp-grpc-host=collector.monitoring.svc \
+  --output-otlp-grpc-port=4317 \
+  --output-otlp-grpc-workers=2 \
+  --output-otlp-grpc-batchtimeout=5s
 ```
 
 ### Fortinet Firewall Logs to Stdout
@@ -416,7 +422,7 @@ Generate logs from Fortinet firewalls with standard rate:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/fortinet \
+  --generator-filegen-source=fortinet \
   --output-type=stdout
 ```
 
@@ -426,37 +432,37 @@ Send Fortinet firewall logs to an OpenTelemetry collector:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/fortinet \
+  --generator-filegen-source=fortinet \
   --output-type=otlp-grpc \
-  --output-otlpgrpc-host=localhost \
-  --output-otlpgrpc-port=4317 \
-  --output-otlpgrpc-workers=2
+  --output-otlp-grpc-host=localhost \
+  --output-otlp-grpc-port=4317 \
+  --output-otlp-grpc-workers=2
 ```
 
-### Multiple Checkpoint and Palo Alto Logs to Stdout (Glob Pattern)
+### Palo Alto Firewall Logs to Stdout
 
-Read from firewall packages using glob pattern and output to stdout:
+Read Palo Alto firewall logs and output to stdout:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source='data_library/*firewall*' \
+  --generator-filegen-source=palo-alto \
   --generator-filegen-workers=4 \
   --output-type=stdout
 ```
 
-### Multiple Checkpoint and Palo Alto Logs to OTLP (Glob Pattern)
+### Palo Alto Firewall Logs to OTLP
 
-Send security logs from firewall packages to OTLP collector:
+Send Palo Alto firewall logs to an OTLP collector:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source='data_library/*firewall*' \
+  --generator-filegen-source=palo-alto \
   --generator-filegen-workers=4 \
   --output-type=otlp-grpc \
-  --output-otlpgrpc-host=security-collector.example.com \
-  --output-otlpgrpc-port=4317 \
-  --output-otlpgrpc-maxexportbatchsize=500 \
-  --output-otlpgrpc-workers=3
+  --output-otlp-grpc-host=security-collector.example.com \
+  --output-otlp-grpc-port=4317 \
+  --output-otlp-grpc-maxexportbatchsize=500 \
+  --output-otlp-grpc-workers=3
 ```
 
 ### Microsoft Windows Security Events (Syslog Format) to Stdout
@@ -465,7 +471,7 @@ Generate Windows security event logs in syslog format to stdout:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/microsoft-windows/security.log \
+  --generator-filegen-source=package:microsoft-windows/security.log \
   --generator-filegen-workers=2 \
   --output-type=stdout
 ```
@@ -476,7 +482,7 @@ Generate Windows security events in XML format to stdout:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/microsoft-windows/security_events.xml \
+  --generator-filegen-source=package:microsoft-windows/security_events.xml \
   --generator-filegen-workers=2 \
   --output-type=stdout
 ```
@@ -487,12 +493,12 @@ Send Windows security events in syslog format to OTLP with TLS:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/microsoft-windows/security.log \
+  --generator-filegen-source=package:microsoft-windows/security.log \
   --generator-filegen-workers=2 \
   --output-type=otlp-grpc \
-  --output-otlpgrpc-host=secure-collector.example.com \
-  --output-otlpgrpc-port=4317 \
-  --output-otlpgrpc-enable-tls=true \
+  --output-otlp-grpc-host=secure-collector.example.com \
+  --output-otlp-grpc-port=4317 \
+  --output-otlp-grpc-enable-tls=true \
   --otlp-grpc-tls-insecure=false \
   --otlp-grpc-tls-cert=/path/to/client.crt \
   --otlp-grpc-tls-key=/path/to/client.key
@@ -504,12 +510,12 @@ Send Windows security events in XML format to OTLP with TLS:
 
 ```bash
 blitz --generator-type=filegen \
-  --generator-filegen-source=data_library/microsoft-windows/security_events.xml \
+  --generator-filegen-source=package:microsoft-windows/security_events.xml \
   --generator-filegen-workers=2 \
   --output-type=otlp-grpc \
-  --output-otlpgrpc-host=secure-collector.example.com \
-  --output-otlpgrpc-port=4317 \
-  --output-otlpgrpc-enable-tls=true \
+  --output-otlp-grpc-host=secure-collector.example.com \
+  --output-otlp-grpc-port=4317 \
+  --output-otlp-grpc-enable-tls=true \
   --otlp-grpc-tls-insecure=false \
   --otlp-grpc-tls-cert=/path/to/client.crt \
   --otlp-grpc-tls-key=/path/to/client.key

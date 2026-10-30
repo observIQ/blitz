@@ -28,14 +28,14 @@ output:
 
 ## Metrics
 
-The UDP output exposes the following metrics:
+The UDP output records the shared output metrics:
 
-- **`blitz_udp_logs_received_total`** (Counter): Number of logs received from the write channel
-- **`blitz_udp_workers_active`** (Gauge): Number of active worker goroutines
-- **`blitz_udp_log_rate_total`** (Counter, Float64): Rate at which logs are successfully sent to the configured host
-- **`blitz_udp_request_size_bytes`** (Histogram): Size of requests in bytes
-- **`blitz_udp_send_errors_total`** (Counter): Total number of send errors, labeled by `error_type` (`unknown` or `timeout`)
-- **`blitz_udp_channel_size`** (Gauge): Current size of the data channel
+- **`blitz.output.entries_received`** (Counter): Entries received by the output
+- **`blitz.output.active_workers`** (Gauge): Number of active worker goroutines
+- **`blitz.output.entry_rate`** (Float64 Counter): Rate at which entries are sent
+- **`blitz.output.request_size`** (Histogram): Size of requests in bytes
+- **`blitz.output.send_errors`** (Counter): Total number of send errors, by `telemetry_type`
+- **`blitz.output.queue_size`** (Observable Gauge): Current number of entries in the queue
 
-All metrics include a `component` label set to `output_udp`.
+All metrics carry an `output_type` attribute set to `udp`. See [Metrics](../metrics.md) for the exported names.
 
