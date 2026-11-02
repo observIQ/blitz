@@ -170,27 +170,25 @@ func (g *Generator) worker(workerID int) {
 		case <-g.stopCh:
 			return
 		case <-timer.Chan():
-			if g.tracker != nil {
-				// Take the resume channel before Acquire, so a Reset that lands
-				// between a failed Acquire and the wait still wakes the worker.
-				resume := g.tracker.ResumeC()
-				if !g.tracker.Acquire() {
-					g.logger.Debug("Flow worker waiting for a count reset", zap.Int("worker_id", workerID))
-					select {
-					case <-g.stopCh:
-						return
-					case <-resume:
-						bo.Reset()
-						timer.Reset(bo.NextBackOff())
-						continue
-					}
+			permit, resume, ok := g.tracker.Acquire()
+			if !ok {
+				g.logger.Debug("Flow worker at the count limit, waiting", zap.Int("worker_id", workerID))
+				select {
+				case <-g.stopCh:
+					return
+				case <-resume:
+					bo.Reset()
+					timer.Reset(bo.NextBackOff())
+					continue
 				}
 			}
 			if err := g.generateAndWrite(r); err != nil {
 				g.logger.Error("Failed to write flow", zap.Int("worker_id", workerID), zap.Error(err))
+				permit.Release()
 				timer.Reset(bo.NextBackOff())
 				continue
 			}
+			permit.Commit()
 			bo.Reset()
 			timer.Reset(bo.NextBackOff())
 		}

@@ -52,6 +52,8 @@ func getTestOverrideFlagsArgs() []string {
 		"--generator-filegen-source", "/var/log",
 		"--generator-filegen-cache-enabled=false",
 		"--generator-filegen-cache-ttl", "0",
+		"--generator-filegen-mode", "replay",
+		"--generator-filegen-seed", "9",
 		"--generator-okta-workers", "22",
 		"--generator-okta-rate", "40ms",
 		"--generator-hostmetrics-workers", "3",
@@ -223,6 +225,8 @@ func getTestOverrideEnvs() map[string]string {
 		"BLITZ_GENERATOR_FILEGEN_SOURCE":                         "syslog_generic",
 		"BLITZ_GENERATOR_FILEGEN_CACHE_ENABLED":                  "false",
 		"BLITZ_GENERATOR_FILEGEN_CACHE_TTL":                      "0",
+		"BLITZ_GENERATOR_FILEGEN_MODE":                           "replay",
+		"BLITZ_GENERATOR_FILEGEN_SEED":                           "4",
 		"BLITZ_GENERATOR_OKTA_WORKERS":                           "23",
 		"BLITZ_GENERATOR_OKTA_RATE":                              "35ms",
 		"BLITZ_GENERATOR_HOSTMETRICS_WORKERS":                    "4",
@@ -434,6 +438,8 @@ func TestOverrideDefaults(t *testing.T) {
 				Source:       "",
 				CacheEnabled: true,
 				CacheTTL:     0,
+				Mode:         FileModeRandom,
+				Seed:         -1,
 			},
 			Okta: OktaGeneratorConfig{
 				Workers: 1,
@@ -673,6 +679,8 @@ func TestOverrideFlags(t *testing.T) {
 				Source:       "/var/log",
 				CacheEnabled: false,
 				CacheTTL:     0,
+				Mode:         FileModeReplay,
+				Seed:         9,
 			},
 			Okta: OktaGeneratorConfig{
 				Workers: 22,
@@ -940,6 +948,8 @@ func TestOverrideEnvs(t *testing.T) {
 				Source:       "syslog_generic",
 				CacheEnabled: false,
 				CacheTTL:     0,
+				Mode:         FileModeReplay,
+				Seed:         4,
 			},
 			Okta: OktaGeneratorConfig{
 				Workers: 23,
@@ -1261,4 +1271,28 @@ func TestTypeHelpListsEveryType(t *testing.T) {
 		require.True(t, ok, "unexpected %s usage: %q", field, help)
 		require.ElementsMatch(t, strings.Split(accepted, ", "), strings.Split(listed, "|"), field)
 	}
+}
+
+// fieldChoices returns the "One of:" list in field's usage text.
+func fieldChoices(t *testing.T, field string) []string {
+	t.Helper()
+	for _, o := range DefaultOverrides() {
+		if o.Field == field {
+			return o.Choices()
+		}
+	}
+	t.Fatalf("no override for %s", field)
+	return nil
+}
+
+// TestOverrideChoices pins that Choices reads the "One of:" or "One or more
+// of:" list from an override's usage text, and returns nil for one without it.
+func TestOverrideChoices(t *testing.T) {
+	require.Equal(t, []string{"stdout", "file"}, fieldChoices(t, "logging.type"))
+	require.Equal(t, []string{"random", "replay"}, fieldChoices(t, "generator.filegen.mode"))
+	require.Equal(t, []string{"asm", "afm", "apm", "dns", "audit", "nginx-plus", "nginx-app-protect", "irules", "f5os"},
+		fieldChoices(t, "generator.f5.enabledProducts"))
+	os := fieldChoices(t, "generator.hostmetrics.os")
+	require.Equal(t, "openbsd", os[len(os)-1], "text after the list is not a value")
+	require.Nil(t, fieldChoices(t, "logging.file.path"))
 }

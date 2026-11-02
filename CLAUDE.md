@@ -102,5 +102,6 @@ make completion
 
 - Use lowercase "Bindplane" (not "BindPlane") in all documentation and comments
 - Follow existing patterns for new generators
+- Generators honor `generator.count`: take a permit with the tracker's `Acquire` before each record, then `Commit` it once the record is written or `Release` it when the write fails (see `generator/count`)
 - Include metrics for new components
 - Add tests for new functionality

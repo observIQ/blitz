@@ -2,15 +2,16 @@
 
 **Class:** Producer (embed-eligible; see [docs/embed.md](../embed.md))
 
-The File generator reads log entries from files on disk and selects a random line from each file on each run. It automatically processes timestamp directives on the selected line. It supports reading from a single file, reading from all files in a directory, or reading from a pre-distributed package of sample logs. Timestamp directives in log entries (like `%c`, `%Y-%m-%dT%H:%M:%SZ`, etc.) are replaced with actual formatted timestamps when the line is selected.
+The File generator reads log entries from files on disk. By default it selects a random line from each file on each run; in replay mode it emits every line once, in order, and then stops (see [Replay Mode](#replay-mode)). It automatically processes timestamp directives on the selected line. It supports reading from a single file, reading from all files in a directory, or reading from a pre-distributed package of sample logs. Timestamp directives in log entries (like `%c`, `%Y-%m-%dT%H:%M:%SZ`, etc.) are replaced with actual formatted timestamps when the line is selected.
 
 ## Features
 
-- **Single file mode**: Read logs from a specified file path
-- **Directory mode**: Read logs from all files in a directory
+- **Single file source**: Read logs from a specified file path
+- **Directory source**: Read logs from all files in a directory
 - **Glob pattern support**: Use wildcards to match multiple files or directories (e.g., `/var/log/*rfc5424*.log`, `/data/syslog_*/*.log`)
-- **Data library mode**: Reference a named package from blitz's built-in `data_library/` (via bare name or explicit `package:` prefix)
-- **Auto-detection**: Mode can auto-detect whether source is a file, directory, or library package
+- **Data library source**: Reference a named package from blitz's built-in `data_library/` (via bare name or explicit `package:` prefix)
+- **Source detection**: Detects whether `source` is a file, directory, glob, or library package, with no setting needed
+- **Replay mode**: Emit every line of your own capture files once, in order, then stop, for byte-for-byte repeatable runs
 - **Flexible rate limiting**: Configurable log generation rate per worker
 - **Multi-worker support**: Distribute file reading across multiple worker goroutines
 - **Dynamic timestamp processing**: Automatic substitution of timestamp directives (`%c`, `%Y-%m-%dT%H:%M:%SZ`, `%Y-%m-%d`, etc.) with actual formatted times
@@ -83,10 +84,12 @@ The File generator automatically processes timestamp directives in log files, re
 | `generator.filegen.source` | `--generator-filegen-source` | `BLITZ_GENERATOR_FILEGEN_SOURCE` | `` | File path, directory path, or glob pattern (auto-detected) |
 | `generator.filegen.cache-enabled` | `--generator-filegen-cache-enabled` | `BLITZ_GENERATOR_FILEGEN_CACHE_ENABLED` | `true` | Enable in-memory file caching (true/false) |
 | `generator.filegen.cache-ttl` | `--generator-filegen-cache-ttl` | `BLITZ_GENERATOR_FILEGEN_CACHE_TTL` | `0` | Cache entry time-to-live in duration format (0 = never expire) |
+| `generator.filegen.mode` | `--generator-filegen-mode` | `BLITZ_GENERATOR_FILEGEN_MODE` | `random` | `random` picks a random line on each emission; `replay` emits every non-empty line once, in order (see [Replay Mode](#replay-mode) for how the run ends). Replay requires `workers: 1`. The old source-type values `file`, `directory` and `package` still load and run `random` |
+| `generator.filegen.seed` | `--generator-filegen-seed` | `BLITZ_GENERATOR_FILEGEN_SEED` | `-1` | Random-mode RNG seed. Negative randomizes per run (the resolved seed is logged); 0 or positive repeats the same sequence of line picks with one worker. A failed send uses up its pick, so the lines delivered repeat only when every send succeeds. Worker N uses seed+N, so with several workers each worker's own picks repeat, but which of them a shared count takes does not. Replay ignores it. |
 
 ## Example Configurations
 
-### File Mode (Single File)
+### Single File Source
 
 Read logs from a single file:
 
@@ -99,7 +102,7 @@ generator:
     source: /var/log/app.log
 ```
 
-### Directory Mode (Auto-Detected)
+### Directory Source
 
 Read logs from all files in a directory:
 
@@ -112,7 +115,7 @@ generator:
     source: /var/log/application
 ```
 
-### Glob Pattern Mode (Auto-Detected)
+### Glob Pattern Source
 
 Use glob patterns to read from matching files or directories:
 
@@ -125,16 +128,46 @@ generator:
     source: data_library/syslog_*/*.log
 ```
 
+## Replay Mode
+
+Replay mode turns a capture file you supply into a repeatable run. Blitz reads the source once and emits every non-empty line exactly once, in order: a single file top to bottom, or a directory's files in lexical order, each top to bottom. When the last line is out, the run ends.
+
+```yaml
+generator:
+  type: filegen
+  filegen:
+    source: /data/captures/incident-42.log
+    mode: replay
+    rate: 10ms
+output:
+  type: file
+  file:
+    path: /tmp/replayed.log
+```
+
+- **Byte for byte**: a line with no timestamp directives is emitted exactly as it appears in the file, without its line ending (a CRLF line loses its `\r` as well as its `\n`), so captures with hard-coded timestamps replay identically on every run. Directives, if a line has any, render at the current time as they do in random mode. Any `%` followed by a directive character is a directive, so `%%` renders as a single `%`; a line with a literal `%` before a directive character does not replay byte for byte.
+- **Ordering**: replay is a single ordered stream, so it requires `workers: 1`. Any other value fails config validation.
+- **One generator**: a replay must be the only generator in the run. A `generators:` list that holds a replay and any other entry fails config validation. To replay several captures, put them in one directory.
+- **Ending the run**: the run ends once the output has accepted the last line.
+  - A line the output rejects is retried until it is accepted.
+  - With `generator.count` set lower than the line count, it ends after that many lines instead.
+  - `onFinish: idle` keeps blitz running after the last line. SIGUSR1 then replays again from the first line, including when it arrives mid-replay (see [Finite Generation](../finite-generation.md)).
+  - Embedded hosts have no count, so there the generator stops emitting after one pass and keeps running until the host stops it.
+- **Empty input**: a source with no non-empty lines fails at startup.
+- **Directories**: subdirectories, and symlinks to directories, are skipped.
+- **Long lines**: lines of any length are read whole, in both modes, so a file with no line breaks reads as one line.
+- **Memory**: the whole input is read into memory before the first line is sent, so a capture must fit in RAM.
+
 ## Behavior
 
-### Auto-Detection
+### Source Detection
 
 The File generator automatically detects the source type:
-- **If source is a file**: Reads the file sequentially line by line
+- **If source is a file**: Reads lines from the file (a random line per run, or every line in order in replay mode)
 - **If source is a directory**: Discovers all files in the directory and distributes them across workers
 - **If source is a glob pattern**: Expands the pattern and processes matching files/directories accordingly
 
-No explicit mode configuration is required; the source type is detected automatically at startup.
+The source type needs no configuration; it is detected at startup. It is separate from `mode`, which picks random or replay.
 
 ### Glob Patterns
 
@@ -160,6 +193,8 @@ blitz --generator-type=filegen --generator-filegen-source='data_library/*'
 
 ### Worker Distribution
 
+This section describes random mode. Replay uses a single worker that walks every file in order (see [Replay Mode](#replay-mode)).
+
 Workers are assigned files in round-robin fashion. On each rate cycle, each worker:
 1. Reads all lines from its assigned file
 2. Selects one line at random from the file (skipping empty lines)
@@ -174,7 +209,7 @@ On each work cycle:
 1. A file is selected from the worker's assigned files
 2. The entire file is read into memory
 3. All non-empty lines are collected
-4. A random line is selected from the collected lines
+4. A random line is selected from the collected lines, drawn from the worker's seeded RNG (`generator.filegen.seed`)
 5. Timestamp directives in the selected line are processed
 6. The line is written to the output with the configured rate limit applied
 7. If a write fails, an error is recorded and the next file cycle begins

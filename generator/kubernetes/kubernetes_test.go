@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -99,4 +100,41 @@ func TestGenerator_CountLimited(t *testing.T) {
 
 	writes := writer.getWrites()
 	assert.Equal(t, 5, len(writes), "Expected exactly 5 logs with count tracker")
+}
+
+// flakyWriter rejects its first failFirst writes, then accepts every one.
+type flakyWriter struct {
+	mockWriter
+	failFirst int
+	calls     int
+}
+
+func (f *flakyWriter) ConsumeLogs(ctx context.Context, records []embed.LogRecord) error {
+	f.mu.Lock()
+	f.calls++
+	failed := f.calls <= f.failFirst
+	f.mu.Unlock()
+	if failed {
+		return errors.New("destination unavailable")
+	}
+	return f.mockWriter.ConsumeLogs(ctx, records)
+}
+
+// TestGenerator_FailedWriteReleasesPermit pins that a rejected write gives
+// its permit back, so the count ends on delivered records.
+func TestGenerator_FailedWriteReleasesPermit(t *testing.T) {
+	writer := &flakyWriter{failFirst: 2}
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, "cri-o", writer, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(3)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(10 * time.Second):
+		t.Fatal("count never completed")
+	}
+	assert.Len(t, writer.getWrites(), 3, "every counted record was delivered")
 }

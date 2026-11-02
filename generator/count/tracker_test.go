@@ -7,59 +7,123 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestNewTracker(t *testing.T) {
-	tracker := NewTracker(10)
-	assert.NotNil(t, tracker)
-	assert.Equal(t, int64(10), tracker.remaining.Load())
-	assert.Equal(t, int64(10), tracker.target)
+func isClosed(ch <-chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
+}
+
+// acquire takes a permit and fails the test when none is granted.
+func acquire(t *testing.T, tracker *Tracker) Permit {
+	t.Helper()
+	p, _, ok := tracker.Acquire()
+	require.True(t, ok)
+	return p
 }
 
 func TestAcquire_Basic(t *testing.T) {
 	tracker := NewTracker(3)
 
-	assert.True(t, tracker.Acquire())
-	assert.True(t, tracker.Acquire())
-	assert.True(t, tracker.Acquire())
-	assert.False(t, tracker.Acquire())
-	assert.False(t, tracker.Acquire()) // repeated calls stay false
+	for i := 0; i < 3; i++ {
+		acquire(t, tracker)
+	}
+	_, _, ok := tracker.Acquire()
+	assert.False(t, ok)
+	_, _, ok = tracker.Acquire()
+	assert.False(t, ok, "repeated calls stay false")
 }
 
-func TestAcquire_SinglePermit(t *testing.T) {
-	tracker := NewTracker(1)
-
-	assert.True(t, tracker.Acquire())
-	assert.False(t, tracker.Acquire())
+func TestAcquire_NilTrackerAlwaysGrants(t *testing.T) {
+	var tracker *Tracker
+	p, resume, ok := tracker.Acquire()
+	assert.True(t, ok)
+	assert.Nil(t, resume)
+	p.Commit()
+	p.Release()
 }
 
-func TestDone_ClosedWhenExhausted(t *testing.T) {
+func TestDone_ClosesOnLastCommitNotLastAcquire(t *testing.T) {
 	tracker := NewTracker(2)
 
-	// Not closed yet
-	select {
-	case <-tracker.Done():
-		t.Fatal("Done should not be closed yet")
-	default:
-	}
+	first := acquire(t, tracker)
+	second := acquire(t, tracker)
+	assert.False(t, isClosed(tracker.Done()), "every permit taken but none delivered")
 
-	tracker.Acquire()
+	first.Commit()
+	assert.False(t, isClosed(tracker.Done()))
 
-	// Still not closed
-	select {
-	case <-tracker.Done():
-		t.Fatal("Done should not be closed yet")
-	default:
-	}
+	second.Commit()
+	assert.True(t, isClosed(tracker.Done()))
+}
 
-	tracker.Acquire()
+func TestRelease_ReturnsPermit(t *testing.T) {
+	tracker := NewTracker(1)
 
-	// Now closed
-	select {
-	case <-tracker.Done():
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("Done should be closed after all permits consumed")
-	}
+	p := acquire(t, tracker)
+	_, _, ok := tracker.Acquire()
+	require.False(t, ok)
+
+	p.Release()
+	assert.False(t, isClosed(tracker.Done()), "a failed delivery does not finish the count")
+
+	retry := acquire(t, tracker)
+	retry.Commit()
+	assert.True(t, isClosed(tracker.Done()))
+	assert.Equal(t, int64(1), tracker.Emitted())
+}
+
+func TestPermit_SettledOnce(t *testing.T) {
+	tracker := NewTracker(2)
+
+	p := acquire(t, tracker)
+	p.Commit()
+	p.Commit()
+	p.Release()
+	assert.Equal(t, int64(1), tracker.Emitted(), "a second settle is ignored")
+	assert.False(t, isClosed(tracker.Done()))
+	_, _, ok := tracker.Acquire()
+	assert.True(t, ok)
+	_, _, ok = tracker.Acquire()
+	assert.False(t, ok, "the release after a commit did not return a permit")
+}
+
+func TestPermit_StaleAfterResetIsIgnored(t *testing.T) {
+	tracker := NewTracker(1)
+
+	stale := acquire(t, tracker)
+	tracker.Reset()
+	stale.Commit()
+	assert.Equal(t, int64(0), tracker.Emitted(), "a delivery from the old cycle does not count")
+	assert.False(t, isClosed(tracker.Done()))
+
+	stale2 := acquire(t, tracker)
+	tracker.Reset()
+	stale2.Release()
+	acquire(t, tracker)
+	_, _, ok := tracker.Acquire()
+	assert.False(t, ok, "a release from the old cycle does not add a permit")
+}
+
+func TestAcquire_ResumeBelongsToTheRefusingCycle(t *testing.T) {
+	tracker := NewTracker(1)
+	acquire(t, tracker).Commit()
+
+	_, resume, ok := tracker.Acquire()
+	require.False(t, ok)
+	assert.False(t, isClosed(resume))
+
+	tracker.Reset()
+	assert.True(t, isClosed(resume), "the refusing cycle's channel closes on the next reset")
+
+	_, next, ok := tracker.Acquire()
+	require.True(t, ok)
+	assert.NotEqual(t, resume, next, "a granted permit reports the new cycle's channel")
 }
 
 func TestAcquire_Concurrent(t *testing.T) {
@@ -70,66 +134,83 @@ func TestAcquire_Concurrent(t *testing.T) {
 
 	var acquired atomic.Int64
 	var wg sync.WaitGroup
-
 	for i := 0; i < goroutines; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for tracker.Acquire() {
+			for {
+				p, _, ok := tracker.Acquire()
+				if !ok {
+					return
+				}
 				acquired.Add(1)
+				p.Commit()
 			}
 		}()
 	}
-
 	wg.Wait()
 
 	assert.Equal(t, int64(count), acquired.Load())
-	assert.Equal(t, int64(0), tracker.remaining.Load())
+	assert.Equal(t, int64(count), tracker.Emitted())
+	assert.True(t, isClosed(tracker.Done()))
+}
 
-	// Done should be closed
-	select {
-	case <-tracker.Done():
-	default:
-		t.Fatal("Done should be closed")
+func TestAcquire_ConcurrentWithReleases(t *testing.T) {
+	const count = 500
+	const goroutines = 8
+
+	tracker := NewTracker(count)
+
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			n := 0
+			for {
+				p, _, ok := tracker.Acquire()
+				if !ok {
+					return
+				}
+				n++
+				if n%3 == 0 {
+					p.Release()
+					continue
+				}
+				p.Commit()
+			}
+		}()
 	}
+	wg.Wait()
+
+	assert.Equal(t, int64(count), tracker.Emitted(), "every released permit is delivered by a retry")
+	assert.True(t, isClosed(tracker.Done()))
 }
 
 func TestReset(t *testing.T) {
 	tracker := NewTracker(3)
-
-	// Exhaust all permits
-	for tracker.Acquire() {
+	for i := 0; i < 3; i++ {
+		acquire(t, tracker).Commit()
 	}
-	assert.False(t, tracker.Acquire())
 
-	// Reset
 	tracker.Reset()
 
-	// Should have permits again
-	assert.True(t, tracker.Acquire())
-	assert.True(t, tracker.Acquire())
-	assert.True(t, tracker.Acquire())
-	assert.False(t, tracker.Acquire())
+	assert.False(t, isClosed(tracker.Done()), "a reset opens a fresh done channel")
+	assert.Equal(t, int64(0), tracker.Emitted())
+	for i := 0; i < 3; i++ {
+		acquire(t, tracker).Commit()
+	}
+	_, _, ok := tracker.Acquire()
+	assert.False(t, ok)
+	assert.True(t, isClosed(tracker.Done()))
 }
 
 func TestReset_UnblocksResumeC(t *testing.T) {
 	tracker := NewTracker(1)
-	tracker.Acquire()
-
 	resumeCh := tracker.ResumeC()
+	assert.False(t, isClosed(resumeCh))
 
-	// Not closed yet
-	select {
-	case <-resumeCh:
-		t.Fatal("ResumeC should not be closed yet")
-	default:
-	}
-
-	// Reset from a goroutine. The "not closed yet" check above already ran, so there
-	// is no need to delay before resetting.
-	go func() {
-		tracker.Reset()
-	}()
+	tracker.Reset()
 
 	select {
 	case <-resumeCh:
@@ -138,62 +219,17 @@ func TestReset_UnblocksResumeC(t *testing.T) {
 	}
 }
 
-func TestReset_NewDoneChannel(t *testing.T) {
-	tracker := NewTracker(1)
-	tracker.Acquire()
-
-	// First Done is closed
-	select {
-	case <-tracker.Done():
-	default:
-		t.Fatal("Done should be closed")
-	}
-
-	tracker.Reset()
-
-	// New Done is open
-	select {
-	case <-tracker.Done():
-		t.Fatal("Done should not be closed after Reset")
-	default:
-	}
-
-	// Exhaust again
-	tracker.Acquire()
-
-	// New Done is now closed
-	select {
-	case <-tracker.Done():
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("Done should be closed after second exhaustion")
-	}
-}
-
 func TestReset_MultipleCycles(t *testing.T) {
 	tracker := NewTracker(2)
 
 	for cycle := 0; cycle < 5; cycle++ {
-		assert.True(t, tracker.Acquire(), "cycle %d: first acquire", cycle)
-		assert.True(t, tracker.Acquire(), "cycle %d: second acquire", cycle)
-		assert.False(t, tracker.Acquire(), "cycle %d: third acquire should fail", cycle)
-
-		select {
-		case <-tracker.Done():
-		default:
-			t.Fatalf("cycle %d: Done should be closed", cycle)
-		}
+		acquire(t, tracker).Commit()
+		acquire(t, tracker).Commit()
+		_, _, ok := tracker.Acquire()
+		assert.False(t, ok, "cycle %d: third acquire should fail", cycle)
+		assert.True(t, isClosed(tracker.Done()), "cycle %d: Done should be closed", cycle)
 
 		tracker.Reset()
-	}
-}
-
-func TestResumeC_NotClosedWithoutReset(t *testing.T) {
-	tracker := NewTracker(1)
-
-	select {
-	case <-tracker.ResumeC():
-		t.Fatal("ResumeC should not be closed without Reset")
-	default:
 	}
 }
 
@@ -205,70 +241,56 @@ func TestDone_ThreadSafe(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for tracker.Acquire() {
+			for {
+				p, _, ok := tracker.Acquire()
+				if !ok {
+					break
+				}
+				p.Commit()
 			}
 			<-tracker.Done()
 		}()
 	}
-
 	wg.Wait()
 }
 
-func TestEmitted(t *testing.T) {
+func TestEmitted_CountsDeliveries(t *testing.T) {
 	tracker := NewTracker(10)
 	assert.Equal(t, int64(0), tracker.Emitted())
 
-	tracker.Acquire()
-	tracker.Acquire()
-	tracker.Acquire()
-	assert.Equal(t, int64(3), tracker.Emitted())
+	a := acquire(t, tracker)
+	b := acquire(t, tracker)
+	assert.Equal(t, int64(0), tracker.Emitted(), "taken permits are not deliveries")
 
-	// Exhaust the rest
-	for tracker.Acquire() {
-	}
-	assert.Equal(t, int64(10), tracker.Emitted())
-}
-
-func TestEmitted_AfterReset(t *testing.T) {
-	tracker := NewTracker(5)
-	for tracker.Acquire() {
-	}
-	assert.Equal(t, int64(5), tracker.Emitted())
-
-	tracker.Reset()
-	assert.Equal(t, int64(0), tracker.Emitted())
-
-	tracker.Acquire()
-	tracker.Acquire()
-	assert.Equal(t, int64(2), tracker.Emitted())
+	a.Commit()
+	b.Release()
+	assert.Equal(t, int64(1), tracker.Emitted())
 }
 
 func TestReset_ConcurrentWithAcquire(t *testing.T) {
-	tracker := NewTracker(10)
+	const target = 10
+	tracker := NewTracker(target)
 
-	var wg sync.WaitGroup
-
-	// Goroutine that acquires
-	wg.Add(1)
+	// Each send hands a reset to the other goroutine, which runs it while
+	// this one keeps acquiring, so resets land between acquires.
+	resets := make(chan struct{})
+	done := make(chan struct{})
 	go func() {
-		defer wg.Done()
-		for i := 0; i < 50; i++ {
-			tracker.Acquire()
-		}
-	}()
-
-	// Goroutine that resets periodically. The 1ms spacing is intentional: it spreads
-	// the resets so they interleave with the concurrent Acquire calls, which is the
-	// concurrency this test exercises. It is not a wait-for-state sleep.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 5; i++ {
-			time.Sleep(time.Millisecond)
+		defer close(done)
+		for range resets {
 			tracker.Reset()
 		}
 	}()
 
-	wg.Wait()
-	// No panics, no deadlocks = pass
+	for i := range 500 {
+		if p, _, ok := tracker.Acquire(); ok {
+			p.Commit()
+		}
+		require.LessOrEqual(t, tracker.Emitted(), int64(target), "a cycle never counts past its target")
+		if i%25 == 0 {
+			resets <- struct{}{}
+		}
+	}
+	close(resets)
+	<-done
 }

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,7 +16,11 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // mockConsumer implements embed.LogConsumer for testing.
@@ -764,4 +770,275 @@ func TestFileLogGenerator_CountLimited(t *testing.T) {
 
 	writes := consumer.getWrites()
 	assert.Equal(t, 5, len(writes), "Expected exactly 5 logs with count tracker")
+}
+
+// TestFileLogGenerator_EmptyFileIsNotCounted pins that a file with no
+// non-empty lines never takes a permit: nothing is sent, so it is not a
+// delivered record.
+func TestFileLogGenerator_EmptyFileIsNotCounted(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a-empty.log"), []byte("\n\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b-full.log"), []byte("line\n"), 0o600))
+
+	consumer := newMockConsumer()
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, dir, true, 0, consumer, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(3)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("count never completed")
+	}
+	assert.Len(t, consumer.getWrites(), 3, "every counted record was sent")
+}
+
+// TestFileLogGenerator_BlankSourceFails pins that random mode, like replay,
+// fails at Start when no file has a line to send, instead of looping on
+// empty files with nothing logged.
+func TestFileLogGenerator_BlankSourceFails(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.log"), []byte("\n\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.log"), []byte(""), 0o600))
+
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, dir, true, 0, newMockConsumer(), nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	assert.ErrorContains(t, gen.Start(context.Background()), "no non-empty lines")
+}
+
+// TestFileLogGenerator_FailedStartRecordsNoWorkers pins that a Start that
+// fails before launching workers does not report them as active.
+func TestFileLogGenerator_FailedStartRecordsNoWorkers(t *testing.T) {
+	for name, replay := range map[string]bool{"replay": true, "random": false} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "a.log"), []byte("\n"), 0o600))
+			reader := sdkmetric.NewManualReader()
+			tel := embed.TelemetrySettings{MeterProvider: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))}
+
+			gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, dir, true, 0, newMockConsumer(), nil, tel)
+			require.NoError(t, err)
+			if replay {
+				require.NoError(t, gen.SetReplay())
+			}
+			require.Error(t, gen.Start(context.Background()))
+
+			var rm metricdata.ResourceMetrics
+			require.NoError(t, reader.Collect(context.Background(), &rm))
+			for _, sm := range rm.ScopeMetrics {
+				for _, m := range sm.Metrics {
+					assert.NotEqual(t, "blitz.generator.active_workers", m.Name)
+				}
+			}
+		})
+	}
+}
+
+// TestFileLogGenerator_WriteErrorCountedOnce pins that a rejected write adds
+// one to blitz.generator.write_errors, not one per layer that saw it.
+func TestFileLogGenerator_WriteErrorCountedOnce(t *testing.T) {
+	for name, replay := range map[string]bool{"replay": true, "random": false} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "in.log")
+			require.NoError(t, os.WriteFile(path, []byte("line\n"), 0o600))
+			reader := sdkmetric.NewManualReader()
+			tel := embed.TelemetrySettings{MeterProvider: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))}
+
+			consumer := newMockConsumer()
+			consumer.setConsumeError(errors.New("destination unavailable"))
+			gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, path, true, 0, consumer, nil, tel)
+			require.NoError(t, err)
+			if replay {
+				require.NoError(t, gen.SetReplay())
+			}
+			require.NoError(t, gen.Start(context.Background()))
+			require.Eventually(t, func() bool { return len(consumer.getErrors()) >= 2 }, 5*time.Second, time.Millisecond)
+			require.NoError(t, gen.Stop(context.Background()))
+
+			var rm metricdata.ResourceMetrics
+			require.NoError(t, reader.Collect(context.Background(), &rm))
+			var got int64
+			for _, sm := range rm.ScopeMetrics {
+				for _, m := range sm.Metrics {
+					if m.Name == "blitz.generator.write_errors" {
+						for _, dp := range m.Data.(metricdata.Sum[int64]).DataPoints {
+							got += dp.Value
+						}
+					}
+				}
+			}
+			assert.Equal(t, int64(len(consumer.getErrors())), got)
+		})
+	}
+}
+
+// TestFileLogGenerator_WorkersKeepCoveringEveryFile pins that with several
+// workers every file keeps being read after the first pass, not only the
+// ones at multiples of the worker count.
+func TestFileLogGenerator_WorkersKeepCoveringEveryFile(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"a", "b", "c"} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name+".log"), []byte(name+"\n"), 0o600))
+	}
+	consumer := newMockConsumer()
+	gen, err := New(zaptest.NewLogger(t), 2, time.Millisecond, dir, true, 0, consumer, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	require.NoError(t, gen.Start(context.Background()))
+	require.Eventually(t, func() bool { return len(consumer.getWrites()) >= 60 }, 5*time.Second, time.Millisecond)
+	require.NoError(t, gen.Stop(context.Background()))
+
+	seen := map[string]int{}
+	for _, r := range consumer.getWrites() {
+		seen[r.Message]++
+	}
+	for _, name := range []string{"a", "b", "c"} {
+		assert.GreaterOrEqual(t, seen[name], 10, "file %s read %d times of %d: %v", name, seen[name], len(consumer.getWrites()), seen)
+	}
+}
+
+// TestFileLogGenerator_UnreadableFileDoesNotStallWorker pins that a file
+// that cannot be read is skipped for the next one, so one bad file cannot
+// stop a worker from sending.
+func TestFileLogGenerator_UnreadableFileDoesNotStallWorker(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads files regardless of permissions")
+	}
+	dir := t.TempDir()
+	locked := filepath.Join(dir, "a.log")
+	require.NoError(t, os.WriteFile(locked, []byte("locked\n"), 0o600))
+	require.NoError(t, os.Chmod(locked, 0o000))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.log"), []byte("open\n"), 0o600))
+
+	consumer := newMockConsumer()
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, dir, false, 0, consumer, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	tracker := count.NewTracker(3)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+
+	select {
+	case <-tracker.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatalf("count never completed: %d writes", len(consumer.getWrites()))
+	}
+}
+
+// blockingConsumer holds every write until release closes, counting the
+// writes in flight.
+type blockingConsumer struct {
+	inFlight atomic.Int32
+	release  chan struct{}
+}
+
+func (c *blockingConsumer) ConsumeLogs(ctx context.Context, _ []embed.LogRecord) error {
+	c.inFlight.Add(1)
+	select {
+	case <-c.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// TestFileLogGenerator_EmptyShareDoesNotStallWorker pins that a worker
+// whose share of the files has no lines moves on to files outside it. With
+// 2 workers and 2 files, worker 0's share is only the empty file.
+func TestFileLogGenerator_EmptyShareDoesNotStallWorker(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.log"), []byte("\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.log"), []byte("b\n"), 0o600))
+
+	consumer := &blockingConsumer{release: make(chan struct{})}
+	gen, err := New(zaptest.NewLogger(t), 2, time.Millisecond, dir, false, 0, consumer, nil, embed.NopTelemetry())
+	require.NoError(t, err)
+	require.NoError(t, gen.Start(context.Background()))
+	t.Cleanup(func() {
+		close(consumer.release)
+		_ = gen.Stop(context.Background())
+	})
+
+	require.Eventually(t, func() bool { return consumer.inFlight.Load() == 2 }, 3*time.Second, time.Millisecond,
+		"both workers send from b.log")
+}
+
+// TestFileLogGenerator_ReplayEndRecordsNoWorkers pins that a replay without
+// a count records no active workers once its one pass ends.
+func TestFileLogGenerator_ReplayEndRecordsNoWorkers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "in.log")
+	require.NoError(t, os.WriteFile(path, []byte("line\n"), 0o600))
+	reader := sdkmetric.NewManualReader()
+	tel := embed.TelemetrySettings{MeterProvider: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))}
+
+	consumer := newMockConsumer()
+	gen, err := New(zaptest.NewLogger(t), 1, time.Millisecond, path, true, 0, consumer, nil, tel)
+	require.NoError(t, err)
+	require.NoError(t, gen.SetReplay())
+	require.NoError(t, gen.Start(context.Background()))
+	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+
+	activeWorkers := func() int64 {
+		var rm metricdata.ResourceMetrics
+		require.NoError(t, reader.Collect(context.Background(), &rm))
+		for _, sm := range rm.ScopeMetrics {
+			for _, m := range sm.Metrics {
+				if m.Name == "blitz.generator.active_workers" {
+					return m.Data.(metricdata.Gauge[int64]).DataPoints[0].Value
+				}
+			}
+		}
+		return -1
+	}
+	require.Eventually(t, func() bool { return len(consumer.getWrites()) == 1 && activeWorkers() == 0 },
+		5*time.Second, time.Millisecond)
+}
+
+// TestCommonTimestampPatterns pins each whole pattern replaced before the
+// per-directive pass to its output, on a day that shows the padding.
+func TestCommonTimestampPatterns(t *testing.T) {
+	at := time.Date(2026, time.January, 5, 3, 4, 5, 6_000_000, time.UTC)
+	want := map[string]string{
+		"%Y-%m-%dT%H:%M:%S.%3NZ": "2026-01-05T03:04:05.006Z",
+		"%Y-%m-%dT%H:%M:%SZ":     "2026-01-05T03:04:05Z",
+		"%Y-%m-%dT%H:%M:%S":      "2026-01-05T03:04:05",
+		"%Y/%m/%d %H:%M:%S":      "2026/01/05 03:04:05",
+		"%b %d %H:%M:%S":         "Jan 05 03:04:05",
+		"%b %e %T":               "Jan  5 03:04:05",
+	}
+	require.Len(t, commonTimestampPatterns, len(want))
+	g := &FileLogGenerator{logger: zaptest.NewLogger(t)}
+	for _, p := range commonTimestampPatterns {
+		assert.Equal(t, want[p.pattern], p.formatter(at), p.pattern)
+		assert.NotContains(t, g.processTimestamps(p.pattern), "%", p.pattern)
+	}
+}
+
+// TestWarnIfCollision pins that a bare-name source resolved to the library
+// warns, with a hint, only when a same-named directory exists on disk.
+func TestWarnIfCollision(t *testing.T) {
+	core, logs := observer.New(zap.WarnLevel)
+	g := &FileLogGenerator{logger: zap.New(core)}
+	dir := t.TempDir()
+
+	g.warnIfCollision(filepath.Join(dir, "missing"))
+	require.Zero(t, logs.Len(), "no directory, no warning")
+
+	g.warnIfCollision(dir)
+	require.Equal(t, 1, logs.Len())
+	assert.Contains(t, logs.All()[0].ContextMap()["hint"], "package:"+dir)
+}
+
+// TestPercentEscapeCoversEveryDirective pins that %% escapes the epoch
+// directives and the multi-directive patterns too, not only the
+// single-character directives.
+func TestPercentEscapeCoversEveryDirective(t *testing.T) {
+	g := &FileLogGenerator{logger: zaptest.NewLogger(t)}
+	assert.Equal(t, "a %EPOCH_S b", g.processTimestamps("a %%EPOCH_S b"))
+	assert.Equal(t, "%Y", g.processTimestamps("%%Y"))
+	got := g.processTimestamps("x %%Y-%m-%dT%H:%M:%SZ y")
+	assert.True(t, strings.HasPrefix(got, "x %Y-"), got)
+	assert.NotContains(t, got, "%m", got)
 }

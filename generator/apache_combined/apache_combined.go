@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/internal/datagen"
+	"github.com/observiq/blitz/internal/generator/pacing"
 	"github.com/observiq/blitz/internal/useragent"
 	"github.com/observiq/blitz/telemetry"
 	"go.opentelemetry.io/otel/attribute"
@@ -135,10 +135,7 @@ func (g *ApacheCombinedLogGenerator) worker(workerID int) {
 	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 1, componentName)
 	defer g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 0, componentName)
 
-	backoffConfig := backoff.NewExponentialBackOff()
-	backoffConfig.InitialInterval = g.rate
-	backoffConfig.MaxInterval = 5 * time.Second
-	backoffConfig.MaxElapsedTime = 0 // Never stop retrying
+	backoffConfig := pacing.NewWriteBackoff(g.rate)
 
 	// Drive the timer from this goroutine only. backoff.ExponentialBackOff is
 	// not safe for concurrent use, so we never hand it to backoff.NewTicker's
@@ -152,11 +149,12 @@ func (g *ApacheCombinedLogGenerator) worker(workerID int) {
 			g.logger.Debug("Worker stopping", zap.Int("worker_id", workerID))
 			return
 		case <-timer.C:
-			if g.tracker != nil && !g.tracker.Acquire() {
+			permit, resume, ok := g.tracker.Acquire()
+			if !ok {
 				select {
 				case <-g.stopCh:
 					return
-				case <-g.tracker.ResumeC():
+				case <-resume:
 					timer.Reset(backoffConfig.NextBackOff())
 					continue
 				}
@@ -166,9 +164,11 @@ func (g *ApacheCombinedLogGenerator) worker(workerID int) {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
 					zap.Error(err))
+				permit.Release()
 				timer.Reset(backoffConfig.NextBackOff())
 				continue
 			}
+			permit.Commit()
 			backoffConfig.Reset()
 			timer.Reset(backoffConfig.NextBackOff())
 		}

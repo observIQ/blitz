@@ -261,7 +261,7 @@ func TestCountTrackerResumeAndStop(t *testing.T) {
 	g.SetCountTracker(tr)
 	require.NoError(t, g.Start(context.Background()))
 	require.Eventually(t, func() bool { return cc.count() == 2 }, 5*time.Second, 5*time.Millisecond)
-	require.Eventually(t, func() bool { return logs.FilterMessage("F5 worker waiting for a count reset").Len() == 1 }, 5*time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return logs.FilterMessage("F5 worker at the count limit, waiting").Len() == 1 }, 5*time.Second, time.Millisecond)
 	tr.Reset()
 	require.Eventually(t, func() bool { return cc.count() == 4 }, 5*time.Second, 5*time.Millisecond)
 	require.NoError(t, g.Stop(context.Background()))

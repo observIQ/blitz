@@ -341,3 +341,24 @@ func TestGenerateSpanID(t *testing.T) {
 	id := generateSpanID()
 	assert.Len(t, id, 16) // 8 bytes = 16 hex chars
 }
+
+// TestScheduleEmission_PastEndSendsAtOnce pins that a span whose end time has
+// already passed is sent at once and still settles its trace's permit.
+func TestScheduleEmission_PastEndSendsAtOnce(t *testing.T) {
+	consumer := &mockTraceConsumer{}
+	g, err := New(baseCfg(t, consumer))
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	permit, _, ok := tracker.Acquire()
+	require.True(t, ok)
+	d := &traceDelivery{permit: permit}
+
+	g.scheduleEmission(embed.Span{Name: "late", EndTime: time.Now().Add(-time.Second)}, d)
+	g.wg.Wait()
+	assert.Len(t, consumer.Arrivals(), 1)
+	select {
+	case <-tracker.Done():
+	default:
+		t.Fatal("the span's trace was not counted")
+	}
+}

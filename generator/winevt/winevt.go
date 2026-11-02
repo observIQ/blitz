@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator"
 	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/generator/pacing"
 	"github.com/observiq/blitz/internal/generators/winevt/templates"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -105,10 +105,7 @@ func (g *WinevtGenerator) worker(workerID int, writer output.LogWriter) {
 	defer g.wg.Done()
 	g.logger.Debug("Starting worker", zap.Int("worker_id", workerID))
 
-	backoffConfig := backoff.NewExponentialBackOff()
-	backoffConfig.InitialInterval = g.rate
-	backoffConfig.MaxInterval = 5 * time.Second
-	backoffConfig.MaxElapsedTime = 0
+	backoffConfig := pacing.NewWriteBackoff(g.rate)
 
 	// Drive the timer from this goroutine only. backoff.ExponentialBackOff is
 	// not safe for concurrent use, so we never hand it to backoff.NewTicker's
@@ -122,20 +119,23 @@ func (g *WinevtGenerator) worker(workerID int, writer output.LogWriter) {
 			g.logger.Debug("Worker stopping", zap.Int("worker_id", workerID))
 			return
 		case <-timer.C:
-			if g.tracker != nil && !g.tracker.Acquire() {
+			permit, resume, ok := g.tracker.Acquire()
+			if !ok {
 				select {
 				case <-g.stopCh:
 					return
-				case <-g.tracker.ResumeC():
+				case <-resume:
 					timer.Reset(backoffConfig.NextBackOff())
 					continue
 				}
 			}
 			if err := g.generateAndWrite(writer, workerID); err != nil {
 				g.logger.Error("Failed to write log", zap.Int("worker_id", workerID), zap.Error(err))
+				permit.Release()
 				timer.Reset(backoffConfig.NextBackOff())
 				continue
 			}
+			permit.Commit()
 			backoffConfig.Reset()
 			timer.Reset(backoffConfig.NextBackOff())
 		}
