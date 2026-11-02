@@ -37,14 +37,14 @@ output:
 
 ## Metrics
 
-The File output exposes the following metrics:
+The File output records the shared output metrics:
 
-- **`blitz_file_logs_received_total`** (Counter): Number of logs received from the write channel
-- **`blitz_file_workers_active`** (Gauge): Number of active worker goroutines
-- **`blitz_file_log_rate_total`** (Counter, Float64): Rate at which logs are successfully written to file
-- **`blitz_file_request_size_bytes`** (Histogram): Size of write requests in bytes
-- **`blitz_file_write_errors_total`** (Counter): Total number of file write errors, labeled by `error_type`
-- **`blitz_file_channel_size`** (Gauge): Current size of the data channel
+- **`blitz.output.entries_received`** (Counter): Entries received by the output
+- **`blitz.output.active_workers`** (Gauge): Number of active worker goroutines
+- **`blitz.output.entry_rate`** (Float64 Counter): Rate at which entries are sent
+- **`blitz.output.request_size`** (Histogram): Size of requests in bytes
+- **`blitz.output.send_errors`** (Counter): Total number of send errors, by `telemetry_type`
+- **`blitz.output.queue_size`** (Observable Gauge): Current number of entries in the queue
 
-All metrics include a `component` label set to `output_file`.
+All metrics carry an `output_type` attribute set to `file`. See [Metrics](../metrics.md) for the exported names.
 

@@ -38,9 +38,9 @@ generator:
 
 The NGINX generator exposes the following metrics:
 
-- **`blitz.generator.logs.generated`** (Counter): Total number of logs generated
-- **`blitz.generator.workers.active`** (Gauge): Number of active worker goroutines
-- **`blitz.generator.write.errors`** (Counter): Total number of write errors, labeled by `error_type` (`unknown` or `timeout`)
+- **`blitz.generator.entries`** (Counter): Total number of logs generated
+- **`blitz.generator.active_workers`** (Gauge): Number of active worker goroutines
+- **`blitz.generator.write_errors`** (Counter): Total number of write errors, labeled by `error_type` (`unknown` or `timeout`)
 
-All metrics include a `component` label set to `generator_nginx`.
+All metrics carry a `generator_type` attribute set to `nginx`. See [Metrics](../metrics.md) for the exported names.
 

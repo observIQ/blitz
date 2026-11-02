@@ -13,6 +13,7 @@
     - [File Logging Configuration](#file-logging-configuration)
   - [Generator Configuration](#generator-configuration)
   - [Output Configuration](#output-configuration)
+  - [Run Configuration](#run-configuration)
 - [Example Configurations](#example-configurations)
   - [Basic TCP Output Configuration](#basic-tcp-output-configuration)
   - [High-Performance UDP Configuration](#high-performance-udp-configuration)
@@ -178,7 +179,7 @@ generators:
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `fix`, `flow`, `f5` |
+| `generator.type` | `--generator-type` | `BLITZ_GENERATOR_TYPE` | `nop` | Generator type. Valid values: `nop`, `json`, `winevt`, `wel`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `filegen`, `okta`, `hostmetrics`, `traces`, `fix`, `flow`, `f5` |
 
 For detailed configuration options for each generator, see the individual generator documentation:
 
@@ -192,6 +193,14 @@ For detailed configuration options for each generator, see the individual genera
 - [NGINX Combined Log Format Generator](https://github.com/observiq/blitz/blob/main/docs/generator/nginx.md)
 - [PostgreSQL Log Format Generator](https://github.com/observiq/blitz/blob/main/docs/generator/postgres.md)
 - [Kubernetes Container Log Generator](https://github.com/observiq/blitz/blob/main/docs/generator/kubernetes.md)
+- [File Generator (filegen)](https://github.com/observiq/blitz/blob/main/docs/generator/filegen.md)
+- [Okta System Log Generator](https://github.com/observiq/blitz/blob/main/docs/generator/okta.md)
+- [Host Metrics Generator](https://github.com/observiq/blitz/blob/main/docs/generator/hostmetrics.md)
+- [Traces Generator](https://github.com/observiq/blitz/blob/main/docs/generator/traces.md)
+- [Windows Event Log (wel) Generator](https://github.com/observiq/blitz/blob/main/docs/generator/wel.md)
+- [FIX Generator](https://github.com/observiq/blitz/blob/main/docs/generator/fix.md)
+- [Flow Generator](https://github.com/observiq/blitz/blob/main/docs/generator/flow.md)
+- [F5 Generator](https://github.com/observiq/blitz/blob/main/docs/generator/f5.md)
 
 ### Output Configuration
 
@@ -257,6 +266,21 @@ Notes:
   type's default. Any value you write on the entry is kept as written,
   including `0` and `false`. Entries never take values from the singular
   `output` form.
+
+### Run Configuration
+
+These settings apply to the whole run rather than to one generator or output.
+
+| YAML Path | Flag Name | Environment Variable | Default | Description |
+|-----------|-----------|---------------------|---------|-------------|
+| `generator.count` | `--generator-count` | `BLITZ_GENERATOR_COUNT` | `0` | Total number of records to generate (0 = unlimited). See [Finite Generation](finite-generation.md). |
+| `onFinish` | `--onfinish` | `BLITZ_ONFINISH` | `exit` | What happens when the count is reached: `exit` or `idle`. See [Finite Generation](finite-generation.md). |
+| `metrics.port` | `--metrics-port` | `BLITZ_METRICS_PORT` | `9100` | HTTP port for blitz's own Prometheus metrics endpoint. See [Metrics](metrics.md). |
+| `telemetry.traces.otlpEndpoint` | `--telemetry-traces-otlpendpoint` | `BLITZ_TELEMETRY_TRACES_OTLPENDPOINT` | `""` | OTLP gRPC endpoint (`host:port`) for exporting blitz's own spans. Empty disables it. |
+| `telemetry.traces.insecure` | `--telemetry-traces-insecure` | `BLITZ_TELEMETRY_TRACES_INSECURE` | `false` | Send blitz's own spans over plaintext gRPC (no TLS). |
+| `telemetry.traces.perBatchSpans` | `--telemetry-traces-perbatchspans` | `BLITZ_TELEMETRY_TRACES_PERBATCHSPANS` | `false` | Enable the higher-volume per-emit-cycle spans. |
+| `telemetry.logs.otlpEndpoint` | `--telemetry-logs-otlpendpoint` | `BLITZ_TELEMETRY_LOGS_OTLPENDPOINT` | `""` | OTLP gRPC endpoint (`host:port`) for exporting blitz's own logs. Empty disables it. |
+| `telemetry.logs.insecure` | `--telemetry-logs-insecure` | `BLITZ_TELEMETRY_LOGS_INSECURE` | `false` | Send blitz's own logs over plaintext gRPC (no TLS). |
 
 ## Example Configurations
 
@@ -456,12 +480,11 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `output.file.path` - Required when using File output
 
 ### Validation Constraints
-- `generator.json.workers` - Must be ≥ 1
-- `generator.json.rate` - Must be > 0
-- `generator.winevt.workers` - Must be ≥ 1
-- `generator.winevt.rate` - Must be > 0
-- `generator.palo-alto.workers` - Must be ≥ 1
-- `generator.palo-alto.rate` - Must be > 0
+- `generator.<type>.workers` - Must be ≥ 1 for every generator except `nop`, which has no settings, and `hostmetrics`, which runs one worker per simulated host
+- `generator.<type>.rate` - Must be > 0 for every generator except `nop`
+- `generator.filegen.mode` - Must be one of: `random`, `replay` (the old source-type values `file`, `directory` and `package` still load and run `random`; see the [filegen docs](generator/filegen.md))
+- `generator.filegen.workers` - Must be exactly 1 when `generator.filegen.mode` is `replay`
+- A `filegen` generator in `replay` mode must be the only generator
 - `output.tcp.workers` - Must be ≥ 0
 - `output.udp.workers` - Must be ≥ 0
 - `output.syslog.workers` - Must be ≥ 0
@@ -476,7 +499,7 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
 - `logging.type` - Must be one of: `stdout`, `file`
 - `logging.file.path` - Required when `logging.type` is `file`
-- `generator.type` - Must be one of: `nop`, `json`, `winevt`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `fix`, `flow`, `f5`
+- `generator.type` - Must be one of: `nop`, `json`, `winevt`, `wel`, `palo-alto`, `apache-common`, `apache-combined`, `apache-error`, `nginx`, `postgres`, `kubernetes`, `filegen`, `okta`, `hostmetrics`, `traces`, `fix`, `flow`, `f5`
 - `output.type` - Must be one of: `nop`, `stdout`, `tcp`, `udp`, `syslog`, `otlp-grpc`, `file`, `hec`, `flow`, `prometheus-remote-write`, `prometheus-scrape`
 
 ## Error Handling
@@ -618,7 +641,7 @@ Or with command-line flags:
 ./blitz --output-type otlp-grpc \
   --output-otlp-grpc-host collector.example.com \
   --output-otlp-grpc-port 4317 \
-  --otlp-grpc-tls-insecure false \
+  --otlp-grpc-tls-insecure=false \
   --otlp-grpc-tls-cert /path/to/cert.pem \
   --otlp-grpc-tls-key /path/to/key.pem \
   --otlp-grpc-tls-ca /path/to/ca.pem \

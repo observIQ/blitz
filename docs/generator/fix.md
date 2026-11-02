@@ -213,7 +213,7 @@ generator/fix/
         └── moneymarket/         — CD/CP/BA/BN
 ```
 
-## v1 limitations (deferred to follow-up tickets)
+## v1 limitations
 
 - **Repeating groups**: multi-leg combos (NoLegs / LegSymbol), multiple
   underlyings (NoUnderlyings / UnderlyingSymbol), CDO tranche

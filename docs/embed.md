@@ -356,7 +356,7 @@ modules, err := blitzconfig.LoadModules(yamlBytes, blitzconfig.EmbedOpts{
 
 `EnvOverrides` overlays on top of the parsed YAML, matching the precedence the CLI gives `BLITZ_*` env vars over YAML values.
 
-CLI cobra-flag bindings (`--generator-type`, `--output-otlpgrpc-host`, etc.) are **out of scope for embedded mode** and are NOT honored via this map. Embedded hosts have no flags to bind, since they're a library being called by another program. Hosts that want flag-like overrides translate them into YAML paths themselves.
+CLI cobra-flag bindings (`--generator-type`, `--output-otlp-grpc-host`, etc.) are **out of scope for embedded mode** and are NOT honored via this map. Embedded hosts have no flags to bind, since they're a library being called by another program. Hosts that want flag-like overrides translate them into YAML paths themselves.
 
 ### Distributing the `data_library/` files for embedding
 
@@ -395,18 +395,19 @@ Flows follow the same pattern through `FlowConsumer`. For hosts that want flows 
 |----------------------------------------------|----------|------------------------------------------------------------------------------------------------------------------|
 | apache-common, apache-combined, apache-error | Producer | Common / Combined / Error log formats                                                                            |
 | f5                                           | Producer | Weighted mix of F5 product logs (BIG-IP modules, NGINX, F5OS); see [generator/f5.md](generator/f5.md)           |
-| filegen                                      | Producer | Replays lines from files; supports glob and directories                                                          |
+| filegen                                      | Producer | Lines from files, picked at random or replayed in order; supports glob and directories                           |
 | flow                                         | Producer | Network flow records (5-tuple plus counters); the flow output picks the wire format                              |
 | fix                                          | Producer | FIX protocol messages (4.2, 4.4, 5.0SP2)                                                                         |
 | json                                         | Producer | Structured JSON logs; `default` and `pii` log types                                                              |
 | kubernetes                                   | Producer | CRI-O container log format                                                                                       |
 | nginx                                        | Producer | NGINX Combined log format                                                                                        |
-| nop                                          | Producer | No-op generator (testing helper)                                                                                 |
+| nop                                          | Producer | No-op generator (testing helper). Not embed-eligible: `LoadModules` rejects it.                                  |
 | okta                                         | Producer | Okta System Log format                                                                                           |
 | palo-alto                                    | Producer | Palo Alto syslog                                                                                                 |
 | postgres                                     | Producer | PostgreSQL log format                                                                                            |
 | hostmetrics                                  | Producer | Host metric scrapers (CPU, disk, memory, etc.)                                                                   |
 | traces                                       | Producer | Synthetic distributed traces                                                                                     |
-| winevt                                       | Producer | Windows Event XML mode (current). A future WEL Windows-API mode lands as an Effector via a separate constructor. |
+| wel                                          | Producer | Windows Event Log XML across many channels, driven by a machine role                                             |
+| winevt                                       | Producer | Windows Event XML. Deprecated and not available via embed (use `wel`); `LoadModules` rejects it.                 |
 | Future: WEL Windows-API mode (PIPE-928)      | Effector | Writes to actual Windows event log. Cannot be embedded.                                                          |
 | Future: REST simulators (PIPE-943)           | Effector | HTTP servers external clients poll. Cannot be embedded.                                                          |

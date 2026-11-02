@@ -82,15 +82,15 @@ output:
 
 ## Metrics
 
-The OTLP gRPC output exposes the following metrics:
+The OTLP gRPC output records the shared output metrics:
 
-- **`blitz_otlp_grpc_logs_received_total`** (Counter): Number of logs received from the write channel
-- **`blitz_otlp_grpc_workers_active`** (Gauge): Number of active worker goroutines
-- **`blitz_otlp_grpc_log_rate_total`** (Counter, Float64): Rate at which logs are successfully sent to the configured host
-- **`blitz_otlp_grpc_request_size_bytes`** (Histogram): Size of requests in bytes
-- **`blitz_otlp_grpc_request_latency`** (Histogram): Request latency in seconds
-- **`blitz_otlp_grpc_send_errors_total`** (Counter): Total number of send errors, labeled by `error_type`
-- **`blitz_otlp_grpc_channel_size`** (Gauge): Current size of the data channel
+- **`blitz.output.entries_received`** (Counter): Entries received by the output
+- **`blitz.output.active_workers`** (Gauge): Number of active worker goroutines
+- **`blitz.output.entry_rate`** (Float64 Counter): Rate at which entries are sent
+- **`blitz.output.request_size`** (Histogram): Size of requests in bytes
+- **`blitz.output.request_latency`** (Float64 Histogram): Request latency in milliseconds
+- **`blitz.output.send_errors`** (Counter): Total number of send errors, by `telemetry_type`
+- **`blitz.output.queue_size`** (Observable Gauge): Current number of log records in the log queue. Metrics and spans wait in their own queues, which this gauge does not count
 
-All metrics include a `component` label set to `output_otlp_grpc`.
+All metrics carry an `output_type` attribute set to `otlp-grpc`. See [Metrics](../metrics.md) for the exported names.
 

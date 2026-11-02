@@ -23,8 +23,8 @@ spec:
             - --generator-nginx-workers=1
             - --generator-nginx-rate=250ms
             - --output-type=otlp-grpc
-            - --output-otlpgrpc-host=127.0.0.1
-            - --output-otlpgrpc-port=4317
+            - --output-otlp-grpc-host=127.0.0.1
+            - --output-otlp-grpc-port=4317
           resources:
             requests:
               cpu: 50m
@@ -55,8 +55,8 @@ spec:
             - --generator-nginx-workers=1
             - --generator-nginx-rate=250ms
             - --output-type=otlp-grpc
-            - --output-otlpgrpc-host=127.0.0.1
-            - --output-otlpgrpc-port=4318
+            - --output-otlp-grpc-host=127.0.0.1
+            - --output-otlp-grpc-port=4318
           resources:
             requests:
               cpu: 50m
@@ -87,8 +87,8 @@ spec:
             - --generator-nginx-workers=1
             - --generator-nginx-rate=250ms
             - --output-type=otlp-grpc
-            - --output-otlpgrpc-host=127.0.0.1
-            - --output-otlpgrpc-port=4319
+            - --output-otlp-grpc-host=127.0.0.1
+            - --output-otlp-grpc-port=4319
           resources:
             requests:
               cpu: 50m
@@ -119,8 +119,8 @@ spec:
             - --generator-nginx-workers=1
             - --generator-nginx-rate=250ms
             - --output-type=otlp-grpc
-            - --output-otlpgrpc-host=127.0.0.1
-            - --output-otlpgrpc-port=4320
+            - --output-otlp-grpc-host=127.0.0.1
+            - --output-otlp-grpc-port=4320
           resources:
             requests:
               cpu: 50m
@@ -151,8 +151,8 @@ spec:
             - --generator-nginx-workers=1
             - --generator-nginx-rate=250ms
             - --output-type=otlp-grpc
-            - --output-otlpgrpc-host=127.0.0.1
-            - --output-otlpgrpc-port=4321
+            - --output-otlp-grpc-host=127.0.0.1
+            - --output-otlp-grpc-port=4321
           resources:
             requests:
               cpu: 50m
@@ -183,8 +183,8 @@ spec:
             - --generator-nginx-workers=1
             - --generator-nginx-rate=250ms
             - --output-type=otlp-grpc
-            - --output-otlpgrpc-host=127.0.0.1
-            - --output-otlpgrpc-port=4322
+            - --output-otlp-grpc-host=127.0.0.1
+            - --output-otlp-grpc-port=4322
           resources:
             requests:
               cpu: 50m
@@ -215,8 +215,8 @@ spec:
             - --generator-nginx-workers=1
             - --generator-nginx-rate=250ms
             - --output-type=otlp-grpc
-            - --output-otlpgrpc-host=127.0.0.1
-            - --output-otlpgrpc-port=4323
+            - --output-otlp-grpc-host=127.0.0.1
+            - --output-otlp-grpc-port=4323
           resources:
             requests:
               cpu: 50m
@@ -247,8 +247,8 @@ spec:
             - --generator-nginx-workers=1
             - --generator-nginx-rate=250ms
             - --output-type=otlp-grpc
-            - --output-otlpgrpc-host=127.0.0.1
-            - --output-otlpgrpc-port=4324
+            - --output-otlp-grpc-host=127.0.0.1
+            - --output-otlp-grpc-port=4324
           resources:
             requests:
               cpu: 50m

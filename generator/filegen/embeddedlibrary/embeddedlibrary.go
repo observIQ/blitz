@@ -1,9 +1,9 @@
 // Package embeddedlibrary ships the filegen data library as files baked
 // into the Go binary via //go:embed, gated by the embed_library build tag.
 //
-// Standalone blitz CLI does NOT import this package — it reads the
-// data_library/ files from disk at runtime so users can edit them
-// without a recompile. Library consumers (e.g. the OTel
+// The standalone blitz CLI passes FS() too, but reads data_library/
+// from disk at runtime as well, disk winning per path, so users can
+// edit the files without a recompile. Library consumers (e.g. the OTel
 // telemetrygeneratorreceiver) that want the data library bundled into
 // their binary import this package and pass FS() to filegen.New.
 //

@@ -52,7 +52,7 @@ const (
 type Generator struct {
 	// Type specifies the generator type (json)
 	Type GeneratorType `yaml:"type,omitempty" mapstructure:"type,omitempty"`
-	// Count is the total number of logs to generate (0 = unlimited)
+	// Count is the total number of records to generate (0 = unlimited)
 	Count int `yaml:"count,omitempty" mapstructure:"count,omitempty"`
 	// JSON contains JSON generator configuration
 	JSON JSONGeneratorConfig `yaml:"json,omitempty" mapstructure:"json,omitempty"`

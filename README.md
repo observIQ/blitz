@@ -27,13 +27,20 @@ Blitz consists of generators that create telemetry data and outputs that send da
 - **[apache-common](https://github.com/observiq/blitz/blob/main/docs/generator/apache-common.md)** - Generates Apache Common Log Format (CLF) entries
 - **[apache-combined](https://github.com/observiq/blitz/blob/main/docs/generator/apache-combined.md)** - Generates Apache Combined Log Format entries with referer and user-agent
 - **[apache-error](https://github.com/observiq/blitz/blob/main/docs/generator/apache-error.md)** - Generates Apache Error Log Format entries for server diagnostics
-- **[filegen](https://github.com/observiq/blitz/blob/main/docs/generator/filegen.md)** - Generates telemetry by reading lines from files with configurable rate and random line selection
+- **[filegen](https://github.com/observiq/blitz/blob/main/docs/generator/filegen.md)** - Emits lines from your own files or the built-in data library, either picked at random or replayed once in order
 - **[json](https://github.com/observiq/blitz/blob/main/docs/generator/json.md)** - Generates structured JSON logs
 - **[kubernetes](https://github.com/observiq/blitz/blob/main/docs/generator/kubernetes.md)** - Generates Kubernetes container log format entries in CRI-O format with various application log types
 - **[nginx](https://github.com/observiq/blitz/blob/main/docs/generator/nginx.md)** - Generates NGINX Combined Log Format entries matching NGINX's default log format
 - **[palo-alto](https://github.com/observiq/blitz/blob/main/docs/generator/palo-alto.md)** - Generates realistic Palo Alto firewall syslog entries
 - **[postgres](https://github.com/observiq/blitz/blob/main/docs/generator/postgres.md)** - Generates PostgreSQL log format entries including query logs, connections, and database events
-- **[winevt](https://github.com/observiq/blitz/blob/main/docs/generator/winevt.md)** - Generates Windows Event logs in unparsed XML format
+- **[winevt](https://github.com/observiq/blitz/blob/main/docs/generator/winevt.md)** - Deprecated: generates Windows Event logs in unparsed XML format. Use `wel` instead
+- **[wel](https://github.com/observiq/blitz/blob/main/docs/generator/wel.md)** - Generates Windows Event Log entries across Security, System, Application, Sysmon, PowerShell, and other channels
+- **[okta](https://github.com/observiq/blitz/blob/main/docs/generator/okta.md)** - Generates Okta System Log events in JSON format
+- **[hostmetrics](https://github.com/observiq/blitz/blob/main/docs/generator/hostmetrics.md)** - Generates host metrics that mimic the OpenTelemetry Host Metrics receiver
+- **[traces](https://github.com/observiq/blitz/blob/main/docs/generator/traces.md)** - Generates distributed traces with an HTTP server root span and 1 to 4 child spans (database, cache, processing, downstream HTTP, validation)
+- **[fix](https://github.com/observiq/blitz/blob/main/docs/generator/fix.md)** - Generates FIX (Financial Information eXchange) protocol messages for trading telemetry pipelines
+- **[flow](https://github.com/observiq/blitz/blob/main/docs/generator/flow.md)** - Generates network flow records, exported by the `flow` output (UDP wire formats) or `otlp-grpc` (as OTLP logs)
+- **[f5](https://github.com/observiq/blitz/blob/main/docs/generator/f5.md)** - Generates a weighted mix of syslog log lines across the F5 product portfolio
 
 ### Outputs
 
@@ -44,6 +51,10 @@ Blitz consists of generators that create telemetry data and outputs that send da
 - **[syslog](https://github.com/observiq/blitz/blob/main/docs/output/syslog.md)** - Formats and sends logs via syslog (RFC 3164 or 5424) over UDP or TCP
 - **[tcp](https://github.com/observiq/blitz/blob/main/docs/output/tcp.md)** - Sends telemetry over TCP connections with optional TLS encryption
 - **[udp](https://github.com/observiq/blitz/blob/main/docs/output/udp.md)** - Sends telemetry over UDP connections
+- **[hec](https://github.com/observiq/blitz/blob/main/docs/output/hec.md)** - Sends logs to Splunk over the HTTP Event Collector, with batching, TLS, and indexer acknowledgement
+- **[flow](https://github.com/observiq/blitz/blob/main/docs/output/flow.md)** - Exports flow records over UDP in NetFlow, sFlow, or IPFIX wire formats
+- **[prometheus-remote-write](https://github.com/observiq/blitz/blob/main/docs/output/prometheus-remote-write.md)** - Pushes metrics to a Prometheus remote-write endpoint (1.0 or 2.0)
+- **[prometheus-scrape](https://github.com/observiq/blitz/blob/main/docs/output/prometheus-scrape.md)** - Serves metrics on an HTTP `/metrics` endpoint for a Prometheus scraper
 
 ## Installation
 
