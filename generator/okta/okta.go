@@ -287,17 +287,14 @@ func (g *Generator) worker(workerID int) {
 			g.logger.Debug("Worker stopping", zap.Int("worker_id", workerID))
 			return
 		case <-timer.C:
-			permit, resume, ok := g.tracker.Acquire()
+			permit, wait, ok := g.tracker.Acquire()
 			if !ok {
-				select {
-				case <-g.stopCh:
+				if !pacing.AwaitWake(g.stopCh, wait, backoffConfig, timer) {
 					return
-				case <-resume:
-					timer.Reset(backoffConfig.NextBackOff())
-					continue
 				}
+				continue
 			}
-			err := g.generateAndWriteLog(r, workerID)
+			err := g.generateAndWriteLog(count.WithPermit(context.Background(), permit), r, workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
@@ -313,7 +310,7 @@ func (g *Generator) worker(workerID int) {
 	}
 }
 
-func (g *Generator) generateAndWriteLog(r *rand.Rand, _ int) error {
+func (g *Generator) generateAndWriteLog(ctx context.Context, r *rand.Rand, _ int) error {
 	logRecord, err := g.generateOktaLog(r)
 	if err != nil {
 		g.recordWriteError(errorTypeUnknown, err)
@@ -322,7 +319,7 @@ func (g *Generator) generateAndWriteLog(r *rand.Rand, _ int) error {
 
 	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{logRecord}); err != nil {

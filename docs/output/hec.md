@@ -16,18 +16,18 @@ Each log record is wrapped in a HEC JSON envelope with metadata fields (`time`, 
 | `output.hec.token` | `--output-hec-token` | `BLITZ_OUTPUT_HEC_TOKEN` | `""` | HEC authentication token |
 | `output.hec.workers` | `--output-hec-workers` | `BLITZ_OUTPUT_HEC_WORKERS` | `1` | Number of HEC output workers. Each worker has its own HEC channel. |
 | `output.hec.batchSize` | `--output-hec-batchsize` | `BLITZ_OUTPUT_HEC_BATCHSIZE` | `100` | Maximum events per batch |
-| `output.hec.batchTimeout` | `--output-hec-batchtimeout` | `BLITZ_OUTPUT_HEC_BATCHTIMEOUT` | `5s` | Maximum time before flushing a partial batch |
+| `output.hec.batchTimeout` | `--output-hec-batchtimeout` | `BLITZ_OUTPUT_HEC_BATCHTIMEOUT` | `5s` | Maximum time before flushing a partial batch. Must be > 0 |
 | `output.hec.eventFormat` | `--output-hec-eventformat` | `BLITZ_OUTPUT_HEC_EVENTFORMAT` | `raw` | Event body format: `raw` (message string) or `parsed` (structured JSON via ParseFunc) |
 
 ### Indexer Acknowledgement (ACK)
 
-When enabled, the HEC output tracks each batch's acknowledgement status. Unacknowledged batches are resent after the ACK timeout, up to the configured retry limit.
+When enabled, the HEC output tracks each batch's acknowledgement status. Unacknowledged batches are resent after the ACK timeout, up to the configured retry limit. This includes batches whose ACK status cannot be queried: if the ACK endpoint keeps failing, those batches still time out, are resent, and are dropped after the last retry.
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
 | `output.hec.enableAck` | `--output-hec-enableack` | `BLITZ_OUTPUT_HEC_ENABLEACK` | `true` | Enable Splunk indexer acknowledgement |
-| `output.hec.ackPollInterval` | `--output-hec-ackpollinterval` | `BLITZ_OUTPUT_HEC_ACKPOLLINTERVAL` | `10s` | How often to poll for ACK status |
-| `output.hec.ackTimeout` | `--output-hec-acktimeout` | `BLITZ_OUTPUT_HEC_ACKTIMEOUT` | `5m` | Time to wait for ACK before resending |
+| `output.hec.ackPollInterval` | `--output-hec-ackpollinterval` | `BLITZ_OUTPUT_HEC_ACKPOLLINTERVAL` | `10s` | How often to poll for ACK status. Must be > 0 when `enableAck` is true |
+| `output.hec.ackTimeout` | `--output-hec-acktimeout` | `BLITZ_OUTPUT_HEC_ACKTIMEOUT` | `5m` | Time to wait for ACK before resending. Must be > 0 when `enableAck` is true |
 | `output.hec.maxRetries` | `--output-hec-maxretries` | `BLITZ_OUTPUT_HEC_MAXRETRIES` | `3` | Maximum resend attempts per batch before dropping |
 
 ### Event Metadata

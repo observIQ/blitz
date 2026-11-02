@@ -167,14 +167,14 @@ func TestMetricBatch(t *testing.T) {
 	assert.True(t, batch.isEmpty())
 	assert.False(t, batch.isFull())
 
-	batch.add(&metricspb.Metric{Name: "test1"})
+	batch.add(&metricspb.Metric{Name: "test1"}, func(error) {})
 	assert.False(t, batch.isEmpty())
 	assert.False(t, batch.isFull())
 
-	batch.add(&metricspb.Metric{Name: "test2"})
+	batch.add(&metricspb.Metric{Name: "test2"}, func(error) {})
 	assert.True(t, batch.isFull())
 
-	metrics := batch.getAndClear()
+	metrics, _ := batch.getAndClear()
 	assert.Len(t, metrics, 2)
 	assert.True(t, batch.isEmpty())
 	batch.timer.Stop()
@@ -184,11 +184,11 @@ func TestTraceBatch(t *testing.T) {
 	batch := newTraceBatch(2, time.Second)
 	assert.True(t, batch.isEmpty())
 
-	batch.add(&tracepb.Span{Name: "span1"})
-	batch.add(&tracepb.Span{Name: "span2"})
+	batch.add(&tracepb.Span{Name: "span1"}, func(error) {})
+	batch.add(&tracepb.Span{Name: "span2"}, func(error) {})
 	assert.True(t, batch.isFull())
 
-	spans := batch.getAndClear()
+	spans, _ := batch.getAndClear()
 	assert.Len(t, spans, 2)
 	assert.True(t, batch.isEmpty())
 	batch.timer.Stop()

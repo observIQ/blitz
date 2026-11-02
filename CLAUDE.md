@@ -115,6 +115,7 @@ make completion
 
 - Use lowercase "Bindplane" (not "BindPlane") in all documentation and comments
 - Follow existing patterns for new generators
-- Generators honor `generator.count`: take a permit with the tracker's `Acquire` before each record, then `Commit` it once the record is written or `Release` it when the write fails (see `generator/count`)
+- Generators honor `generator.count`: add a `SetCountTracker(*count.Tracker)` method (the CLI finds it by interface assertion), take a permit with the tracker's `Acquire` before each record, pass it to the consumer with `count.WithPermit(ctx, permit)`, then `Commit` it once the write returns or `Release` it when the write fails (see `generator/count`)
+- Outputs that send a record after the write call returns take `count.Hold(ctx)` in the write call and settle it with the send's result
 - Include metrics for new components
 - Add tests for new functionality

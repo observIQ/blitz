@@ -68,6 +68,10 @@ func (c *OTLPGrpcOutputConfig) Validate() error {
 		return fmt.Errorf("OTLP gRPC output max export batch size cannot be negative, got %d", c.MaxExportBatchSize)
 	}
 
+	if c.BatchTimeout <= 0 {
+		return fmt.Errorf("OTLP gRPC output batch timeout must be greater than 0, got %s", c.BatchTimeout)
+	}
+
 	if c.RequestTimeout < 0 {
 		return fmt.Errorf("OTLP gRPC output request timeout cannot be negative, got %s", c.RequestTimeout)
 	}

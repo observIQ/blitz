@@ -138,7 +138,7 @@ func (g *JSONLogGenerator) Start(_ context.Context) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i)
+		go g.worker(i) // #nosec G118 -- workers are bounded by Stop() and the WaitGroup, not the Start context
 	}
 
 	return nil
@@ -194,17 +194,14 @@ func (g *JSONLogGenerator) worker(workerID int) {
 			g.logger.Debug("Worker stopping", zap.Int("worker_id", workerID))
 			return
 		case <-timer.C:
-			permit, resume, ok := g.tracker.Acquire()
+			permit, wait, ok := g.tracker.Acquire()
 			if !ok {
-				select {
-				case <-g.stopCh:
+				if !pacing.AwaitWake(g.stopCh, wait, backoffConfig, timer) {
 					return
-				case <-resume:
-					timer.Reset(backoffConfig.NextBackOff())
-					continue
 				}
+				continue
 			}
-			err := g.generateAndWriteLog(workerID)
+			err := g.generateAndWriteLog(count.WithPermit(context.Background(), permit), workerID)
 			if err != nil {
 				g.logger.Error("Failed to write log",
 					zap.Int("worker_id", workerID),
@@ -222,7 +219,7 @@ func (g *JSONLogGenerator) worker(workerID int) {
 
 // generateAndWriteLog generates a random log and pushes it as a
 // single-record batch to the configured consumer.
-func (g *JSONLogGenerator) generateAndWriteLog(_ int) error {
+func (g *JSONLogGenerator) generateAndWriteLog(ctx context.Context, _ int) error {
 	var logData logtypes.LogData
 	var err error
 
@@ -257,7 +254,7 @@ func (g *JSONLogGenerator) generateAndWriteLog(_ int) error {
 	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
 
 	// Write the data with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	if err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{logRecord}); err != nil {

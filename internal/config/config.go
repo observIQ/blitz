@@ -75,6 +75,9 @@ func (c *Config) Validate() error {
 	} else if err := c.Output.Validate(); err != nil {
 		return err
 	}
+	if err := c.validateCountFlush(); err != nil {
+		return err
+	}
 	if err := c.Metrics.Validate(); err != nil {
 		return err
 	}
@@ -86,6 +89,29 @@ func (c *Config) Validate() error {
 	}
 	if c.OnFinish != "" && c.OnFinish != "exit" && c.OnFinish != "idle" {
 		return fmt.Errorf("onFinish must be one of: exit, idle, got %q", c.OnFinish)
+	}
+	return nil
+}
+
+// validateCountFlush rejects a count run whose remote-write output never
+// flushes a partial batch: that batch would wait for Stop, which waits for
+// the count, so the run would never end.
+func (c *Config) validateCountFlush() error {
+	counted := c.Generator.Count > 0
+	for _, g := range c.Generators {
+		counted = counted || g.Count > 0
+	}
+	if !counted {
+		return nil
+	}
+	for i, o := range c.EffectiveOutputs() {
+		if o.Type == OutputTypePrometheusRemoteWrite && o.PrometheusRemoteWrite.BatchTimeout == 0 {
+			err := fmt.Errorf("prometheus-remote-write output batchTimeout must be greater than 0 when generator.count or a generators: entry count is set, or a partial batch is never sent")
+			if len(c.Outputs) > 0 {
+				return fmt.Errorf("outputs[%d] validation failed: %w", i, err)
+			}
+			return err
+		}
 	}
 	return nil
 }

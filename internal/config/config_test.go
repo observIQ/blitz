@@ -145,3 +145,25 @@ func TestRunLevelCountIsValidatedNextToAList(t *testing.T) {
 	cfg = loadLikeCLI(t, list, map[string]any{"generator.count": 3})
 	require.NoError(t, cfg.Validate())
 }
+
+// TestCountRejectsUnflushedPromRW pins that a count run refuses a
+// remote-write output with no batch timeout: a partial batch would wait for
+// Stop, which waits for the count, so the run would never end.
+func TestCountRejectsUnflushedPromRW(t *testing.T) {
+	out := map[string]any{
+		"output.type": "prometheus-remote-write",
+		"output.prometheus-remote-write.endpoint":     "http://localhost:9090/api/v1/write",
+		"output.prometheus-remote-write.batchTimeout": "0s",
+		"generator.type": "hostmetrics",
+	}
+	cfg := loadLikeCLI(t, "", out)
+	require.NoError(t, cfg.Validate(), "an unlimited run flushes at Stop")
+
+	out["generator.count"] = 10
+	cfg = loadLikeCLI(t, "", out)
+	require.ErrorContains(t, cfg.Validate(), "batchTimeout")
+
+	list := "outputs:\n  - type: prometheus-remote-write\n    prometheus-remote-write:\n      endpoint: http://localhost:9090/api/v1/write\n      batchTimeout: 0s\n"
+	cfg = loadLikeCLI(t, list, map[string]any{"generator.type": "hostmetrics", "generator.count": 10})
+	require.ErrorContains(t, cfg.Validate(), "outputs[0]")
+}

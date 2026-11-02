@@ -389,15 +389,17 @@ Worker Failure → Exponential Backoff → Worker Restart → Continued Operatio
 
 ### Adding New Generators:
 1. Implement `embed.ProducerModule` and yield records to the consumer for its signal
-2. Add configuration types and overrides to the config package
-3. Construct it in `dispatch.ForEmbedAt` (`internal/dispatch/embed.go`, wrapped by `ForEmbed`), which the CLI and embedded hosts share
-4. Add validation rules and tests, a `docs/generator/<name>.md` page, a README entry, and a docker-compose service
+2. Honor `generator.count`: add a `SetCountTracker(*count.Tracker)` method (the CLI finds it by interface assertion and hands over the run's tracker), take a permit with the tracker's `Acquire` before each record, pass it to the consumer with `count.WithPermit(ctx, permit)`, then `Commit` it once the write returns or `Release` it when the write fails (see `generator/count`)
+3. Add configuration types and overrides to the config package
+4. Construct it in `dispatch.ForEmbedAt` (`internal/dispatch/embed.go`, wrapped by `ForEmbed`), which the CLI and embedded hosts share
+5. Add validation rules and tests, a `docs/generator/<name>.md` page, a README entry, and a docker-compose service
 
 ### Adding New Outputs:
 1. Implement `output.Writer` plus the writer for each signal it accepts
-2. Add configuration types and overrides to the config package
-3. Construct it in the CLI's output builder (`cmd/blitz/main.go`)
-4. Add validation rules and tests, a `docs/output/<name>.md` page, and a README entry
+2. If the output sends a record after its write call returns, take `count.Hold(ctx)` in the write call and settle it with the send's result, so a finite run counts only delivered records (see [Finite Generation](finite-generation.md#delivery))
+3. Add configuration types and overrides to the config package
+4. Construct it in the CLI's output builder (`cmd/blitz/main.go`)
+5. Add validation rules and tests, a `docs/output/<name>.md` page, and a README entry
 
 ### Configuration Extensions:
 1. Add new fields to configuration structures

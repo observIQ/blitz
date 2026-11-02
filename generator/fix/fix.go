@@ -243,13 +243,13 @@ func (g *Generator) runWorker(workerIdx int) {
 		case <-ticker.C:
 			// Acquire before building, so a spent count takes no sequence
 			// number or order.
-			permit, resume, ok := g.tracker.Acquire()
+			permit, wait, ok := g.tracker.Acquire()
 			if !ok {
 				g.logger.Debug("FIX worker at the count limit, waiting", zap.Int("worker_id", workerIdx))
 				select {
 				case <-g.stopCh:
 					return
-				case <-resume:
+				case <-wait:
 					continue
 				}
 			}
@@ -260,7 +260,7 @@ func (g *Generator) runWorker(workerIdx int) {
 				permit.Release()
 				continue
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(count.WithPermit(context.Background(), permit), 5*time.Second)
 			rec := embed.LogRecord{
 				Message: string(msg),
 				Metadata: embed.LogRecordMetadata{

@@ -90,6 +90,18 @@ func (c *HECOutputConfig) Validate() error {
 		return fmt.Errorf("HEC output batch size cannot be negative, got %d", c.BatchSize)
 	}
 
+	if c.BatchTimeout <= 0 {
+		return fmt.Errorf("HEC output batch timeout must be greater than 0, got %s", c.BatchTimeout)
+	}
+
+	if c.EnableACK && c.ACKPollInterval <= 0 {
+		return fmt.Errorf("HEC output ACK poll interval must be greater than 0 with ACK enabled, got %s", c.ACKPollInterval)
+	}
+
+	if c.EnableACK && c.ACKTimeout <= 0 {
+		return fmt.Errorf("HEC output ACK timeout must be greater than 0 with ACK enabled, got %s", c.ACKTimeout)
+	}
+
 	if c.MaxRetries < 0 {
 		return fmt.Errorf("HEC output max retries cannot be negative, got %d", c.MaxRetries)
 	}

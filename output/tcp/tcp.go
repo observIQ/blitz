@@ -3,11 +3,13 @@ package tcp
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -40,6 +42,12 @@ const outputType = "tcp"
 type tcpItem struct {
 	ctx context.Context
 	msg string
+	// sent settles the record's count permit, if any, with the send result.
+	sent func(error)
+}
+
+func newTCPItem(ctx context.Context, msg string) tcpItem {
+	return tcpItem{ctx: ctx, msg: msg, sent: count.Hold(ctx)}
 }
 
 // TCP implements the Output interface for TCP connections
@@ -128,14 +136,19 @@ func (t *TCP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 // If the provided context is done, WriteLog will return immediately
 // even if the data is not written to the channel.
 func (t *TCP) WriteLog(ctx context.Context, data output.LogRecord) error {
+	item := newTCPItem(ctx, data.Message)
 	select {
-	case t.dataChan <- tcpItem{ctx: ctx, msg: data.Message}:
+	case t.dataChan <- item:
 		t.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
-		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
+		err := fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
+		item.sent(err)
+		return err
 	case <-t.ctx.Done():
-		return fmt.Errorf("TCP output is shutting down")
+		err := fmt.Errorf("TCP output is shutting down")
+		item.sent(err)
+		return err
 	}
 }
 
@@ -181,22 +194,22 @@ func (t *TCP) tcpWorker(id int) {
 		return
 	}
 	defer conn.Close()
+	t.serve(id, conn)
+}
 
+// serve sends queued records on conn until a send fails, which returns so
+// the worker manager reconnects, or until shutdown.
+func (t *TCP) serve(id int, conn net.Conn) {
 	for {
 		select {
 		case item, ok := <-t.dataChan:
 			if !ok {
+				// Safety net: Stop closes dataChan only after the workers exit.
 				t.logger.Info("TCP worker exiting - channel closed", zap.Int("worker_id", id))
 				return
 			}
 
-			_, span := output.StartSendSpan(item.ctx, t.tel, "blitz.output.tcp.send")
-			err := t.sendData(conn, item.msg)
-			if err != nil {
-				span.RecordError(err)
-			}
-			span.End()
-			if err != nil {
+			if err := t.deliver(conn, item); err != nil {
 				t.logger.Error("Failed to send TCP data",
 					zap.Int("worker_id", id),
 					zap.Error(err))
@@ -225,6 +238,7 @@ func (t *TCP) drainBuffered(ctx context.Context) {
 		t.logger.Error("Failed to connect while draining buffered records on shutdown",
 			zap.Int("dropped", len(t.dataChan)),
 			zap.Error(err))
+		t.failRemaining(err)
 		return
 	}
 	defer conn.Close()
@@ -241,21 +255,38 @@ func (t *TCP) drainTo(ctx context.Context, conn net.Conn, deadline time.Time) {
 		if ctx.Err() != nil || time.Now().After(deadline) {
 			t.logger.Warn("Shutdown deadline reached while draining buffered records",
 				zap.Int("dropped", len(t.dataChan)+1))
+			err := errors.New("shutdown deadline reached")
+			data.sent(err)
+			t.failRemaining(err)
 			return
 		}
-		_, span := output.StartSendSpan(data.ctx, t.tel, "blitz.output.tcp.send")
-		err := t.sendData(conn, data.msg)
-		if err != nil {
-			span.RecordError(err)
-		}
-		span.End()
-		if err != nil {
+		if err := t.deliver(conn, data); err != nil {
 			t.logger.Error("Failed to send buffered record while draining on shutdown",
 				zap.Int("dropped", len(t.dataChan)+1),
 				zap.Error(err))
+			t.failRemaining(err)
 			return
 		}
 	}
+}
+
+// failRemaining settles every record left in the closed dataChan as unsent.
+func (t *TCP) failRemaining(err error) {
+	for data := range t.dataChan {
+		data.sent(err)
+	}
+}
+
+// deliver sends one record and settles its permit with the result.
+func (t *TCP) deliver(conn net.Conn, item tcpItem) error {
+	_, span := output.StartSendSpan(item.ctx, t.tel, "blitz.output.tcp.send")
+	err := t.sendData(conn, item.msg)
+	if err != nil {
+		span.RecordError(err)
+	}
+	span.End()
+	item.sent(err)
+	return err
 }
 
 // connect establishes a TCP connection to the configured host and port

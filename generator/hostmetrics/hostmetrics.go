@@ -261,7 +261,7 @@ func (g *Generator) scrape(r *rand.Rand) {
 	}
 	failed := false
 
-	ctx := context.Background()
+	ctx := count.WithPermit(context.Background(), permit)
 
 	// The host-identity resource is fixed for this generator's lifetime, so it
 	// is built once (StaticResources in New) and shared read-only across every

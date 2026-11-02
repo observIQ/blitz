@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/counttest"
+
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/output"
 	"github.com/stretchr/testify/require"
@@ -45,7 +48,8 @@ func TestUDP_drainBuffered_emptyChannelReturnsEarly(t *testing.T) {
 
 func TestUDP_drainBuffered_connectErrorReturns(t *testing.T) {
 	u := &UDP{logger: zap.NewNop(), host: "nonexistent.invalid", port: "1", dataChan: make(chan udpItem, 1)}
-	u.dataChan <- udpItem{ctx: context.Background(), msg: "x"}
+	u.dataChan <- newUDPItem(context.Background(), "x")
+	close(u.dataChan) // Stop closes the channel before draining
 	u.drainBuffered(context.Background())
 }
 
@@ -53,8 +57,8 @@ func TestUDP_drainTo_stopsOnSendError(t *testing.T) {
 	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
 	require.NoError(t, err)
 	u := &UDP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m, dataChan: make(chan udpItem, 2)}
-	u.dataChan <- udpItem{ctx: context.Background(), msg: "one"}
-	u.dataChan <- udpItem{ctx: context.Background(), msg: "two"}
+	u.dataChan <- newUDPItem(context.Background(), "one")
+	u.dataChan <- newUDPItem(context.Background(), "two")
 	close(u.dataChan)
 
 	conn := &fakeConn{writeErr: fmt.Errorf("write failed")}
@@ -64,7 +68,7 @@ func TestUDP_drainTo_stopsOnSendError(t *testing.T) {
 
 func TestUDP_drainTo_stopsWhenContextDone(t *testing.T) {
 	u := &UDP{logger: zap.NewNop(), dataChan: make(chan udpItem, 1)}
-	u.dataChan <- udpItem{ctx: context.Background(), msg: "one"}
+	u.dataChan <- newUDPItem(context.Background(), "one")
 	close(u.dataChan)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -449,4 +453,99 @@ func getReceivedUDPData(t *testing.T) [][]byte {
 	}
 
 	return result
+}
+
+// TestUDP_PermitSettlesWhenSent pins that a queued record's permit counts
+// once the datagram is sent.
+func TestUDP_PermitSettlesWhenSent(t *testing.T) {
+	conn, addr := startTestUDPServer(t)
+	defer conn.Close()
+	host, port, err := net.SplitHostPort(addr)
+	require.NoError(t, err)
+	u, err := New(zap.NewNop(), host, port, 1, embed.NopTelemetry())
+	require.NoError(t, err)
+	defer func() { _ = u.Stop(context.Background()) }()
+
+	ctx, p := counttest.Held(t)
+	require.NoError(t, u.WriteLog(ctx, output.LogRecord{Message: "held"}))
+	p.Commit()
+	require.True(t, counttest.Settled(p))
+	require.True(t, p.Delivered())
+}
+
+// TestUDP_drainTo_releasesEveryUnsentRecord pins that a drain that stops
+// early settles every record it did not send as failed.
+func TestUDP_drainTo_releasesEveryUnsentRecord(t *testing.T) {
+	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
+	require.NoError(t, err)
+	u := &UDP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m, dataChan: make(chan udpItem, 4)}
+	ctx1, p1 := counttest.Held(t)
+	ctx2, p2 := counttest.Held(t)
+	u.dataChan <- newUDPItem(ctx1, "one")
+	u.dataChan <- newUDPItem(ctx2, "two")
+	p1.Commit()
+	p2.Commit()
+	close(u.dataChan)
+
+	u.drainTo(context.Background(), &fakeConn{writeErr: fmt.Errorf("write failed")}, time.Now().Add(time.Hour))
+
+	for _, p := range []count.Permit{p1, p2} {
+		require.True(t, counttest.Settled(p))
+		require.False(t, p.Delivered())
+	}
+}
+
+// TestUDP_UnresolvableDrainReleasesPermit pins that records stranded by a
+// failed shutdown connect are not counted.
+func TestUDP_UnresolvableDrainReleasesPermit(t *testing.T) {
+	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
+	require.NoError(t, err)
+	u := &UDP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m, host: "invalid.invalid", port: "9", dataChan: make(chan udpItem, 1)}
+	ctx, p := counttest.Held(t)
+	u.dataChan <- newUDPItem(ctx, "one")
+	p.Commit()
+	close(u.dataChan)
+
+	u.drainBuffered(context.Background())
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
+}
+
+// TestUDP_deliverReportsSendResult pins the worker's send step: a failed
+// write fails the record's permit.
+func TestUDP_deliverReportsSendResult(t *testing.T) {
+	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
+	require.NoError(t, err)
+	u := &UDP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m}
+	ctx, p := counttest.Held(t)
+	item := newUDPItem(ctx, "x")
+	p.Commit()
+	require.Error(t, u.deliver(&fakeConn{writeErr: fmt.Errorf("refused")}, item))
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
+}
+
+// TestUDP_UnqueuedWriteReleasesPermit pins that a record that never reaches
+// the queue is released.
+func TestUDP_UnqueuedWriteReleasesPermit(t *testing.T) {
+	counttest.ReleasesUnqueued(t, func(writeCtx, outputCtx context.Context) error {
+		u := &UDP{dataChan: make(chan udpItem), ctx: outputCtx}
+		return u.WriteLog(writeCtx, output.LogRecord{Message: "x"})
+	})
+}
+
+// TestUDP_serveReturnsOnSendFailure pins that a failed send releases the
+// record and returns, so the worker manager reconnects.
+func TestUDP_serveReturnsOnSendFailure(t *testing.T) {
+	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
+	require.NoError(t, err)
+	u := &UDP{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m, ctx: context.Background(),
+		dataChan: make(chan udpItem, 1)}
+	ctx, p := counttest.Held(t)
+	u.dataChan <- newUDPItem(ctx, "x")
+	p.Commit()
+
+	u.serve(0, &fakeConn{writeErr: fmt.Errorf("network unreachable")})
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
 }

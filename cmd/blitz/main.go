@@ -356,7 +356,7 @@ func run(cmd *cobra.Command, args []string) error {
 	if tracker != nil {
 		logger.Info("Telemetry generation completed",
 			zap.Any("generators", genTypes),
-			zap.Int64("records_emitted", tracker.Emitted()))
+			zap.Int64("records_delivered", tracker.Emitted()))
 	}
 
 	logger.Info("blitz shutdown complete")
@@ -518,9 +518,7 @@ func buildOutput(logger *zap.Logger, out config.Output, tel embed.TelemetrySetti
 			otlpgrpc.WithHost(out.OTLPGrpc.Host),
 			otlpgrpc.WithPort(strconv.Itoa(out.OTLPGrpc.Port)),
 			otlpgrpc.WithWorkers(out.OTLPGrpc.Workers),
-		}
-		if out.OTLPGrpc.BatchTimeout > 0 {
-			opts = append(opts, otlpgrpc.WithBatchTimeout(out.OTLPGrpc.BatchTimeout))
+			otlpgrpc.WithBatchTimeout(out.OTLPGrpc.BatchTimeout),
 		}
 		if out.OTLPGrpc.RequestTimeout > 0 {
 			opts = append(opts, otlpgrpc.WithRequestTimeout(out.OTLPGrpc.RequestTimeout))

@@ -224,7 +224,7 @@ func (g *Generator) Start(_ context.Context) error {
 
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i)
+		go g.worker(i) // #nosec G118 -- workers are bounded by Stop() and the WaitGroup, not the Start context
 	}
 	return nil
 }
@@ -285,18 +285,15 @@ func (g *Generator) worker(workerID int) {
 			return
 		case <-timer.C:
 			// Honor the finite-count budget: when the tracker is exhausted,
-			// idle until a restart (ResumeC) or shutdown rather than emitting.
-			permit, resume, ok := g.tracker.Acquire()
+			// wait for a returned permit, a restart, or shutdown.
+			permit, wait, ok := g.tracker.Acquire()
 			if !ok {
-				select {
-				case <-g.stopCh:
+				if !pacing.AwaitWake(g.stopCh, wait, backoffConfig, timer) {
 					return
-				case <-resume:
-					timer.Reset(backoffConfig.NextBackOff())
-					continue
 				}
+				continue
 			}
-			if err := g.generateAndWrite(rng); err != nil {
+			if err := g.generateAndWrite(count.WithPermit(context.Background(), permit), rng); err != nil {
 				g.logger.Error("Failed to write WEL event",
 					zap.Int("worker_id", workerID),
 					zap.Error(err),
@@ -312,7 +309,7 @@ func (g *Generator) worker(workerID int) {
 	}
 }
 
-func (g *Generator) generateAndWrite(rng *rand.Rand) error {
+func (g *Generator) generateAndWrite(ctx context.Context, rng *rand.Rand) error {
 	// Pick a random event definition
 	def := g.registry.RandomEvent(rng)
 	if def == nil {
@@ -330,7 +327,7 @@ func (g *Generator) generateAndWrite(rng *rand.Rand) error {
 		metric.WithAttributeSet(attribute.NewSet(attribute.String("channel", record.Channel))),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	logRecord := embed.LogRecord{

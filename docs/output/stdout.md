@@ -6,7 +6,7 @@ The stdout output writes all generated telemetry to standard output (stdout). Th
 
 ## Buffering
 
-Log records are written into an in-process buffer (`bufio.Writer` wrapping `os.Stdout`) and flushed either when the buffer fills or every `flushInterval`. This significantly reduces syscall overhead when running with many generator workers.
+Records of every signal (logs, metrics, and spans) are written as lines into one in-process buffer (`bufio.Writer` wrapping `os.Stdout`) and flushed either when the buffer fills or every `flushInterval`. This significantly reduces syscall overhead when running with many generator workers.
 
 On graceful shutdown (SIGINT, SIGTERM), buffered records are flushed before exit. Records remaining in the buffer during a hard kill (SIGKILL) or crash are lost.
 
@@ -21,7 +21,7 @@ The stdout output does not mutate data; it writes log records as-is to standard 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
 | `output.type` | `--output-type` | `BLITZ_OUTPUT_TYPE` | `nop` | Output type. Set to `stdout` to use this output. |
-| `output.stdout.flushInterval` | `--output-stdout-flushinterval` | `BLITZ_OUTPUT_STDOUT_FLUSHINTERVAL` | `100ms` | How often to flush buffered log records to stdout. |
+| `output.stdout.flushInterval` | `--output-stdout-flushinterval` | `BLITZ_OUTPUT_STDOUT_FLUSHINTERVAL` | `100ms` | How often to flush buffered records to stdout. |
 
 ## Example Configuration
 

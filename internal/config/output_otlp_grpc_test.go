@@ -146,6 +146,7 @@ func TestOTLPGrpcOutputConfig_Validate(t *testing.T) {
 				Host:           "localhost",
 				Port:           4317,
 				Workers:        1,
+				BatchTimeout:   time.Second,
 				RequestTimeout: -1,
 			},
 			wantErr: true,
@@ -157,9 +158,19 @@ func TestOTLPGrpcOutputConfig_Validate(t *testing.T) {
 				Host:           "localhost",
 				Port:           4317,
 				Workers:        1,
+				BatchTimeout:   time.Second,
 				RequestTimeout: 10 * time.Second,
 			},
 			wantErr: false,
+		},
+		{
+			name: "zero batch timeout",
+			config: OTLPGrpcOutputConfig{
+				Host: "localhost",
+				Port: 4317,
+			},
+			wantErr: true,
+			errMsg:  "batch timeout",
 		},
 	}
 

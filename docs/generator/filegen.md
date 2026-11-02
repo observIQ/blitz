@@ -130,7 +130,7 @@ generator:
 
 ## Replay Mode
 
-Replay mode turns a capture file you supply into a repeatable run. Blitz reads the source once and emits every non-empty line exactly once, in order: a single file top to bottom, or a directory's files in lexical order, each top to bottom. When the last line is out, the run ends.
+Replay mode turns a capture file you supply into a repeatable run. Blitz reads the source once and emits every non-empty line exactly once, in order: a single file top to bottom, or a directory's files in lexical order, each top to bottom. When the last line is out, the run ends. A line whose send fails is retried after the pass, so it arrives out of order (see Ending the run below).
 
 ```yaml
 generator:
@@ -148,11 +148,15 @@ output:
 - **Byte for byte**: a line with no timestamp directives is emitted exactly as it appears in the file, without its line ending (a CRLF line loses its `\r` as well as its `\n`), so captures with hard-coded timestamps replay identically on every run. Directives, if a line has any, render at the current time as they do in random mode. Any `%` followed by a directive character is a directive, so `%%` renders as a single `%`; a line with a literal `%` before a directive character does not replay byte for byte.
 - **Ordering**: replay is a single ordered stream, so it requires `workers: 1`. Any other value fails config validation.
 - **One generator**: a replay must be the only generator in the run. A `generators:` list that holds a replay and any other entry fails config validation. To replay several captures, put them in one directory.
-- **Ending the run**: the run ends once the output has accepted the last line.
-  - A line the output rejects is retried until it is accepted.
-  - With `generator.count` set lower than the line count, it ends after that many lines instead.
+- **Ending the run**: the run ends once the last line is delivered.
+  - Replay waits for each line's result before it sends the next. A line whose send fails goes to a retry queue and replay moves on; after the last line it retries the queued lines, each up to 3 times, logging each retry. A line that still fails is logged as an error and dropped, and the run's count is lowered by one so it can end. Retried lines arrive after the lines that followed them.
+  - On a batching output (otlp-grpc, hec), each line waits up to the batch timeout (`batchTimeout`) for its batch to send, so lower the timeout for a faster replay.
+  - With HEC ACKs on (the default), each line also waits until Splunk acknowledges its batch, checked every `output.hec.ackPollInterval` (10s by default) and resent after `output.hec.ackTimeout` (5m by default). Lower the interval, or set `output.hec.enableAck: false`, for a faster replay.
+  - Each line also waits about one `rate` (1s by default) before the next. The wait is jittered by up to 50% either way.
+  - On stdout, each line also waits for the next buffer flush, up to `output.stdout.flushInterval` (100ms by default). Over 100,000 lines that adds up to about three hours (about half that on average), so lower the interval for a faster replay.
+  - With `generator.count` set lower than the line count, it ends once that many lines are delivered instead. A failed line then gives its place to the next line, so it can be left in the retry queue unsent.
   - `onFinish: idle` keeps blitz running after the last line. SIGUSR1 then replays again from the first line, including when it arrives mid-replay (see [Finite Generation](../finite-generation.md)).
-  - Embedded hosts have no count, so there the generator stops emitting after one pass and keeps running until the host stops it.
+  - Embedded hosts have no count, so there the generator stops emitting after one pass and keeps running until the host stops it. Without a count, replay also does not wait for each line's result, so an output with several workers can reorder lines.
 - **Empty input**: a source with no non-empty lines fails at startup.
 - **Unreadable file**: any file in the source that cannot be read, a glob match that cannot be stat'd (such as a dangling symlink), or a matched directory that cannot be listed fails at startup.
 - **Directories**: subdirectories, and symlinks to directories, are skipped.

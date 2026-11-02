@@ -12,6 +12,7 @@ import (
 	"github.com/observiq/blitz/embed"
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/wel/catalog"
+	"github.com/observiq/blitz/internal/counttest"
 	"github.com/observiq/blitz/internal/datagen"
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
@@ -335,7 +336,7 @@ func TestComputerAndDomainFollowDomainMembership(t *testing.T) {
 				Identity:  tc.id,
 			})
 			require.NoError(t, err)
-			require.NoError(t, gen.generateAndWrite(rand.New(rand.NewSource(1))))
+			require.NoError(t, gen.generateAndWrite(context.Background(), rand.New(rand.NewSource(1))))
 
 			require.Len(t, cons.messages, 1)
 			assert.Contains(t, cons.messages[0], "<Computer>"+tc.wantXML+"</Computer>")
@@ -449,4 +450,29 @@ func TestGeneratorFailedWriteReleasesPermit(t *testing.T) {
 		t.Fatal("count never completed")
 	}
 	require.Equal(t, 3, consumer.Count(), "every counted record was delivered")
+}
+
+// TestGeneratorRefusedWorkerWakesOnReset pins that a worker refused a permit
+// waits for the tracker, then generates again once Reset is called.
+func TestGeneratorRefusedWorkerWakesOnReset(t *testing.T) {
+	consumer := &mockConsumer{}
+	gen, err := New(Config{Logger: zap.NewNop(), Workers: 1, Rate: time.Millisecond, Computer: "TESTPC", Domain: "CONTOSO", Role: catalog.RoleWorkstation, Consumer: consumer})
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	t.Cleanup(func() { _ = gen.Stop(context.Background()) })
+	counttest.WakesOnReset(t, tracker, func() int { return consumer.Count() })
+}
+
+// TestGeneratorRefusedWorkerStops pins that a worker refused a permit stops
+// when the generator stops.
+func TestGeneratorRefusedWorkerStops(t *testing.T) {
+	consumer := &mockConsumer{}
+	gen, err := New(Config{Logger: zap.NewNop(), Workers: 1, Rate: time.Millisecond, Computer: "TESTPC", Domain: "CONTOSO", Role: catalog.RoleWorkstation, Consumer: consumer})
+	require.NoError(t, err)
+	tracker := count.NewTracker(1)
+	gen.SetCountTracker(tracker)
+	require.NoError(t, gen.Start(context.Background()))
+	counttest.StopsWhileRefused(t, tracker, func() int { return consumer.Count() }, gen.Stop)
 }

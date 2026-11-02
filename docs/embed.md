@@ -332,7 +332,7 @@ Two supported paths:
 
   Keys the YAML leaves unset resolve to the same defaults the standalone CLI uses (for example, `workers: 1`), for the singular `generator`/`output` forms and for every `generators:`/`outputs:` entry.
 
-  `count` (on `generator`, a `generators:` entry, or an override) is accepted but not honored in embedded mode: modules run until the host stops them, and only the standalone CLI stops a run at its count. A filegen replay (`filegen.mode: replay`) stops emitting after one pass through its input but keeps running until the host stops it.
+  `count` (on `generator`, a `generators:` entry, or an override) is accepted but not honored in embedded mode: modules run until the host stops them, and only the standalone CLI stops a run at its count. Validation still applies the count-dependent output rule, so a `prometheus-remote-write` output with `batchTimeout: 0` is rejected when a count is set. A filegen replay (`filegen.mode: replay`) stops emitting after one pass through its input but keeps running until the host stops it.
 
   A `Config` built in Go whose `Generator.Filegen` (or a `Generators` entry's `Filegen`) leaves `Seed` unset gets seed 0, which repeats the same random-mode line picks on every run. Set `Seed: -1` to randomize, as the YAML and CLI defaults do (see the [seed value contract](datagen.md#seed-value-contract)).
 

@@ -20,6 +20,7 @@ import (
 	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/generator/resource"
 	"github.com/observiq/blitz/internal/datagen"
+	"github.com/observiq/blitz/internal/generator/pacing"
 	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
 )
@@ -132,7 +133,7 @@ func (g *Generator) Start(_ context.Context) error {
 	g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), int64(g.workers), componentName)
 	for i := 0; i < g.workers; i++ {
 		g.wg.Add(1)
-		go g.worker(i)
+		go g.worker(i) // #nosec G118 -- workers are bounded by Stop() and the WaitGroup, not the Start context
 	}
 	return nil
 }
@@ -170,19 +171,15 @@ func (g *Generator) worker(workerID int) {
 		case <-g.stopCh:
 			return
 		case <-timer.Chan():
-			permit, resume, ok := g.tracker.Acquire()
+			permit, wait, ok := g.tracker.Acquire()
 			if !ok {
 				g.logger.Debug("Flow worker at the count limit, waiting", zap.Int("worker_id", workerID))
-				select {
-				case <-g.stopCh:
+				if !pacing.AwaitWake(g.stopCh, wait, bo, timer) {
 					return
-				case <-resume:
-					bo.Reset()
-					timer.Reset(bo.NextBackOff())
-					continue
 				}
+				continue
 			}
-			if err := g.generateAndWrite(r); err != nil {
+			if err := g.generateAndWrite(count.WithPermit(context.Background(), permit), r); err != nil {
 				g.logger.Error("Failed to write flow", zap.Int("worker_id", workerID), zap.Error(err))
 				permit.Release()
 				timer.Reset(bo.NextBackOff())
@@ -195,12 +192,12 @@ func (g *Generator) worker(workerID int) {
 	}
 }
 
-func (g *Generator) generateAndWrite(r *rand.Rand) error {
+func (g *Generator) generateAndWrite(ctx context.Context, r *rand.Rand) error {
 	rec := generateFlow(r, g.scenario, g.clock.Now(), g.victim)
 	rec.ExporterIP = g.exporter
 	rec.Metadata.Resource = g.static.Record()
 	g.metrics.BlitzGeneratorEntriesCounter.Add(context.Background(), 1, componentName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := g.consumer.ConsumeFlows(ctx, []embed.FlowRecord{rec}); err != nil {
 		g.metrics.BlitzGeneratorWriteErrorsCounter.Add(context.Background(), 1, componentName)

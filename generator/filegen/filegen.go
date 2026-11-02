@@ -573,17 +573,14 @@ func (g *FileLogGenerator) worker(id int, files []string) {
 				continue
 			}
 
-			permit, resume, ok := g.tracker.Acquire()
+			permit, wait, ok := g.tracker.Acquire()
 			if !ok {
-				select {
-				case <-g.stopCh:
+				if !pacing.AwaitWake(g.stopCh, wait, backoffConfig, timer) {
 					return
-				case <-resume:
-					timer.Reset(backoffConfig.NextBackOff())
-					continue
 				}
+				continue
 			}
-			if err := g.emit(lines[rng.Intn(len(lines))]); err != nil {
+			if err := g.emit(count.WithPermit(context.Background(), permit), lines[rng.Intn(len(lines))]); err != nil {
 				g.logger.Error("Error sending from file", zap.String("file", file), zap.Error(err))
 				permit.Release()
 				timer.Reset(backoffConfig.NextBackOff())
@@ -611,27 +608,19 @@ func (g *FileLogGenerator) replayWorker(lines []string) {
 	defer timer.Stop()
 
 	idx := 0
-	// cycle is the tracker's resume channel for the pass in progress. Acquire
-	// reports the current one with every permit, so a changed channel means a
+	// retries holds lines whose send failed, retried in order after the pass.
+	var retries []replayRetry
+	// cycle is the tracker's cycle channel for the pass in progress. Acquire
+	// reports the current one with every grant, so a changed channel means a
 	// reset (SIGUSR1) landed and the refilled count starts a fresh pass.
 	var cycle <-chan struct{}
-	waitResume := func(resume <-chan struct{}) bool {
-		select {
-		case <-g.stopCh:
-			return false
-		case <-resume:
-			backoffConfig.Reset()
-			timer.Reset(backoffConfig.NextBackOff())
-			return true
-		}
-	}
 
 	for {
 		select {
 		case <-g.stopCh:
 			return
 		case <-timer.C:
-			if idx >= len(lines) {
+			if idx >= len(lines) && len(retries) == 0 {
 				if g.tracker == nil {
 					g.logger.Info("Replay complete", zap.Int("lines", len(lines)))
 					g.metrics.BlitzGeneratorActiveWorkersGauge.Record(context.Background(), 0, componentName)
@@ -641,36 +630,90 @@ func (g *FileLogGenerator) replayWorker(lines []string) {
 				// reset, then replay from the first line. A tracker larger
 				// than the line count (the CLI bounds it; a caller of
 				// SetCountTracker may not) leaves its extra permits undrawn.
-				if !waitResume(cycle) {
+				if !pacing.AwaitWake(g.stopCh, cycle, backoffConfig, timer) {
 					return
 				}
 				idx = 0
 				continue
 			}
-			permit, resume, ok := g.tracker.Acquire()
-			if resume != cycle {
-				idx = 0
-				cycle = resume
-			}
+			permit, wait, ok := g.tracker.Acquire()
 			if !ok {
-				if !waitResume(resume) {
+				if !pacing.AwaitWake(g.stopCh, wait, backoffConfig, timer) {
 					return
 				}
 				continue
 			}
-			if err := g.emit(lines[idx]); err != nil {
-				g.logger.Error("Error replaying line", zap.Int("index", idx), zap.Error(err))
+			if wait != cycle {
+				idx = 0
+				retries = nil
+				cycle = wait
+			}
+			// The pass sends each line in turn, then the retry queue.
+			cur := replayRetry{line: idx}
+			retrying := idx >= len(lines)
+			if retrying {
+				cur = retries[0]
+				retries = retries[1:]
+				g.logger.Warn("Retrying a replay line",
+					zap.Int("index", cur.line), zap.Int("retry", cur.tries+1), zap.Int("of", replayRetries))
+			} else {
+				idx++
+			}
+			err := g.emit(count.WithPermit(context.Background(), permit), lines[cur.line])
+			if err != nil {
 				permit.Release()
+			} else {
+				permit.Commit()
+			}
+			// Wait for the destination's result before the next send, so
+			// lines arrive in order and a failed line is queued only once
+			// every output has settled it.
+			select {
+			case <-g.stopCh:
+				return
+			case <-permit.Settled():
+			}
+			// A failed send counts as undelivered even with no tracker, whose
+			// zero permit always reports delivered.
+			if err != nil || !permit.Delivered() {
+				if err == nil {
+					err = errNotDelivered
+				}
+				if retrying {
+					cur.tries++
+				}
+				if cur.tries >= replayRetries {
+					g.logger.Error("Dropping a replay line after its retries failed",
+						zap.Int("index", cur.line), zap.Int("retries", cur.tries), zap.Error(err))
+					permit.Forgo()
+				} else {
+					g.logger.Error("Replayed line was not delivered, queued for retry",
+						zap.Int("index", cur.line), zap.Error(err))
+					retries = append(retries, cur)
+				}
 				timer.Reset(backoffConfig.NextBackOff())
 				continue
 			}
-			permit.Commit()
-			idx++
 			backoffConfig.Reset()
 			timer.Reset(backoffConfig.NextBackOff())
 		}
 	}
 }
+
+// replayRetries is how many times a failed replay line is retried before it
+// is dropped.
+const replayRetries = 3
+
+// replayRetry is a replay line waiting for another send, and the retries it
+// has had.
+type replayRetry struct {
+	line  int
+	tries int
+}
+
+// errNotDelivered reports a line an output accepted and then failed to
+// deliver; that output logs the cause.
+var errNotDelivered = errors.New("an output did not deliver the line")
 
 // errNoLines reports a file with no non-empty lines to send.
 var errNoLines = errors.New("file has no non-empty lines")
@@ -712,11 +755,11 @@ func (g *FileLogGenerator) fileLines(filename string) ([]string, error) {
 
 // emit processes the line's timestamp directives and pushes it to the
 // consumer as a size-1 batch.
-func (g *FileLogGenerator) emit(line string) error {
+func (g *FileLogGenerator) emit(ctx context.Context, line string) error {
 	processedLine := g.processTimestamps(line)
 
 	// Push as a size-1 batch with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	err := g.consumer.ConsumeLogs(ctx, []embed.LogRecord{{
 		Message: processedLine,
 		Metadata: embed.LogRecordMetadata{

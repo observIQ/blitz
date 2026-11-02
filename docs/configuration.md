@@ -255,7 +255,10 @@ Notes:
   error while another output accepted the record; a record is a generator write
   error only when every output dropped it. An output that accepts a record and
   then fails to send it is logged at Warn (same sampling) and counted in
-  `blitz.output.fanout_write_errors`.
+  `blitz.output.fanout_write_errors`. With `generator.count`, a record counts
+  only once every output delivered it; one that any output drops or fails is
+  replaced and sent to all of them again (see
+  [Finite Generation](finite-generation.md#delivery)).
 - On shutdown, an output that will not stop writing is abandoned and logged
   at Error, so one bad output cannot hang blitz or use up the other outputs'
   time to flush. It is abandoned before the shutdown deadline, or at most
@@ -273,7 +276,7 @@ These settings apply to the whole run rather than to one generator or output.
 
 | YAML Path | Flag Name | Environment Variable | Default | Description |
 |-----------|-----------|---------------------|---------|-------------|
-| `generator.count` | `--generator-count` | `BLITZ_GENERATOR_COUNT` | `0` | Total number of records to generate (0 = unlimited). See [Finite Generation](finite-generation.md). |
+| `generator.count` | `--generator-count` | `BLITZ_GENERATOR_COUNT` | `0` | Total number of records to deliver (0 = unlimited). See [Finite Generation](finite-generation.md). |
 | `onFinish` | `--onfinish` | `BLITZ_ONFINISH` | `exit` | What happens when the count is reached: `exit` or `idle`. See [Finite Generation](finite-generation.md). |
 | `metrics.port` | `--metrics-port` | `BLITZ_METRICS_PORT` | `9100` | HTTP port for blitz's own Prometheus metrics endpoint. See [Metrics](metrics.md). |
 | `telemetry.traces.otlpEndpoint` | `--telemetry-traces-otlpendpoint` | `BLITZ_TELEMETRY_TRACES_OTLPENDPOINT` | `""` | OTLP gRPC endpoint (`host:port`) for exporting blitz's own spans. Empty disables it. |
@@ -496,6 +499,10 @@ Duration values (like `generator.json.rate`, `generator.winevt.rate`, or `genera
 - `output.otlp-grpc.maxQueueSize` - Must be ≥ 0
 - `output.otlp-grpc.maxExportBatchSize` - Must be ≥ 0
 - `output.otlp-grpc.batchTimeout` - Must be > 0 (duration format)
+- `output.hec.batchTimeout` - Must be > 0 (duration format)
+- `output.hec.ackPollInterval` - Must be > 0 when `output.hec.enableAck` is true
+- `output.hec.ackTimeout` - Must be > 0 when `output.hec.enableAck` is true
+- `output.prometheus-remote-write.batchTimeout` - Must be > 0 when `generator.count` or any `generators:` entry `count` is set
 - `logging.level` - Must be one of: `debug`, `info`, `warn`, `error`
 - `logging.type` - Must be one of: `stdout`, `file`
 - `logging.file.path` - Required when `logging.type` is `file`

@@ -1,6 +1,7 @@
 package stdout
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
+	"github.com/observiq/blitz/internal/counttest"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"github.com/stretchr/testify/assert"
@@ -88,14 +91,13 @@ func TestStdoutOutput_Write(t *testing.T) {
 }
 
 func TestStdoutOutput_WriteMetric(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	stdout, err := New(logger)
-	require.NoError(t, err)
-
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	os.Stdout = w
+
+	stdout, err := New(zaptest.NewLogger(t))
+	require.NoError(t, err)
 
 	v := 42.5
 	rec := output.MetricRecord{
@@ -110,6 +112,7 @@ func TestStdoutOutput_WriteMetric(t *testing.T) {
 
 	err = stdout.WriteMetric(context.Background(), rec)
 	require.NoError(t, err)
+	require.NoError(t, stdout.Stop(context.Background()))
 
 	w.Close()
 	os.Stdout = oldStdout
@@ -123,14 +126,13 @@ func TestStdoutOutput_WriteMetric(t *testing.T) {
 }
 
 func TestStdoutOutput_WriteTrace(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	stdout, err := New(logger)
-	require.NoError(t, err)
-
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	os.Stdout = w
+
+	stdout, err := New(zaptest.NewLogger(t))
+	require.NoError(t, err)
 
 	rec := output.TraceRecord{
 		TraceID:   "abc123",
@@ -143,6 +145,7 @@ func TestStdoutOutput_WriteTrace(t *testing.T) {
 
 	err = stdout.WriteTrace(context.Background(), rec)
 	require.NoError(t, err)
+	require.NoError(t, stdout.Stop(context.Background()))
 
 	w.Close()
 	os.Stdout = oldStdout
@@ -352,4 +355,122 @@ func TestStdout_SelfTelemetry(t *testing.T) {
 		}
 	}
 	require.True(t, found, "expected blitz.output.entries_received counter")
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, fmt.Errorf("stdout closed") }
+
+// newBufferedOutput builds an output over w with no flush loop, so the test
+// decides when the buffer flushes.
+func newBufferedOutput(t *testing.T, w interface{ Write([]byte) (int, error) }) *StdoutOutput {
+	t.Helper()
+	m, err := output.NewMetrics(embed.NopTelemetry().MeterProvider)
+	require.NoError(t, err)
+	return &StdoutOutput{logger: zap.NewNop(), tel: embed.NopTelemetry(), metrics: m, writer: bufio.NewWriter(w)}
+}
+
+// TestStdoutOutput_PermitSettlesOnFlush pins that a buffered line counts only
+// once the buffer is flushed to stdout.
+func TestStdoutOutput_PermitSettlesOnFlush(t *testing.T) {
+	var buf bytes.Buffer
+	o := newBufferedOutput(t, &buf)
+
+	ctx, p := counttest.Held(t)
+	require.NoError(t, o.WriteLog(ctx, output.LogRecord{Message: "held"}))
+	p.Commit()
+	counttest.StaysPending(t, p, "the line is still in the buffer")
+
+	o.flush()
+	require.True(t, counttest.Settled(p))
+	require.True(t, p.Delivered())
+	require.Equal(t, "held\n", buf.String())
+}
+
+// TestStdoutOutput_FailedFlushReleasesPermits pins that lines lost to a
+// failed flush are not counted.
+func TestStdoutOutput_FailedFlushReleasesPermits(t *testing.T) {
+	o := newBufferedOutput(t, failingWriter{})
+
+	ctx, p := counttest.Held(t)
+	require.NoError(t, o.WriteLog(ctx, output.LogRecord{Message: "lost"}))
+	p.Commit()
+	o.flush()
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
+}
+
+// TestStdoutOutput_WriteAfterStopReleasesPermit pins that a line written
+// after Stop's final flush is released rather than left in the buffer,
+// owed a flush that never comes.
+func TestStdoutOutput_WriteAfterStopReleasesPermit(t *testing.T) {
+	var buf bytes.Buffer
+	o := newBufferedOutput(t, &buf)
+	o.stopCh, o.doneCh = make(chan struct{}), make(chan struct{})
+	close(o.doneCh)
+	require.NoError(t, o.Stop(context.Background()))
+
+	ctx, p := counttest.Held(t)
+	require.Error(t, o.WriteLog(ctx, output.LogRecord{Message: "late"}))
+	p.Commit()
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
+	require.Empty(t, buf.String())
+}
+
+// TestStdoutOutput_BufferWriteErrorReleasesPermit pins that a line the buffer
+// cannot take, because flushing a full buffer failed, is released.
+func TestStdoutOutput_BufferWriteErrorReleasesPermit(t *testing.T) {
+	o := newBufferedOutput(t, failingWriter{})
+	o.writer = bufio.NewWriterSize(failingWriter{}, 16)
+
+	ctx, p := counttest.Held(t)
+	require.Error(t, o.WriteLog(ctx, output.LogRecord{Message: strings.Repeat("x", 64)}))
+	p.Commit()
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
+}
+
+// TestStdoutOutput_NewlineWriteErrorReleasesPermit pins that a line whose
+// trailing newline the buffer cannot take is released.
+func TestStdoutOutput_NewlineWriteErrorReleasesPermit(t *testing.T) {
+	o := newBufferedOutput(t, failingWriter{})
+	o.writer = bufio.NewWriterSize(failingWriter{}, 16)
+
+	ctx, p := counttest.Held(t)
+	require.Error(t, o.WriteLog(ctx, output.LogRecord{Message: strings.Repeat("x", 16)}))
+	p.Commit()
+	require.True(t, counttest.Settled(p))
+	require.False(t, p.Delivered())
+}
+
+// TestStdoutOutput_AllSignalsShareTheBuffer pins that metrics and spans go
+// through the log buffer, so a line the buffer flushed in part is never split
+// by another record, and each record counts once it is flushed.
+func TestStdoutOutput_AllSignalsShareTheBuffer(t *testing.T) {
+	var buf bytes.Buffer
+	o := newBufferedOutput(t, &buf)
+	o.writer = bufio.NewWriterSize(&buf, 16)
+
+	long := strings.Repeat("x", 40)
+	require.NoError(t, o.WriteLog(context.Background(), output.LogRecord{Message: long}))
+	mctx, mp := counttest.Held(t)
+	require.NoError(t, o.WriteMetric(mctx, output.MetricRecord{Name: "cpu.usage"}))
+	mp.Commit()
+	tctx, tp := counttest.Held(t)
+	require.NoError(t, o.WriteTrace(tctx, output.TraceRecord{Name: "GET /"}))
+	tp.Commit()
+	counttest.StaysPending(t, mp, "the metric is still in the buffer")
+	counttest.StaysPending(t, tp, "the span is still in the buffer")
+
+	o.flush()
+	lines := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	require.Len(t, lines, 3)
+	assert.Equal(t, long, lines[0])
+	assert.Contains(t, lines[1], "cpu.usage")
+	assert.Contains(t, lines[2], "GET /")
+	for _, p := range []count.Permit{mp, tp} {
+		require.True(t, counttest.Settled(p))
+		require.True(t, p.Delivered())
+	}
 }

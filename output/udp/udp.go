@@ -2,11 +2,13 @@ package udp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/internal/workermanager"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
@@ -36,6 +38,12 @@ const outputType = "udp"
 type udpItem struct {
 	ctx context.Context
 	msg string
+	// sent settles the record's count permit, if any, with the send result.
+	sent func(error)
+}
+
+func newUDPItem(ctx context.Context, msg string) udpItem {
+	return udpItem{ctx: ctx, msg: msg, sent: count.Hold(ctx)}
 }
 
 // UDP implements the Output interface for UDP connections
@@ -121,14 +129,19 @@ func (u *UDP) ObserveBlitzOutputQueueSize(_ context.Context, observer metric.Int
 // If the provided context is done, WriteLog will return immediately
 // even if the data is not written to the channel.
 func (u *UDP) WriteLog(ctx context.Context, data output.LogRecord) error {
+	item := newUDPItem(ctx, data.Message)
 	select {
-	case u.dataChan <- udpItem{ctx: ctx, msg: data.Message}:
+	case u.dataChan <- item:
 		u.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
 		return nil
 	case <-ctx.Done():
-		return fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
+		err := fmt.Errorf("context cancelled while waiting to write data: %w", ctx.Err())
+		item.sent(err)
+		return err
 	case <-u.ctx.Done():
-		return fmt.Errorf("UDP output is shutting down")
+		err := fmt.Errorf("UDP output is shutting down")
+		item.sent(err)
+		return err
 	}
 }
 
@@ -173,6 +186,7 @@ func (u *UDP) drainBuffered(ctx context.Context) {
 		u.logger.Error("Failed to connect while draining buffered records on shutdown",
 			zap.Int("dropped", len(u.dataChan)),
 			zap.Error(err))
+		u.failRemaining(err)
 		return
 	}
 	defer conn.Close()
@@ -189,21 +203,38 @@ func (u *UDP) drainTo(ctx context.Context, conn net.Conn, deadline time.Time) {
 		if ctx.Err() != nil || time.Now().After(deadline) {
 			u.logger.Warn("Shutdown deadline reached while draining buffered records",
 				zap.Int("dropped", len(u.dataChan)+1))
+			err := errors.New("shutdown deadline reached")
+			data.sent(err)
+			u.failRemaining(err)
 			return
 		}
-		_, span := output.StartSendSpan(data.ctx, u.tel, "blitz.output.udp.send")
-		err := u.sendData(conn, data.msg)
-		if err != nil {
-			span.RecordError(err)
-		}
-		span.End()
-		if err != nil {
+		if err := u.deliver(conn, data); err != nil {
 			u.logger.Error("Failed to send buffered record while draining on shutdown",
 				zap.Int("dropped", len(u.dataChan)+1),
 				zap.Error(err))
+			u.failRemaining(err)
 			return
 		}
 	}
+}
+
+// failRemaining settles every record left in the closed dataChan as unsent.
+func (u *UDP) failRemaining(err error) {
+	for data := range u.dataChan {
+		data.sent(err)
+	}
+}
+
+// deliver sends one record and settles its permit with the result.
+func (u *UDP) deliver(conn net.Conn, item udpItem) error {
+	_, span := output.StartSendSpan(item.ctx, u.tel, "blitz.output.udp.send")
+	err := u.sendData(conn, item.msg)
+	if err != nil {
+		span.RecordError(err)
+	}
+	span.End()
+	item.sent(err)
+	return err
 }
 
 // udpWorker processes UDP data from the channel and sends it to the configured host and port.
@@ -222,22 +253,22 @@ func (u *UDP) udpWorker(id int) {
 		return
 	}
 	defer conn.Close()
+	u.serve(id, conn)
+}
 
+// serve sends queued records on conn until a send fails, which returns so
+// the worker manager reconnects, or until shutdown.
+func (u *UDP) serve(id int, conn net.Conn) {
 	for {
 		select {
 		case item, ok := <-u.dataChan:
 			if !ok {
+				// Safety net: Stop closes dataChan only after the workers exit.
 				u.logger.Info("UDP worker exiting - channel closed", zap.Int("worker_id", id))
 				return
 			}
 
-			_, span := output.StartSendSpan(item.ctx, u.tel, "blitz.output.udp.send")
-			err := u.sendData(conn, item.msg)
-			if err != nil {
-				span.RecordError(err)
-			}
-			span.End()
-			if err != nil {
+			if err := u.deliver(conn, item); err != nil {
 				u.logger.Error("Failed to send UDP data",
 					zap.Int("worker_id", id),
 					zap.Error(err))

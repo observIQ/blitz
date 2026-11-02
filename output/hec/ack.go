@@ -3,6 +3,7 @@ package hec
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
 	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
@@ -25,6 +27,8 @@ type pendingBatch struct {
 	payload    []byte
 	sendTime   time.Time
 	retryCount int
+	// sends settles the batch's records' count permits.
+	sends count.Sends
 }
 
 // ackTracker tracks pending ackIds and their associated batch payloads for a single channel.
@@ -40,23 +44,24 @@ func newACKTracker() *ackTracker {
 }
 
 // track registers a new ackId with its batch payload.
-func (a *ackTracker) track(ackID int64, payload []byte) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.pending[ackID] = &pendingBatch{
-		payload:  payload,
-		sendTime: time.Now(),
-	}
+func (a *ackTracker) track(ackID int64, payload []byte, sends count.Sends) {
+	a.trackWithRetries(ackID, payload, 0, sends)
 }
 
 // trackWithRetries registers a new ackId preserving the accumulated retry count.
-func (a *ackTracker) trackWithRetries(ackID int64, payload []byte, retryCount int) {
+func (a *ackTracker) trackWithRetries(ackID int64, payload []byte, retryCount int, sends count.Sends) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	// Splunk can reuse a pending ackId after a restart or behind a load
+	// balancer; release the earlier batch so its records are replaced.
+	if old, ok := a.pending[ackID]; ok {
+		old.sends.Settle(errors.New("HEC reused a pending ackId"))
+	}
 	a.pending[ackID] = &pendingBatch{
 		payload:    payload,
 		sendTime:   time.Now(),
 		retryCount: retryCount,
+		sends:      sends,
 	}
 }
 
@@ -75,14 +80,25 @@ func (a *ackTracker) pendingIDs() []int64 {
 func (a *ackTracker) confirm(ids []int64) int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	count := 0
+	confirmed := 0
 	for _, id := range ids {
-		if _, ok := a.pending[id]; ok {
+		if batch, ok := a.pending[id]; ok {
 			delete(a.pending, id)
-			count++
+			batch.sends.Settle(nil)
+			confirmed++
 		}
 	}
-	return count
+	return confirmed
+}
+
+// failAll settles every batch still awaiting its ACK with err.
+func (a *ackTracker) failAll(err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for id, batch := range a.pending {
+		delete(a.pending, id)
+		batch.sends.Settle(err)
+	}
 }
 
 // expired returns batches that have exceeded the ack timeout and removes them from the tracker.
@@ -121,6 +137,7 @@ type ackResponse struct {
 type resendItem struct {
 	payload    []byte
 	retryCount int
+	sends      count.Sends
 }
 
 // ackPoller polls the HEC ACK endpoint for a single worker/channel.
@@ -211,17 +228,17 @@ func (p *ackPoller) poll() {
 	p.metrics.recordACKPollLatency(ctx, output.DurationMillis(time.Since(startTime)))
 
 	if err != nil {
+		// Nothing is confirmed, but batches still expire below, so an ACK
+		// endpoint that keeps failing cannot hold their permits forever.
 		span.RecordError(err)
 		p.logger.Error("Failed to query ACK status", zap.Error(err))
-		// Don't remove anything on query failure — will retry next cycle
-		return
 	}
 
 	// Remove confirmed ackIds
 	if len(confirmed) > 0 {
-		count := p.tracker.confirm(confirmed)
-		p.logger.Debug("ACKs confirmed", zap.Int("count", count))
-		p.metrics.recordACKConfirmed(ctx, int64(count))
+		n := p.tracker.confirm(confirmed)
+		p.logger.Debug("ACKs confirmed", zap.Int("count", n))
+		p.metrics.recordACKConfirmed(ctx, int64(n))
 	}
 
 	// Check for expired batches and resend
@@ -237,6 +254,7 @@ func (p *ackPoller) poll() {
 				zap.Int("max_retries", p.maxRetries),
 			)
 			p.metrics.recordACKDropped(ctx, 1)
+			batch.sends.Settle(errors.New("HEC batch not acknowledged after max retries"))
 			continue
 		}
 
@@ -250,9 +268,10 @@ func (p *ackPoller) poll() {
 
 		// Resend the payload with the accumulated retry count
 		select {
-		case p.resendCh <- resendItem{payload: batch.payload, retryCount: newRetryCount}:
+		case p.resendCh <- resendItem{payload: batch.payload, retryCount: newRetryCount, sends: batch.sends}:
 		default:
 			p.logger.Warn("Resend channel full, dropping batch")
+			batch.sends.Settle(errors.New("HEC resend channel full"))
 		}
 	}
 

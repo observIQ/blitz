@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/observiq/blitz/embed"
+	"github.com/observiq/blitz/generator/count"
 	"github.com/observiq/blitz/output"
 	"github.com/observiq/blitz/telemetry"
 	"go.uber.org/zap"
@@ -22,11 +24,15 @@ const outputType = "stdout"
 // Records are batched in memory and flushed to os.Stdout periodically, reducing
 // per-record syscall overhead under high worker counts.
 type StdoutOutput struct {
-	logger        *zap.Logger
-	tel           embed.TelemetrySettings
-	metrics       *output.Metrics
-	writer        *bufio.Writer
-	mu            sync.Mutex
+	logger  *zap.Logger
+	tel     embed.TelemetrySettings
+	metrics *output.Metrics
+	writer  *bufio.Writer
+	mu      sync.Mutex
+	// pending settles the count permits of buffered lines, guarded by mu.
+	pending []func(error)
+	// stopped rejects writes once Stop has begun its final flush, guarded by mu.
+	stopped       bool
 	flushInterval time.Duration
 	stopCh        chan struct{}
 	doneCh        chan struct{}
@@ -69,17 +75,58 @@ func New(logger *zap.Logger, opts ...Option) (*StdoutOutput, error) {
 	return o, nil
 }
 
+// errStopped rejects a write after Stop's final flush.
+var errStopped = errors.New("stdout output is stopped")
+
 // WriteLog buffers the log record for the next flush.
 func (o *StdoutOutput) WriteLog(ctx context.Context, data output.LogRecord) error {
 	o.metrics.BlitzOutputEntriesReceivedCounter.Add(ctx, 1, outputType, "logs")
+	return o.writeLine(ctx, data.Message)
+}
 
+// writeLine buffers one line for the next flush. Every signal shares the
+// buffer, and mu is held for the whole line, so no record interleaves with
+// it, even when a write flushes the buffer part-way.
+func (o *StdoutOutput) writeLine(ctx context.Context, line string) error {
+	sent := count.Hold(ctx)
+	err := o.bufferLine(ctx, line, sent)
+	if err != nil {
+		// Settle outside mu, as flush does.
+		sent(err)
+	}
+	return err
+}
+
+// bufferLine writes line to the buffer and, for a counted record, queues
+// sent to settle on the next flush.
+func (o *StdoutOutput) bufferLine(ctx context.Context, line string, sent func(error)) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-
-	if _, err := o.writer.WriteString(data.Message); err != nil {
+	if o.stopped {
+		return errStopped
+	}
+	if _, err := o.writer.WriteString(line); err != nil {
 		return err
 	}
-	return o.writer.WriteByte('\n')
+	if err := o.writer.WriteByte('\n'); err != nil {
+		return err
+	}
+	if count.Counted(ctx) {
+		o.pending = append(o.pending, sent)
+	}
+	return nil
+}
+
+// flush writes the buffer to stdout and settles the buffered lines' permits
+// with the result.
+func (o *StdoutOutput) flush() {
+	o.mu.Lock()
+	err := o.writer.Flush()
+	pending := o.pending
+	o.pending = nil
+	o.mu.Unlock()
+	// Settle outside mu, so writers do not wait on each permit's locks.
+	count.Sends(pending).Settle(err)
 }
 
 // Stop signals the flush goroutine to exit and performs a best-effort flush of
@@ -94,9 +141,9 @@ func (o *StdoutOutput) Stop(ctx context.Context) error {
 	}
 
 	o.mu.Lock()
-	_ = o.writer.Flush()
+	o.stopped = true
 	o.mu.Unlock()
-
+	o.flush()
 	return nil
 }
 
@@ -111,9 +158,7 @@ func (o *StdoutOutput) flushLoop() {
 			// The flush is the actual stdout I/O, batching many buffered
 			// records, so it gets a standalone gated span.
 			_, span := output.StartSendSpan(context.Background(), o.tel, "blitz.output.stdout.flush")
-			o.mu.Lock()
-			_ = o.writer.Flush()
-			o.mu.Unlock()
+			o.flush()
 			span.End()
 		case <-o.stopCh:
 			return
@@ -121,28 +166,22 @@ func (o *StdoutOutput) flushLoop() {
 	}
 }
 
-// WriteMetric writes a metric record to stdout as JSON.
-func (o *StdoutOutput) WriteMetric(_ context.Context, data output.MetricRecord) error {
+// WriteMetric buffers a metric record as JSON for the next flush.
+func (o *StdoutOutput) WriteMetric(ctx context.Context, data output.MetricRecord) error {
 	b, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshal metric: %w", err)
 	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	_, err = fmt.Fprintln(os.Stdout, string(b))
-	return err
+	return o.writeLine(ctx, string(b))
 }
 
-// WriteTrace writes a trace record to stdout as JSON.
-func (o *StdoutOutput) WriteTrace(_ context.Context, data output.TraceRecord) error {
+// WriteTrace buffers a trace record as JSON for the next flush.
+func (o *StdoutOutput) WriteTrace(ctx context.Context, data output.TraceRecord) error {
 	b, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshal trace: %w", err)
 	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	_, err = fmt.Fprintln(os.Stdout, string(b))
-	return err
+	return o.writeLine(ctx, string(b))
 }
 
 // SupportedTelemetry returns the telemetry types this output can consume.
