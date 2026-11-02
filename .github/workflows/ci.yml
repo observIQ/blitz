@@ -209,7 +209,7 @@ jobs:
       # linux/amd64 and linux/arm64), so QEMU/buildx are set up only there. The
       # freebsd/darwin/windows legs cross-compile binaries only, so they no
       # longer pull from Docker Hub at all, which removes the transient-pull
-      # failure they used to hit (PIPE-1092). On the linux legs the QEMU and
+      # failure they used to hit. On the linux legs the QEMU and
       # buildkit images are pre-pulled with retry and pinned, so a transient
       # Docker Hub blip during setup no longer fails the build.
       - name: Pre-pull buildx base images (retry transient Docker Hub pulls)
@@ -274,7 +274,7 @@ jobs:
         uses: actions/checkout@v7
 
       # Pre-pull the QEMU/buildkit images with retry so a transient Docker Hub
-      # blip during buildx/QEMU setup doesn't fail the merge build (PIPE-1092).
+      # blip during buildx/QEMU setup doesn't fail the merge build.
       # The images are pinned to match what the setup actions request below.
       - name: Pre-pull buildx base images (retry transient Docker Hub pulls)
         run: |

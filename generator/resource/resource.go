@@ -56,7 +56,7 @@ func Default(source string, extras ...string) map[string]any {
 
 // WithHost returns a Resource map like Default but with an explicit host.name,
 // for generators whose hostname comes from a resolved datagen SystemIdentity
-// (PIPE-1036) rather than the process's os.Hostname(). extras follow the same
+// rather than the process's os.Hostname(). extras follow the same
 // key/value convention as Default.
 func WithHost(hostname, source string, extras ...string) map[string]any {
 	r := map[string]any{
@@ -73,7 +73,7 @@ func WithHost(hostname, source string, extras ...string) map[string]any {
 // for a generator worker's lifetime: the host-identity projection (host.name,
 // os.type, ...) plus per-generator constants (telemetry.source, format flavor,
 // version). Build it once at construction and reuse it for every record the
-// worker emits (PIPE-1036).
+// worker emits.
 //
 // The model is: Static + Dynamic (per record) = Record. Static carries the
 // fields that never change for the worker; Record merges in the few that do.

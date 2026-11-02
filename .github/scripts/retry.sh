@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # retry.sh — run a command, retrying only on transient network/registry failures.
 #
-# Absorbs the CI flakes tracked in PIPE-1058 (Go module-proxy blips:
-# proxy.golang.org HTTP/2 stream errors, i/o timeouts) and PIPE-1092
-# (Docker Hub pull timeouts to registry-1.docker.io). Bounded, so a persistent
-# outage still fails the job after RETRY_MAX attempts.
+# Absorbs transient CI flakes: Go module-proxy blips (proxy.golang.org
+# HTTP/2 stream errors, i/o timeouts) and Docker Hub pull timeouts to
+# registry-1.docker.io. Bounded, so a persistent outage still fails the job
+# after RETRY_MAX attempts.
 #
 # By default it retries ONLY when the command output matches a known transient
 # signature, so wrapping a build/test/install step never masks a real compile

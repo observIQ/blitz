@@ -187,7 +187,7 @@ func (c *memoryMetricConsumer) snapshot() []embed.MetricPoint {
 }
 
 // TestEmbed_HostMetricsPointsFlowToMemoryConsumer is the parallel
-// metrics-path smoke test for PIPE-1023: a hostmetrics generator
+// metrics-path smoke test: a hostmetrics generator
 // constructed against an embed.MetricConsumer, wrapped in embed.New,
 // started via the Runner, produces points the host observes in-process.
 func TestEmbed_HostMetricsPointsFlowToMemoryConsumer(t *testing.T) {

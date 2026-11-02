@@ -103,10 +103,8 @@ var reservedIPv4Blocks = []reservedIPv4Block{
 	},
 }
 
-// reservedIPv6Block is the IPv6 parallel to reservedIPv4Block. The struct
-// exists now so future IPv6 random-public emission work has the paradigm in
-// place; see PIPE-1001 for the ticket that will populate reservedIPv6Blocks
-// and add RandomPublicIPv6 / RandomIPInCIDRv6.
+// reservedIPv6Block is the IPv6 parallel to reservedIPv4Block: one special-purpose
+// range that random public IPv6 addresses must avoid.
 type reservedIPv6Block struct {
 	rfc    string
 	name   string
@@ -286,8 +284,8 @@ func isReservedIPv4(ip net.IP) bool {
 //
 // Config-loading code paths that accept user-supplied CIDRs (e.g. via YAML or
 // CLI overrides) MUST call this and reject the entire config on failure.
-// PIPE-1002 tracks wiring the call sites once user-configurable networks
-// land. RandomIPInCIDR retains a soft fallback for defense in depth, but
+// EnvironmentConfig.Build already checks every generated network.
+// RandomIPInCIDR retains a soft fallback for defense in depth, but
 // validation is the strict gate.
 func ValidateCIDR(cidr string) error {
 	ip, ipNet, err := net.ParseCIDR(cidr)
@@ -295,7 +293,7 @@ func ValidateCIDR(cidr string) error {
 		return fmt.Errorf("invalid CIDR %q: %w", cidr, err)
 	}
 	if ip.To4() == nil {
-		return fmt.Errorf("CIDR %q is not IPv4; IPv6 support is tracked in PIPE-1001", cidr)
+		return fmt.Errorf("CIDR %q is not IPv4", cidr)
 	}
 	ones, bits := ipNet.Mask.Size()
 	if bits != 32 {
@@ -443,7 +441,7 @@ func RandomMAC(r *rand.Rand) string {
 //
 // Blitz expects callers to validate the CIDR via ValidateCIDR or
 // NetworkIdentity.Validate before runtime; the strict gate is config-load
-// validation (see PIPE-1002). As a defense-in-depth fallback for unvalidated
+// validation. As a defense-in-depth fallback for unvalidated
 // inputs, this function returns a random IPv4 from RandomIPv4(r) when the
 // CIDR is unparseable, not IPv4, or has a prefix length outside the
 // supported /29-or-shorter range. Reaching the fallback indicates a

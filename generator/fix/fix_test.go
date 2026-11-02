@@ -310,7 +310,7 @@ func TestV42EmitsFIX42BeginString(t *testing.T) {
 }
 
 // TestEmitsResourceWithHostNameAndFixVersion asserts that every emitted
-// LogRecord carries the conventional Resource keys per PIPE-1021: at
+// LogRecord carries the conventional Resource keys: at
 // minimum host.name and telemetry.source, plus the version-specific
 // fix.version key so downstream consumers can pivot on protocol version
 // without parsing the message body.

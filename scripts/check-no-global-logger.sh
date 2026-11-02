@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fail if any non-test Go file uses the global logger (zap.L() / zap.S()).
 # Blitz components must log through an injected *zap.Logger so an embedding
-# host controls the log stream (PIPE-1067).
+# host controls the log stream.
 set -euo pipefail
 
 matches="$(grep -rnE 'zap\.(L|S)\(\)' --include='*.go' . | grep -v '_test\.go' || true)"

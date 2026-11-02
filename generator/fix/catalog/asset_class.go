@@ -253,8 +253,8 @@ func (s SecurityType) Category() AssetCategory {
 }
 
 // AllSecurityTypes returns the SecurityType values declared in this
-// catalog, in a stable order. Useful for golden-output tests and for
-// the StateTracker's per-instrument book initialization.
+// catalog, in a stable order, for golden-output tests and for code that
+// walks every SecurityType.
 func AllSecurityTypes() []SecurityType {
 	return []SecurityType{
 		// Equities

@@ -259,7 +259,7 @@ func (g *Generator) SupportedTelemetry() []telemetry.Type {
 
 // SetCountTracker wires the finite-generation count tracker. With it set, each
 // worker acquires from the tracker before emitting, so the generator honors the
-// configured record budget instead of running unbounded (PIPE-1111).
+// configured record budget instead of running unbounded.
 func (g *Generator) SetCountTracker(t *count.Tracker) {
 	g.tracker = t
 }

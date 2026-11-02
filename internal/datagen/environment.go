@@ -304,7 +304,7 @@ func GenerateEnvironment(seeds *SeedConfig, opts *EnvironmentOpts) (*Environment
 		return nil, err
 	}
 
-	// Appliance identities (PIPE-1035): storage arrays and network hardware,
+	// Appliance identities: storage arrays and network hardware,
 	// each with its own seed and a management interface bound to a subnet.
 	storageSeed := seeds.ResolveSeed(IdentityStorageSystems)
 	storageSystems := generateStorageSystems(storageSeed, opts.StorageSystemCount, networks)

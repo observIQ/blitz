@@ -14,7 +14,7 @@ import (
 // TestACKPollLatencyRecordsMillisAcrossBuckets asserts that a spread of real
 // ACK-poll durations, converted the way ackPoller records them
 // (output.DurationMillis), lands across multiple histogram buckets instead of
-// collapsing into the first one — the defect PIPE-1404 fixed.
+// collapsing into the first one.
 //
 // Asserting the unit is "ms" alone is not sufficient: the unit string does not
 // change the bucket boundaries, so a call site that recorded

@@ -6,7 +6,8 @@
 // The full FIX 4.4 swap modeling involves repeating groups (NoLegs,
 // NoUnderlyings) — v1 emits a flat representative subset so the wire
 // shape is observability-platform compatible. Per-leg/per-underlying
-// repeating groups are deferred to PR #16 (StateTracker).
+// repeating groups wait for repeating-group state tracking, which does
+// not exist yet.
 package otcderivs
 
 import (

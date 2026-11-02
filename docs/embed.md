@@ -380,8 +380,8 @@ The `filegen` generator references files under `data_library/` for the `package:
 ### Not embed-eligible at all (by design)
 
 - **`nop`**: does nothing; never produces records. Excluded from `LoadModules` because there's no Consumer for it to push to. An embedded host has no reason to instantiate a generator that yields nothing.
-- **WEL Windows-API mode (PIPE-928, future)**: writes to the actual Windows Event Log via the OS API. Effector-class. The whole point of Effectors is that their side effects land outside blitz's process, so an embedded host can't observe them. Excluded by design.
-- **REST simulators (PIPE-943, future)**: HTTP servers external clients poll. Effector-class for the same reason.
+- **WEL Windows-API mode (future)**: writes to the actual Windows Event Log via the OS API. Effector-class. The whole point of Effectors is that their side effects land outside blitz's process, so an embedded host can't observe them. Excluded by design.
+- **REST simulators (future)**: HTTP servers external clients poll. Effector-class for the same reason.
 
 ## Consuming via OTel pdata
 
@@ -409,5 +409,5 @@ Flows follow the same pattern through `FlowConsumer`. For hosts that want flows 
 | traces                                       | Producer | Synthetic distributed traces                                                                                     |
 | wel                                          | Producer | Windows Event Log XML across many channels, driven by a machine role                                             |
 | winevt                                       | Producer | Windows Event XML. Deprecated and not available via embed (use `wel`); `LoadModules` rejects it.                 |
-| Future: WEL Windows-API mode (PIPE-928)      | Effector | Writes to actual Windows event log. Cannot be embedded.                                                          |
-| Future: REST simulators (PIPE-943)           | Effector | HTTP servers external clients poll. Cannot be embedded.                                                          |
+| Future: WEL Windows-API mode                 | Effector | Writes to actual Windows event log. Cannot be embedded.                                                          |
+| Future: REST simulators                      | Effector | HTTP servers external clients poll. Cannot be embedded.                                                          |

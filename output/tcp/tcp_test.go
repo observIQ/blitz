@@ -569,7 +569,7 @@ func (f *fakeConn) SetDeadline(time.Time) error      { return nil }
 func (f *fakeConn) SetReadDeadline(time.Time) error  { return nil }
 func (f *fakeConn) SetWriteDeadline(time.Time) error { return nil }
 
-// TestSendDataRecordsLatencyInMillis is the call-site guard for PIPE-1404: a
+// TestSendDataRecordsLatencyInMillis is the call-site guard for latency units: a
 // send that takes a known ~20ms must record request_latency ABOVE the le=5ms
 // bucket. It exercises the real recording path in sendData, so a regression to
 // time.Since(start).Seconds() (which would record ~0.02 and collapse into

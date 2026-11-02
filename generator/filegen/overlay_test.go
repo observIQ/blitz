@@ -90,7 +90,7 @@ func TestOverlayFS_UnionDiskWinsPerFile(t *testing.T) {
 // libraryFS() builds the overlay from the on-disk probe (here via
 // BLITZ_DATA_LIBRARY_DIR) layered over the embedded FS passed to New,
 // so the wired resolution path exercises the same disk-over-embedded
-// behavior as the overlay unit tests (PIPE-1445).
+// behavior as the overlay unit tests.
 func TestLibraryFS_OverlaysDiskOverEmbedded(t *testing.T) {
 	diskDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(diskDir, "pkg"), 0o755))

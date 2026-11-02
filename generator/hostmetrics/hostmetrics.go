@@ -43,7 +43,7 @@ type Config struct {
 	// is used, or a random hostname in the OS style when Identity is nil.
 	Hostname string
 	// Identity, when non-nil, is the resolved simulated host this generator's
-	// metrics describe (PIPE-1036). Its full host.* / os.* / deployment.*
+	// metrics describe. Its full host.* / os.* / deployment.*
 	// projection becomes the static resource on every emitted point. When nil,
 	// a minimal identity is synthesized from OS + Hostname, preserving the
 	// standalone-CLI behavior.

@@ -165,7 +165,7 @@ func TestGeneratorStartStop(t *testing.T) {
 
 // TestGeneratorHonorsFiniteCount confirms the WEL generator stops at the
 // configured record budget: with a count tracker set, generation completes the
-// tracker (Done fires) rather than running unbounded (PIPE-1111).
+// tracker (Done fires) rather than running unbounded.
 func TestGeneratorHonorsFiniteCount(t *testing.T) {
 	logger := zap.NewNop()
 	consumer := &mockConsumer{}
@@ -201,8 +201,7 @@ func TestGeneratorHonorsFiniteCount(t *testing.T) {
 
 // TestGeneratorResumesAfterCountReset covers the idle-and-resume path: once the
 // budget is exhausted the worker idles (emitting nothing), and a tracker Reset
-// unblocks it through the channel Acquire returns, so generation continues
-// (PIPE-1111).
+// unblocks it through the channel Acquire returns, so generation continues.
 func TestGeneratorResumesAfterCountReset(t *testing.T) {
 	logger := zap.NewNop()
 	consumer := &mockConsumer{}

@@ -46,7 +46,7 @@ type SeedConfig struct {
 	Networks     int64
 	Domains      int64
 
-	// Appliance identity seeds (PIPE-1035). <0 = fall back to Shared.
+	// Appliance identity seeds. <0 = fall back to Shared.
 	StorageSystems int64
 	NetworkSystems int64
 }

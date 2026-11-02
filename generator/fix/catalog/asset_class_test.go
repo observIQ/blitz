@@ -54,7 +54,7 @@ func TestSecurityTypesByCategoryUnknownIsNil(t *testing.T) {
 
 // TestExpectedSecurityTypeCount locks in v1 coverage at exactly the
 // declared 42 SecurityType values. If this fails, the catalog has
-// drifted from the PIPE-1022 ticket scope — update the scope OR the
+// drifted from its declared scope — update the scope OR the
 // count, but the mismatch must not slip through review unnoticed.
 func TestExpectedSecurityTypeCount(t *testing.T) {
 	const expected = 42

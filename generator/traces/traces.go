@@ -51,7 +51,7 @@ type Config struct {
 	// simulated machine under the same Seed.
 	Hostname string
 	// Identity, when non-nil, is the resolved simulated host these traces
-	// describe (PIPE-1036). Its full host.* / os.* / deployment.* projection
+	// describe. Its full host.* / os.* / deployment.* projection
 	// becomes the static resource on every span. When nil, a minimal
 	// Linux-style identity is synthesized from Hostname, preserving the prior
 	// standalone-CLI behavior.

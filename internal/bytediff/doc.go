@@ -1,10 +1,9 @@
 // Package bytediff is a test helper for verifying that log generator
-// refactors in PIPE-975 PRs #2-11 preserve byte-exact CLI output.
+// refactors preserve byte-exact CLI output.
 //
-// Each log-generator PR migrates one module to yield embed.LogRecord
-// instead of building the wire-format bytes directly. The CLI path then
-// converts LogRecord back to bytes via an adapter. This helper makes it
-// easy for those PRs to assert that the post-refactor byte sequence
-// matches what the pre-refactor module would have produced for the
-// same RNG seed and input.
+// A log generator migrated to yield embed.LogRecord, instead of building
+// the wire-format bytes directly, relies on the CLI path to convert each
+// LogRecord back to bytes through an adapter. This helper asserts that the
+// resulting byte sequence matches what the generator produced before the
+// migration, for the same RNG seed and input.
 package bytediff

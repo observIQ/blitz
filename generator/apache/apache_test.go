@@ -138,8 +138,7 @@ func TestApacheGenerator_Name(t *testing.T) {
 }
 
 // Compile-time assertion: the migrated generator satisfies
-// embed.ProducerModule. PR #1 contributed the marker; PR #2 wires up
-// Name/Start/Stop with the correct signatures.
+// embed.ProducerModule, so Name/Start/Stop keep the right signatures.
 var _ embed.ProducerModule = (*ApacheLogGenerator)(nil)
 
 func TestApacheGenerator_Start(t *testing.T) {

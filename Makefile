@@ -23,8 +23,8 @@ test:
 	go test ./...
 
 # test-race runs the full suite under the race detector. CI gates on this
-# target so data races in production code fail the build (PIPE-1223). Requires
-# a C toolchain (the race detector needs cgo).
+# target so data races in production code fail the build. Requires a C
+# toolchain (the race detector needs cgo).
 test-race:
 	go test -race ./...
 
@@ -32,7 +32,7 @@ lint:
 	go tool revive -config .revive.toml -formatter friendly ./...
 
 # lint-global-logger fails if any non-test Go file uses zap.L() / zap.S().
-# Components must log through an injected *zap.Logger (PIPE-1067).
+# Components must log through an injected *zap.Logger.
 lint-global-logger:
 	bash ./scripts/check-no-global-logger.sh
 

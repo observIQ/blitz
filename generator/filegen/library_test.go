@@ -10,7 +10,7 @@ import (
 )
 
 // Packages lists the union of disk and embedded packages, marking which
-// layers hold each and flagging disk-over-embedded overrides (PIPE-1454).
+// layers hold each and flagging disk-over-embedded overrides.
 func TestLibrary_Packages_MarksOverrides(t *testing.T) {
 	disk := fstest.MapFS{"apache/access.log": {Data: []byte("d")}, "nginx/access.log": {Data: []byte("d")}}
 	embedded := fstest.MapFS{"apache/access.log": {Data: []byte("e")}, "cisco/access.log": {Data: []byte("e")}}
@@ -32,7 +32,7 @@ func TestLibrary_Packages_MarksOverrides(t *testing.T) {
 }
 
 // ActiveSource reports where the library resolves from, flagging when disk
-// overrides an embedded copy (PIPE-1454).
+// overrides an embedded copy.
 func TestLibrary_ActiveSource(t *testing.T) {
 	disk := fstest.MapFS{"apache/access.log": {Data: []byte("d")}}
 	withContent := fstest.MapFS{"apache/access.log": {Data: []byte("e")}}

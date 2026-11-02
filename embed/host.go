@@ -46,7 +46,7 @@ type Host struct {
 	Telemetry TelemetrySettings
 
 	// Environment is the simulated datagen.Environment that generators draw
-	// their host identities (host.name / os.type) from (PIPE-1036). Nil means
+	// their host identities (host.name / os.type) from. Nil means
 	// generators fall back to the running host's os.Hostname().
 	//
 	// Read-only for the lifetime of a single Runner.Start: workers only read
