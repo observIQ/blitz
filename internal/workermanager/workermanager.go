@@ -90,7 +90,13 @@ func (wm *WorkerManager) runWorker(id int) {
 		// Run the worker function
 		wm.workerFunc(id)
 
-		// If worker function returns, it means it failed - retry with backoff
+		// A worker that returns because Stop cancelled the context has not
+		// failed, so loop back to the exit check above
+		if wm.ctx.Err() != nil {
+			continue
+		}
+
+		// Otherwise the worker function failed - retry with backoff
 		delay := backoffPolicy.NextBackOff()
 		wm.logger.Warn("Worker failed, retrying with backoff",
 			zap.Int("worker_id", id),
