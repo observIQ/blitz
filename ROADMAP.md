@@ -13,8 +13,8 @@ consumer among many rather than the defining purpose.
 
 Work is organized into numbered rounds. **The numbers are our chosen work order, not a strict
 dependency graph.** Some rounds do unlock others. Round 6 is the foundation for the streaming
-protocols, and Round 7 for the API simulators. The rest are sequenced because we chose to finish
-the core before adding breadth.
+protocols, the MQTT broker, and the message brokers, and Round 9 for the API simulators. The rest
+are sequenced because we chose to finish the core before adding breadth.
 
 Blitz is growing from a *generator* that emits telemetry into a *simulator* that stands in for the
 systems telemetry comes from. A simulator here is a thin, faithful facade over shared synthetic
@@ -41,21 +41,29 @@ Prometheus output offering both a scrape endpoint and a remote-write client. Fan
 to multiple outputs at once. Full-width, spec-accurate PAN-OS logs, and more OS families in the
 synthetic environment.
 
-## In progress
+### Round 3.5: Documentation refresh and deterministic file replay
+
+Every doc brought in line with the current generators, outputs, and flags, with a check that
+catches the README drifting again. A replay mode for the file generator that emits each line of a
+file once, in order, and then stops, plus a seed for its random mode. A finite run now counts only
+the records the destination received.
+
+## Up next
 
 ### Round 4: Simulating distributed environments
 
 Take blitz from single-process generation to a coordinated simulation of a whole system of systems.
 Two thrusts. First, enrich the environment model with the primitives that describe how machines
-relate, fail, change, and sit in time and space. Second, coordinate multiple blitz instances into
-one simulation.
+relate, fail, change, and sit in time and space. Second, coordinate multiple blitz instances over
+a NATS event bus into one simulation, including the traffic that interdependent systems produce.
 
 ## Planned
 
 ### Round 5: Plugin and extensibility SDK
 
 Make blitz extensible. Custom generators, written by anyone in any language, participate alongside
-native generators in the same deployment, including full distributed topologies.
+native generators in the same deployment, including full distributed topologies. Plugins run as
+separate processes over a local gRPC socket, with SDKs for Go, Python, and Lua.
 
 ### Round 6: Push Core
 
@@ -63,61 +71,72 @@ One publish and fan-out engine with per-protocol wire adapters, in place of a se
 pub/sub stack per protocol. This is the shared foundation for every streaming, broker, and
 push-based protocol that follows.
 
-### Round 7: API scaffold and REST adapter
+### Round 7: ModBus, MQTT, and Sparkplug B
+
+ModBus and MQTT, each shipping as both a data generator and a real protocol server. A ModBus TCP
+slave answers register reads from any master, and an MQTT broker serves any MQTT client. Sparkplug B
+rides on the MQTT path. A YAML device-profile library covers smart manufacturing, smart grid, and
+building automation.
+
+### Round 8: Vertical industrial protocols
+
+OPC-UA, BACnet, DLMS/COSEM, IEC 61850, PROFINET, and S7comm, each as both a data generator and a
+real protocol server. The device profiles from Round 7 drive them.
+
+### Round 9: API scaffold and REST adapter
 
 The generic, plugin-aware API simulator scaffold plus its first protocol adapter. It shares an HTTP
 server, auth, and TLS substrate across every request/response protocol. REST proves the scaffold
 before we fan out.
 
-### Round 8: REST SaaS simulators
+### Round 10: REST SaaS simulators
 
 Stand-ins for SaaS vendor management and control-plane APIs: MongoDB Atlas, Meraki, SentinelOne, and
 Akamai. Pipelines and any other consuming tool can be tested against synthetic vendor endpoints
 backed by consistent state.
 
-### Round 9: REST HPE storage suite
+### Round 11: Streaming API simulators
+
+The persistent-connection APIs, built as adapters on Push Core. Covers Server-Sent Events, the
+WebSocket family, gRPC streaming, and GraphQL subscriptions.
+
+### Round 12: REST HPE storage suite
 
 HPE storage-array control-plane simulators, built as one coherent vendor-family cluster. An
 array's management API can be exercised end to end, not stubbed per endpoint.
 
-### Round 10: Non-REST HTTP API simulators
+### Round 13: Non-REST HTTP API simulators
 
-The remaining HTTP request/response protocols, including SOAP and XML-over-HTTP. These share the
-Round 7 transport substrate and differ mainly in dispatch and encoding.
+The remaining HTTP request/response protocols: SOAP, XML-over-HTTP, GraphQL queries and mutations,
+JSON-RPC, and XML-RPC. These share the Round 9 transport substrate and differ mainly in dispatch and
+encoding.
 
-### Round 11: Streaming API simulators
-
-The persistent-connection APIs, built as adapters on Push Core. Covers Server-Sent Events and the
-WebSocket family.
-
-### Round 12: Industrial and IoT protocol simulation
-
-ModBus and MQTT, each shipping as both a data generator and a real protocol server. A ModBus TCP
-slave answers register reads from any master, and an MQTT broker serves any MQTT client. Sparkplug B
-rides on the MQTT path. OPC-UA, BACnet, DLMS/COSEM, and IEC 61850 follow as full simulators. A YAML
-device-profile library covers smart manufacturing, smart grid, and building automation.
-
-### Round 13: Message bus simulation
+### Round 14: Message bus simulation
 
 Target the transport layer, not the systems producing telemetry. Kafka, RabbitMQ, NATS, Google Cloud
 Pub/Sub, and ActiveMQ each run as a real broker any client can connect to. A blitz generator routes
 into the broker. An external consumer reads from it over the real wire protocol, with no idea blitz
 is on the other end.
 
-### Round 14: Networking device simulation
+### Round 15: Networking device simulation
 
 Network-fabric devices (switches, routers, firewalls, load balancers) as connectable endpoints. Each
-is reachable over the device's real management surfaces and backed by consistent state.
+is reachable over the device's real management surfaces, such as SNMP, NETCONF, and gNMI, and backed
+by consistent state.
 
-### Round 15: Cloud simulation
+### Round 16: Cloud simulation
 
 Cloud as a first-class entity in the synthetic data model. A simulated host's cloud placement and
 image provenance become provider-correct instead of approximated.
 
-### Round 16: User-configurable deployment tiers
+### Round 17: User-configurable deployment tiers
 
 Replace the current fixed deployment tiers with a user-configurable tier model, so the environments
 blitz simulates match the ones you actually run.
+
+### Round 18: Bugfixes, tech debt, and standards
+
+The successor to Round 2, collecting the fixes, tech debt, and standards work found since.
 
 ## Contributing to the roadmap
 
